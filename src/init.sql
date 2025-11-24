@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS note.embedding (
 CREATE TABLE IF NOT EXISTS note.page (
     id SERIAL PRIMARY KEY,
     note_id BIGINT REFERENCES note.metadata(id),
-    created_at DATETIME,
+    created_at TIMESTAMP,
     content TEXT
 );
 
