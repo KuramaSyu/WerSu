@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from ..note.embedding import NoteEmbeddingEntity
+from entities import NoteEmbeddingEntity
 
 class NoteEmbeddingRepo(ABC):
 
