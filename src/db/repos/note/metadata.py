@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from ..note.metadata import NoteMetadataEntity
+from entities import NoteMetadataEntity
 
 class NotesMetadataRepo(ABC):
 
