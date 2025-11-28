@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
-from entities import NoteMetadataEntity
+from entities import NoteEntity
 
-class NotesMetadataRepo(ABC):
+class NoteMetadataRepo(ABC):
 
     @abstractmethod
     async def insert(
         self,
-        metadata: NoteMetadataEntity,
-    ) -> NoteMetadataEntity:
+        metadata: NoteEntity,
+    ) -> NoteEntity:
         """inserts metadata
         
         Args:
@@ -25,8 +25,8 @@ class NotesMetadataRepo(ABC):
     @abstractmethod
     async def update(
         self,
-        metadata: NoteMetadataEntity,
-    ) -> NoteMetadataEntity:
+        metadata: NoteEntity,
+    ) -> NoteEntity:
         """updates metadata
         
         Args:
@@ -44,8 +44,8 @@ class NotesMetadataRepo(ABC):
     @abstractmethod
     async def delete(
         self,
-        metadata: NoteMetadataEntity,
-    ) -> NoteMetadataEntity:
+        metadata: NoteEntity,
+    ) -> NoteEntity:
         """delete metadata
         
         Args:
