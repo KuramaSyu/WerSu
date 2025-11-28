@@ -52,6 +52,11 @@ class Database(metaclass=SingletonMeta):
     
     async def init_db(self):
         self._pool = await asyncpg.create_pool(dsn=self._dsn)
+        
+        content = ""
+        with open("init.sql") as f:
+            content = f.read()
+        await self._pool.execute(content)
 
     @property
     def pool(self) -> asyncpg.Pool:
