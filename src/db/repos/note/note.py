@@ -5,7 +5,7 @@ from entities import NoteEntity
 from db.database import Database
 
 
-class NoteRepo(ABC):
+class NoteRepoABC(ABC):
 
     @property
     def embedding_table(self) -> str:
@@ -96,7 +96,7 @@ class NoteRepo(ABC):
         """
         ...
 
-class NotePostgreRepo(NoteRepo):
+class NotePostgreRepo(NoteRepoABC):
     def __init__(self, db: Database):
         self._db = db
     
