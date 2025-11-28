@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import List
 from entities import NoteEmbeddingEntity
 
 class NoteEmbeddingRepo(ABC):
@@ -47,6 +48,25 @@ class NoteEmbeddingRepo(ABC):
         metadata: NoteEmbeddingEntity,
     ) -> NoteEmbeddingEntity:
         """delete metadata
+        
+        Args:
+        -----
+        metadata: `NoteEmbeddingEntity`
+            the metadata of a note
+
+        Returns:
+        --------
+        `NoteEmbeddingEntity`:
+            the updated entity
+        """
+        ...
+
+    @abstractmethod
+    async def select(
+        self,
+        metadata: NoteEmbeddingEntity,
+    ) -> List[NoteEmbeddingEntity]:
+        """select embeddings
         
         Args:
         -----
