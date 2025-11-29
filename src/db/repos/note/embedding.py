@@ -9,7 +9,7 @@ class NoteEmbeddingRepo(ABC):
         self,
         embedding: NoteEmbeddingEntity,
     ) -> NoteEmbeddingEntity:
-        """inserts embedding
+        """inserts an embedding
         
         Args:
         -----
@@ -19,7 +19,7 @@ class NoteEmbeddingRepo(ABC):
         Returns:
         --------
         `NoteEmbeddingEntity`:
-            the updated entity (updated ID)
+            the updated embedding (updated ID)
         """
         ...
 
