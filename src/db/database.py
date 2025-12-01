@@ -5,17 +5,21 @@ from asyncpg import Pool, Connection, Record
 
 from utils.singleton import SingletonMeta
 
-def aquire(coroutine: Callable):
+def acquire(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Wrapper for a coroutine which injects
     an aquired connection as first parameter
     """
    
 
-    @functools.wraps(coroutine)
-    async def wrapper(self: "Database", *coro_args, _cxn: Connection, **coro_kwargs):
-         # aquire pool from DatabaseConnection
-        pool = Database.get_instance().pool
+    @functools.wraps(func)
+    async def wrapper(self: "Database", *coro_args, **coro_kwargs) -> Any:
+        if isinstance(self, str):
+            coro_args = (self, *coro_args)
+            self = Database.get_instance()
+
+        # aquire pool from DatabaseConnection
+        pool = self.pool
 
         async with pool.acquire() as connection:
             # aquired connection
@@ -23,13 +27,12 @@ def aquire(coroutine: Callable):
                 # started transaction
                 # -> call coroutine inside the transaction
                 # and pass the connection as first arg
-                return await coroutine(
+                return await func(
                     self,
                     *coro_args,
                     _cxn=connection,
                     **coro_kwargs
                 )
-    
     return wrapper
 
 def copy_docs(copy_from_func: Callable):
@@ -75,7 +78,7 @@ class Database(metaclass=SingletonMeta):
         assert cls._instance
         return cls._instance
 
-    @aquire
+    @acquire
     async def execute(self, query: str, *args: List[Any], _cxn: Connection) -> str:
         """
         Execute an SQL command (or commands).
@@ -103,7 +106,7 @@ class Database(metaclass=SingletonMeta):
         return await _cxn.execute(query, *args)
 
     
-    @aquire
+    @acquire
     async def fetch(self, query: str, *args: List[Any], _cxn: Connection) -> List[Record]:
         """use when making selections.
 
