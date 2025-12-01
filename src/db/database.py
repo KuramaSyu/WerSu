@@ -117,4 +117,13 @@ class Database(metaclass=SingletonMeta):
         """
         return await _cxn.fetch(query, *args)
 
+    @acquire
+    async def fetchrow(self, query: str, *args: List[Any], _cxn: Connection) -> Optional[Record]:
+        """use when making selections that return a single row.
 
+        Returns:
+        --------
+        Optional[Record]:
+            the record from the selection/return or None
+        """
+        return await _cxn.fetchrow(query, *args)
