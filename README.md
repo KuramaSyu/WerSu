@@ -16,3 +16,9 @@
     ```bash
     python -m grpc_tools.protoc   -I grpc/proto   --python_out=grpc/generated   --grpc_python_out=grpc/generated   --mypy_out=grpc/generated   note.proto
     ```
+
+### Start gRPC server
+```bash
+cd src
+env PYTHONTRACEMALLOC=1 python main.py
+```
