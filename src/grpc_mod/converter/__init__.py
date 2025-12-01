@@ -1,0 +1,1 @@
+from .note_entity_converter import to_grpc_note
