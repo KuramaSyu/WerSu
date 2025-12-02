@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import user_pb2 as user__pb2
+from grpc_mod.proto import user_pb2 as grpc__mod_dot_proto_dot_user__pb2
 
 GRPC_GENERATED_VERSION = '1.76.0'
 GRPC_VERSION = grpc.__version__
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in user_pb2_grpc.py depends on'
+        + ' but the generated code in grpc_mod/proto/user_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -37,23 +37,23 @@ class UserServiceStub(object):
         """
         self.GetUser = channel.unary_unary(
                 '/user.UserService/GetUser',
-                request_serializer=user__pb2.GetUserRequest.SerializeToString,
-                response_deserializer=user__pb2.User.FromString,
+                request_serializer=grpc__mod_dot_proto_dot_user__pb2.GetUserRequest.SerializeToString,
+                response_deserializer=grpc__mod_dot_proto_dot_user__pb2.User.FromString,
                 _registered_method=True)
         self.PostUser = channel.unary_unary(
                 '/user.UserService/PostUser',
-                request_serializer=user__pb2.PostUserRequest.SerializeToString,
-                response_deserializer=user__pb2.User.FromString,
+                request_serializer=grpc__mod_dot_proto_dot_user__pb2.PostUserRequest.SerializeToString,
+                response_deserializer=grpc__mod_dot_proto_dot_user__pb2.User.FromString,
                 _registered_method=True)
         self.AlterUser = channel.unary_unary(
                 '/user.UserService/AlterUser',
-                request_serializer=user__pb2.AlterUserRequest.SerializeToString,
-                response_deserializer=user__pb2.User.FromString,
+                request_serializer=grpc__mod_dot_proto_dot_user__pb2.AlterUserRequest.SerializeToString,
+                response_deserializer=grpc__mod_dot_proto_dot_user__pb2.User.FromString,
                 _registered_method=True)
         self.DeleteUser = channel.unary_unary(
                 '/user.UserService/DeleteUser',
-                request_serializer=user__pb2.DeleteUserRequest.SerializeToString,
-                response_deserializer=user__pb2.DeleteUserResponse.FromString,
+                request_serializer=grpc__mod_dot_proto_dot_user__pb2.DeleteUserRequest.SerializeToString,
+                response_deserializer=grpc__mod_dot_proto_dot_user__pb2.DeleteUserResponse.FromString,
                 _registered_method=True)
 
 
@@ -90,23 +90,23 @@ def add_UserServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'GetUser': grpc.unary_unary_rpc_method_handler(
                     servicer.GetUser,
-                    request_deserializer=user__pb2.GetUserRequest.FromString,
-                    response_serializer=user__pb2.User.SerializeToString,
+                    request_deserializer=grpc__mod_dot_proto_dot_user__pb2.GetUserRequest.FromString,
+                    response_serializer=grpc__mod_dot_proto_dot_user__pb2.User.SerializeToString,
             ),
             'PostUser': grpc.unary_unary_rpc_method_handler(
                     servicer.PostUser,
-                    request_deserializer=user__pb2.PostUserRequest.FromString,
-                    response_serializer=user__pb2.User.SerializeToString,
+                    request_deserializer=grpc__mod_dot_proto_dot_user__pb2.PostUserRequest.FromString,
+                    response_serializer=grpc__mod_dot_proto_dot_user__pb2.User.SerializeToString,
             ),
             'AlterUser': grpc.unary_unary_rpc_method_handler(
                     servicer.AlterUser,
-                    request_deserializer=user__pb2.AlterUserRequest.FromString,
-                    response_serializer=user__pb2.User.SerializeToString,
+                    request_deserializer=grpc__mod_dot_proto_dot_user__pb2.AlterUserRequest.FromString,
+                    response_serializer=grpc__mod_dot_proto_dot_user__pb2.User.SerializeToString,
             ),
             'DeleteUser': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteUser,
-                    request_deserializer=user__pb2.DeleteUserRequest.FromString,
-                    response_serializer=user__pb2.DeleteUserResponse.SerializeToString,
+                    request_deserializer=grpc__mod_dot_proto_dot_user__pb2.DeleteUserRequest.FromString,
+                    response_serializer=grpc__mod_dot_proto_dot_user__pb2.DeleteUserResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -135,8 +135,8 @@ class UserService(object):
             request,
             target,
             '/user.UserService/GetUser',
-            user__pb2.GetUserRequest.SerializeToString,
-            user__pb2.User.FromString,
+            grpc__mod_dot_proto_dot_user__pb2.GetUserRequest.SerializeToString,
+            grpc__mod_dot_proto_dot_user__pb2.User.FromString,
             options,
             channel_credentials,
             insecure,
@@ -162,8 +162,8 @@ class UserService(object):
             request,
             target,
             '/user.UserService/PostUser',
-            user__pb2.PostUserRequest.SerializeToString,
-            user__pb2.User.FromString,
+            grpc__mod_dot_proto_dot_user__pb2.PostUserRequest.SerializeToString,
+            grpc__mod_dot_proto_dot_user__pb2.User.FromString,
             options,
             channel_credentials,
             insecure,
@@ -189,8 +189,8 @@ class UserService(object):
             request,
             target,
             '/user.UserService/AlterUser',
-            user__pb2.AlterUserRequest.SerializeToString,
-            user__pb2.User.FromString,
+            grpc__mod_dot_proto_dot_user__pb2.AlterUserRequest.SerializeToString,
+            grpc__mod_dot_proto_dot_user__pb2.User.FromString,
             options,
             channel_credentials,
             insecure,
@@ -216,8 +216,8 @@ class UserService(object):
             request,
             target,
             '/user.UserService/DeleteUser',
-            user__pb2.DeleteUserRequest.SerializeToString,
-            user__pb2.DeleteUserResponse.FromString,
+            grpc__mod_dot_proto_dot_user__pb2.DeleteUserRequest.SerializeToString,
+            grpc__mod_dot_proto_dot_user__pb2.DeleteUserResponse.FromString,
             options,
             channel_credentials,
             insecure,

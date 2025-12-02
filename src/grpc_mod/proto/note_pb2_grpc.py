@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import note_pb2 as note__pb2
+from grpc_mod.proto import note_pb2 as grpc__mod_dot_proto_dot_note__pb2
 
 GRPC_GENERATED_VERSION = '1.76.0'
 GRPC_VERSION = grpc.__version__
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in note_pb2_grpc.py depends on'
+        + ' but the generated code in grpc_mod/proto/note_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -37,13 +37,13 @@ class NoteServiceStub(object):
         """
         self.GetNote = channel.unary_unary(
                 '/note.NoteService/GetNote',
-                request_serializer=note__pb2.GetNoteRequest.SerializeToString,
-                response_deserializer=note__pb2.Note.FromString,
+                request_serializer=grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.SerializeToString,
+                response_deserializer=grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
                 _registered_method=True)
         self.PostNote = channel.unary_unary(
                 '/note.NoteService/PostNote',
-                request_serializer=note__pb2.PostNoteRequest.SerializeToString,
-                response_deserializer=note__pb2.Note.FromString,
+                request_serializer=grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
+                response_deserializer=grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
                 _registered_method=True)
 
 
@@ -68,13 +68,13 @@ def add_NoteServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'GetNote': grpc.unary_unary_rpc_method_handler(
                     servicer.GetNote,
-                    request_deserializer=note__pb2.GetNoteRequest.FromString,
-                    response_serializer=note__pb2.Note.SerializeToString,
+                    request_deserializer=grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.FromString,
+                    response_serializer=grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
             ),
             'PostNote': grpc.unary_unary_rpc_method_handler(
                     servicer.PostNote,
-                    request_deserializer=note__pb2.PostNoteRequest.FromString,
-                    response_serializer=note__pb2.Note.SerializeToString,
+                    request_deserializer=grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.FromString,
+                    response_serializer=grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -103,8 +103,8 @@ class NoteService(object):
             request,
             target,
             '/note.NoteService/GetNote',
-            note__pb2.GetNoteRequest.SerializeToString,
-            note__pb2.Note.FromString,
+            grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.SerializeToString,
+            grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
             options,
             channel_credentials,
             insecure,
@@ -130,8 +130,8 @@ class NoteService(object):
             request,
             target,
             '/note.NoteService/PostNote',
-            note__pb2.PostNoteRequest.SerializeToString,
-            note__pb2.Note.FromString,
+            grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
+            grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
             options,
             channel_credentials,
             insecure,
