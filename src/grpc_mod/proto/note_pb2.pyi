@@ -9,7 +9,6 @@ import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.message
 import google.protobuf.timestamp_pb2
-import google.protobuf.wrappers_pb2
 import sys
 import typing
 
@@ -116,27 +115,52 @@ class PostNoteRequest(google.protobuf.message.Message):
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    TITLE_FIELD_NUMBER: builtins.int
+    CONTENT_FIELD_NUMBER: builtins.int
+    AUTHOR_ID_FIELD_NUMBER: builtins.int
+    title: builtins.str
+    content: builtins.str
+    author_id: builtins.int
+    def __init__(
+        self,
+        *,
+        title: builtins.str = ...,
+        content: builtins.str | None = ...,
+        author_id: builtins.int = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["_content", b"_content", "content", b"content"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["_content", b"_content", "author_id", b"author_id", "content", b"content", "title", b"title"]) -> None: ...
+    def WhichOneof(self, oneof_group: typing.Literal["_content", b"_content"]) -> typing.Literal["content"] | None: ...
+
+Global___PostNoteRequest: typing_extensions.TypeAlias = PostNoteRequest
+
+@typing.final
+class AlterNoteRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     ID_FIELD_NUMBER: builtins.int
     TITLE_FIELD_NUMBER: builtins.int
     CONTENT_FIELD_NUMBER: builtins.int
     AUTHOR_ID_FIELD_NUMBER: builtins.int
+    id: builtins.int
+    title: builtins.str
+    content: builtins.str
     author_id: builtins.int
-    @property
-    def id(self) -> google.protobuf.wrappers_pb2.Int32Value: ...
-    @property
-    def title(self) -> google.protobuf.wrappers_pb2.StringValue: ...
-    @property
-    def content(self) -> google.protobuf.wrappers_pb2.StringValue: ...
     def __init__(
         self,
         *,
-        id: google.protobuf.wrappers_pb2.Int32Value | None = ...,
-        title: google.protobuf.wrappers_pb2.StringValue | None = ...,
-        content: google.protobuf.wrappers_pb2.StringValue | None = ...,
-        author_id: builtins.int = ...,
+        id: builtins.int = ...,
+        title: builtins.str | None = ...,
+        content: builtins.str | None = ...,
+        author_id: builtins.int | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_id", b"_id", "content", b"content", "id", b"id", "title", b"title"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_id", b"_id", "author_id", b"author_id", "content", b"content", "id", b"id", "title", b"title"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_id", b"_id"]) -> typing.Literal["id"] | None: ...
+    def HasField(self, field_name: typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "title", b"title"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "id", b"id", "title", b"title"]) -> None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_author_id", b"_author_id"]) -> typing.Literal["author_id"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_content", b"_content"]) -> typing.Literal["content"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_title", b"_title"]) -> typing.Literal["title"] | None: ...
 
-Global___PostNoteRequest: typing_extensions.TypeAlias = PostNoteRequest
+Global___AlterNoteRequest: typing_extensions.TypeAlias = AlterNoteRequest

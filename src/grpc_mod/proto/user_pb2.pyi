@@ -6,7 +6,6 @@ isort:skip_file
 import builtins
 import google.protobuf.descriptor
 import google.protobuf.message
-import google.protobuf.wrappers_pb2
 import sys
 import typing
 
@@ -28,16 +27,14 @@ class User(google.protobuf.message.Message):
     AVATAR_URL_FIELD_NUMBER: builtins.int
     id: builtins.int
     discord_id: builtins.int
-    @property
-    def avatar_url(self) -> google.protobuf.wrappers_pb2.StringValue: ...
+    avatar_url: builtins.str
     def __init__(
         self,
         *,
         id: builtins.int = ...,
         discord_id: builtins.int = ...,
-        avatar_url: google.protobuf.wrappers_pb2.StringValue | None = ...,
+        avatar_url: builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["avatar_url", b"avatar_url"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["avatar_url", b"avatar_url", "discord_id", b"discord_id", "id", b"id"]) -> None: ...
 
 Global___User: typing_extensions.TypeAlias = User
@@ -47,13 +44,16 @@ class GetUserRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     ID_FIELD_NUMBER: builtins.int
+    DISCORD_ID_FIELD_NUMBER: builtins.int
     id: builtins.int
+    discord_id: builtins.int
     def __init__(
         self,
         *,
         id: builtins.int = ...,
+        discord_id: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["id", b"id"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["discord_id", b"discord_id", "id", b"id"]) -> None: ...
 
 Global___GetUserRequest: typing_extensions.TypeAlias = GetUserRequest
 
@@ -64,15 +64,13 @@ class PostUserRequest(google.protobuf.message.Message):
     DISCORD_ID_FIELD_NUMBER: builtins.int
     AVATAR_URL_FIELD_NUMBER: builtins.int
     discord_id: builtins.int
-    @property
-    def avatar_url(self) -> google.protobuf.wrappers_pb2.StringValue: ...
+    avatar_url: builtins.str
     def __init__(
         self,
         *,
         discord_id: builtins.int = ...,
-        avatar_url: google.protobuf.wrappers_pb2.StringValue | None = ...,
+        avatar_url: builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["avatar_url", b"avatar_url"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["avatar_url", b"avatar_url", "discord_id", b"discord_id"]) -> None: ...
 
 Global___PostUserRequest: typing_extensions.TypeAlias = PostUserRequest
@@ -85,18 +83,15 @@ class AlterUserRequest(google.protobuf.message.Message):
     DISCORD_ID_FIELD_NUMBER: builtins.int
     AVATAR_URL_FIELD_NUMBER: builtins.int
     id: builtins.int
-    @property
-    def discord_id(self) -> google.protobuf.wrappers_pb2.Int64Value: ...
-    @property
-    def avatar_url(self) -> google.protobuf.wrappers_pb2.StringValue: ...
+    discord_id: builtins.int
+    avatar_url: builtins.str
     def __init__(
         self,
         *,
         id: builtins.int = ...,
-        discord_id: google.protobuf.wrappers_pb2.Int64Value | None = ...,
-        avatar_url: google.protobuf.wrappers_pb2.StringValue | None = ...,
+        discord_id: builtins.int = ...,
+        avatar_url: builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["avatar_url", b"avatar_url", "discord_id", b"discord_id"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["avatar_url", b"avatar_url", "discord_id", b"discord_id", "id", b"id"]) -> None: ...
 
 Global___AlterUserRequest: typing_extensions.TypeAlias = AlterUserRequest
