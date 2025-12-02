@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional
 from db.entities import NoteEntity
 
 from db.database import Database
@@ -82,7 +82,7 @@ class NoteRepoABC(ABC):
     async def select(
         self,
         note: NoteEntity,
-    ) -> NoteEntity:
+    ) -> Optional[NoteEntity]:
         """select note
         
         Args:
@@ -146,7 +146,7 @@ class NotePostgreRepo(NoteRepoABC):
     async def delete(self, note):
         raise NotImplementedError("Not implemented yet")
     
-    async def select(self, note: NoteEntity) -> NoteEntity:
+    async def select(self, note: NoteEntity) -> Optional[NoteEntity]:
         assert note.note_id
         query = f"""
         WITH filtered_note AS (
@@ -163,7 +163,8 @@ class NotePostgreRepo(NoteRepoABC):
             query,
             note.note_id
         )
-    
+
+
 
 
 
