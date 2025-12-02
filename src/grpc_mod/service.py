@@ -14,7 +14,7 @@ from grpc_mod import (
     DeleteUserResponse, PostUserRequest
 )
 from grpc_mod.converter import to_grpc_note
-from db.repos.user.user import UserRepositoryABC
+from db.repos.user.user import UserRepoABC
 from src.grpc_mod.converter.user_entity_converter import to_grpc_user
 
 
@@ -81,7 +81,7 @@ class GRPCUserService(UserServiceServicer):
     Implements the gRPC service defined in grpc/proto/user.proto
     """
 
-    def __init__(self, user_repo: UserRepositoryABC):
+    def __init__(self, user_repo: UserRepoABC):
         self.repo = user_repo
 
     async def GetUser(self, request: GetUserRequest, context: ServicerContext) -> User:

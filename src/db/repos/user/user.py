@@ -5,7 +5,7 @@ from db.entities import UserEntity
 from db import Database
 
 
-class UserRepositoryABC(ABC):
+class UserRepoABC(ABC):
     @abstractmethod
     async def insert(self, user: UserEntity) -> UserEntity:
         """Insert a new user and return the created entity with ID."""
@@ -37,7 +37,7 @@ class UserRepositoryABC(ABC):
         pass
 
 
-class UserRepository(UserRepositoryABC):
+class UserRepository(UserRepoABC):
     def __init__(self, db: Database):
         self.db = db
 
