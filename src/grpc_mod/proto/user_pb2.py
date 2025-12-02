@@ -22,29 +22,28 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 from google.protobuf import wrappers_pb2 as google_dot_protobuf_dot_wrappers__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nuser.proto\x12\x04user\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/wrappers.proto\"X\n\x04User\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x12\n\ndiscord_id\x18\x02 \x01(\x03\x12\x30\n\navatar_url\x18\x03 \x01(\x0b\x32\x1c.google.protobuf.StringValue\"\x1c\n\x0eGetUserRequest\x12\n\n\x02id\x18\x01 \x01(\x05\"W\n\x0fPostUserRequest\x12\x12\n\ndiscord_id\x18\x01 \x01(\x03\x12\x30\n\navatar_url\x18\x02 \x01(\x0b\x32\x1c.google.protobuf.StringValue\"\x81\x01\n\x10\x41lterUserRequest\x12\n\n\x02id\x18\x01 \x01(\x05\x12/\n\ndiscord_id\x18\x02 \x01(\x0b\x32\x1b.google.protobuf.Int64Value\x12\x30\n\navatar_url\x18\x03 \x01(\x0b\x32\x1c.google.protobuf.StringValue\"\x1f\n\x11\x44\x65leteUserRequest\x12\n\n\x02id\x18\x01 \x01(\x05\"%\n\x12\x44\x65leteUserResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32\xdb\x01\n\x0bUserService\x12+\n\x07GetUser\x12\x14.user.GetUserRequest\x1a\n.user.User\x12-\n\x08PostUser\x12\x15.user.PostUserRequest\x1a\n.user.User\x12/\n\tAlterUser\x12\x16.user.AlterUserRequest\x1a\n.user.User\x12?\n\nDeleteUser\x12\x17.user.DeleteUserRequest\x1a\x18.user.DeleteUserResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nuser.proto\x12\x04user\x1a\x1egoogle/protobuf/wrappers.proto\"X\n\x04User\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x12\n\ndiscord_id\x18\x02 \x01(\x03\x12\x30\n\navatar_url\x18\x03 \x01(\x0b\x32\x1c.google.protobuf.StringValue\"\x1c\n\x0eGetUserRequest\x12\n\n\x02id\x18\x01 \x01(\x05\"W\n\x0fPostUserRequest\x12\x12\n\ndiscord_id\x18\x01 \x01(\x03\x12\x30\n\navatar_url\x18\x02 \x01(\x0b\x32\x1c.google.protobuf.StringValue\"\x81\x01\n\x10\x41lterUserRequest\x12\n\n\x02id\x18\x01 \x01(\x05\x12/\n\ndiscord_id\x18\x02 \x01(\x0b\x32\x1b.google.protobuf.Int64Value\x12\x30\n\navatar_url\x18\x03 \x01(\x0b\x32\x1c.google.protobuf.StringValue\"\x1f\n\x11\x44\x65leteUserRequest\x12\n\n\x02id\x18\x01 \x01(\x05\"%\n\x12\x44\x65leteUserResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32\xdb\x01\n\x0bUserService\x12+\n\x07GetUser\x12\x14.user.GetUserRequest\x1a\n.user.User\x12-\n\x08PostUser\x12\x15.user.PostUserRequest\x1a\n.user.User\x12/\n\tAlterUser\x12\x16.user.AlterUserRequest\x1a\n.user.User\x12?\n\nDeleteUser\x12\x17.user.DeleteUserRequest\x1a\x18.user.DeleteUserResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'user_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_USER']._serialized_start=85
-  _globals['_USER']._serialized_end=173
-  _globals['_GETUSERREQUEST']._serialized_start=175
-  _globals['_GETUSERREQUEST']._serialized_end=203
-  _globals['_POSTUSERREQUEST']._serialized_start=205
-  _globals['_POSTUSERREQUEST']._serialized_end=292
-  _globals['_ALTERUSERREQUEST']._serialized_start=295
-  _globals['_ALTERUSERREQUEST']._serialized_end=424
-  _globals['_DELETEUSERREQUEST']._serialized_start=426
-  _globals['_DELETEUSERREQUEST']._serialized_end=457
-  _globals['_DELETEUSERRESPONSE']._serialized_start=459
-  _globals['_DELETEUSERRESPONSE']._serialized_end=496
-  _globals['_USERSERVICE']._serialized_start=499
-  _globals['_USERSERVICE']._serialized_end=718
+  _globals['_USER']._serialized_start=52
+  _globals['_USER']._serialized_end=140
+  _globals['_GETUSERREQUEST']._serialized_start=142
+  _globals['_GETUSERREQUEST']._serialized_end=170
+  _globals['_POSTUSERREQUEST']._serialized_start=172
+  _globals['_POSTUSERREQUEST']._serialized_end=259
+  _globals['_ALTERUSERREQUEST']._serialized_start=262
+  _globals['_ALTERUSERREQUEST']._serialized_end=391
+  _globals['_DELETEUSERREQUEST']._serialized_start=393
+  _globals['_DELETEUSERREQUEST']._serialized_end=424
+  _globals['_DELETEUSERRESPONSE']._serialized_start=426
+  _globals['_DELETEUSERRESPONSE']._serialized_end=463
+  _globals['_USERSERVICE']._serialized_start=466
+  _globals['_USERSERVICE']._serialized_end=685
 # @@protoc_insertion_point(module_scope)
