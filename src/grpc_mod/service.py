@@ -1,5 +1,5 @@
 from datetime import datetime
-
+import traceback
 import grpc
 from grpc.aio import ServicerContext
 
@@ -111,15 +111,15 @@ class GRPCUserService(UserServiceServicer):
         ...
     
     async def PostUser(self, request: PostUserRequest, context: ServicerContext) -> User:
-        if not request.HasField("discord_id") or not request.HasField("avatar_url"):
-            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
-            context.set_details("'discord_id' and 'avatar_url' must be provided")
-            return User()
-        user_entity = await self.repo.insert(
-            UserEntity(
-                id=None,
-                discord_id=request.discord_id,
-                avatar_url=request.avatar_url,
+        try:
+            user_entity = await self.repo.insert(
+                UserEntity(
+                    id=None,
+                    discord_id=request.discord_id,
+                    avatar_url=request.avatar_url,
+                )
             )
-        )
-        return to_grpc_user(user_entity)
+            print(f"Created user entity: {user_entity}")
+            return to_grpc_user(user_entity)
+        except Exception as e:
+            traceback.print_exc()
