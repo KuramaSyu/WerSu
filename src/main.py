@@ -19,7 +19,7 @@ def logging_provider(file: str, cls_instance: Optional[object] = None) -> loggin
     """provides a logger for the given file and class name"""
     logger_name = f"{file}"
     if cls_instance:
-        logger_name += f".{cls_instance.__class__.__name__}"
+        logger_name += f".{cls_instance.__class__.__qualname__}"
     log = getLogger(logger_name)
     log.setLevel(logging.DEBUG)
 
@@ -44,7 +44,7 @@ def logging_provider(file: str, cls_instance: Optional[object] = None) -> loggin
                 # Apply dim white to message only (after the last ": ")
                 parts = formatted.split(': ', 1)
                 if len(parts) == 2:
-                    return Style.BRIGHT + parts[0] + Style.RESET_ALL + ': ' + Style.DIM + Fore.LIGHTBLACK_EX + parts[1] + Style.RESET_ALL
+                    return Style.BRIGHT + parts[0] + Style.RESET_ALL + ': ' + Style.DIM + Fore.WHITE + parts[1] + Style.RESET_ALL
                 return formatted
             else:
                 record.levelname = f"{Style.BRIGHT}{color}{levelname}{Style.RESET_ALL}"
