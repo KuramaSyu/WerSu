@@ -10,8 +10,6 @@ import pandas as pd
 from pandas import DataFrame
 import asyncpg
 from asyncpg import Record
-from pandas.core.common import T
-from pandas.core.frame import SequenceNotStr
 
 from api.types import loggingProvider
 from db.database import Database
@@ -57,7 +55,7 @@ def formatter(func: Callable):
                 columns = [k for k in return_value.keys()]
             else:
                 raise TypeError(f"{type(return_value)} is not supported. Only list and dict can be converted to dataframe.")
-            return_value = pd.DataFrame(data=return_value, columns=cast(SequenceNotStr, columns))
+            return_value = pd.DataFrame(data=return_value, columns=columns)  # type: ignore
         return return_value
     update_wrapper(wrapper, func)
     return wrapper
