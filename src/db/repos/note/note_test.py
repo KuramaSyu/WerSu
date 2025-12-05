@@ -1,9 +1,9 @@
 from typing import Dict, Optional
 from db.entities import NoteEntity
-from db.repos.note.note import NoteRepoABC
+from db.repos.note.note import NoteRepoFacadeABC
 
 
-class NoteTestRepo(NoteRepoABC):
+class NoteTestRepo(NoteRepoFacadeABC):
     """In-memory test implementation of NoteRepoABC for testing"""
     
     def __init__(self):
