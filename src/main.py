@@ -8,7 +8,7 @@ import grpc
 from colorama import Fore, Style, init
 
 
-from db.repos import NoteRepoABC, NotePostgreRepo
+from db.repos import NoteRepoFacadeABC, NotePostgreRepoFacade
 from db import Database
 from db.repos.user.user import UserRepoABC, UserPostgresRepo
 from grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
@@ -93,7 +93,7 @@ async def serve():
     await db.init_db()
 
     # note service
-    repo: NotePostgreRepo = NotePostgreRepo(db=db)
+    repo: NotePostgreRepoFacade = NotePostgreRepoFacade(db=db)
     note_service = GrpcNoteService(repo=repo, log=logging_provider)
     add_NoteServiceServicer_to_server(note_service, server)
 
