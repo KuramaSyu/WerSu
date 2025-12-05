@@ -10,6 +10,9 @@ from db.repos.note.content import NoteContentRepo
 
 from db.repos.note.permission import NotePermissionRepo
 from db.table import TableABC
+from api.undefined import UNDEFINED
+from db.entities.note.permission import NotePermissionEntity
+from db.repos.note.embedding import NoteEmbeddingRepo
 
 
 class NoteRepoFacadeABC(ABC):
@@ -90,7 +93,7 @@ class NoteRepoFacadeABC(ABC):
         self,
         note: NoteEntity,
     ) -> Optional[NoteEntity]:
-        """select note
+        """select a whole note by its ID
         
         Args:
         -----
@@ -106,12 +109,14 @@ class NoteRepoFacadeABC(ABC):
         """
         ...
 
-class NotePostgreRepoFacade(NoteRepoFacadeABC):
+    # TODO: select multiple notes
+
+class NoteRepoFacade(NoteRepoFacadeABC):
     def __init__(
         self, 
         db: Database,
         content_repo: NoteContentRepo,
-        embedding_repo: NoteEmbeddingEntity,
+        embedding_repo: NoteEmbeddingRepo,
         permission_repo: NotePermissionRepo,
     ):
         self._db = db
@@ -166,7 +171,29 @@ class NotePostgreRepoFacade(NoteRepoFacadeABC):
     
     async def select(self, note: NoteEntity) -> Optional[NoteEntity]:
         assert note.note_id
-        record = await self._
+        record = await self._content_repo.select_by_id(note.note_id)
+        if not record:
+            return None
+        
+        # fetch embeddings
+        embeddings = await self._embedding_repo.select(
+            NoteEmbeddingEntity(
+                note_id=note.note_id,
+                model=UNDEFINED,
+                embedding=UNDEFINED,
+            )
+        )
+        record.embeddings = embeddings
+
+        # fetch permissions
+        permissions = await self._permission_repo.select(
+            NotePermissionEntity(
+                note_id=note.note_id,
+                role_id=UNDEFINED,
+            )
+        )
+        record.permissions = permissions
+        return record
 
 
 
