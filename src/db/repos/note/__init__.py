@@ -1,3 +1,3 @@
 from .embedding import *
-from .metadata import *
+from .content import *
 from .note import *
