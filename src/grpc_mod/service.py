@@ -9,6 +9,7 @@ from grpc.aio import ServicerContext
 import asyncpg
 
 from api import loggingProvider
+from api.undefined import UNDEFINED
 from db.repos import NoteRepoFacadeABC
 from db.entities import NoteEntity
 from grpc_mod import (
@@ -31,18 +32,20 @@ class GrpcNoteService(NoteServiceServicer):
     def __init__(self, repo: NoteRepoFacadeABC, log: loggingProvider):
         self.repo = repo
         self.log = log(__name__, self)
-
+ 
     async def GetNote(self, request: GetNoteRequest, context: ServicerContext) -> Note:
         try:
-            note_entity = await self.repo.select(note=NoteEntity(
-                note_id=request.id,
-                author_id=None,
-                content=None,
-                embeddings=[],
-                permissions=[],
-                title=None,
-                updated_at=None
-            ))
+            note_entity = await self.repo.select(
+                NoteEntity(
+                    note_id=request.id,
+                    author_id=UNDEFINED,
+                    content=UNDEFINED,
+                    embeddings=[],
+                    permissions=[],
+                    title=UNDEFINED,
+                    updated_at=UNDEFINED
+                )
+            )
             assert (note_entity 
                 and note_entity.note_id 
                 and note_entity.author_id 
@@ -51,6 +54,7 @@ class GrpcNoteService(NoteServiceServicer):
             )
 
             # conversion from note_entity to gRPC Note Message
+            assert all([e.model != UNDEFINED for e in note_entity.embeddings])
             return Note(
                 id=note_entity.note_id,
                 title=note_entity.title,
@@ -58,14 +62,16 @@ class GrpcNoteService(NoteServiceServicer):
                 content=note_entity.content,
                 embeddings=[
                     NoteEmbedding(
-                        model=e.model,
-                        embedding=e.embedding,
+                        model=e.model,  # type: ignore
+                        embedding=e.embedding,  # type: ignore
                     ) for e in note_entity.embeddings
+                    if e.model != UNDEFINED and e.embedding != UNDEFINED
                 ],
                 permissions=[
                     NotePermission(
-                        role_id=p.role_id
+                        role_id=p.role_id  # type: ignore
                     ) for p in note_entity.permissions
+                    if p.role_id != UNDEFINED
                 ]
 
             )
@@ -79,7 +85,7 @@ class GrpcNoteService(NoteServiceServicer):
         try:
             note_entity = await self.repo.insert(
                 NoteEntity(
-                    note_id=None,
+                    note_id=UNDEFINED,
                     author_id=request.author_id,
                     content=request.content,
                     embeddings=[],
