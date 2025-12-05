@@ -80,25 +80,8 @@ class TableABC(Protocol):
     
     Example:
         >>> table = Table('users', logging_provider, db)
-        >>> await table.insert(['name', 'email'], ['John', 'john@example.com'])
+        >>> await table.insert(where={'name': 'John', 'email': 'john@example.com'})
     """
-    
-    def __init__(
-        self, 
-        table_name: str,
-        logging_provider: loggingProvider, 
-        db: Database,
-        error_log: bool = True
-    ) -> None:
-        """Initialize the table with database connection and logging.
-        
-        Args:
-            table_name: Name of the table in the database.
-            logging_provider: Function that returns a logger instance.
-            db: Database instance to operate on.
-            error_log: Whether to log errors. Defaults to True.
-        """
-        ...
     
     def return_as_dataframe(self, b: bool) -> None:
         """Configure whether query results should be returned as pandas DataFrame.
@@ -111,10 +94,17 @@ class TableABC(Protocol):
         """
         ...
     
+    def get_id_fields(self) -> List[str]:
+        """Get the list of column names that form the table's identifier.
+        
+        Returns:
+            List of column names used as the primary key/identifier.
+        """
+        ...
+    
     async def insert(
         self, 
-        which_columns: List[str], 
-        values: List | Dict[str, Any], 
+        where: Dict[str, Any] | pd.DataFrame,
         returning: str = "*",
         on_conflict: str = "",
     ) -> Optional[Union[List[asyncpg.Record], asyncpg.Record]]:
@@ -123,9 +113,8 @@ class TableABC(Protocol):
         Executes an INSERT statement with optional conflict handling.
         
         Args:
-            which_columns: List of column names to insert into.
-            values: Either a list of values matching which_columns order,
-                or a dictionary mapping column names to values.
+            where: Dictionary mapping column names to values, or DataFrame with
+                columns as field names and rows as records to insert.
             returning: Columns to return from the inserted row. Defaults to '*'.
             on_conflict: ON CONFLICT clause (e.g., 'DO NOTHING'). Defaults to empty.
         
@@ -134,53 +123,39 @@ class TableABC(Protocol):
             or None if the operation fails.
         
         Example:
-            >>> await table.insert(['name', 'age'], ['Alice', 30])
-            >>> await table.insert(['name'], ['Bob'], on_conflict='DO NOTHING')
+            >>> await table.insert(where={'name': 'Alice', 'age': 30})
+            >>> await table.insert(where={'name': 'Bob'}, on_conflict='DO NOTHING')
         """
         ...
     
     async def upsert(
         self, 
-        where: OrderedDict[str, Any] | None = None,
-        which_columns: List[str] | None = None,
-        values: List[Any] | None = None,
-        compound_of: int = 0,
+        where: Dict[str, Any] | pd.DataFrame,
         returning: str = ""
     ) -> Optional[Union[List[asyncpg.Record], asyncpg.Record, pd.DataFrame, str]]:
         """Insert a record or update it if it already exists.
         
         Uses INSERT ... ON CONFLICT ... DO UPDATE to implement upsert logic.
-        The first column(s) in which_columns/where are treated as the conflict target.
+        The columns from get_id_fields() are treated as the conflict target.
         
         Args:
-            where: OrderedDict mapping column names to values. Alternative to
-                using which_columns and values separately.
-            which_columns: List of column names. First column(s) are the conflict target.
-            values: List of values matching which_columns order.
-            compound_of: Number of columns forming the compound primary key.
-                If 0, only the first column is used as conflict target.
+            where: Dictionary mapping column names to values, or DataFrame with
+                columns as field names and rows as records to upsert.
             returning: Columns to return. Defaults to empty (no return).
         
         Returns:
             The upserted record(s) if returning is specified, or execution status.
             Can be DataFrame if return_as_dataframe is enabled.
         
-        Note:
-            The first value(s) in which_columns and values should be the primary key.
-            For compound keys, set compound_of to the number of key columns.
-        
         Example:
-            >>> await table.upsert(
-            ...     where=OrderedDict({'id': 1, 'name': 'Alice', 'age': 31}),
-            ...     compound_of=1
-            ... )
+            >>> await table.upsert(where={'id': 1, 'name': 'Alice', 'age': 31})
         """
         ...
     
     async def update(
         self, 
         set: Dict[str, Any], 
-        where: Dict[str, Any],
+        where: Dict[str, Any] | pd.DataFrame,
         returning: str = "*"
     ) -> Optional[Union[List[asyncpg.Record], asyncpg.Record, pd.DataFrame, str]]:
         """Update existing records in the table.
@@ -189,7 +164,8 @@ class TableABC(Protocol):
         
         Args:
             set: Dictionary mapping column names to new values.
-            where: Dictionary mapping column names to filter values.
+            where: Dictionary mapping column names to filter values, or DataFrame
+                with columns as field names and rows as filter criteria.
                 Only records matching all conditions will be updated.
             returning: Columns to return from updated rows. Defaults to '*'.
         
@@ -207,52 +183,44 @@ class TableABC(Protocol):
     
     async def delete(
         self, 
-        columns: List[str] | None = None,
-        matching_values: List[Any] | None = None,
-        where: Dict[str, Any] | None = None,
+        where: Dict[str, Any] | pd.DataFrame,
     ) -> Optional[Union[List[Dict[str, Any]], pd.DataFrame]]:
         """Delete records from the table and return them.
         
         Executes a DELETE statement with WHERE clause and returns deleted records.
         
         Args:
-            columns: List of column names for WHERE clause.
-            matching_values: List of values matching columns order.
-            where: Dictionary mapping column names to filter values.
-                Alternative to using columns and matching_values.
+            where: Dictionary mapping column names to filter values, or DataFrame
+                with columns as field names and rows as filter criteria.
         
         Returns:
             List of deleted records as dictionaries, or DataFrame if
             return_as_dataframe is enabled. None if operation fails.
         
         Example:
-            >>> await table.delete(columns=['id'], matching_values=[1])
+            >>> await table.delete(where={'id': 1})
             >>> await table.delete(where={'status': 'inactive'})
         """
         ...
     
     async def select(
         self, 
-        columns: List[str] | None = None, 
-        matching_values: List | None = None,
-        additional_values: Optional[List] = None,
+        where: Dict[str, Any] | pd.DataFrame,
         order_by: Optional[str] = None, 
-        where: Optional[Dict[str, Any]] = None,
-        select: str = "*"
+        select: str = "*",
+        additional_values: Optional[List] = None,
     ) -> Optional[Union[List[Dict[str, Any]], pd.DataFrame]]:
         """Select records from the table with filtering and ordering.
         
         Executes a SELECT statement with WHERE clause and optional ORDER BY.
         
         Args:
-            columns: List of column names for WHERE clause.
-            matching_values: List of values matching columns order.
-            additional_values: Additional parameterized values to append
-                to matching_values (for complex queries).
+            where: Dictionary mapping column names to filter values, or DataFrame
+                with columns as field names and rows as filter criteria.
             order_by: ORDER BY clause (e.g., 'created_at DESC').
-            where: Dictionary mapping column names to filter values.
-                Alternative to using columns and matching_values.
             select: Columns to select. Defaults to '*'.
+            additional_values: Additional parameterized values to append
+                to WHERE conditions (for complex queries).
         
         Returns:
             List of selected records as dictionaries, or DataFrame if
@@ -269,8 +237,7 @@ class TableABC(Protocol):
     
     async def select_row(
         self, 
-        columns: List[str], 
-        matching_values: List, 
+        where: Dict[str, Any] | pd.DataFrame,
         select: str = "*"
     ) -> Optional[asyncpg.Record]:
         """Select a single row from the table.
@@ -278,49 +245,51 @@ class TableABC(Protocol):
         Convenience method that calls select() and returns only the first record.
         
         Args:
-            columns: List of column names for WHERE clause.
-            matching_values: List of values matching columns order.
+            where: Dictionary mapping column names to filter values, or DataFrame
+                with columns as field names.
             select: Columns to select. Defaults to '*'.
         
         Returns:
             Single record as asyncpg.Record, or None if no record found.
         
         Example:
-            >>> row = await table.select_row(['id'], [1])
+            >>> row = await table.select_row(where={'id': 1})
         """
         ...
     
-    async def delete_by_id(self, column: str, id: Any) -> Optional[Dict[str, Any]]:
+    async def delete_by_id(self, *id_values: Any) -> Optional[Dict[str, Any]]:
         """Delete a single record by its identifier.
         
-        Convenience method for deleting a record using a single column filter.
+        Convenience method for deleting a record using id_fields as filter.
+        Number of values must match the number of id_fields.
         
         Args:
-            column: Name of the identifier column (e.g., 'id', 'user_id').
-            id: Value of the identifier to match.
+            *id_values: Values for each id field in order.
         
         Returns:
             The deleted record as a dictionary, or None if not found.
         
         Example:
-            >>> await table.delete_by_id('id', 123)
+            >>> await table.delete_by_id(123)  # if id_fields is ['id']
+            >>> await table.delete_by_id(user_id, org_id)  # if id_fields is ['user_id', 'org_id']
         """
         ...
     
-    async def fetch_by_id(self, column: str, id: Any) -> Optional[Dict[str, Any]]:
+    async def fetch_by_id(self, *id_values: Any) -> Optional[Dict[str, Any]]:
         """Fetch a single record by its identifier.
         
-        Convenience method for selecting a record using a single column filter.
+        Convenience method for selecting a record using id_fields as filter.
+        Number of values must match the number of id_fields.
         
         Args:
-            column: Name of the identifier column (e.g., 'id', 'user_id').
-            id: Value of the identifier to match.
+            *id_values: Values for each id field in order.
         
         Returns:
             The record as a dictionary, or None if not found.
         
         Example:
-            >>> user = await table.fetch_by_id('id', 123)
+            >>> user = await table.fetch_by_id(123)  # if id_fields is ['id']
+            >>> user = await table.fetch_by_id(user_id, org_id)  # if id_fields is ['user_id', 'org_id']
         """
         ...
     
@@ -419,11 +388,12 @@ class Table:
         _executed_sql: Last executed SQL with values (for logging).
         _as_dataframe: When True, return results as pandas DataFrame.
         _error_logging: When True, log errors and exceptions.
+        id_fields: Column names that form the table's identifier.
     
     Example:
         >>> db = Database(...)
-        >>> users_table = Table('users', logging_provider, db)
-        >>> await users_table.insert(['name', 'email'], ['Alice', 'alice@example.com'])
+        >>> users_table = Table('users', logging_provider, db, id_fields=['id'])
+        >>> await users_table.insert(where={'name': 'Alice', 'age': 30})
         >>> users = await users_table.select(where={'status': 'active'})
     """
 
@@ -432,7 +402,8 @@ class Table:
         table_name: str,
         logging_provider: loggingProvider, 
         db: Database,
-        error_log: bool = True
+        error_log: bool = True,
+        id_fields: Optional[List[str]] = None,
     ):
         """Initialize the Table instance.
         
@@ -441,15 +412,26 @@ class Table:
             logging_provider: Function that returns a configured logger.
             db: Database instance for executing queries.
             error_log: Enable error logging. Defaults to True.
+            id_fields: List of column names that form the table's identifier.
+                Used by delete_by_id() and fetch_by_id() methods.
         """
 
         self.name = table_name
         self.db = db
         self.log = logging_provider(__name__, self.name)
         self.do_log = self.log.level == logging.DEBUG
+        self.id_fields = id_fields or []
         self._executed_sql = ""
         self._as_dataframe: bool = False
         self._error_logging = error_log
+    
+    def get_id_fields(self) -> List[str]:
+        """Get the list of column names that form the table's identifier.
+        
+        Returns:
+            List of column names used as the primary key/identifier.
+        """
+        return self.id_fields
 
     def return_as_dataframe(self, b: bool) -> None:
         self._as_dataframe = b
@@ -457,33 +439,33 @@ class Table:
     @with_log()
     async def insert(
         self, 
-        which_columns: List[str], 
-        values: List | Dict[str, Any], 
+        where: Dict[str, Any] | pd.DataFrame,
         returning: str = "*",
         on_conflict: str = "",
     ) -> Optional[asyncpg.Record]:
         """Insert a new record into the table.
         
         Executes an INSERT statement with optional conflict handling.
-        Automatically handles both list and dictionary value formats.
+        Automatically handles both dictionary and DataFrame formats.
         
         Args:
-            which_columns: Column names to insert into.
-            values: Either a list of values matching which_columns order,
-                or a dictionary mapping column names to values.
+            where: Dictionary mapping column names to values, or DataFrame with
+                columns as field names and rows as records to insert.
             returning: Columns to return from inserted row. Defaults to '*'.
             on_conflict: ON CONFLICT clause (e.g., 'DO NOTHING'). Defaults to empty.
         
         Returns:
             The inserted record(s) or None if operation fails.
         """
-        if isinstance(values, dict):
-            new_values = []
-            new_columns = []
-            for k, v in values.items():
-                new_values.append(v)
-                new_columns.append(k)
-            values, which_columns = new_values, new_columns
+        # Convert DataFrame to dict-like format
+        if isinstance(where, pd.DataFrame):
+            # For now, handle single row DataFrame
+            if len(where) != 1:
+                raise ValueError("DataFrame must contain exactly one row for insert")
+            where = dict(where.iloc[0])
+        
+        which_columns = list(where.keys())
+        values = list(where.values())
 
         values_chain = [f'${num}' for num in range(1, len(values)+1)]
         sql = (
@@ -502,37 +484,30 @@ class Table:
     @formatter
     async def upsert(
         self, 
-        where: OrderedDict[str, Any] | None = None,
-        which_columns: List[str] | None = None,
-        values: List[Any] | None = None,
-        compound_of: int = 0,
+        where: Dict[str, Any] | pd.DataFrame,
         returning: str = ""
     ) -> Optional[asyncpg.Record]:
         """Insert a record or update if it already exists (upsert).
         
         Uses INSERT ... ON CONFLICT ... DO UPDATE to implement upsert logic.
-        The first column(s) are treated as the conflict target (primary key).
+        The columns from get_id_fields() are treated as the conflict target.
         
         Args:
-            where: OrderedDict mapping column names to values. Alternative to
-                using which_columns and values separately.
-            which_columns: Column names to insert/update. First column(s) are the
-                conflict target.
-            values: Values matching which_columns order.
-            compound_of: Number of columns forming the compound primary key.
-                If 0, only the first column is used. Defaults to 0.
+            where: Dictionary mapping column names to values, or DataFrame with
+                columns as field names and rows as records to upsert.
             returning: Columns to return. Defaults to empty (no return).
         
         Returns:
             The upserted record(s) if returning is specified, or None.
-        
-        Note:
-            - The first value(s) in which_columns and values should be the primary key.
-            - For compound keys, set compound_of to the number of key columns.
         """
-        if where:
-            which_columns = list(where.keys())
-            values = list(where.values())
+        # Convert DataFrame to dict-like format
+        if isinstance(where, pd.DataFrame):
+            if len(where) != 1:
+                raise ValueError("DataFrame must contain exactly one row for upsert")
+            where = dict(where.iloc[0])
+        
+        which_columns = list(where.keys())
+        values = list(where.values())
         
         assert values and which_columns
         values_chain = [f'${num}' for num in range(1, len(values)+1)]
@@ -542,9 +517,11 @@ class Table:
                 continue
             update_set_query += f"{item[0]}={item[1]}, "
         update_set_query = update_set_query[:-2]  # remove last ","
-        on_conflict_values = which_columns[0]
-        if compound_of:
-            on_conflict_values = ", ".join(c for c in which_columns[:compound_of])
+        
+        # Use id_fields from dependency injection
+        id_fields = self.get_id_fields()
+        on_conflict_values = ", ".join(id_fields) if id_fields else which_columns[0]
+        
         sql = (
             f"INSERT INTO {self.name} ({', '.join(which_columns)}) \n"
             f"VALUES ({', '.join(values_chain)}) \n"
@@ -562,20 +539,26 @@ class Table:
     async def update(
         self, 
         set: Dict[str, Any], 
-        where: Dict[str, Any],
+        where: Dict[str, Any] | pd.DataFrame,
         returning: str = "*"
     ) -> Optional[asyncpg.Record]:
         """Update existing records in the table.
         
         Args:
             set: Dictionary mapping column names to new values.
-            where: Dictionary mapping column names to filter values.
+            where: Dictionary mapping column names to filter values, or DataFrame
+                with columns as field names and rows as filter criteria.
                 Only matching records will be updated.
             returning: Columns to return from updated rows. Defaults to '*'.
         
         Returns:
             The updated record(s) or None if operation fails.
         """
+        # Convert DataFrame to dict if needed
+        if isinstance(where, pd.DataFrame):
+            if len(where) != 1:
+                raise ValueError("DataFrame must contain exactly one row for update")
+            where = dict(where.iloc[0])
         num_gen = (num for num in range(1,100))
         update_set_query = ", ".join([f'{col_name}=${i}' for i, col_name in zip(num_gen, set.keys())])
         next_ = next(num_gen) -1  # otherwise it would be one to high - python bug?
@@ -595,26 +578,25 @@ class Table:
     @formatter
     async def delete(
         self, 
-        columns: List[str] | None = None,
-        matching_values: List[Any] | None = None,
-        where: Dict[str, Any] | None = None,
+        where: Dict[str, Any] | pd.DataFrame,
     ) -> Optional[List[Dict[str, Any]]]:
         """Delete records from the table and return them.
         
         Args:
-            columns: Column names for WHERE clause.
-            matching_values: Values matching columns order.
-            where: Dictionary mapping column names to filter values.
-                Alternative to columns and matching_values.
+            where: Dictionary mapping column names to filter values, or DataFrame
+                with columns as field names and rows as filter criteria.
         
         Returns:
             List of deleted records as dictionaries, or None if operation fails.
         """
-        if where:
-            columns = [*where.keys()]
-            matching_values = [*where.values()]
+        # Convert DataFrame to dict if needed
+        if isinstance(where, pd.DataFrame):
+            if len(where) != 1:
+                raise ValueError("DataFrame must contain exactly one row for delete")
+            where = dict(where.iloc[0])
         
-        assert columns and matching_values
+        columns = list(where.keys())
+        matching_values = list(where.values())
         where_stmt = self.__class__.create_where_statement(columns)
 
         sql = (
@@ -636,35 +618,31 @@ class Table:
     @formatter
     async def select(
         self, 
-        columns: List[str] | None = None, 
-        matching_values: List | None = None,
-        additional_values: Optional[List] = None,
+        where: Dict[str, Any] | pd.DataFrame,
         order_by: Optional[str] = None, 
-        where: Optional[Dict[str, Any]] = None,
-        select: str = "*"
+        select: str = "*",
+        additional_values: Optional[List] = None,
     ) -> Optional[List[Dict[str, Any]]]:
         """Select records from the table with filtering and ordering.
         
         Args:
-            columns: Column names for WHERE clause.
-            matching_values: Values matching columns order.
-            additional_values: Additional parameterized values to append.
+            where: Dictionary mapping column names to filter values, or DataFrame
+                with columns as field names and rows as filter criteria.
             order_by: ORDER BY clause (e.g., 'created_at DESC').
-            where: Dictionary mapping column names to filter values.
-                Alternative to columns and matching_values.
             select: Columns to select. Defaults to '*'.
+            additional_values: Additional parameterized values to append.
         
         Returns:
             List of selected records as dictionaries, or None if no records found.
         """
-        if where:
-            columns = []
-            matching_values = []
-            for k, v in where.items():
-                columns.append(k)
-                matching_values.append(v)
+        # Convert DataFrame to dict if needed
+        if isinstance(where, pd.DataFrame):
+            if len(where) != 1:
+                raise ValueError("DataFrame must contain exactly one row for select")
+            where = dict(where.iloc[0])
         
-        assert columns and matching_values
+        columns = list(where.keys())
+        matching_values = list(where.values())
         where_stmt = self.__class__.create_where_statement(columns)
         sql = (
             f"SELECT {select} FROM {self.name}\n"
@@ -679,41 +657,64 @@ class Table:
         records = await self.db.fetch(sql, *matching_values)
         return records
 
-    async def select_row(self, columns: List[str], matching_values: List, select: str = "*") -> Optional[asyncpg.Record]:
-        records = await self.select(columns, matching_values, select=select)
+    async def select_row(
+        self, 
+        where: Dict[str, Any] | pd.DataFrame,
+        select: str = "*"
+    ) -> Optional[asyncpg.Record]:
+        """Select a single row from the table.
+        
+        Convenience method that calls select() and returns only the first record.
+        
+        Args:
+            where: Dictionary mapping column names to filter values, or DataFrame
+                with columns as field names.
+            select: Columns to select. Defaults to '*'.
+        
+        Returns:
+            Single record as asyncpg.Record, or None if no record found.
+        
+        Example:
+            >>> row = await table.select_row(where={'id': 1})
+        """
+        records = await self.select(where, select=select)
         if not records:
             return None
         return records[0]
 
-    async def delete_by_id(self, column: str, id: Any) -> Optional[Dict]:
+    async def delete_by_id(self, *id_values: Any) -> Optional[Dict]:
         """Delete a single record by its identifier.
         
         Args:
-            column: Name of the identifier column.
-            id: Value of the identifier to match.
+            *id_values: Values for each id field in order.
         
         Returns:
             The deleted record as a dictionary, or None if not found.
         """
-        return await self.delete(
-            columns=[column],
-            matching_values=[id],
-        )
+        if not self.id_fields:
+            raise ValueError("Table has no id_fields configured")
+        if len(id_values) != len(self.id_fields):
+            raise ValueError(f"Expected {len(self.id_fields)} id values, got {len(id_values)}")
+        
+        where = dict(zip(self.id_fields, id_values))
+        return await self.delete(where=where)
 
-    async def fetch_by_id(self, column: str, id: Any) -> Optional[Dict]:
+    async def fetch_by_id(self, *id_values: Any) -> Optional[Dict]:
         """Fetch a single record by its identifier.
         
         Args:
-            column: Name of the identifier column.
-            id: Value of the identifier to match.
+            *id_values: Values for each id field in order.
         
         Returns:
             The record as a dictionary, or None if not found.
         """
-        rec = await self.select(
-            columns=[column],
-            matching_values=[id],
-        )
+        if not self.id_fields:
+            raise ValueError("Table has no id_fields configured")
+        if len(id_values) != len(self.id_fields):
+            raise ValueError(f"Expected {len(self.id_fields)} id values, got {len(id_values)}")
+        
+        where = dict(zip(self.id_fields, id_values))
+        rec = await self.select(where=where)
         if not rec:
             return None
         return rec[0]
