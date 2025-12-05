@@ -5,20 +5,25 @@ import asyncpg
 
 from db.entities import NoteEntity
 from db import Database
+from db.entities.note.embedding import NoteEmbeddingEntity
+from db.repos.note.content import NoteContentRepo
+
+from db.repos.note.permission import NotePermissionRepo
+from db.table import TableABC
 
 
-class NoteRepoABC(ABC):
+class NoteRepoFacadeABC(ABC):
     """Represents the ABC for note-operations which operate over multiple relations"""
     @property
-    def embedding_table(self) -> str:
+    def embedding_table_name(self) -> str:
         return "note.embedding"
 
     @property
-    def content_table(self) -> str:
+    def content_table_name(self) -> str:
         return "note.content"
     
     @property
-    def permission_table(self) -> str:
+    def permission_table_name(self) -> str:
         return "note.permission"
 
     @abstractmethod
@@ -101,14 +106,24 @@ class NoteRepoABC(ABC):
         """
         ...
 
-class NotePostgreRepo(NoteRepoABC):
-    def __init__(self, db: Database):
+class NotePostgreRepoFacade(NoteRepoFacadeABC):
+    def __init__(
+        self, 
+        db: Database,
+        content_repo: NoteContentRepo,
+        embedding_repo: NoteEmbeddingEntity,
+        permission_repo: NotePermissionRepo,
+    ):
         self._db = db
+        self._content_repo = content_repo
+        self._embedding_repo = embedding_repo
+        self._permission_repo = permission_repo
+
     
     async def insert(self, note: NoteEntity):
         # insert note itself
         query = f"""
-        INSERT INTO {self.content_table}(title, content, updated_at, author_id)
+        INSERT INTO {self.content_table_name}(title, content, updated_at, author_id)
         VALUES ($1, $2, $3, $4)
         RETURNING id
         """
@@ -119,7 +134,7 @@ class NotePostgreRepo(NoteRepoABC):
 
         # insert embeddings
         query = f"""
-        INSERT INTO {self.embedding_table}(model, embedding)
+        INSERT INTO {self.embedding_table_name}(model, embedding)
         VALUES ($1, $2)
         """
         for embedding in note.embeddings:
@@ -131,7 +146,7 @@ class NotePostgreRepo(NoteRepoABC):
         
         # insert permissions
         query = f"""
-        INSERT INTO {self.permission_table}(note_id, role_id)
+        INSERT INTO {self.permission_table_name}(note_id, role_id)
         VALUES ($1, $2)
         """
         for permission in note.permissions:
@@ -151,21 +166,7 @@ class NotePostgreRepo(NoteRepoABC):
     
     async def select(self, note: NoteEntity) -> Optional[NoteEntity]:
         assert note.note_id
-        query = f"""
-        WITH filtered_note AS (
-            SELECT * FROM {self.content_table}
-            WHERE id = $1
-        )
-
-        SELECT * FROM filtered_note fn
-        JOIN {self.embedding_table} ON {self.embedding_table}.note_id = fn.id
-        JOIN {self.permission_table} ON {self.permission_table}.note_id = fn.id
-        """
-
-        return await self._db.fetch(
-            query,
-            note.note_id
-        )
+        record = await self._
 
 
 
