@@ -89,6 +89,25 @@ class NoteContentRepo(ABC):
         """
         ...
 
+    @abstractmethod
+    async def select_by_id(
+        self,
+        note_id: int,
+    ) -> NoteEntity:
+        """select metadata by ID
+        
+        Args:
+        -----
+        note_id: `int`
+            the ID of the note
+
+        Returns:
+        --------
+        `NoteEntity`:
+            the matching entity
+        """
+        ...
+
 
 class NoteContentPostgresRepo(NoteContentRepo):
     """Provides an implementation using Postgres as the backend database"""
@@ -128,3 +147,14 @@ class NoteContentPostgresRepo(NoteContentRepo):
         if not records:
             return []
         return [NoteEntity(**record) for record in records]
+
+    async def select_by_id(self, note_id: int) -> NoteEntity:
+        record = await self._table.fetch_by_id(note_id)
+        if not record:
+            raise Exception(f"Note with ID {note_id} not found")
+        # convert Record to NoteEntity (id -> note_id)
+        record = dict(record)
+        record['note_id'] = record.pop('id')
+
+        # neither embeddings nor permissions are fetched here
+        return NoteEntity(**record, embeddings=[], permissions=[])
