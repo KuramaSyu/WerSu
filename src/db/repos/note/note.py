@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import List, Optional
 
 import asyncpg
@@ -13,7 +14,29 @@ from db.table import TableABC
 from api.undefined import UNDEFINED
 from db.entities.note.permission import NotePermissionEntity
 from db.repos.note.embedding import NoteEmbeddingRepo
+from grpc_mod.proto.note_pb2 import GetSearchNotesRequest, MinimalNote
 
+
+class SearchType(Enum):
+    NO_SEARCH = 1
+    FULL_TEXT_TITLE = 2
+    FUZZY = 3
+    CONTEXT = 4
+
+    @staticmethod
+    def from_proto(proto_value: GetSearchNotesRequest.SearchType.ValueType) -> "SearchType":
+        if proto_value == GetSearchNotesRequest.SearchType.Undefined:
+            return SearchType.CONTEXT
+        elif proto_value == GetSearchNotesRequest.SearchType.NoSearch:
+            return SearchType.NO_SEARCH
+        elif proto_value == GetSearchNotesRequest.SearchType.FullTextTitle:
+            return SearchType.FULL_TEXT_TITLE
+        elif proto_value == GetSearchNotesRequest.SearchType.Fuzzy:
+            return SearchType.FUZZY
+        elif proto_value == GetSearchNotesRequest.SearchType.Context:
+            return SearchType.CONTEXT
+        else:
+            raise ValueError(f"Unknown SearchType value: {proto_value}")
 
 class NoteRepoFacadeABC(ABC):
     """Represents the ABC for note-operations which operate over multiple relations"""
@@ -109,6 +132,35 @@ class NoteRepoFacadeABC(ABC):
         """
         ...
 
+    @abstractmethod
+    async def search_notes(
+        self, 
+        search_type: SearchType,
+        query: str, 
+        limit: int, 
+        offset: int
+    ) -> List[MinimalNote]:
+        """search notes according to the search type
+        
+        Args:
+        -----
+        search_type: `SearchType`
+            the type of search to perform
+        query: `str`
+            the search query
+        limit: `int`
+            the maximum number of results to return
+        offset: `int`
+            the offset for pagination
+
+        Returns:
+        --------
+        `List[MinimalNote]`:
+            the list of matching minimal notes
+        """
+        ...
+
+
     # TODO: select multiple notes
 
 class NoteRepoFacade(NoteRepoFacadeABC):
@@ -194,6 +246,51 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         )
         record.permissions = permissions
         return record
+
+    async def search_notes(
+        self, 
+        search_type: SearchType,
+        query: str, 
+        limit: int, 
+        offset: int
+    ) -> List[MinimalNote]:
+        if search_type == SearchType.NO_SEARCH:
+            return []
+        elif search_type == SearchType.FULL_TEXT_TITLE:
+            sql_query = f"""
+            SELECT id, title FROM {self.content_table_name}
+            WHERE to_tsvector('english', title) @@ plainto_tsquery('english', $1)
+            LIMIT $2 OFFSET $3
+            """
+        elif search_type == SearchType.FUZZY:
+            sql_query = f"""
+            SELECT id, title FROM {self.content_table_name}
+            WHERE similarity(title, $1) > 0.3
+            ORDER BY similarity(title, $1) DESC
+            LIMIT $2 OFFSET $3
+            """
+        elif search_type == SearchType.CONTEXT:
+            sql_query = f"""
+            SELECT id, title FROM {self.content_table_name}
+            WHERE content ILIKE '%' || $1 || '%'
+            LIMIT $2 OFFSET $3
+            """
+        else:
+            raise ValueError(f"Unsupported search type: {search_type}")
+
+        records = await self._db.fetchall(
+            sql_query,
+            query,
+            limit,
+            offset
+        )
+        result = [
+            MinimalNote(
+                id=record["id"],
+                title=record["title"]
+            ) for record in records
+        ]
+        return result
 
 
 
