@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 from typing import List
 
 from asyncpg import Record
-from pandas.io.sql import re
 from db.entities import NoteEmbeddingEntity
 from db.table import TableABC
 
