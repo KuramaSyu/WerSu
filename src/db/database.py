@@ -60,17 +60,17 @@ class DatabaseABC(ABC):
         ...
     
     @abstractmethod
-    async def execute(self, query: str, *args: List[Any]) -> str:
+    async def execute(self, query: str, *args: Any) -> str:
         """Executes an SQL command (or commands)."""
         ...
     
     @abstractmethod
-    async def fetch(self, query: str, *args: List[Any]) -> List[Dict]:
+    async def fetch(self, query: str, *args: Any) -> List[Dict]:
         """Fetches multiple records from the database."""
         ...
     
     @abstractmethod
-    async def fetchrow(self, query: str, *args: List[Any]) -> Optional[Dict]:
+    async def fetchrow(self, query: str, *args: Any) -> Optional[Dict]:
         """Fetches a single record from the database."""
         ...
     
@@ -107,7 +107,7 @@ class Database(DatabaseABC):
         return cls._instance
 
     @acquire
-    async def execute(self, query: str, *args: List[Any], _cxn: Connection) -> str:
+    async def execute(self, query: str, *args: Any, _cxn: Connection) -> str:
         """
         Execute an SQL command (or commands).
 
@@ -135,7 +135,7 @@ class Database(DatabaseABC):
 
     
     @acquire
-    async def fetch(self, query: str, *args: List[Any], _cxn: Connection) -> List[Record]:
+    async def fetch(self, query: str, *args: Any, _cxn: Connection) -> List[Record]:
         """use when making selections.
 
         Returns:
@@ -146,7 +146,7 @@ class Database(DatabaseABC):
         return await _cxn.fetch(query, *args)
 
     @acquire
-    async def fetchrow(self, query: str, *args: List[Any], _cxn: Connection) -> Optional[Record]:
+    async def fetchrow(self, query: str, *args: Any, _cxn: Connection) -> Optional[Record]:
         """use when making selections that return a single row.
 
         Returns:
