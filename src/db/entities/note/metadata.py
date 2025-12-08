@@ -4,9 +4,11 @@ from datetime import datetime
 
 from asyncpg import Record
 
+
 from .embedding import NoteEmbeddingEntity
 from .permission import NotePermissionEntity
 from api.undefined import *
+
 
 @dataclass
 class NoteEntity:
@@ -30,3 +32,13 @@ class NoteEntity:
             embeddings=[],
             permissions=[]
         )
+
+    def to_grpc_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.note_id,
+            "title": self.title,
+            "updated_at": self.updated_at,
+            "author_id": self.author_id,
+            "content": self.content,
+            "embeddings": self.embeddings,
+        }
