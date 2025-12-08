@@ -71,6 +71,7 @@ def main():
     get_note(stub, note_id=resp.id)
 
     print("Posting note with empty content to perform a search")
+    get_note(stub, )
 
 if __name__ == "__main__":
     main()
