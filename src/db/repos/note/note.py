@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Type
 
 import asyncpg
 
@@ -10,6 +10,7 @@ from db.entities.note.embedding import NoteEmbeddingEntity
 from db.repos.note.content import NoteContentRepo
 
 from db.repos.note.permission import NotePermissionRepo
+from db.repos.note.search_strategy import ContextNoteSearchStrategy, FuzzyTitleContentSearchStrategy, NoteSearchStrategy, TitleLexemeNoteSearchStrategy
 from db.table import TableABC
 from api.undefined import UNDEFINED
 from db.entities.note.permission import NotePermissionEntity
@@ -254,44 +255,25 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         limit: int, 
         offset: int
     ) -> List[MinimalNote]:
+        strategy_type: Type[NoteSearchStrategy]
         if search_type == SearchType.NO_SEARCH:
-            return []
+            strategy_type = ContextNoteSearchStrategy
         elif search_type == SearchType.FULL_TEXT_TITLE:
-            sql_query = f"""
-            SELECT id, title FROM {self.content_table_name}
-            WHERE to_tsvector('english', title) @@ plainto_tsquery('english', $1)
-            LIMIT $2 OFFSET $3
-            """
+            strategy_type = TitleLexemeNoteSearchStrategy
         elif search_type == SearchType.FUZZY:
-            sql_query = f"""
-            SELECT id, title FROM {self.content_table_name}
-            WHERE similarity(title, $1) > 0.3
-            ORDER BY similarity(title, $1) DESC
-            LIMIT $2 OFFSET $3
-            """
+            strategy_type = FuzzyTitleContentSearchStrategy
         elif search_type == SearchType.CONTEXT:
-            sql_query = f"""
-            SELECT id, title FROM {self.content_table_name}
-            WHERE content ILIKE '%' || $1 || '%'
-            LIMIT $2 OFFSET $3
-            """
-        else:
-            raise ValueError(f"Unsupported search type: {search_type}")
-
-        records = await self._db.fetchall(
-            sql_query,
-            query,
-            limit,
-            offset
+            strategy_type = ContextNoteSearchStrategy
+        else: 
+            raise ValueError(f"Unknown SearchType: {search_type}")
+        strategy = strategy_type(
+            db=self._db,
+            query=query,
+            limit=limit,
+            offset=offset
         )
-        result = [
-            MinimalNote(
-                id=record["id"],
-                title=record["title"]
-            ) for record in records
-        ]
-        return result
-
+        note_entities = await strategy.search()
+        notes = [NoteEntity.from_record(record) for record in note_entities]
 
 
 
