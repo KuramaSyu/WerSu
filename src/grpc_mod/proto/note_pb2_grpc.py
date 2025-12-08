@@ -45,6 +45,11 @@ class NoteServiceStub(object):
                 request_serializer=grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
                 response_deserializer=grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
                 _registered_method=True)
+        self.SearchNotes = channel.unary_stream(
+                '/note.NoteService/SearchNotes',
+                request_serializer=grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
+                response_deserializer=grpc__mod_dot_proto_dot_note__pb2.MinimalNote.FromString,
+                _registered_method=True)
 
 
 class NoteServiceServicer(object):
@@ -63,6 +68,12 @@ class NoteServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SearchNotes(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_NoteServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -75,6 +86,11 @@ def add_NoteServiceServicer_to_server(servicer, server):
                     servicer.PostNote,
                     request_deserializer=grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.FromString,
                     response_serializer=grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
+            ),
+            'SearchNotes': grpc.unary_stream_rpc_method_handler(
+                    servicer.SearchNotes,
+                    request_deserializer=grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.FromString,
+                    response_serializer=grpc__mod_dot_proto_dot_note__pb2.MinimalNote.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -132,6 +148,33 @@ class NoteService(object):
             '/note.NoteService/PostNote',
             grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
             grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SearchNotes(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/note.NoteService/SearchNotes',
+            grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
+            grpc__mod_dot_proto_dot_note__pb2.MinimalNote.FromString,
             options,
             channel_credentials,
             insecure,
