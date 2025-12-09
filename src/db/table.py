@@ -421,7 +421,7 @@ class Table(TableABC):
 
         self.name = table_name
         self.db = db
-        self.log = logging_provider(__name__, self.name)
+        self.log = logging_provider(__name__, self)
         self.do_log = self.log.level == logging.DEBUG
         self.id_fields = id_fields or []
         self._executed_sql = ""
@@ -472,7 +472,6 @@ class Table(TableABC):
             sql += f"ON CONFLICT {on_conflict}\n"
         if returning:
             sql += f"RETURNING {returning}\n"
-        self._create_sql_log_message(sql, values)
         return_values = await self.db.fetch(sql, *values)
         return return_values
 
@@ -519,7 +518,6 @@ class Table(TableABC):
         )
         if returning:
             sql += f"RETURNING {returning} \n"
-        self._create_sql_log_message(sql, values)
         return_values = await self.db.execute(sql, *values)
         return return_values   
     
@@ -559,7 +557,6 @@ class Table(TableABC):
         if returning:
             sql += f"RETURNING {returning} \n"
         values = [*set.values(), *where.values()]
-        self._create_sql_log_message(sql, values)
         return_values = await self.db.execute(sql, *values)
         return return_values   
 
@@ -592,8 +589,6 @@ class Table(TableABC):
             f"WHERE {where_stmt}\n"
             f"RETURNING *"
         )
-        self._create_sql_log_message(sql, matching_values)
-
         records = await self.db.fetch(sql, *matching_values)
         return records
 
@@ -643,8 +638,7 @@ class Table(TableABC):
             sql += f"\nORDER BY {order_by}"
         if additional_values:
             matching_values.extend(additional_values)
-        self._create_sql_log_message(sql, matching_values)
-
+            
         records = await self.db.fetch(sql, *matching_values)
         return records
 
@@ -709,7 +703,6 @@ class Table(TableABC):
     @with_log()
     @formatter
     async def _fetch(self, sql: str, *args) -> Optional[List[Record]]:
-        self._create_sql_log_message(sql, [*args])
         return await self.db.fetch(sql, *args)
 
     @staticmethod
