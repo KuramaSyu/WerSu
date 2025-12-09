@@ -9,6 +9,7 @@ from grpc.aio import ServicerContext
 import asyncpg
 
 from api import LoggingProvider
+from api.types import Pagination
 from api.undefined import UNDEFINED
 from db.repos import NoteRepoFacadeABC
 from db.entities import NoteEntity
@@ -114,8 +115,7 @@ class GrpcNoteService(NoteServiceServicer):
         notes = await self.repo.search_notes(
             to_search_type(request.search_type),
             request.query,
-            request.limit,
-            request.offset,
+            pagination=Pagination(limit=request.limit, offset=request.offset)
         )
         for note in notes:
             yield to_grpc_minimal_note(note)
