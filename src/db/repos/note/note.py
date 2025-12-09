@@ -6,6 +6,7 @@ import typing
 import asyncpg
 
 from ai.embedding_generator import EmbeddingGenerator, Models
+from api.types import Pagination
 from db.entities import NoteEntity
 from db import Database
 from db.entities.note.embedding import NoteEmbeddingEntity
@@ -47,7 +48,9 @@ class NoteRepoFacadeABC(ABC):
         note: NoteEntity,
     ) -> NoteEntity:
         """inserts a full note into 
-        all 3 relations used for this
+        all 3 relations used for this.
+        The embedding will be generated automatically.
+        Added embeddings will be ignored.
         
         Args:
         -----
@@ -126,8 +129,7 @@ class NoteRepoFacadeABC(ABC):
         self, 
         search_type: SearchType,
         query: str, 
-        limit: int, 
-        offset: int
+        pagination: Pagination
     ) -> List[NoteEntity]:
         """search notes according to the search type
         
@@ -137,10 +139,8 @@ class NoteRepoFacadeABC(ABC):
             the type of search to perform
         query: `str`
             the search query
-        limit: `int`
-            the maximum number of results to return
-        offset: `int`
-            the offset for pagination
+        pagination: `Pagination`
+            pagination parameters (limit, offset)
 
         Returns:
         --------
@@ -149,8 +149,6 @@ class NoteRepoFacadeABC(ABC):
         """
         ...
 
-
-    # TODO: select multiple notes
 
 class NoteRepoFacade(NoteRepoFacadeABC):
     def __init__(
@@ -186,22 +184,12 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         VALUES ($1, $2, $3)
         """
         if note.content:
-            model = Models.MINI_LM_L6_V2
-            embedding = EmbeddingGenerator(model).generate(note.content)
-            embedding_str = EmbeddingGenerator.tensor_to_str_vec(embedding)
-            await self._db.execute(
-                query,
-                note_id, model.value, embedding_str
+            embedding = await self._embedding_repo.insert(
+                note_id,
+                note.title if note.title else "",
+                note.content
             )
-            note.embeddings.append(
-                NoteEmbeddingEntity(
-                    note_id=note_id,
-                    model=model.value,
-                    embedding=embedding.tolist()
-                )
-            )
-
-            
+            note.embeddings.append(embedding)
         # insert permissions
         query = f"""
         INSERT INTO {self.permission_table_name}(note_id, role_id)
@@ -252,26 +240,34 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         self, 
         search_type: SearchType,
         query: str, 
-        limit: int, 
-        offset: int
+        pagination: Pagination
     ) -> List[NoteEntity]:
-        strategy_type: Type[NoteSearchStrategy]
+
+        # these parameters are common to all strategies __init__ fn
+        common_init_parameters = {
+            "db": self._db,
+            "query": query,
+            "limit": pagination.limit,
+            "offset": pagination.offset,
+        }
+        strategy: NoteSearchStrategy
         if search_type == SearchType.NO_SEARCH:
-            strategy_type = ContextNoteSearchStrategy
+            strategy = ContextNoteSearchStrategy(
+                **common_init_parameters, 
+                generator=self._embedding_repo.embedding_generator
+            )
         elif search_type == SearchType.FULL_TEXT_TITLE:
-            strategy_type = TitleLexemeNoteSearchStrategy
+            strategy = TitleLexemeNoteSearchStrategy(**common_init_parameters)
         elif search_type == SearchType.FUZZY:
-            strategy_type = FuzzyTitleContentSearchStrategy
+            strategy = FuzzyTitleContentSearchStrategy(**common_init_parameters)
         elif search_type == SearchType.CONTEXT:
-            strategy_type = ContextNoteSearchStrategy
+            strategy = ContextNoteSearchStrategy(
+                **common_init_parameters, 
+                generator=self._embedding_repo.embedding_generator
+            )
         else: 
             raise ValueError(f"Unknown SearchType: {search_type}")
-        strategy = strategy_type(
-            db=self._db,
-            query=query,
-            limit=limit,
-            offset=offset
-        )
+
         note_entities = await strategy.search()
         return note_entities
 
