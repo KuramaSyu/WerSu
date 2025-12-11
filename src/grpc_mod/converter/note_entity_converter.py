@@ -4,10 +4,9 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from api.undefined import UNDEFINED
 from db.entities.note.metadata import NoteEntity
 from db.repos.note.note import SearchType
-from grpc_mod.converter.dict_helper import drop_except_keys
 from grpc_mod.proto.note_pb2 import GetSearchNotesRequest, MinimalNote, Note, NoteEmbedding, NotePermission
-from grpc_mod.converter import drop_undefined
 from utils import asdict
+from utils.dict_helper import drop_except_keys, drop_undefined
 
 
 
