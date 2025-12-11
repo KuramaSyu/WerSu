@@ -110,6 +110,19 @@ class GrpcNoteService(NoteServiceServicer):
             context.set_details("Internal server error while creating note")
             return Note()
 
+    async def AlterNote(self, request: PostNoteRequest, context: ServicerContext) -> Note:
+        self.repo.update(
+            NoteEntity(
+                note_id=request.id,
+                author_id=request.author_id,
+                content=request.content,
+                embeddings=[],
+                permissions=[],
+                title=request.title,
+                updated_at=datetime.now(),
+            )
+        )
+        ...
     async def SearchNotes(
         self, request: GetSearchNotesRequest, context: ServicerContext
     ) -> AsyncIterator[MinimalNote]:
