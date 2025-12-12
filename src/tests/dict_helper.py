@@ -51,7 +51,7 @@ class DropExceptKeysUseCase(TestCase):
 class AsDictDataclassUseCase(TestCase):
     def test_if_undefined_age_is_dropped(self):
         test_user = TestUser("paul", UNDEFINED)
-        with self.assertRaises(KeyError) as cm:
+        with self.assertRaises(KeyError):
             asdict(test_user)["age"]
 
     def test_if_normal_fields_persist(self):
