@@ -1,0 +1,14 @@
+# Formatting / linting
+black
+
+# Testing
+pytest
+pytest-asyncio
+
+# Containers / integration tests
+docker
+testcontainers
+
+# Typing / protobuf helpers
+mypy-protobuf
+types-protobuf
