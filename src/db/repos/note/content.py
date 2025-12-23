@@ -121,13 +121,19 @@ class NoteContentPostgresRepo(NoteContentRepo):
         return metadata
 
     async def update(self, set: NoteEntity, where: NoteEntity) -> NoteEntity:
+        where_arg = asdict(where)
+        where_arg["id"] = where_arg.pop("note_id", None)
         record = await self._table.update(
             set=asdict(set),
-            where=asdict(where)
+            where=where_arg,
+            returning="*"
         )
         if not record:
-            raise Exception("Failed to update metadata")
-        return set
+            raise Exception(f"Failed to update metadata; returned: {record}")
+        assert isinstance(record, Record)
+        record = dict(record)
+        record['note_id'] = record.pop('id')  # convert SQL id -> note_id for NoteEntity
+        return NoteEntity(**record)
 
     async def delete(self, metadata: NoteEntity) -> NoteEntity:
         conditions = asdict(metadata)
