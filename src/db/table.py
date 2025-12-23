@@ -482,8 +482,6 @@ class Table(TableABC):
             returning=returning
         )
 
-    @with_log()
-    @formatter
     async def _upsert(
         self, 
         where: Dict[str, Any] | pd.DataFrame,
@@ -564,12 +562,10 @@ class Table(TableABC):
             where=where
         )
 
-    @with_log()
-    @formatter
     async def _delete(
         self, 
         where: Dict[str, Any] | pd.DataFrame,
-    ) -> Optional[List[Dict[str, Any]]]:
+    ) -> Optional[List[Record]]:
         # Convert DataFrame to dict if needed
         if isinstance(where, pd.DataFrame):
             if len(where) != 1:
