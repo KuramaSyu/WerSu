@@ -13,13 +13,13 @@ from src.api.undefined import *
 @dataclass
 class NoteEntity:
     """Represents one record of note.metadata"""
-    note_id: UndefinedOr[int]
-    title: UndefinedNoneOr[str]
-    updated_at: UndefinedNoneOr[datetime]
-    author_id: UndefinedNoneOr[int]
-    content: UndefinedNoneOr[str]
-    embeddings: UndefinedOr[List[NoteEmbeddingEntity]]
-    permissions: UndefinedOr[List[NotePermissionEntity]]
+    note_id: UndefinedOr[int] = UNDEFINED
+    title: UndefinedNoneOr[str] = UNDEFINED
+    updated_at: UndefinedNoneOr[datetime] = UNDEFINED
+    author_id: UndefinedNoneOr[int] = UNDEFINED
+    content: UndefinedNoneOr[str] = UNDEFINED
+    embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED
+    permissions: UndefinedOr[List[NotePermissionEntity]] = UNDEFINED
 
     @staticmethod
     def from_record(record: Record | Dict[str, Any]) -> "NoteEntity":
