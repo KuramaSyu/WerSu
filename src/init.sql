@@ -36,19 +36,20 @@ CREATE TABLE IF NOT EXISTS role.permission (
     key TEXT UNIQUE -- e.g., 'read', 'write', 'delete', 'manage_roles'
 );
 
--- default permissions for a role / for now not important
-CREATE TABLE IF NOT EXISTS role.role_permission (
-    role_id BIGINT REFERENCES role.role(id),
-    permission_id BIGINT REFERENCES role.permission(id),
-    allow BOOLEAN, -- allow/deny flag
-    PRIMARY KEY(role_id, permission_id)
-);
 
 -- roles
 CREATE TABLE IF NOT EXISTS role.role (
   id BIGINT PRIMARY KEY,
   name TEXT,
   description TEXT
+);
+
+-- default permissions for a role / for now not important
+CREATE TABLE IF NOT EXISTS role.role_permission (
+    role_id BIGINT REFERENCES role.role(id),
+    permission_id BIGINT REFERENCES role.permission(id),
+    allow BOOLEAN, -- allow/deny flag
+    PRIMARY KEY(role_id, permission_id)
 );
 
 -- resources (shelves, books, chapters, notes) and their hierarchy
