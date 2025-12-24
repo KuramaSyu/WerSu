@@ -164,6 +164,74 @@ async def test_search_by_context(
         negative_search=True
     ) == True
 
+async def test_search_by_web_lexme_matching(
+    note_repo_facade: NoteRepoFacadeABC, 
+    user_repo: UserRepoABC
+):
+    """Creates a test user, and creates multiple notes for this user, then searches by fuzzy matching"""
+    user = UserEntity(
+        discord_id=123455,
+        avatar_url="test",
+    )
+    user = await user_repo.insert(user)
+
+    note_titles = [
+        "Zelda totk means Tears of the Kingdom.",
+        "Deep learning is a subset of machine learning.",
+        "Neural networks are used in deep learning.",
+        "Support vector machines are a type of machine learning algorithm.",
+        "Decision trees are another type of machine learning algorithm.",
+        "Tears contain water and salt.",
+        "Kingdoms are ruled by kings and queens.",
+    ]
+
+    for content in note_titles:
+        test_note = NoteEntity(
+            title=content, 
+            content=content, 
+            updated_at=datetime.now(), 
+            author_id=user.id
+        )
+        await note_repo_facade.insert(test_note)
+
+    async def search(search_query: str, should_contain: str, negative_search: bool = False) -> bool:
+        """Small helper function to make a positive search"""
+        search_results = await note_repo_facade.search_notes(
+            search_type=SearchType.FULL_TEXT_TITLE,
+            query=search_query,
+            pagination=Pagination(limit=10, offset=0)
+        )
+        assert search_results[0].content
+        if negative_search:
+            return should_contain not in search_results[0].content
+        else:
+            return should_contain in search_results[0].content
+
+    # normal exact title search
+    await search(
+        search_query="Zelda",
+        should_contain="Zelda totk means Tears of the Kingdom"
+    )
+
+    # Fuzzy matching a Zelda search should fail
+    with pytest.raises(RuntimeError, match="Failed to fetch notes by exact title"):
+        assert await search(
+            search_query="Yelda totk",
+            should_contain="Zelda totk means Tears of the Kingdom"
+        ) == True
+
+    # matching things excluding Zelda
+    assert await search(
+        search_query="Kingdom -Zelda",
+        should_contain="Zelda totk means Tears of the Kingdom",
+        negative_search=True
+    ) == True
+
+    # Fuzzy matching vector + machine search
+    assert await search(
+        search_query="vector algorithm machine",
+        should_contain="Support vector machines"
+    ) == True
 
 
 
