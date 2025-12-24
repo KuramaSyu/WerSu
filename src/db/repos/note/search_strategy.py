@@ -96,7 +96,7 @@ class DateNoteSearchStrategy(NoteSearchStrategy):
         return [NoteEntity.from_record(record) for record in records]
 
 
-class TitleLexemeNoteSearchStrategy(NoteSearchStrategy):
+class WebNoteSearchStrategy(NoteSearchStrategy):
     """
     Return notes which match by lexme or similarity in the title and content. 
     Title is also fuzzy searched
