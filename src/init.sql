@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS note.content (
     title TEXT,
     content TEXT,
     updated_at TIMESTAMP,
-    author_id BIGINT REFERENCES users(id),
+    author_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
     search_vector tsvector GENERATED ALWAYS AS (
         setweight(to_tsvector('english', title), 'A') ||  -- title is more important
         setweight(to_tsvector('english', content), 'B')
@@ -45,7 +45,7 @@ USING GIN (search_vector);
 
 
 CREATE TABLE IF NOT EXISTS note.embedding (
-    note_id BIGINT REFERENCES note.content(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    note_id BIGINT NOT NULL REFERENCES note.content(id) ON DELETE CASCADE ON UPDATE CASCADE,
     model VARCHAR(128),
     embedding VECTOR(384), -- size of output of text-embedding-3-small model 
     PRIMARY KEY(note_id, model)
@@ -67,8 +67,8 @@ CREATE TABLE IF NOT EXISTS role.role (
 
 -- default permissions for a role / for now not important
 CREATE TABLE IF NOT EXISTS role.role_permission (
-    role_id BIGINT REFERENCES role.role(id),
-    permission_id BIGINT REFERENCES role.permission(id),
+    role_id BIGINT NOT NULL REFERENCES role.role(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    permission_id BIGINT NOT NULL REFERENCES role.permission(id) ON DELETE CASCADE ON UPDATE CASCADE,
     allow BOOLEAN, -- allow/deny flag
     PRIMARY KEY(role_id, permission_id)
 );
@@ -77,23 +77,23 @@ CREATE TABLE IF NOT EXISTS role.role_permission (
 CREATE TABLE IF NOT EXISTS role.resource (
     id BIGSERIAL PRIMARY KEY,
     type TEXT NOT NULL CHECK (type IN ('shelf', 'book', 'chapter', 'note')),
-    parent_id BIGINT REFERENCES role.resource(id) NULL,
+    parent_id BIGINT REFERENCES role.resource(id) ON DELETE CASCADE ON UPDATE CASCADE,
     name TEXT NOT NULL
 );
 
 -- assigns permissiont to a role for a specific resource
 CREATE TABLE IF NOT EXISTS role.resource_role_permission_assignment (
     id BIGINT PRIMARY KEY,
-    permission_id BIGINT REFERENCES role.permission(id),
-    role_id BIGINT REFERENCES role.role(id),
-    resource_id BIGINT NOT NULL,
+    permission_id BIGINT NOT NULL REFERENCES role.permission(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    role_id BIGINT NOT NULL REFERENCES role.role(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    resource_id BIGINT NOT NULL REFERENCES role.resource(id) ON DELETE CASCADE ON UPDATE CASCADE,
     UNIQUE(role_id, resource_id, permission_id)
 );
 
 -- assigns a role to a user
 CREATE TABLE IF NOT EXISTS role.user_role_assignment (
     id BIGINT PRIMARY KEY,
-    user_id BIGINT REFERENCES users(id),
-    role_id BIGINT REFERENCES role.role(id),
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    role_id BIGINT NOT NULL REFERENCES role.role(id) ON DELETE CASCADE ON UPDATE CASCADE,
     UNIQUE(user_id, role_id)
 );
