@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -20,8 +21,28 @@ CREATE TABLE IF NOT EXISTS note.content (
     title TEXT,
     content TEXT,
     updated_at TIMESTAMP,
-    author_id BIGINT REFERENCES users(id)
+    author_id BIGINT REFERENCES users(id),
+    search_vector tsvector GENERATED ALWAYS AS (
+        setweight(to_tsvector('english', title), 'A') ||  -- title is more important
+        setweight(to_tsvector('english', content), 'B')
+    ) STORED
 );
+
+-- Trigram typo tolerance for content
+CREATE INDEX IF NOT EXISTS note_content_title_trgm_idx
+ON note.content
+USING GIN (title gin_trgm_ops);
+
+-- Trigram typo tolerance for title
+CREATE INDEX IF NOT EXISTS idx_note_content_trgm 
+ON note.content 
+USING GIN (content gin_trgm_ops);
+
+-- Full text search index
+CREATE INDEX IF NOT EXISTS note_content_search_idx
+ON note.content
+USING GIN (search_vector);
+
 
 CREATE TABLE IF NOT EXISTS note.embedding (
     note_id BIGINT REFERENCES note.content(id) ON DELETE CASCADE ON UPDATE CASCADE,
