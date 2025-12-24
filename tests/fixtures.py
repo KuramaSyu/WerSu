@@ -1,3 +1,6 @@
+import asyncio
+from typing import Iterator
+import asyncpg
 import pytest
 from testcontainers.postgres import PostgresContainer
 from src.ai.embedding_generator import EmbeddingGenerator, Models
@@ -21,8 +24,8 @@ def create_postgres_dsn(postgres_container: PostgresContainer) -> str:
         f"{postgres_container.dbname}"
     )
 
-@pytest.fixture
-async def db():
+@pytest.fixture(scope="session")
+def dsn() -> Iterator[str]:
     container = PostgresContainer(
         image="pgvector/pgvector:pg16",
         username="postgres",
@@ -31,13 +34,30 @@ async def db():
     )
     container.start()
     dsn = create_postgres_dsn(container)
-    db = Database(dsn, logging_provider, init_file="src/init.sql")
-    await db.init_db()
-    yield db
-    await db.close()
+    yield dsn
     container.stop()
 
-@pytest.fixture
+
+@pytest.fixture(scope="function")
+async def db(dsn):
+    db = Database(dsn, logging_provider, init_file="src/init.sql")
+    await db.init_db()
+
+    # clean state
+    await db.execute("""
+    TRUNCATE TABLE
+        users,
+        note.content,
+        role.permission,
+        role.role,
+        role.metadata
+    RESTART IDENTITY CASCADE;
+    """)
+
+    yield db
+    await db.close()
+
+@pytest.fixture(scope="function")
 def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
     common_table_kwargs = {"db": db, "logging_provider": logging_provider}
     content_table = Table(
@@ -73,6 +93,7 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
     )
     return repo
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 async def user_repo(db: Database) -> UserRepoABC:
     return UserPostgresRepo(db)
+

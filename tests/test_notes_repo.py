@@ -14,7 +14,7 @@ from src.db.repos.user.user import UserRepoABC
 import src.api
 from src.db.repos import UserPostgresRepo, Database, note
 from src.utils import logging_provider
-from .fixtures import db, note_repo_facade, user_repo
+from .fixtures import db, note_repo_facade, user_repo, dsn
 
 # each test recreates user and note to keep readability per test
 
