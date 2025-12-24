@@ -188,6 +188,7 @@ class TableABC(Protocol, Generic[TReturn]):
     async def delete(
         self, 
         where: Dict[str, Any] | pd.DataFrame,
+        returning: str = "*"
     ) -> Optional[TReturn]:
         """Delete records from the table and return them.
         
@@ -279,7 +280,7 @@ class TableABC(Protocol, Generic[TReturn]):
         """
         ...
     
-    async def fetch_by_id(self, *id_values: Any) -> Optional[Record]:
+    async def fetch_by_id(self, *id_values: Any, select: str = "*") -> Optional[Record]:
         """Fetch a single record by its identifier.
         
         Convenience method for selecting a record using id_fields as filter.
@@ -557,14 +558,17 @@ class Table(TableABC):
     async def delete(
         self, 
         where: Dict[str, Any] | pd.DataFrame,
+        returning: str = "*"
     ) -> Optional[List[Record]]:
         return await self._delete(
-            where=where
+            where=where,
+            returning=returning
         )
 
     async def _delete(
         self, 
         where: Dict[str, Any] | pd.DataFrame,
+        returning: str = "*"
     ) -> Optional[List[Record]]:
         # Convert DataFrame to dict if needed
         if isinstance(where, pd.DataFrame):
@@ -579,7 +583,7 @@ class Table(TableABC):
         sql = (
             f"DELETE FROM {self.name}\n"
             f"WHERE {where_stmt}\n"
-            f"RETURNING *"
+            f"RETURNING {returning}\n"
         )
         records = await self.db.fetch(sql, *matching_values)
         return records
@@ -674,14 +678,14 @@ class Table(TableABC):
             return None
         return ret[0]
 
-    async def fetch_by_id(self, *id_values: Any) -> Optional[Record]:
+    async def fetch_by_id(self, *id_values: Any, select: str = "*") -> Optional[Record]:
         if not self.id_fields:
             raise ValueError("Table has no id_fields configured")
         if len(id_values) != len(self.id_fields):
             raise ValueError(f"Expected {len(self.id_fields)} id values, got {len(id_values)}")
         
         where = dict(zip(self.id_fields, id_values))
-        rec = await self.select(where=where)
+        rec = await self.select(where=where, select=select)
         if not rec:
             return None
         return rec[0]
