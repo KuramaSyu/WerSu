@@ -234,6 +234,58 @@ async def test_search_by_web_lexme_matching(
     ) == True
 
 
+async def test_search_by_similarity(
+    note_repo_facade: NoteRepoFacadeABC, 
+    user_repo: UserRepoABC
+):
+    """
+    Creates a test user, 
+    and creates multiple notes for this user, 
+    then searches by similarity
+    """
+    user = UserEntity(
+        discord_id=123455,
+        avatar_url="test",
+    )
+    user = await user_repo.insert(user)
+
+    note_titles = [
+        "Tears of the Kingdom is a game for Nintendo Switch.",
+        "Mario Kart 8 is a racing game for Nintendo Switch.",
+        "The Legend of Zelda is an action-adventure game series.",
+    ]
+
+    for content in note_titles:
+        test_note = NoteEntity(
+            title=content, 
+            content=content, 
+            updated_at=datetime.now(), 
+            author_id=user.id
+        )
+        await note_repo_facade.insert(test_note)
+
+    async def search(search_query: str, should_contain: str) -> bool:
+        """Small helper function to make a positive search"""
+        search_results = await note_repo_facade.search_notes(
+            search_type=SearchType.FUZZY,
+            query=search_query,
+            pagination=Pagination(limit=10, offset=0)
+        )
+        assert search_results[0].content
+        return should_contain in search_results[0].content
+    
+    assert await search(
+        search_query="Mario Card 9",
+        should_contain="Mario Kart 8"
+    ) == True
+    
+    assert await search(
+        search_query="Selda",
+        should_contain="The Legend of Zelda"
+    ) == True
+
+
+
 
 
 
