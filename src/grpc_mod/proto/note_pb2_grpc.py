@@ -36,17 +36,17 @@ class NoteServiceStub(object):
             channel: A grpc.Channel.
         """
         self.GetNote = channel.unary_unary(
-                '/note.NoteService/GetNote',
+                '/proto.NoteService/GetNote',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
                 _registered_method=True)
         self.PostNote = channel.unary_unary(
-                '/note.NoteService/PostNote',
+                '/proto.NoteService/PostNote',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
                 _registered_method=True)
         self.SearchNotes = channel.unary_stream(
-                '/note.NoteService/SearchNotes',
+                '/proto.NoteService/SearchNotes',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.FromString,
                 _registered_method=True)
@@ -94,9 +94,9 @@ def add_NoteServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'note.NoteService', rpc_method_handlers)
+            'proto.NoteService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('note.NoteService', rpc_method_handlers)
+    server.add_registered_method_handlers('proto.NoteService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -118,7 +118,7 @@ class NoteService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/note.NoteService/GetNote',
+            '/proto.NoteService/GetNote',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
             options,
@@ -145,7 +145,7 @@ class NoteService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/note.NoteService/PostNote',
+            '/proto.NoteService/PostNote',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
             options,
@@ -172,7 +172,7 @@ class NoteService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            '/note.NoteService/SearchNotes',
+            '/proto.NoteService/SearchNotes',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.FromString,
             options,

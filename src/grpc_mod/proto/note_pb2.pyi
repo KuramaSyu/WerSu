@@ -111,6 +111,7 @@ class MinimalNote(google.protobuf.message.Message):
     UPDATED_AT_FIELD_NUMBER: builtins.int
     STRIPPED_CONTENT_FIELD_NUMBER: builtins.int
     id: builtins.int
+    """Note ID (eg 42)"""
     title: builtins.str
     author_id: builtins.int
     stripped_content: builtins.str

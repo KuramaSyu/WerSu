@@ -25,31 +25,32 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dsrc/grpc_mod/proto/note.proto\x12\x04note\x1a\x1fgoogle/protobuf/timestamp.proto\"-\n\x0eGetNoteRequest\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x0f\n\x07user_id\x18\x02 \x01(\x05\"\xe9\x01\n\x15GetSearchNotesRequest\x12;\n\x0bsearch_type\x18\x01 \x01(\x0e\x32&.note.GetSearchNotesRequest.SearchType\x12\r\n\x05query\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\x05\x12\x0e\n\x06offset\x18\x04 \x01(\x05\x12\x0f\n\x07user_id\x18\x05 \x01(\x05\"T\n\nSearchType\x12\r\n\tUndefined\x10\x00\x12\x0c\n\x08NoSearch\x10\x01\x12\x11\n\rFullTextTitle\x10\x02\x12\t\n\x05\x46uzzy\x10\x03\x12\x0b\n\x07\x43ontext\x10\x04\"\x85\x01\n\x0bMinimalNote\x12\n\n\x02id\x18\x01 \x01(\x05\x12\r\n\x05title\x18\x02 \x01(\t\x12\x11\n\tauthor_id\x18\x03 \x01(\x05\x12.\n\nupdated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x18\n\x10stripped_content\x18\x05 \x01(\t\"\xa6\x01\n\x04Note\x12\n\n\x02id\x18\x01 \x01(\x05\x12\r\n\x05title\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\x12.\n\nupdated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tauthor_id\x18\x05 \x01(\x05\x12)\n\x0bpermissions\x18\x07 \x03(\x0b\x32\x14.note.NotePermissionJ\x04\x08\x06\x10\x07\"1\n\rNoteEmbedding\x12\r\n\x05model\x18\x01 \x01(\t\x12\x11\n\tembedding\x18\x02 \x03(\x02\"!\n\x0eNotePermission\x12\x0f\n\x07role_id\x18\x01 \x01(\x05\"U\n\x0fPostNoteRequest\x12\r\n\x05title\x18\x01 \x01(\t\x12\x14\n\x07\x63ontent\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x11\n\tauthor_id\x18\x03 \x01(\x05\x42\n\n\x08_content\"\x84\x01\n\x10\x41lterNoteRequest\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x12\n\x05title\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x14\n\x07\x63ontent\x18\x03 \x01(\tH\x01\x88\x01\x01\x12\x16\n\tauthor_id\x18\x04 \x01(\x05H\x02\x88\x01\x01\x42\x08\n\x06_titleB\n\n\x08_contentB\x0c\n\n_author_id2\xaa\x01\n\x0bNoteService\x12+\n\x07GetNote\x12\x14.note.GetNoteRequest\x1a\n.note.Note\x12-\n\x08PostNote\x12\x15.note.PostNoteRequest\x1a\n.note.Note\x12?\n\x0bSearchNotes\x12\x1b.note.GetSearchNotesRequest\x1a\x11.note.MinimalNote0\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dsrc/grpc_mod/proto/note.proto\x12\x05proto\x1a\x1fgoogle/protobuf/timestamp.proto\"-\n\x0eGetNoteRequest\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x0f\n\x07user_id\x18\x02 \x01(\x05\"\xea\x01\n\x15GetSearchNotesRequest\x12<\n\x0bsearch_type\x18\x01 \x01(\x0e\x32\'.proto.GetSearchNotesRequest.SearchType\x12\r\n\x05query\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\x05\x12\x0e\n\x06offset\x18\x04 \x01(\x05\x12\x0f\n\x07user_id\x18\x05 \x01(\x05\"T\n\nSearchType\x12\r\n\tUndefined\x10\x00\x12\x0c\n\x08NoSearch\x10\x01\x12\x11\n\rFullTextTitle\x10\x02\x12\t\n\x05\x46uzzy\x10\x03\x12\x0b\n\x07\x43ontext\x10\x04\"\x85\x01\n\x0bMinimalNote\x12\n\n\x02id\x18\x01 \x01(\x05\x12\r\n\x05title\x18\x02 \x01(\t\x12\x11\n\tauthor_id\x18\x03 \x01(\x05\x12.\n\nupdated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x18\n\x10stripped_content\x18\x05 \x01(\t\"\xa7\x01\n\x04Note\x12\n\n\x02id\x18\x01 \x01(\x05\x12\r\n\x05title\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\x12.\n\nupdated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tauthor_id\x18\x05 \x01(\x05\x12*\n\x0bpermissions\x18\x07 \x03(\x0b\x32\x15.proto.NotePermissionJ\x04\x08\x06\x10\x07\"1\n\rNoteEmbedding\x12\r\n\x05model\x18\x01 \x01(\t\x12\x11\n\tembedding\x18\x02 \x03(\x02\"!\n\x0eNotePermission\x12\x0f\n\x07role_id\x18\x01 \x01(\x05\"U\n\x0fPostNoteRequest\x12\r\n\x05title\x18\x01 \x01(\t\x12\x14\n\x07\x63ontent\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x11\n\tauthor_id\x18\x03 \x01(\x05\x42\n\n\x08_content\"\x84\x01\n\x10\x41lterNoteRequest\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x12\n\x05title\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x14\n\x07\x63ontent\x18\x03 \x01(\tH\x01\x88\x01\x01\x12\x16\n\tauthor_id\x18\x04 \x01(\x05H\x02\x88\x01\x01\x42\x08\n\x06_titleB\n\n\x08_contentB\x0c\n\n_author_id2\xb0\x01\n\x0bNoteService\x12-\n\x07GetNote\x12\x15.proto.GetNoteRequest\x1a\x0b.proto.Note\x12/\n\x08PostNote\x12\x16.proto.PostNoteRequest\x1a\x0b.proto.Note\x12\x41\n\x0bSearchNotes\x12\x1c.proto.GetSearchNotesRequest\x1a\x12.proto.MinimalNote0\x01\x42\x31Z/github.com/KuramaSyu/Wersu-Rest/src/proto;protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'src.grpc_mod.proto.note_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-  DESCRIPTOR._loaded_options = None
-  _globals['_GETNOTEREQUEST']._serialized_start=72
-  _globals['_GETNOTEREQUEST']._serialized_end=117
-  _globals['_GETSEARCHNOTESREQUEST']._serialized_start=120
-  _globals['_GETSEARCHNOTESREQUEST']._serialized_end=353
-  _globals['_GETSEARCHNOTESREQUEST_SEARCHTYPE']._serialized_start=269
-  _globals['_GETSEARCHNOTESREQUEST_SEARCHTYPE']._serialized_end=353
-  _globals['_MINIMALNOTE']._serialized_start=356
-  _globals['_MINIMALNOTE']._serialized_end=489
-  _globals['_NOTE']._serialized_start=492
-  _globals['_NOTE']._serialized_end=658
-  _globals['_NOTEEMBEDDING']._serialized_start=660
-  _globals['_NOTEEMBEDDING']._serialized_end=709
-  _globals['_NOTEPERMISSION']._serialized_start=711
-  _globals['_NOTEPERMISSION']._serialized_end=744
-  _globals['_POSTNOTEREQUEST']._serialized_start=746
-  _globals['_POSTNOTEREQUEST']._serialized_end=831
-  _globals['_ALTERNOTEREQUEST']._serialized_start=834
-  _globals['_ALTERNOTEREQUEST']._serialized_end=966
-  _globals['_NOTESERVICE']._serialized_start=969
-  _globals['_NOTESERVICE']._serialized_end=1139
+  _globals['DESCRIPTOR']._loaded_options = None
+  _globals['DESCRIPTOR']._serialized_options = b'Z/github.com/KuramaSyu/Wersu-Rest/src/proto;proto'
+  _globals['_GETNOTEREQUEST']._serialized_start=73
+  _globals['_GETNOTEREQUEST']._serialized_end=118
+  _globals['_GETSEARCHNOTESREQUEST']._serialized_start=121
+  _globals['_GETSEARCHNOTESREQUEST']._serialized_end=355
+  _globals['_GETSEARCHNOTESREQUEST_SEARCHTYPE']._serialized_start=271
+  _globals['_GETSEARCHNOTESREQUEST_SEARCHTYPE']._serialized_end=355
+  _globals['_MINIMALNOTE']._serialized_start=358
+  _globals['_MINIMALNOTE']._serialized_end=491
+  _globals['_NOTE']._serialized_start=494
+  _globals['_NOTE']._serialized_end=661
+  _globals['_NOTEEMBEDDING']._serialized_start=663
+  _globals['_NOTEEMBEDDING']._serialized_end=712
+  _globals['_NOTEPERMISSION']._serialized_start=714
+  _globals['_NOTEPERMISSION']._serialized_end=747
+  _globals['_POSTNOTEREQUEST']._serialized_start=749
+  _globals['_POSTNOTEREQUEST']._serialized_end=834
+  _globals['_ALTERNOTEREQUEST']._serialized_start=837
+  _globals['_ALTERNOTEREQUEST']._serialized_end=969
+  _globals['_NOTESERVICE']._serialized_start=972
+  _globals['_NOTESERVICE']._serialized_end=1148
 # @@protoc_insertion_point(module_scope)
