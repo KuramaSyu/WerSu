@@ -27,13 +27,16 @@ class GetNoteRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     ID_FIELD_NUMBER: builtins.int
+    USER_ID_FIELD_NUMBER: builtins.int
     id: builtins.int
+    user_id: builtins.int
     def __init__(
         self,
         *,
         id: builtins.int = ...,
+        user_id: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["id", b"id"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["id", b"id", "user_id", b"user_id"]) -> None: ...
 
 Global___GetNoteRequest: typing_extensions.TypeAlias = GetNoteRequest
 
@@ -74,12 +77,15 @@ class GetSearchNotesRequest(google.protobuf.message.Message):
     QUERY_FIELD_NUMBER: builtins.int
     LIMIT_FIELD_NUMBER: builtins.int
     OFFSET_FIELD_NUMBER: builtins.int
+    USER_ID_FIELD_NUMBER: builtins.int
     search_type: Global___GetSearchNotesRequest.SearchType.ValueType
     """Search parameters"""
     query: builtins.str
     limit: builtins.int
     """Pagination"""
     offset: builtins.int
+    user_id: builtins.int
+    """authentication"""
     def __init__(
         self,
         *,
@@ -87,8 +93,9 @@ class GetSearchNotesRequest(google.protobuf.message.Message):
         query: builtins.str = ...,
         limit: builtins.int = ...,
         offset: builtins.int = ...,
+        user_id: builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["limit", b"limit", "offset", b"offset", "query", b"query", "search_type", b"search_type"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["limit", b"limit", "offset", b"offset", "query", b"query", "search_type", b"search_type", "user_id", b"user_id"]) -> None: ...
 
 Global___GetSearchNotesRequest: typing_extensions.TypeAlias = GetSearchNotesRequest
 

@@ -6,6 +6,7 @@ package note;
 // Request for getting a note by id
 message GetNoteRequest {
     int32 id = 1;
+    int32 user_id = 2;
 }
 
 message GetSearchNotesRequest {
@@ -23,6 +24,9 @@ message GetSearchNotesRequest {
     // Pagination
     int32 limit = 3;
     int32 offset = 4;
+
+    // authentication
+    int32 user_id = 5;
 }
 
 // Response: represents a minimal Note for search results
