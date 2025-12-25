@@ -18,7 +18,7 @@
             --python_out=. \
             --grpc_python_out=. \
             --mypy_out=. \
-            grpc_mod/proto/*.proto
+            src/grpc_mod/proto/*.proto
     ```
 
 ### Start gRPC server
