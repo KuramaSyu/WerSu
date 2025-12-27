@@ -1,4 +1,6 @@
-# i-will-find-it
+# Wersu
+### Project Structure
+![img](wersu-structure.drawio.png)
 
 # Todo
 - better logging, more di
