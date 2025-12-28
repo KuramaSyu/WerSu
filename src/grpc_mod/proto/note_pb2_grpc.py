@@ -45,6 +45,16 @@ class NoteServiceStub(object):
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
                 _registered_method=True)
+        self.PatchNote = channel.unary_unary(
+                '/proto.NoteService/PatchNote',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterNoteRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+                _registered_method=True)
+        self.DeleteNote = channel.unary_unary(
+                '/proto.NoteService/DeleteNote',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteNoteRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+                _registered_method=True)
         self.SearchNotes = channel.unary_stream(
                 '/proto.NoteService/SearchNotes',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
@@ -68,6 +78,18 @@ class NoteServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def PatchNote(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteNote(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def SearchNotes(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -85,6 +107,16 @@ def add_NoteServiceServicer_to_server(servicer, server):
             'PostNote': grpc.unary_unary_rpc_method_handler(
                     servicer.PostNote,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
+            ),
+            'PatchNote': grpc.unary_unary_rpc_method_handler(
+                    servicer.PatchNote,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterNoteRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
+            ),
+            'DeleteNote': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteNote,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteNoteRequest.FromString,
                     response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
             ),
             'SearchNotes': grpc.unary_stream_rpc_method_handler(
@@ -147,6 +179,60 @@ class NoteService(object):
             target,
             '/proto.NoteService/PostNote',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PatchNote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.NoteService/PatchNote',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterNoteRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteNote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.NoteService/DeleteNote',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteNoteRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
             options,
             channel_credentials,

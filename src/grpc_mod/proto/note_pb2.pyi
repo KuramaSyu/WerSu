@@ -204,7 +204,7 @@ Global___NotePermission: typing_extensions.TypeAlias = NotePermission
 
 @typing.final
 class PostNoteRequest(google.protobuf.message.Message):
-    """Request to add/Update a note"""
+    """Request to add a note"""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -226,6 +226,26 @@ class PostNoteRequest(google.protobuf.message.Message):
     def WhichOneof(self, oneof_group: typing.Literal["_content", b"_content"]) -> typing.Literal["content"] | None: ...
 
 Global___PostNoteRequest: typing_extensions.TypeAlias = PostNoteRequest
+
+@typing.final
+class DeleteNoteRequest(google.protobuf.message.Message):
+    """Request to delete a note"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    ID_FIELD_NUMBER: builtins.int
+    AUTHOR_ID_FIELD_NUMBER: builtins.int
+    id: builtins.int
+    author_id: builtins.int
+    def __init__(
+        self,
+        *,
+        id: builtins.int = ...,
+        author_id: builtins.int = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["author_id", b"author_id", "id", b"id"]) -> None: ...
+
+Global___DeleteNoteRequest: typing_extensions.TypeAlias = DeleteNoteRequest
 
 @typing.final
 class AlterNoteRequest(google.protobuf.message.Message):
