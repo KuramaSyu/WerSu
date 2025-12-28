@@ -60,11 +60,17 @@ message NotePermission {
     int32 role_id = 1;
 }
 
-// Request to add/Update a note
+// Request to add a note
 message PostNoteRequest {
     string title = 1;
     optional string content = 2;
     int32 author_id = 3;
+}
+
+// Request to delete a note
+message DeleteNoteRequest {
+    int32 id = 1;
+    int32 author_id = 2;
 }
 
 message AlterNoteRequest {
@@ -78,5 +84,7 @@ message AlterNoteRequest {
 service NoteService {
     rpc GetNote(GetNoteRequest) returns (Note);
     rpc PostNote(PostNoteRequest) returns (Note);
+    rpc PatchNote(AlterNoteRequest) returns (Note);
+    rpc DeleteNote(DeleteNoteRequest) returns (Note);
     rpc SearchNotes(GetSearchNotesRequest) returns (stream MinimalNote);
 }
