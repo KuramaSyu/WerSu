@@ -85,7 +85,7 @@ async def test_create_and_remove_note(
     assert test_note_select  # select should return a note
     assert test_note_select == test_note_insert  # selected note should equal inserted note
 
-    test_notes_delete = await note_repo_facade.delete(test_note_insert, ctx)
+    test_notes_delete = await note_repo_facade.delete(test_note_insert.note_id, ctx)
     
     # deleted note should equal inserted note. Embeddings and permissions are left out, 
     # since they get cleard by SQL constraints and are not returned in the delete statement

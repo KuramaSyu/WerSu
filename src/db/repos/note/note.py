@@ -226,8 +226,8 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         )
 
         # add removed embeddings and permissions
-        note_entity.embeddings = note.embeddings
-        note_entity.permissions = note.permissions
+        note_entity.embeddings = note.embeddings or []
+        note_entity.permissions = note.permissions or []
         return note_entity
 
     async def delete(self, note_id: int, ctx: UserContext) -> Optional[List[NoteEntity]]:

@@ -85,6 +85,7 @@ class GrpcNoteService(NoteServiceServicer):
                 ),
                 UserContext(user_id=request.author_id)
             )
+            self.log.debug(f"Updated note entity: {note_entity}")
             return to_grpc_note(note_entity)
         except Exception:
             self.log.error(f"Error updating note: {traceback.format_exc()}")
