@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: ankane/pgvector:latest   # includes pgvector preinstalled
+    image: pgvector/pgvector:0.8.1-pg18-trixie
     container_name: postgres
     restart: always
     environment:
@@ -10,7 +10,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - ./data:/var/lib/postgresql
+      - ./data/pgvector:/var/lib/postgresql
 
   pgweb:
     container_name: pgweb_helper
