@@ -1,6 +1,20 @@
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Type
+from dataclasses import dataclass
+
+
+__all__ = [
+    "SubjectsComputationOp",
+    "ValidationError",
+    "SubjectsComputationExpressionABC",
+    "DirectExpression",
+    "ComputedSubjectsExpression",
+    "UnionExpression",
+    "IntersectionExpression",
+    "ExclusionExpression",
+]
+
 
 class SubjectsComputationOp(Enum):
     """Possible operations a subject can use"""
@@ -45,6 +59,7 @@ class DirectExpression(SubjectsComputationExpressionABC):
         return SubjectsComputationOp.OP_DIRECT
 
 
+@dataclass
 class ComputedSubjectsExpression(SubjectsComputationExpressionABC):
     """Computed relations: include subjects from another relation (same-object inheritance)"""
     computed_relation: str  # "owner" (on the same object)
@@ -53,20 +68,30 @@ class ComputedSubjectsExpression(SubjectsComputationExpressionABC):
         return SubjectsComputationOp.OP_COMPUTED_SUBJECTS
     
 
+@dataclass
 class UnionExpression(SubjectsComputationExpressionABC):
     """Boolean OR logic (either set A or set B -> A ∩ B )"""
+    children: list[SubjectsComputationExpressionABC]
+
     def operation(self) -> SubjectsComputationOp:
         return SubjectsComputationOp.OP_UNION
 
 
+@dataclass
 class IntersectionExpression(SubjectsComputationExpressionABC):
     """Boolean AND logic (in both sets A and B -> A ∪ B)"""
+    children: list[SubjectsComputationOp]
+
     def operation(self) -> SubjectsComputationOp:
         return SubjectsComputationOp.OP_INTERSECTION
 
 
+@dataclass
 class ExclusionExpression(SubjectsComputationExpressionABC):
     """Set substraction A - B (same as A\B)"""
+    left: SubjectsComputationExpressionABC
+    right: SubjectsComputationExpressionABC
+    
     def operation(self) -> SubjectsComputationOp:
         return SubjectsComputationOp.OP_EXCLUSION
 
