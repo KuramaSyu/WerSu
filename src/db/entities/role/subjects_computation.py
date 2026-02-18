@@ -54,13 +54,13 @@ class ComputedSubjectsExpression(SubjectsComputationExpressionABC):
     
 
 class UnionExpression(SubjectsComputationExpressionABC):
-    """Boolean OR logic (either set A or set B)"""
+    """Boolean OR logic (either set A or set B -> A ∩ B )"""
     def operation(self) -> SubjectsComputationOp:
         return SubjectsComputationOp.OP_UNION
 
 
 class IntersectionExpression(SubjectsComputationExpressionABC):
-    """Boolean AND logic (in both sets A and B)"""
+    """Boolean AND logic (in both sets A and B -> A ∪ B)"""
     def operation(self) -> SubjectsComputationOp:
         return SubjectsComputationOp.OP_INTERSECTION
 
