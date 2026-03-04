@@ -24,3 +24,15 @@ services:
       - PGWEB_DATABASE_URL=postgres://postgres:postgres@postgres:5432/db?sslmode=disable
     depends_on:
       - postgres
+      
+  spicedb:
+    image: authzed/spicedb:latest
+    container_name: spicedb
+    command:
+      - serve
+      - --http-enabled=true
+      - --grpc-preshared-key=somerandomkeyhere
+    ports:
+      - "50051:50051" # gRPC
+      - "8443:8443"   # HTTP
+    restart: unless-stopped
