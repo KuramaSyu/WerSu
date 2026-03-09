@@ -87,7 +87,7 @@ async def serve():
     add_UserServiceServicer_to_server(user_service, server)
 
     # configure server
-    listen_addr = "[::]:50051"
+    listen_addr = "[::]:50052"
     server.add_insecure_port(listen_addr)
     log.info(f"gRPC server listening on {listen_addr}")
 
