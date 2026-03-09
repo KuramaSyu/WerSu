@@ -1,0 +1,27 @@
+definition user {}
+definition directory {
+    relation parent: directory
+    relation admin: user
+    relation writer: user
+    relation reader: user
+
+    permission delete = admin
+    permission write = writer + admin
+    permission view = reader + write
+
+
+}
+definition note {
+    relation admin: user
+    relation writer: user
+    relation reader: user
+    relation parent_directory: directory
+
+    /**
+    * permission delete is granted to admins or parent 
+    * directory users with delete permission
+    */
+    permission delete = admin + parent_directory->delete
+    permission write = writer + admin + parent_directory->write
+    permission view = reader + write
+}
