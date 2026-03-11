@@ -10,6 +10,8 @@ import grpc
 from authzed.api.v1 import (
     BulkExportRelationshipsRequest,
     BulkImportRelationshipsRequest,
+    CheckPermissionRequest,
+    CheckPermissionResponse,
     Client,
     Consistency,
     ObjectReference,
@@ -53,7 +55,7 @@ def get_client() -> Client:
     )
 
 # real system would use actual IDs as object_id
-elimia = SubjectReference(
+emilia = SubjectReference(
     object=ObjectReference(
         object_type="user",
         object_id="emilia"
@@ -67,7 +69,7 @@ alfred = SubjectReference(
     )
 )
 
-daily_note = ObjectReference(
+alfreds_daily_note = ObjectReference(
     object_type="note",
     object_id="daily_note_2026-03-10"
 )
@@ -79,14 +81,14 @@ requests = [
     BulkImportRelationshipsRequest(
         relationships=[
             Relationship(
-                resource=daily_note,
+                resource=alfreds_daily_note,
                 relation="admin",
                 subject=alfred,
             ),
             Relationship(
-                resource=daily_note,
+                resource=alfreds_daily_note,
                 relation="reader",
-                subject=elimia
+                subject=emilia
             )
         ]
     )
@@ -107,3 +109,36 @@ for resp in export_requests:
         relationships.append(rel)
 
 assert len(relationships) == 2
+
+# make permission check
+
+# direct permission
+resp = client.CheckPermission(CheckPermissionRequest(
+    resource=alfreds_daily_note,
+    permission="delete",
+    subject=alfred
+))
+assert resp.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
+
+# computed permission
+resp = client.CheckPermission(CheckPermissionRequest(
+    resource=alfreds_daily_note,
+    permission="view",
+    subject=alfred
+))
+assert resp.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
+resp = client.CheckPermission(CheckPermissionRequest(
+    resource=alfreds_daily_note,
+    permission="view",
+    subject=emilia
+))
+assert resp.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
+
+# emilia should not be able to delete alfreds note
+resp = client.CheckPermission(CheckPermissionRequest(
+    resource=alfreds_daily_note,
+    permission="delete",
+    subject=emilia
+))
+assert resp.permissionship == CheckPermissionResponse.PERMISSIONSHIP_NO_PERMISSION
+print("Tests finished")
