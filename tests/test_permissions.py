@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from re import sub
 from typing import Any, Dict, Optional, Sequence, Tuple
 
 import grpc
@@ -48,7 +49,7 @@ definition note {
 def get_client() -> Client:
     return Client(
         "localhost:50051",
-        insecure_bearer_token_credentials("my_secret_token")
+        insecure_bearer_token_credentials("somerandomkeyhere")
     )
 
 # real system would use actual IDs as object_id
@@ -73,3 +74,36 @@ daily_note = ObjectReference(
 
 client = get_client()
 client.WriteSchema(WriteSchemaRequest(schema=SCHEMA_ZED))
+
+requests = [
+    BulkImportRelationshipsRequest(
+        relationships=[
+            Relationship(
+                resource=daily_note,
+                relation="admin",
+                subject=alfred,
+            ),
+            Relationship(
+                resource=daily_note,
+                relation="reader",
+                subject=elimia
+            )
+        ]
+    )
+]
+
+import_requests = client.BulkImportRelationships((req for req in requests))
+assert import_requests.num_loaded == 2
+
+export_requests = client.BulkExportRelationships(
+    BulkExportRelationshipsRequest(
+        consistency=Consistency(fully_consistent=True)
+    )
+)
+
+relationships = []
+for resp in export_requests:
+    for rel in resp.relationships:
+        relationships.append(rel)
+
+assert len(relationships) == 2
