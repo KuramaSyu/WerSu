@@ -89,7 +89,8 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
                 logging_provider=logging_provider
             )
         ),
-        permission_repo=NotePermissionPostgresRepo(permission_table),
+        # TODO: testing with SpiceDB could get hard. Maybe make a Fake which does not do any checks 
+        permission_repo=NotePermissionPostgresRepo(permission_table), 
         logging_provider=logging_provider
     )
     return repo
