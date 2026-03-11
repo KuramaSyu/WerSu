@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from re import sub
 from typing import Any, Dict, Optional, Sequence, Tuple
@@ -14,12 +15,14 @@ from authzed.api.v1 import (
     CheckPermissionResponse,
     AsyncClient,
     Consistency,
+    LookupResourcesRequest,
     ObjectReference,
     Relationship,
     SubjectReference,
     WriteSchemaRequest,
 )
 from grpcutil import insecure_bearer_token_credentials
+from numpy import full
 
 
 SCHEMA_ZED: str = """
@@ -48,12 +51,11 @@ definition note {
 }
 """
 
-def get_client() -> Client:
+def get_client() -> AsyncClient:
     return AsyncClient(
         "localhost:50051",
         insecure_bearer_token_credentials("somerandomkeyhere")
     )
-
 
 async def main():
     # real system would use actual IDs as object_id
@@ -143,6 +145,21 @@ async def main():
         subject=emilia
     ))
     assert resp.permissionship == CheckPermissionResponse.PERMISSIONSHIP_NO_PERMISSION
+
+    assert await check_what_subjects_has_permission_on(client, alfred, "view") == ["daily_note_2026-03-10"]
+
     print("Tests finished")
 
-asyncio.run(main())
+
+async def check_what_subjects_has_permission_on(client: AsyncClient, subj: SubjectReference, permission: str) -> list[str]:
+    req = LookupResourcesRequest(
+        resource_object_type="note",
+        permission=permission,
+        subject=subj,
+        consistency=Consistency(fully_consistent=True)
+    )
+    stream = client.LookupResources(req)
+    return [resp.resource_object_id async for resp in stream]
+
+if __name__ == "__main__":
+    asyncio.run(main())
