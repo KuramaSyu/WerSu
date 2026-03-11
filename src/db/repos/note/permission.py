@@ -128,3 +128,6 @@ class NotePermissionPostgresRepo(NotePermissionRepo):
         if not records:
             return []
         return [NotePermissionEntity(**record) for record in records]
+    
+class NotePermissionSpicedbRepo(NotePermissionRepo):
+    ...

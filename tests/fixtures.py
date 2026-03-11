@@ -57,9 +57,6 @@ async def db(dsn):
     TRUNCATE TABLE
         users,
         note.content,
-        role.permission,
-        role.role,
-        role.metadata
     RESTART IDENTITY CASCADE;
     """)
 
@@ -73,12 +70,6 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
         **common_table_kwargs, 
         table_name="note.content", 
         id_fields=["id"],
-        error_log=True
-    )
-    permission_table = Table(
-        **common_table_kwargs, 
-        table_name="note.permission", 
-        id_fields=["note_id", "role_id"],
         error_log=True
     )
     embedding_table = Table(
