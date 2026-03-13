@@ -258,3 +258,72 @@ class NotePermissionSpicedbRepo(NotePermissionRepo):
         )
         return await self.lookup(relationship)
 
+
+class NotePermissionInMemoryRepo(NotePermissionRepo):
+    """In-memory implementation of NotePermissionRepo for unit testing."""
+
+    def __init__(self) -> None:
+        self._store: List[Relationship] = []
+
+    async def insert(self, relationships: List[Relationship]) -> List[Relationship]:
+        self._store.extend(deepcopy(relationships))
+        return relationships
+
+    async def delete(self, relationship: Relationship) -> Relationship:
+        def matches(stored: Relationship) -> bool:
+            obj_match = (
+                stored.object.object_type == relationship.object.object_type
+                and (
+                    relationship.object.object_id is UNDEFINED
+                    or stored.object.object_id == relationship.object.object_id
+                )
+            )
+            rel_match = stored.relation == relationship.relation
+            subj_match = (
+                stored.subject.object_type == relationship.subject.object_type
+                and (
+                    relationship.subject.object_id is UNDEFINED
+                    or stored.subject.object_id == relationship.subject.object_id
+                )
+            )
+            return obj_match and rel_match and subj_match
+
+        self._store = [r for r in self._store if not matches(r)]
+        return relationship
+
+    async def lookup(self, relationship: Relationship) -> List[ObjectRef]:
+        results: List[ObjectRef] = []
+        for stored in self._store:
+            obj_match = (
+                stored.object.object_type == relationship.object.object_type
+                and (
+                    relationship.object.object_id is UNDEFINED
+                    or stored.object.object_id == relationship.object.object_id
+                )
+            )
+            rel_match = stored.relation == relationship.relation
+            subj_match = (
+                stored.subject.object_type == relationship.subject.object_type
+                and (
+                    relationship.subject.object_id is UNDEFINED
+                    or stored.subject.object_id == relationship.subject.object_id
+                )
+            )
+            if obj_match and rel_match and subj_match:
+                results.append(
+                    ObjectRef(
+                        object_type=stored.object.object_type,
+                        object_id=stored.object.object_id
+                    )
+                )
+        return results
+
+    async def lookup_notes(self, user: UserContextABC, permission: str) -> List[ObjectRef]:
+        user_id = user.get_user_id()
+        relationship = Relationship(
+            object=ObjectRef(object_type="note", object_id=UNDEFINED),
+            relation=permission,
+            subject=SubjectRef(object_type="user", object_id=user_id),
+        )
+        return await self.lookup(relationship)
+
