@@ -167,7 +167,7 @@ class NotePermissionRepo(ABC):
         ...
 
     
-class NotePermissionSpicedbRepo(NotePermissionRepo):
+class NotePermissionRepoSpicedb(NotePermissionRepo):
     converter = SpicedbPermissionConverter()
 
     def __init__(self, client: AsyncClient) -> None:
@@ -259,7 +259,7 @@ class NotePermissionSpicedbRepo(NotePermissionRepo):
         return await self.lookup(relationship)
 
 
-class NotePermissionInMemoryRepo(NotePermissionRepo):
+class NotePermissionRepoInMemory(NotePermissionRepo):
     """In-memory implementation of NotePermissionRepo for unit testing."""
 
     def __init__(self) -> None:

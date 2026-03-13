@@ -7,7 +7,7 @@ from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
 from src.db.repos.note.note import NoteRepoFacade, NoteRepoFacadeABC
-from src.db.repos.note.permission import NotePermissionPostgresRepo
+from src.db.repos.note.permission import NotePermissionRepoInMemory
 from src.db.table import Table
 from src.db.entities.user.user import UserEntity
 from src.db.repos.user.user import UserRepoABC
@@ -90,7 +90,7 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
             )
         ),
         # TODO: testing with SpiceDB could get hard. Maybe make a Fake which does not do any checks 
-        permission_repo=NotePermissionPostgresRepo(permission_table), 
+        permission_repo=NotePermissionRepoInMemory(),
         logging_provider=logging_provider
     )
     return repo
