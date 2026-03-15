@@ -8,7 +8,6 @@ from asyncpg import Record
 from authzed.api.v1.permission_service_pb2 import ImportBulkRelationshipsRequest
 from src.api.user_context import UserContextABC
 from src.db.entities import NotePermissionEntity
-from src.db.repos.note.note import UserContext
 from src.db.table import TableABC
 from src.utils import asdict
 
@@ -63,7 +62,7 @@ class PermissionConverterABC(ABC):
 
 class SpicedbPermissionConverter(PermissionConverterABC):
     def convert_object_ref(self, object_ref: ObjectRef) -> ObjectReference:
-        assert object_ref.object_id == str, "object_id must be provided for object reference"
+        assert object_ref.object_id != UNDEFINED, "object_id must be provided for object reference"
         return ObjectReference(
             object_type=object_ref.object_type,
             object_id=str(object_ref.object_id)
