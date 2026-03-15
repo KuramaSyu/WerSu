@@ -42,7 +42,7 @@ class SubjectRef(ObjectRef):
 
 class Relationship:
     def __init__(self, resource: ObjectRef, relation: str, subject: SubjectRef) -> None:
-        self.object = resource
+        self.resource = resource
         self.relation = relation
         self.subject = subject
 
@@ -75,7 +75,7 @@ class SpicedbPermissionConverter(PermissionConverterABC):
     
     def convert_relationship(self, relationship: Relationship) -> SpicedbRelationship:
         return SpicedbRelationship(
-            resource=self.convert_object_ref(relationship.object),
+            resource=self.convert_object_ref(relationship.resource),
             relation=relationship.relation,
             subject=self.convert_subject_ref(relationship.subject)
         )
@@ -165,12 +165,72 @@ class NotePermissionRepo(ABC):
         """
         ...
 
+    @abstractmethod
+    async def has_permission(
+        self,
+        user: UserContextABC,
+        permission: str,
+        resource: ObjectRef,
+    ) -> bool:
+        """Check whether a user has a permission on a resource.
+
+        Parameters
+        ----------
+        user : UserContextABC
+            Current user context.
+        permission : str
+            Permission to verify.
+        resource : ObjectRef
+            Resource to check against.
+
+        Returns
+        -------
+        bool
+            True if permission is granted.
+        """
+        ...
+
+    @abstractmethod
+    async def get_permissions(
+        self,
+        user: UserContextABC,
+        resource: ObjectRef,
+    ) -> List[str]:
+        """List effective permissions for a user on a resource.
+
+        Parameters
+        ----------
+        user : UserContextABC
+            Current user context.
+        resource : ObjectRef
+            Resource to evaluate.
+
+        Returns
+        -------
+        List[str]
+            Granted permissions.
+        """
+        ...
+
     
 class NotePermissionRepoSpicedb(NotePermissionRepo):
     converter = SpicedbPermissionConverter()
+    _default_permission_candidates_by_object_type = {
+        "note": ["view", "write", "delete"],
+        "directory": ["view", "write", "delete"],
+    }
 
-    def __init__(self, client: AsyncClient) -> None:
+    def __init__(
+        self,
+        client: AsyncClient,
+        permission_candidates_by_object_type: dict[str, list[str]] | None = None,
+    ) -> None:
         self.client = client
+        self._permission_candidates_by_object_type = (
+            permission_candidates_by_object_type
+            if permission_candidates_by_object_type is not None
+            else self._default_permission_candidates_by_object_type
+        )
 
     async def insert(self, relationships: List[Relationship]) -> List[Relationship]:
         requests = [ImportBulkRelationshipsRequest(
@@ -185,12 +245,12 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         filter = RelationshipFilter()
         
         def get_filter(rel: Relationship) -> RelationshipFilter:
-            assert rel.object.object_id != UNDEFINED, "object_id must be provided for delete operation"
+            assert rel.resource.object_id != UNDEFINED, "object_id must be provided for delete operation"
             assert rel.subject.object_id != UNDEFINED, "subject_id must be provided for delete operation"
             
             filter = RelationshipFilter(
-                resource_type=rel.object.object_type,
-                optional_resource_id=str(rel.object.object_id),
+                resource_type=rel.resource.object_type,
+                optional_resource_id=str(rel.resource.object_id),
                 optional_relation=rel.relation,
                 optional_subject_filter=SubjectFilter(
                     subject_type=rel.subject.object_type,
@@ -218,15 +278,15 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
             )
         )
         filter.optional_relation = relationship.relation
-        filter.resource_type = relationship.object.object_type
-        if relationship.object.object_id != UNDEFINED:
-            filter.optional_resource_id = str(relationship.object.object_id)
+        filter.resource_type = relationship.resource.object_type
+        if relationship.resource.object_id != UNDEFINED:
+            filter.optional_resource_id = str(relationship.resource.object_id)
         if relationship.subject.object_id != UNDEFINED:
             filter.optional_subject_filter
         
         result = self.client.LookupResources(
             LookupResourcesRequest(
-                resource_object_type=relationship.object.object_type,
+                resource_object_type=relationship.resource.object_type,
                 permission=relationship.relation,
                 subject=self.converter.convert_subject_ref(relationship.subject),
                 consistency=Consistency(fully_consistent=True)
@@ -236,7 +296,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         async for resp in result:
             objects.append(
                 ObjectRef(
-                    object_type=relationship.object.object_type,
+                    object_type=relationship.resource.object_type,
                     object_id=resp.resource_object_id
                 )
             )
@@ -257,9 +317,85 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         )
         return await self.lookup(relationship)
 
+    async def has_permission(
+        self,
+        user: UserContextABC,
+        permission: str,
+        resource: ObjectRef,
+    ) -> bool:
+        """Check whether a user has a permission on a resource.
+
+        Parameters
+        ----------
+        user : UserContextABC
+            Current user context.
+        permission : str
+            Permission to verify.
+        resource : ObjectRef
+            Resource to check.
+
+        Returns
+        -------
+        bool
+            True if granted by SpiceDB.
+        """
+        assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
+
+        response = await self.client.CheckPermission(
+            CheckPermissionRequest(
+                resource=self.converter.convert_object_ref(resource),
+                permission=permission,
+                subject=self.converter.convert_subject_ref(
+                    SubjectRef(
+                        object_type="user",
+                        object_id=user.user_id,
+                    )
+                ),
+                consistency=Consistency(fully_consistent=True),
+            )
+        )
+        return response.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
+
+    async def get_permissions(self, user: UserContextABC, resource: ObjectRef) -> List[str]:
+        """List effective permissions for a user on a resource.
+
+        Parameters
+        ----------
+        user : UserContextABC
+            Current user context.
+        resource : ObjectRef
+            Resource to evaluate.
+
+        Returns
+        -------
+        List[str]
+            Permissions granted by configured candidates.
+        """
+        assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
+
+        candidates = self._permission_candidates_by_object_type.get(resource.object_type, [])
+        permissions: List[str] = []
+        for permission in candidates:
+            if await self.has_permission(user=user, permission=permission, resource=resource):
+                permissions.append(permission)
+        return permissions
+
+
 
 class NotePermissionRepoInMemory(NotePermissionRepo):
     """In-memory implementation of NotePermissionRepo for unit testing."""
+    _relation_implied_permissions = {
+        "note": {
+            "admin": {"admin", "delete", "write", "view"},
+            "writer": {"writer", "write", "view"},
+            "reader": {"reader", "view"},
+        },
+        "directory": {
+            "admin": {"admin", "delete", "write", "view"},
+            "writer": {"writer", "write", "view"},
+            "reader": {"reader", "view"},
+        },
+    }
 
     def __init__(self) -> None:
         self._store: List[Relationship] = []
@@ -271,10 +407,10 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
     async def delete(self, relationship: Relationship) -> Relationship:
         def matches(stored: Relationship) -> bool:
             obj_match = (
-                stored.object.object_type == relationship.object.object_type
+                stored.resource.object_type == relationship.resource.object_type
                 and (
-                    relationship.object.object_id is UNDEFINED
-                    or stored.object.object_id == relationship.object.object_id
+                    relationship.resource.object_id is UNDEFINED
+                    or stored.resource.object_id == relationship.resource.object_id
                 )
             )
             rel_match = stored.relation == relationship.relation
@@ -294,10 +430,10 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
         results: List[ObjectRef] = []
         for stored in self._store:
             obj_match = (
-                stored.object.object_type == relationship.object.object_type
+                stored.resource.object_type == relationship.resource.object_type
                 and (
-                    relationship.object.object_id is UNDEFINED
-                    or stored.object.object_id == relationship.object.object_id
+                    relationship.resource.object_id is UNDEFINED
+                    or stored.resource.object_id == relationship.resource.object_id
                 )
             )
             rel_match = stored.relation == relationship.relation
@@ -311,8 +447,8 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
             if obj_match and rel_match and subj_match:
                 results.append(
                     ObjectRef(
-                        object_type=stored.object.object_type,
-                        object_id=stored.object.object_id
+                        object_type=stored.resource.object_type,
+                        object_id=stored.resource.object_id
                     )
                 )
         return results
@@ -325,4 +461,64 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
             subject=SubjectRef(object_type="user", object_id=user_id),
         )
         return await self.lookup(relationship)
+
+    async def has_permission(
+        self,
+        user: UserContextABC,
+        permission: str,
+        resource: ObjectRef,
+    ) -> bool:
+        """Check whether a user has a permission on a resource.
+
+        Parameters
+        ----------
+        user : UserContextABC
+            Current user context.
+        permission : str
+            Permission to verify.
+        resource : ObjectRef
+            Resource to check.
+
+        Returns
+        -------
+        bool
+            True when permission is present.
+        """
+        permissions = await self.get_permissions(user=user, resource=resource)
+        return permission in permissions
+
+    async def get_permissions(self, user: UserContextABC, resource: ObjectRef) -> List[str]:
+        """List effective permissions for a user on a resource.
+
+        Parameters
+        ----------
+        user : UserContextABC
+            Current user context.
+        resource : ObjectRef
+            Resource to evaluate.
+
+        Returns
+        -------
+        List[str]
+            Sorted unique permission names.
+        """
+        assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
+
+        direct_relations: List[str] = []
+        for stored in self._store:
+            if (
+                stored.resource.object_type == resource.object_type
+                and stored.resource.object_id == resource.object_id
+                and stored.subject.object_type == "user"
+                and stored.subject.object_id == user.user_id
+            ):
+                direct_relations.append(stored.relation)
+
+        implied_map = self._relation_implied_permissions.get(resource.object_type, {})
+        permissions = set[str]()
+        for relation in direct_relations:
+            # Keep unknown relations as-is so tests can still work with custom schemas.
+            permissions.update(implied_map.get(relation, {relation}))
+
+        return sorted(permissions)
 
