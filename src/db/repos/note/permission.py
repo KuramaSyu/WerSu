@@ -42,8 +42,8 @@ class SubjectRef(ObjectRef):
     pass
 
 class Relationship:
-    def __init__(self, object: ObjectRef, relation: str, subject: SubjectRef) -> None:
-        self.object = object
+    def __init__(self, resource: ObjectRef, relation: str, subject: SubjectRef) -> None:
+        self.object = resource
         self.relation = relation
         self.subject = subject
 
@@ -246,7 +246,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
     async def lookup_notes(self, user: UserContextABC, permission: str) -> List[ObjectRef]:
         user_id = user.get_user_id()
         relationship = Relationship(
-            object=ObjectRef(
+            resource=ObjectRef(
                 object_type="note",
                 object_id=UNDEFINED
             ),
@@ -321,7 +321,7 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
     async def lookup_notes(self, user: UserContextABC, permission: str) -> List[ObjectRef]:
         user_id = user.get_user_id()
         relationship = Relationship(
-            object=ObjectRef(object_type="note", object_id=UNDEFINED),
+            resource=ObjectRef(object_type="note", object_id=UNDEFINED),
             relation=permission,
             subject=SubjectRef(object_type="user", object_id=user_id),
         )
