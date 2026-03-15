@@ -8,6 +8,7 @@ pytest-asyncio
 # Containers / integration tests
 docker
 testcontainers
+testcontainers-spicedb
 
 # Typing / protobuf helpers
 mypy-protobuf
