@@ -78,3 +78,31 @@ async def test_note_insert_and_check(note_permissions_repo: NotePermissionRepoSp
 
     alfred_admin_notes = await note_permissions_repo.lookup_notes(UserContext("alfred"), "admin")
     assert [obj.object_id for obj in alfred_admin_notes] == []
+
+
+async def test_note_missing_permissions(note_permissions_repo: NotePermissionRepoSpicedb):
+    emilia = SubjectRef(object_type="user", object_id="emilia")
+    alfred = SubjectRef(object_type="user", object_id="alfred")
+
+    reader_note_id = f"note-{uuid.uuid4().hex}"
+    admin_note_id = f"note-{uuid.uuid4().hex}"
+    reader_note = ObjectRef(object_type="note", object_id=reader_note_id)
+    admin_note = ObjectRef(object_type="note", object_id=admin_note_id)
+
+    inserted = await note_permissions_repo.insert(
+        [
+            Relationship(resource=reader_note, relation="reader", subject=emilia),
+            Relationship(resource=admin_note, relation="admin", subject=alfred),
+        ]
+    )
+    assert len(inserted) == 2
+
+    # Emilia can view her reader note, but is not admin there.
+    assert await note_permissions_repo.has_permission(UserContext("emilia"), "view", reader_note)
+    assert not await note_permissions_repo.has_permission(UserContext("emilia"), "admin", reader_note)
+
+    # Emilia has no permissions at all on Alfred's note.
+    assert not await note_permissions_repo.has_permission(UserContext("emilia"), "view", admin_note)
+    assert not await note_permissions_repo.has_permission(UserContext("emilia"), "admin", admin_note)
+    assert await note_permissions_repo.get_permissions(UserContext("emilia"), admin_note) == []
+
