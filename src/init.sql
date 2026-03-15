@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    id TEXT PRIMARY KEY DEFAULT uuidv7()::text,
     discord_id BIGINT UNIQUE NOT NULL,
     avatar TEXT NOT NULL,
     username TEXT NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE SCHEMA IF NOT EXISTS note;
 
 CREATE TABLE IF NOT EXISTS note.content (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    id TEXT PRIMARY KEY DEFAULT uuidv7()::text,
     title TEXT,
     content TEXT,
     updated_at TIMESTAMP,

@@ -80,7 +80,7 @@ async def test_create_and_remove_note(
     )
     test_note_insert = await note_repo_facade.insert(test_note)
     assert isinstance(test_note_insert.note_id, str)  # inserted note should have an ID
-    assert UUID(test_note_insert.note_id).version == 4
+    assert UUID(test_note_insert.note_id).version == 7
 
     test_note_select = await note_repo_facade.select_by_id(note_id=test_note_insert.note_id, ctx=ctx)
     assert test_note_select  # select should return a note

@@ -27,7 +27,7 @@ def create_postgres_dsn(postgres_container: PostgresContainer) -> str:
 @pytest.fixture(scope="session")
 def dsn() -> Iterator[str]:
     container = PostgresContainer(
-        image="pgvector/pgvector:pg16",
+        image="pgvector/pgvector:0.8.1-pg18-trixie",
         username="postgres",
         password="postgres",
         dbname="testdb",

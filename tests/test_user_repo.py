@@ -45,7 +45,7 @@ async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_rep
     """
     test_user = await user_repo.insert(test_user)
     assert isinstance(test_user.id, str)
-    assert UUID(test_user.id).version == 4
+    assert UUID(test_user.id).version == 7
     ctx = UserContext(user_id=test_user.id)
 
     test_note = NoteEntity(
@@ -56,7 +56,7 @@ async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_rep
     )
     note = await note_repo_facade.insert(test_note)
     assert isinstance(note.note_id, str)
-    assert UUID(note.note_id).version == 4
+    assert UUID(note.note_id).version == 7
 
     await user_repo.delete(test_user.id)
     ret_user = await user_repo.select(test_user.id)
