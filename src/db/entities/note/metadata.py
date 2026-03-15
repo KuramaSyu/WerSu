@@ -16,7 +16,7 @@ class NoteEntity:
     note_id: UndefinedOr[str] = UNDEFINED
     title: UndefinedNoneOr[str] = UNDEFINED
     updated_at: UndefinedNoneOr[datetime] = UNDEFINED
-    author_id: UndefinedNoneOr[int] = UNDEFINED
+    author_id: UndefinedNoneOr[str] = UNDEFINED
     content: UndefinedNoneOr[str] = UNDEFINED
     embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED
     permissions: UndefinedOr[List[NotePermissionEntity]] = UNDEFINED
