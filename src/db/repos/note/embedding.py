@@ -14,7 +14,7 @@ class NoteEmbeddingRepo(ABC):
     @abstractmethod
     async def insert(
         self,
-        note_id: int,
+        note_id: str,
         title: str,
         content: str,
     ) -> NoteEmbeddingEntity:
@@ -22,7 +22,7 @@ class NoteEmbeddingRepo(ABC):
         
         Args:
         -----
-        note_id: `int`
+        note_id: `str`
             the ID of the note
         title: `str`
             the note title, used to generate the embedding
@@ -106,7 +106,7 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
         self._table = table
         self._embedding_generator = embedding_generator
 
-    async def insert(self, note_id: int, title: str, content: str) -> NoteEmbeddingEntity:
+    async def insert(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
         # generate embedding
         embedding_content = f"{title}\n{content}"
         embedding = self._embedding_generator.generate(embedding_content)

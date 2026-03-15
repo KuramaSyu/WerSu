@@ -28,7 +28,7 @@ class User(google.protobuf.message.Message):
     USERNAME_FIELD_NUMBER: builtins.int
     DISCRIMINATOR_FIELD_NUMBER: builtins.int
     EMAIL_FIELD_NUMBER: builtins.int
-    id: builtins.int
+    id: builtins.str
     discord_id: builtins.int
     avatar: builtins.str
     username: builtins.str
@@ -37,7 +37,7 @@ class User(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        id: builtins.int = ...,
+        id: builtins.str = ...,
         discord_id: builtins.int = ...,
         avatar: builtins.str = ...,
         username: builtins.str = ...,
@@ -54,12 +54,12 @@ class GetUserRequest(google.protobuf.message.Message):
 
     ID_FIELD_NUMBER: builtins.int
     DISCORD_ID_FIELD_NUMBER: builtins.int
-    id: builtins.int
+    id: builtins.str
     discord_id: builtins.int
     def __init__(
         self,
         *,
-        id: builtins.int | None = ...,
+        id: builtins.str | None = ...,
         discord_id: builtins.int | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["_discord_id", b"_discord_id", "_id", b"_id", "discord_id", b"discord_id", "id", b"id"]) -> builtins.bool: ...
@@ -108,7 +108,7 @@ class AlterUserRequest(google.protobuf.message.Message):
     USERNAME_FIELD_NUMBER: builtins.int
     DISCRIMINATOR_FIELD_NUMBER: builtins.int
     EMAIL_FIELD_NUMBER: builtins.int
-    id: builtins.int
+    id: builtins.str
     discord_id: builtins.int
     avatar: builtins.str
     username: builtins.str
@@ -117,7 +117,7 @@ class AlterUserRequest(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        id: builtins.int = ...,
+        id: builtins.str = ...,
         discord_id: builtins.int | None = ...,
         avatar: builtins.str | None = ...,
         username: builtins.str | None = ...,
@@ -144,11 +144,11 @@ class DeleteUserRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     ID_FIELD_NUMBER: builtins.int
-    id: builtins.int
+    id: builtins.str
     def __init__(
         self,
         *,
-        id: builtins.int = ...,
+        id: builtins.str = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["id", b"id"]) -> None: ...
 

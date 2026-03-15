@@ -95,13 +95,13 @@ class NoteContentRepo(ABC):
     @abstractmethod
     async def select_by_id(
         self,
-        note_id: int,
+        note_id: str,
     ) -> NoteEntity:
         """select metadata by ID
         
         Args:
         -----
-        note_id: `int`
+        note_id: `str`
             the ID of the note
 
         Returns:
@@ -180,9 +180,9 @@ class NoteContentPostgresRepo(NoteContentRepo):
         )
         if not records:
             return []
-        return [NoteEntity(**record) for record in records]
+        return [NoteEntity.from_record(record) for record in records]
 
-    async def select_by_id(self, note_id: int) -> NoteEntity:
+    async def select_by_id(self, note_id: str) -> NoteEntity:
         record = await self._table.fetch_by_id(note_id, select="id, title, content, updated_at, author_id")
         if not record:
             raise RuntimeError(f"Note with ID {note_id} not found")

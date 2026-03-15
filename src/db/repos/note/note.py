@@ -97,14 +97,14 @@ class NoteRepoFacadeABC(ABC):
     @abstractmethod
     async def delete(
         self,
-        note_id: int,
+        note_id: str,
         ctx: UserContext,
     ) -> Optional[List[NoteEntity]]:
         """delete note
         
         Args:
         -----
-        note_id: `int`
+        note_id: `str`
             the ID of the note to delete
 
         Returns:
@@ -118,14 +118,14 @@ class NoteRepoFacadeABC(ABC):
     @abstractmethod
     async def select_by_id(
         self,
-        note_id: int,
+        note_id: str,
         ctx: UserContext,
     ) -> Optional[NoteEntity]:
         """select a whole note by its ID
         
         Args:
         -----
-        note_id: `int`
+        note_id: `str`
             the ID of the note
 
             
@@ -187,7 +187,7 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         VALUES ($1, $2, $3, $4)
         RETURNING id
         """
-        note_id: int = (await self._db.fetchrow(
+        note_id: str = (await self._db.fetchrow(
             query, 
             note.title, note.content, note.updated_at, note.author_id
         ))["id"] 
@@ -237,10 +237,10 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         note_entity.permissions = note.permissions or []
         return note_entity
 
-    async def delete(self, note_id: int, ctx: UserContext) -> Optional[List[NoteEntity]]:
+    async def delete(self, note_id: str, ctx: UserContext) -> Optional[List[NoteEntity]]:
         return await self._content_repo.delete(NoteEntity(note_id=note_id, author_id=ctx.user_id))
     
-    async def select_by_id(self, note_id: int, ctx: UserContext) -> Optional[NoteEntity]:
+    async def select_by_id(self, note_id: str, ctx: UserContext) -> Optional[NoteEntity]:
         record = await self._content_repo.select_by_id(note_id)
         if not record:
             return None
@@ -256,12 +256,20 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         record.embeddings = embeddings
 
         # fetch permissions
-        permissions = await self._permission_repo.select(
-            NotePermissionEntity(
-                note_id=note_id,
-                role_id=UNDEFINED,
+        select_permissions = getattr(self._permission_repo, "select", None)
+        if callable(select_permissions):
+            select_permissions = typing.cast(
+                typing.Callable[[NotePermissionEntity], typing.Awaitable[List[NotePermissionEntity]]],
+                select_permissions,
             )
-        )
+            permissions = await select_permissions(
+                NotePermissionEntity(
+                    note_id=note_id,
+                    role_id=UNDEFINED,
+                )
+            )
+        else:
+            permissions = []
         record.permissions = permissions
         return record
 

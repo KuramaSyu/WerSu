@@ -18,7 +18,7 @@ class NoteSearchStrategy(ABC):
         query: str,
         limit: int,
         offset: int,
-        user_id: int,
+        user_id: str,
     ) -> None:
         self.db = db
         self.query = query
@@ -146,7 +146,7 @@ class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
 
 class ContextNoteSearchStrategy(NoteSearchStrategy):
     """Return notes based on semantic search using embeddings."""
-    def __init__(self, db: DatabaseABC, query: str, limit: int, offset: int, user_id: int, generator: EmbeddingGeneratorABC) -> None:
+    def __init__(self, db: DatabaseABC, query: str, limit: int, offset: int, user_id: str, generator: EmbeddingGeneratorABC) -> None:
         super().__init__(db, query, limit, offset, user_id)
         self.generator = generator
 
@@ -157,8 +157,8 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         FROM note.embedding
         JOIN 
             note.content on note.content.id = note.embedding.note_id 
-            AND note.embedding.model = $2
-            AND note.content.author_id = {self.user_id}
+        WHERE note.embedding.model = $2
+            AND note.content.author_id = $3
         ORDER BY similarity ASC
         LIMIT {self.limit}
         OFFSET {self.offset}
@@ -166,7 +166,7 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         query_embedding = self.generator.generate(self.query)
         query_embedding_str = self.generator.tensor_to_str_vec(query_embedding)
         start = datetime.now()
-        records = await self.db.fetch(query, query_embedding_str, model.value)
+        records = await self.db.fetch(query, query_embedding_str, model.value, self.user_id)
 
         if not records:
             raise RuntimeError("Failed to fetch notes by context.")

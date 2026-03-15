@@ -1,8 +1,9 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     discord_id BIGINT UNIQUE NOT NULL,
     avatar TEXT NOT NULL,
     username TEXT NOT NULL,
@@ -13,11 +14,11 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE SCHEMA IF NOT EXISTS note;
 
 CREATE TABLE IF NOT EXISTS note.content (
-    id SERIAL PRIMARY KEY,
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     title TEXT,
     content TEXT,
     updated_at TIMESTAMP,
-    author_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
     search_vector tsvector GENERATED ALWAYS AS (
         setweight(to_tsvector('english', title), 'A') ||  -- title is more important
         setweight(to_tsvector('english', content), 'B')
@@ -41,7 +42,7 @@ USING GIN (search_vector);
 
 
 CREATE TABLE IF NOT EXISTS note.embedding (
-    note_id BIGINT NOT NULL REFERENCES note.content(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    note_id TEXT NOT NULL REFERENCES note.content(id) ON DELETE CASCADE ON UPDATE CASCADE,
     model VARCHAR(128),
     embedding VECTOR(384), -- size of output of text-embedding-3-small model 
     PRIMARY KEY(note_id, model)

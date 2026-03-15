@@ -243,7 +243,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         return objects
 
     async def lookup_notes(self, user: UserContextABC, permission: str) -> List[ObjectRef]:
-        user_id = user.get_user_id()
+        user_id = user.user_id
         relationship = Relationship(
             resource=ObjectRef(
                 object_type="note",
@@ -318,7 +318,7 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
         return results
 
     async def lookup_notes(self, user: UserContextABC, permission: str) -> List[ObjectRef]:
-        user_id = user.get_user_id()
+        user_id = user.user_id
         relationship = Relationship(
             resource=ObjectRef(object_type="note", object_id=UNDEFINED),
             relation=permission,

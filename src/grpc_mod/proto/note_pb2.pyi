@@ -28,13 +28,13 @@ class GetNoteRequest(google.protobuf.message.Message):
 
     ID_FIELD_NUMBER: builtins.int
     USER_ID_FIELD_NUMBER: builtins.int
-    id: builtins.int
-    user_id: builtins.int
+    id: builtins.str
+    user_id: builtins.str
     def __init__(
         self,
         *,
-        id: builtins.int = ...,
-        user_id: builtins.int = ...,
+        id: builtins.str = ...,
+        user_id: builtins.str = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["id", b"id", "user_id", b"user_id"]) -> None: ...
 
@@ -84,7 +84,7 @@ class GetSearchNotesRequest(google.protobuf.message.Message):
     limit: builtins.int
     """Pagination"""
     offset: builtins.int
-    user_id: builtins.int
+    user_id: builtins.str
     """authentication"""
     def __init__(
         self,
@@ -93,7 +93,7 @@ class GetSearchNotesRequest(google.protobuf.message.Message):
         query: builtins.str = ...,
         limit: builtins.int = ...,
         offset: builtins.int = ...,
-        user_id: builtins.int = ...,
+        user_id: builtins.str = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["limit", b"limit", "offset", b"offset", "query", b"query", "search_type", b"search_type", "user_id", b"user_id"]) -> None: ...
 
@@ -110,19 +110,19 @@ class MinimalNote(google.protobuf.message.Message):
     AUTHOR_ID_FIELD_NUMBER: builtins.int
     UPDATED_AT_FIELD_NUMBER: builtins.int
     STRIPPED_CONTENT_FIELD_NUMBER: builtins.int
-    id: builtins.int
-    """Note ID (eg 42)"""
+    id: builtins.str
+    """Note ID (UUIDv4 string)"""
     title: builtins.str
-    author_id: builtins.int
+    author_id: builtins.str
     stripped_content: builtins.str
     @property
     def updated_at(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
     def __init__(
         self,
         *,
-        id: builtins.int = ...,
+        id: builtins.str = ...,
         title: builtins.str = ...,
-        author_id: builtins.int = ...,
+        author_id: builtins.str = ...,
         updated_at: google.protobuf.timestamp_pb2.Timestamp | None = ...,
         stripped_content: builtins.str = ...,
     ) -> None: ...
@@ -143,10 +143,10 @@ class Note(google.protobuf.message.Message):
     UPDATED_AT_FIELD_NUMBER: builtins.int
     AUTHOR_ID_FIELD_NUMBER: builtins.int
     PERMISSIONS_FIELD_NUMBER: builtins.int
-    id: builtins.int
+    id: builtins.str
     title: builtins.str
     content: builtins.str
-    author_id: builtins.int
+    author_id: builtins.str
     @property
     def updated_at(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
     @property
@@ -156,11 +156,11 @@ class Note(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        id: builtins.int = ...,
+        id: builtins.str = ...,
         title: builtins.str = ...,
         content: builtins.str = ...,
         updated_at: google.protobuf.timestamp_pb2.Timestamp | None = ...,
-        author_id: builtins.int = ...,
+        author_id: builtins.str = ...,
         permissions: collections.abc.Iterable[Global___NotePermission] | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["updated_at", b"updated_at"]) -> builtins.bool: ...
@@ -213,13 +213,13 @@ class PostNoteRequest(google.protobuf.message.Message):
     AUTHOR_ID_FIELD_NUMBER: builtins.int
     title: builtins.str
     content: builtins.str
-    author_id: builtins.int
+    author_id: builtins.str
     def __init__(
         self,
         *,
         title: builtins.str = ...,
         content: builtins.str | None = ...,
-        author_id: builtins.int = ...,
+        author_id: builtins.str = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["_content", b"_content", "content", b"content"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["_content", b"_content", "author_id", b"author_id", "content", b"content", "title", b"title"]) -> None: ...
@@ -235,13 +235,13 @@ class DeleteNoteRequest(google.protobuf.message.Message):
 
     ID_FIELD_NUMBER: builtins.int
     AUTHOR_ID_FIELD_NUMBER: builtins.int
-    id: builtins.int
-    author_id: builtins.int
+    id: builtins.str
+    author_id: builtins.str
     def __init__(
         self,
         *,
-        id: builtins.int = ...,
-        author_id: builtins.int = ...,
+        id: builtins.str = ...,
+        author_id: builtins.str = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["author_id", b"author_id", "id", b"id"]) -> None: ...
 
@@ -255,17 +255,17 @@ class AlterNoteRequest(google.protobuf.message.Message):
     TITLE_FIELD_NUMBER: builtins.int
     CONTENT_FIELD_NUMBER: builtins.int
     AUTHOR_ID_FIELD_NUMBER: builtins.int
-    id: builtins.int
+    id: builtins.str
     title: builtins.str
     content: builtins.str
-    author_id: builtins.int
+    author_id: builtins.str
     def __init__(
         self,
         *,
-        id: builtins.int = ...,
+        id: builtins.str = ...,
         title: builtins.str | None = ...,
         content: builtins.str | None = ...,
-        author_id: builtins.int | None = ...,
+        author_id: builtins.str | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "title", b"title"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "id", b"id", "title", b"title"]) -> None: ...

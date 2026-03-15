@@ -12,7 +12,7 @@ from src.grpc_mod.proto.user_pb2 import GetUserRequest, PostUserRequest, User
 from src.grpc_mod.proto.user_pb2_grpc import UserServiceStub
 
 
-async def get_note(stub: NoteServiceStub, note_id: int):
+async def get_note(stub: NoteServiceStub, note_id: str):
     request = GetNoteRequest(id=note_id)
     try:
         response = await stub.GetNote(request)
@@ -39,7 +39,7 @@ async def search_note(stub: NoteServiceStub, query: str):
     return notes
 
 
-async def get_user(stub: UserServiceStub, user_id: int | None, discord_id: int | None) -> User | None:
+async def get_user(stub: UserServiceStub, user_id: str | None, discord_id: int | None) -> User | None:
     request = GetUserRequest(id=user_id, discord_id=discord_id)
     try:
         response = await stub.GetUser(request)
@@ -54,7 +54,7 @@ async def get_user(stub: UserServiceStub, user_id: int | None, discord_id: int |
 async def post_user(stub: UserServiceStub, discord_id: int, avatar_url: str):
     request = PostUserRequest(
         discord_id=discord_id,
-        avatar_url=avatar_url,
+        avatar=avatar_url,
     )
     try:
         response = await stub.PostUser(request)
@@ -66,7 +66,7 @@ async def post_user(stub: UserServiceStub, discord_id: int, avatar_url: str):
         return None
 
 
-async def post_note(stub: NoteServiceStub, title: str, content: str, author_id: int = 1):
+async def post_note(stub: NoteServiceStub, title: str, content: str, author_id: str = ""):
     request = PostNoteRequest(
         title=title,
         content=content,

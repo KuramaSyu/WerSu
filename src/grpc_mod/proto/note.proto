@@ -6,8 +6,8 @@ option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
 
 // Request for getting a note by id
 message GetNoteRequest {
-    int32 id = 1;
-    int32 user_id = 2;
+    string id = 1;
+    string user_id = 2;
 }
 
 message GetSearchNotesRequest {
@@ -27,14 +27,14 @@ message GetSearchNotesRequest {
     int32 offset = 4;
 
     // authentication
-    int32 user_id = 5;
+    string user_id = 5;
 }
 
 // Response: represents a minimal Note for search results
 message MinimalNote {
-    int32 id = 1; // Note ID (eg 42)
+    string id = 1; // Note ID (UUIDv4 string)
     string title = 2;
-    int32 author_id = 3;
+    string author_id = 3;
     google.protobuf.Timestamp updated_at = 4;
     string stripped_content = 5;
 }
@@ -42,11 +42,11 @@ message MinimalNote {
 // Response: represents a Note
 message Note {
     reserved 6;
-    int32 id = 1;
+    string id = 1;
     string title = 2;
     string content = 3;
     google.protobuf.Timestamp updated_at = 4;
-    int32 author_id = 5;
+    string author_id = 5;
     //repeated NoteEmbedding embeddings = 6;
     repeated NotePermission permissions = 7;
 }
@@ -64,20 +64,20 @@ message NotePermission {
 message PostNoteRequest {
     string title = 1;
     optional string content = 2;
-    int32 author_id = 3;
+    string author_id = 3;
 }
 
 // Request to delete a note
 message DeleteNoteRequest {
-    int32 id = 1;
-    int32 author_id = 2;
+    string id = 1;
+    string author_id = 2;
 }
 
 message AlterNoteRequest {
-    int32 id = 1;
+    string id = 1;
     optional string title = 2;
     optional string content = 3;
-    optional int32 author_id = 4;
+    optional string author_id = 4;
 }
 
 // Note Service

@@ -13,7 +13,7 @@ from src.api.undefined import *
 @dataclass
 class NoteEntity:
     """Represents one record of note.metadata"""
-    note_id: UndefinedOr[int] = UNDEFINED
+    note_id: UndefinedOr[str] = UNDEFINED
     title: UndefinedNoneOr[str] = UNDEFINED
     updated_at: UndefinedNoneOr[datetime] = UNDEFINED
     author_id: UndefinedNoneOr[int] = UNDEFINED

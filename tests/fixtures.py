@@ -56,8 +56,8 @@ async def db(dsn):
     await db.execute("""
     TRUNCATE TABLE
         users,
-        note.content,
-    RESTART IDENTITY CASCADE;
+        note.content
+    CASCADE;
     """)
 
     yield db

@@ -1,6 +1,7 @@
 from dataclasses import replace
 from datetime import datetime
 from typing import AsyncGenerator, Optional
+from uuid import UUID
 import pytest
 from testcontainers.postgres import PostgresContainer
 from src.db.entities.note.metadata import NoteEntity
@@ -43,7 +44,8 @@ async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_rep
     - Asserts that both user and note are deleted (cascade delete)
     """
     test_user = await user_repo.insert(test_user)
-    assert isinstance(test_user.id, int)
+    assert isinstance(test_user.id, str)
+    assert UUID(test_user.id).version == 4
     ctx = UserContext(user_id=test_user.id)
 
     test_note = NoteEntity(
@@ -53,7 +55,8 @@ async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_rep
         author_id=test_user.id
     )
     note = await note_repo_facade.insert(test_note)
-    assert isinstance(note.note_id, int)
+    assert isinstance(note.note_id, str)
+    assert UUID(note.note_id).version == 4
 
     await user_repo.delete(test_user.id)
     ret_user = await user_repo.select(test_user.id)

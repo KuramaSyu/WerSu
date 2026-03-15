@@ -6,7 +6,7 @@ from typing import Optional
 class UserEntity:
     discord_id: int
     avatar: Optional[str] = None
-    id: Optional[int] = None
+    id: Optional[str] = None
     username: Optional[str] = None
     discriminator: Optional[str] = None
     email: Optional[str] = None

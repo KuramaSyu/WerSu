@@ -23,7 +23,7 @@ class UserRepoABC(ABC):
         pass
 
     @abstractmethod
-    async def select(self, user_id: int) -> Optional[UserEntity]:
+    async def select(self, user_id: str) -> Optional[UserEntity]:
         """Select a user by ID."""
         pass
 
@@ -33,7 +33,7 @@ class UserRepoABC(ABC):
         pass
 
     @abstractmethod
-    async def delete(self, user_id: int) -> bool:
+    async def delete(self, user_id: str) -> bool:
         """Delete a user by ID."""
         pass
 
@@ -70,10 +70,10 @@ class UserPostgresRepo(UserRepoABC):
             RETURNING id
         """
         user_id = await self.db.fetchrow(query, user.discord_id, user.avatar, user.username, user.discriminator, user.email)
-        user.id = user_id
+        user.id = user_id["id"]
         return user
 
-    async def select(self, user_id: int) -> Optional[UserEntity]:
+    async def select(self, user_id: str) -> Optional[UserEntity]:
         """Select a user by ID."""
         query = "SELECT id, discord_id, avatar, username, discriminator, email FROM users WHERE id = $1"
         row = await self.db.fetchrow(query, user_id)
@@ -103,7 +103,7 @@ class UserPostgresRepo(UserRepoABC):
             )
         return None
 
-    async def delete(self, user_id: int) -> bool:
+    async def delete(self, user_id: str) -> bool:
         """Delete a user by ID."""
         query = "DELETE FROM users WHERE id = $1"
         result = await self.db.execute(query, user_id)

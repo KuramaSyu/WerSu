@@ -5,7 +5,7 @@ option go_package = "github.com/KuramaSyu/WerSu-Rest/src/proto;proto";
 
 // User Messages
 message User {
-    int32 id = 1;
+    string id = 1;
     int64 discord_id = 2;
     string avatar= 3;
     string username = 4;
@@ -15,7 +15,7 @@ message User {
 }
 
 message GetUserRequest {
-    optional int32 id = 1;
+    optional string id = 1;
     optional int64 discord_id = 2;
 }
 
@@ -28,7 +28,7 @@ message PostUserRequest {
 }
 
 message AlterUserRequest {
-    int32 id = 1;
+    string id = 1;
     optional int64 discord_id = 2;
     optional string avatar = 3;
     optional string username = 4;
@@ -37,7 +37,7 @@ message AlterUserRequest {
 }
 
 message DeleteUserRequest {
-    int32 id = 1;
+    string id = 1;
 }
 
 message DeleteUserResponse {
