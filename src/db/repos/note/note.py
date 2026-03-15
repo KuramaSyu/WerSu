@@ -31,10 +31,11 @@ class SearchType(Enum):
 
 class UserContext(UserContextABC):
     def __init__(self, user_id: str):
-        self.user_id = user_id
+        self._user_id = user_id
 
-    def get_user_id(self) -> str:
-        return self.user_id
+    @property
+    def user_id(self) -> str:
+        return self._user_id
 
 
 class NoteRepoFacadeABC(ABC):
