@@ -8,6 +8,7 @@ import asyncpg
 
 from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.api.types import LoggingProvider, Pagination
+from src.api.user_context import UserContextABC
 from src.db.entities import NoteEntity
 from src.db import Database
 from src.db.entities.note.embedding import NoteEmbeddingEntity
@@ -28,9 +29,12 @@ class SearchType(Enum):
     CONTEXT = 4
 
 
-class UserContext:
-    def __init__(self, user_id: int):
+class UserContext(UserContextABC):
+    def __init__(self, user_id: str):
         self.user_id = user_id
+
+    def get_user_id(self) -> str:
+        return self.user_id
 
 
 class NoteRepoFacadeABC(ABC):
