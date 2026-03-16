@@ -1,9 +1,7 @@
 name: Create Docker Image
 
 on:
-  workflow_run:
-    workflows: ["Build Python Serice"]
-    types: [completed]
+  push:
 
 permissions:
   contents: read
