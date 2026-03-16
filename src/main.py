@@ -1,6 +1,7 @@
 import logging
 from logging import getLogger, basicConfig
 import sys
+import os
 
 import asyncio
 from typing import Optional, Callable
@@ -30,13 +31,20 @@ async def serve():
     log = logging_provider(__name__)
     setup_table_logging(logging_provider)
 
+    db_dsn = os.getenv(
+        "DATABASE_DSN",
+        "postgres://postgres:postgres@localhost:5433/db?sslmode=disable",
+    )
+    grpc_host = os.getenv("GRPC_HOST", "[::]")
+    grpc_port = os.getenv("GRPC_PORT", "50052")
+
     # create server 
     server = grpc.aio.server()
 
     # connect to database
     log.info("Connecting to database...")
     db = Database(
-        dsn="postgres://postgres:postgres@localhost:5433/db?sslmode=disable",
+        dsn=db_dsn,
         log=logging_provider
     )
     await db.init_db()
@@ -87,7 +95,7 @@ async def serve():
     add_UserServiceServicer_to_server(user_service, server)
 
     # configure server
-    listen_addr = "[::]:50052"
+    listen_addr = f"{grpc_host}:{grpc_port}"
     server.add_insecure_port(listen_addr)
     log.info(f"gRPC server listening on {listen_addr}")
 
