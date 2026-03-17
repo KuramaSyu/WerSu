@@ -2,28 +2,41 @@ import logging
 from logging import getLogger, basicConfig
 import sys
 import os
+import time
 
 import asyncio
 from typing import Optional, Callable
+from authzed.api.v1 import AsyncClient
 import grpc
 from colorama import Fore, Style, init
+from grpcutil import insecure_bearer_token_credentials
 
+from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
+from src.db.repos.note.permission import NotePermissionRepoSpicedb
 from src.utils import logging_provider
-from src.ai.embedding_generator import EmbeddingGenerator, Models
-from src.db import table
-from src.db.repos import NoteRepoFacadeABC, NoteRepoFacade
-from src.db import Database
+from src.db.database import Database
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
-from src.db.repos.note.permission import NotePermissionPostgresRepo
 from src.db.repos.user.user import UserRepoABC, UserPostgresRepo
 from src.db.table import Table, setup_table_logging
+from src.grpc_mod.proto.note_pb2_grpc import add_NoteServiceServicer_to_server
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
-from src.grpc_mod import add_NoteServiceServicer_to_server, GrpcNoteService, GrpcUserService
 from src.db.repos.note.content import NoteContentPostgresRepo
 
 
 
 
+def get_os_env_variable(name: str, log: logging.Logger, default: UndefinedOr[str]) -> str:
+    """if UNDEFINED, then log ciritcal error and exit"""
+
+    value = os.getenv(name)
+    if value is not None:
+        return value
+
+    if not isinstance(default, UndefinedType):
+        return default
+
+    log.critical(f"{name} environment variable not set and no default provided")
+    sys.exit(1)
 
 
 async def serve():
@@ -31,12 +44,16 @@ async def serve():
     log = logging_provider(__name__)
     setup_table_logging(logging_provider)
 
-    db_dsn = os.getenv(
+    db_dsn = get_os_env_variable(
         "DATABASE_DSN",
-        "postgres://postgres:postgres@localhost:5433/db?sslmode=disable",
+        log,
+        "postgres://postgres:postgres@localhost:5433/db?sslmode=disable"
     )
-    grpc_host = os.getenv("GRPC_HOST", "[::]")
-    grpc_port = os.getenv("GRPC_PORT", "50052")
+    grpc_host = get_os_env_variable("GRPC_HOST", log, "[::]")
+    grpc_port = get_os_env_variable("GRPC_PORT", log, "50052")
+    grpc_spicedb_credentials = get_os_env_variable("GRPC_SPICEDB_CREDENTIALS", log, UNDEFINED)
+    grpc_spicedb_address = get_os_env_variable("GRPC_SPICEDB_ADDRESS", log, UNDEFINED)
+    
 
     # create server 
     server = grpc.aio.server()
@@ -48,6 +65,13 @@ async def serve():
         log=logging_provider
     )
     await db.init_db()
+
+    # connect to spicedb permission service
+    log.info("Connecting to SpiceDB permission service...")
+    spicedb_client = AsyncClient(
+        grpc_spicedb_address,
+        insecure_bearer_token_credentials(grpc_spicedb_credentials)
+    )
 
     # setup db tables and their primary keys
     log.info("Setting up database tables...")
@@ -69,18 +93,35 @@ async def serve():
     )
 
     # setup note repo via DI
+    log.info("Importing repo and service modules...")
+    repo_import_started = time.perf_counter()
+    from src.db.repos.note.note import NoteRepoFacade
+    from src.grpc_mod.service import GrpcNoteService, GrpcUserService
+    log.info(f"Repo/service imports completed in {time.perf_counter() - repo_import_started:.2f}s")
+
+    log.info("Import ML model for embedding generation...")
+    ml_import_started = time.perf_counter()
+    from src.ai.embedding_generator import EmbeddingGenerator, Models
+    log.info(f"ML import completed in {time.perf_counter() - ml_import_started:.2f}s")
+
+    model_init_started = time.perf_counter()
+    embedding_generator = EmbeddingGenerator(
+        model_name=Models.MINI_LM_L6_V2,
+        logging_provider=logging_provider,
+    )
+    log.info(f"Embedding model initialized in {time.perf_counter() - model_init_started:.2f}s")
+
     log.info("Setting up NoteRepoFacade, sub repos and embedding generator...")
     repo: NoteRepoFacade = NoteRepoFacade(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
         embedding_repo=NoteEmbeddingPostgresRepo(
             table=embedding_table,
-            embedding_generator=EmbeddingGenerator(
-                model_name=Models.MINI_LM_L6_V2, 
-                logging_provider=logging_provider
-            )
+            embedding_generator=embedding_generator
         ),
-        permission_repo=NotePermissionPostgresRepo(permission_table),
+        permission_repo=NotePermissionRepoSpicedb(
+            client=spicedb_client
+        ),
         logging_provider=logging_provider,
     )
 

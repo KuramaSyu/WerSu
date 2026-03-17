@@ -5,7 +5,6 @@ from typing import List, Optional
 from asyncpg import Record
 from src.api.undefined import UNDEFINED
 from src.db.entities import NoteEntity
-from src.db.repos.note import permission
 from src.db.table import TableABC
 
 from src.utils import asdict

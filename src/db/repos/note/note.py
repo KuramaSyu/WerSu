@@ -6,16 +6,14 @@ import typing
 
 import asyncpg
 
-from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.api.types import LoggingProvider, Pagination
 from src.api.user_context import UserContextABC
 from src.db.entities import NoteEntity
-from src.db import Database
+from src.db.database import Database
 from src.db.entities.note.embedding import NoteEmbeddingEntity
 from src.db.repos.note.content import NoteContentRepo
 
 from src.db.repos.note.permission import NotePermissionRepo
-from src.db.repos.note.search_strategy import ContextNoteSearchStrategy, DateNoteSearchStrategy, FuzzyTitleContentSearchStrategy, NoteSearchStrategy, WebNoteSearchStrategy
 from src.db.table import TableABC
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.permission import NotePermissionEntity
@@ -281,6 +279,13 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         pagination: Pagination
     ) -> List[NoteEntity]:
 
+        from src.db.repos.note.search_strategy import (
+            ContextNoteSearchStrategy,
+            DateNoteSearchStrategy,
+            FuzzyTitleContentSearchStrategy,
+            WebNoteSearchStrategy,
+        )
+
         # these parameters are common to all strategies __init__ fn
         common_init_parameters = {
             "db": self._db,
@@ -289,7 +294,6 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             "offset": pagination.offset,
             "user_id": ctx.user_id,
         }
-        strategy: NoteSearchStrategy
         if search_type == SearchType.NO_SEARCH:
             strategy = DateNoteSearchStrategy(**common_init_parameters)
         elif search_type == SearchType.FULL_TEXT_TITLE:

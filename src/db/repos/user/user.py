@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from src.db.entities import UserEntity
-from src.db import Database
+from src.db.database import Database
 from src.utils.logging import logging_provider
 
 

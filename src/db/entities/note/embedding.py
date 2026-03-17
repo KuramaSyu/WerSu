@@ -1,8 +1,14 @@
 from dataclasses import dataclass
 from typing import Sequence
 
-from src.ai.embedding_generator import EmbeddingGenerator, EmbeddingGeneratorABC
 from src.api.undefined import *
+
+
+def _str_vec_to_list(vec_str: str) -> Sequence[float]:
+    vec_str = vec_str.strip().lstrip("[").rstrip("]")
+    if not vec_str:
+        return []
+    return [float(x) for x in vec_str.split(",")]
 
 
 @dataclass
@@ -16,7 +22,7 @@ class NoteEmbeddingEntity:
     def __post_init__(self):
         if isinstance(self.embedding, str):
             # embeddings are strings in DB, hence a conversion here
-            self.embedding = EmbeddingGeneratorABC.str_vec_to_list(self.embedding)
+            self.embedding = _str_vec_to_list(self.embedding)
 
 
 

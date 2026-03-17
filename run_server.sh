@@ -1,1 +1,5 @@
-env PYTHONTRACEMALLOC=1 python -m src.main
+#!/bin/bash
+set -a
+source .env.default
+python -m src.main
+set +a

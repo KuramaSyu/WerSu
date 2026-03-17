@@ -11,9 +11,10 @@ import asyncpg
 from src.api import LoggingProvider
 from src.api.types import Pagination
 from src.api.undefined import UNDEFINED
-from src.db.repos import NoteRepoFacadeABC
 from src.db.entities import NoteEntity
-from src.db.repos.note.note import SearchType, UserContext
+from src.db.repos.note.note import NoteRepoFacadeABC, SearchType, UserContext
+from src.db.repos.user.user import UserRepoABC
+from src.db.entities.user.user import UserEntity
 from src.grpc_mod import (
     GetNoteRequest, NoteEmbedding, 
     NotePermission, PostNoteRequest, Note,
@@ -23,7 +24,6 @@ from src.grpc_mod import (
     DeleteUserResponse, PostUserRequest,
 )
 from src.grpc_mod.converter import to_grpc_note, to_grpc_user
-from src.db import UserRepoABC, UserEntity
 from src.grpc_mod.converter.note_entity_converter import to_grpc_minimal_note, to_search_type
 from src.grpc_mod.proto.note_pb2 import AlterNoteRequest, DeleteNoteRequest, GetSearchNotesRequest, MinimalNote
 

@@ -6,7 +6,7 @@ from asyncpg import Record
 from src.ai.embedding_generator import EmbeddingGenerator, EmbeddingGeneratorABC, Models
 from src.db.database import Database, DatabaseABC
 from src.db.entities import NoteEntity
-from src.db import TableABC
+from src.db.table import TableABC
 
 
 class NoteSearchStrategy(ABC):
