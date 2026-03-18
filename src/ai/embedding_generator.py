@@ -1,7 +1,7 @@
 from abc import ABC, abstractclassmethod, abstractmethod, abstractstaticmethod
 from datetime import datetime
 from enum import Enum
-from sentence_transformers import SentenceTransformer
+
 import numpy as np
 from typing import List, Any, Sequence
 
@@ -81,6 +81,7 @@ class EmbeddingGeneratorABC(ABC):
 class EmbeddingGenerator(EmbeddingGeneratorABC):
     """Generates embeddings for given text using specified model."""
     def __init__(self, model_name: Models, logging_provider: LoggingProvider):
+        from sentence_transformers import SentenceTransformer
         self.model = SentenceTransformer(model_name.value)
         self.model_enum = model_name
         self.log = logging_provider(__name__, self)

@@ -21,7 +21,9 @@ from src.db.table import Table, setup_table_logging
 from src.grpc_mod.proto.note_pb2_grpc import add_NoteServiceServicer_to_server
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
 from src.db.repos.note.content import NoteContentPostgresRepo
-
+from src.db.repos.note.note import NoteRepoFacade
+from src.grpc_mod.service import GrpcNoteService, GrpcUserService
+from src.ai.embedding_generator import EmbeddingGenerator, Models
 
 
 
@@ -95,14 +97,10 @@ async def serve():
     # setup note repo via DI
     log.info("Importing repo and service modules...")
     repo_import_started = time.perf_counter()
-    from src.db.repos.note.note import NoteRepoFacade
-    from src.grpc_mod.service import GrpcNoteService, GrpcUserService
+
     log.info(f"Repo/service imports completed in {time.perf_counter() - repo_import_started:.2f}s")
 
-    log.info("Import ML model for embedding generation...")
-    ml_import_started = time.perf_counter()
-    from src.ai.embedding_generator import EmbeddingGenerator, Models
-    log.info(f"ML import completed in {time.perf_counter() - ml_import_started:.2f}s")
+    
 
     model_init_started = time.perf_counter()
     embedding_generator = EmbeddingGenerator(
