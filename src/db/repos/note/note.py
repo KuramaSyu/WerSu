@@ -11,9 +11,10 @@ from src.api.user_context import UserContextABC
 from src.db.entities import NoteEntity
 from src.db.database import Database
 from src.db.entities.note.embedding import NoteEmbeddingEntity
+from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.content import NoteContentRepo
 
-from src.db.repos.note.permission import NotePermissionRepo
+from src.db.repos.note.permission import NotePermissionRepo, NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.db.table import TableABC
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.permission import NotePermissionEntity
@@ -54,9 +55,12 @@ class NoteRepoFacadeABC(ABC):
     async def insert(
         self,
         note: NoteEntity,
+        user: UserContextABC,
     ) -> NoteEntity:
         """inserts a full note into 
-        all 3 relations used for this.
+        Note DB, stores relations (note#owner@user) and stores 
+        directory relation (note#parent_directory@users_fleeting_dir) or a given 
+        directory.
         The embedding will be generated automatically.
         Added embeddings will be ignored.
         
@@ -64,6 +68,8 @@ class NoteRepoFacadeABC(ABC):
         -----
         note: `NoteMetadataEntity`
             the note of a note
+        user: `UserContextABC`
+            information about the user to create owner relation to note
 
         Returns:
         --------
@@ -169,16 +175,19 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         content_repo: NoteContentRepo,
         embedding_repo: NoteEmbeddingRepo,
         permission_repo: NotePermissionRepo,
+        directory_repo: DirectoryRepo,
         logging_provider: LoggingProvider,
     ):
         self._db = db
         self._content_repo = content_repo
         self._embedding_repo = embedding_repo
         self._permission_repo = permission_repo
+        self._directory_repo = directory_repo
         self.log = logging_provider(__name__, self)
 
     
-    async def insert(self, note: NoteEntity):
+    async def insert(self, note: NoteEntity, user: UserContextABC):
+        NOTE_SPICEDB_TYPE = "note"
         # insert note itself
         query = f"""
         INSERT INTO {self.content_table_name}(title, content, updated_at, author_id)
@@ -206,20 +215,18 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             )
             note.embeddings.append(embedding)
 
+        # get directory
+        self._d
+        
         # insert permissions
-        query = f"""
-        INSERT INTO {self.permission_table_name}(note_id, role_id)
-        VALUES ($1, $2)
-        """
-        if isinstance(note.permissions, list):
-            for permission in note.permissions:
-                permission.note_id = note_id
-                await self._db.execute(
-                    query,
-                    note_id, permission.role_id
-                )
-        else:
-            note.permissions = []  # to ensure it's the same value as the SQL return
+        owner_relation = Relationship(
+            resource=ObjectRef(ObjectTypeEnum.NOTE, note_id), 
+            relation=NoteRelationEnum.OWNER, 
+            subject=SubjectRef(ObjectTypeEnum.USER, user.user_id)
+        )
+        
+        self._permission_repo.insert()
+        note.permissions = []  # to ensure it's the same value as the SQL return
         note.note_id = note_id
         return note
     
