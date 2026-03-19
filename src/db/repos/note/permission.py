@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
+from enum import StrEnum
 from operator import ge
 import re
-from typing import Any, List, Optional, Protocol
+from typing import Any, List, Literal, Optional, Protocol, TypeAlias
 
 from asyncpg import Record
 from authzed.api.v1.permission_service_pb2 import ImportBulkRelationshipsRequest
@@ -31,22 +32,92 @@ from grpcutil import insecure_bearer_token_credentials
 
 from src.api import UNDEFINED, UndefinedNoneOr, UndefinedOr
 
+
+class ObjectTypeEnum(StrEnum):
+    NOTE = "note"
+    DIRECTORY = "directory"
+    USER = "user"
+
+
+class NoteRelationEnum(StrEnum):
+    ADMIN = "admin"
+    WRITER = "writer"
+    READER = "reader"
+    VIEW = "view"
+    WRITE = "write"
+    DELETE = "delete"
+    PARENT_DIRECTORY = "parent_directory"
+    OWNER = "owner"
+
+
+class DirectoryRelationEnum(StrEnum):
+    PARENT = "parent"
+    ADMIN = "admin"
+    WRITER = "writer"
+    READER = "reader"
+    VIEW = "view"
+    WRITE = "write"
+    DELETE = "delete"
+
+
+ObjectType: TypeAlias = Literal["note", "directory", "user"]
+SubjectType: TypeAlias = Literal["user", "directory"]
+NoteRelationName: TypeAlias = Literal[
+    "admin",
+    "writer",
+    "reader",
+    "view",
+    "write",
+    "delete",
+    "parent_directory",
+    "owner",
+]
+DirectoryRelationName: TypeAlias = Literal[
+    "parent",
+    "admin",
+    "writer",
+    "reader",
+    "view",
+    "write",
+    "delete",
+]
+RelationName: TypeAlias = NoteRelationName | DirectoryRelationName
+RelationEnum: TypeAlias = NoteRelationEnum | DirectoryRelationEnum
+
 class ObjectRef:
-    def __init__(self, object_type: str, object_id: UndefinedOr[str]) -> None:
+    def __init__(
+        self,
+        object_type: ObjectType | ObjectTypeEnum,
+        object_id: UndefinedOr[str],
+    ) -> None:
         self.object_type = object_type
         self.object_id = object_id
       
 
 class SubjectRef(ObjectRef):
-    pass
+    def __init__(
+        self,
+        object_type: SubjectType | ObjectTypeEnum,
+        object_id: UndefinedOr[str],
+    ) -> None:
+        super().__init__(object_type=object_type, object_id=object_id)
 
 class PartialRelationship:
-    def __init__(self, relation: str, subject: SubjectRef) -> None:
+    def __init__(
+        self,
+        relation: RelationName | RelationEnum,
+        subject: SubjectRef,
+    ) -> None:
         self.relation = relation
         self.subject = subject
 
 class Relationship(PartialRelationship):
-    def __init__(self, resource: ObjectRef, relation: str, subject: SubjectRef) -> None:
+    def __init__(
+        self,
+        resource: ObjectRef,
+        relation: RelationName | RelationEnum,
+        subject: SubjectRef,
+    ) -> None:
         self.resource = resource
         super.__init__(relation, subject)
 
