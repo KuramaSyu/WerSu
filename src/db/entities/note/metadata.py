@@ -4,6 +4,7 @@ from datetime import datetime
 
 from asyncpg import Record
 
+from src.db.entities.directory.directory import DirectoryEntity
 from src.db.repos.note.permission import PartialRelationship, Relationship
 
 
@@ -22,6 +23,7 @@ class NoteEntity:
     content: UndefinedNoneOr[str] = UNDEFINED
     embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED
     permissions: UndefinedOr[List[PartialRelationship]] = UNDEFINED
+    parent_dir: UndefinedOr[DirectoryEntity] = UNDEFINED
 
     @staticmethod
     def from_record(record: Record | Dict[str, Any]) -> "NoteEntity":
