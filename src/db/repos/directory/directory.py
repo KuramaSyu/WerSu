@@ -21,11 +21,11 @@ from src.db.repos.note.permission import (
 )
 
 
-class DirectoryRepoABC(ABC):
+class DirectoryRepo(ABC):
     """Abstract repository interface for directory persistence and relations."""
 
     @abstractmethod
-    async def CreateDirectory(self, entity: DirectoryEntity) -> DirectoryEntity:
+    async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
         """Create a directory.
 
         Parameters
@@ -41,7 +41,7 @@ class DirectoryRepoABC(ABC):
         ...
 
     @abstractmethod
-    async def FetchDirectory(self, id: str) -> Optional[DirectoryEntity]:
+    async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
         """Fetch a directory by ID.
 
         Parameters
@@ -57,7 +57,7 @@ class DirectoryRepoABC(ABC):
         ...
 
     @abstractmethod
-    async def FetchDirectories(self, user: UserContextABC) -> List[DirectoryEntity]:
+    async def fetch_directories(self, user: UserContextABC) -> List[DirectoryEntity]:
         """Fetch all directories visible to a user.
 
         Parameters
@@ -73,7 +73,7 @@ class DirectoryRepoABC(ABC):
         ...
 
     @abstractmethod
-    async def DeleteDirectory(self, entity: DirectoryEntity) -> bool:
+    async def delete_directory(self, entity: DirectoryEntity) -> bool:
         """Delete a directory.
 
         Parameters
@@ -89,7 +89,7 @@ class DirectoryRepoABC(ABC):
         ...
 
 
-class DirectoryRepoSpicedbPostgres(DirectoryRepoABC):
+class DirectoryRepoSpicedbPostgres(DirectoryRepo):
     """Directory repository backed by Postgres and SpiceDB."""
 
     def __init__(
@@ -102,7 +102,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepoABC):
         self._permission_repo = permission_repo
         self._spicedb_client = spicedb_client
 
-    async def CreateDirectory(self, entity: DirectoryEntity) -> DirectoryEntity:
+    async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
         record = await self._db.fetchrow(
             """
             INSERT INTO note.directory(name, image_url)
@@ -148,7 +148,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepoABC):
             relations=entity.relations if isinstance(entity.relations, list) else [],
         )
 
-    async def FetchDirectory(self, id: str) -> Optional[DirectoryEntity]:
+    async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
         record = await self._db.fetchrow(
             """
             SELECT id, name, image_url
@@ -170,7 +170,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepoABC):
             relations=relations,
         )
 
-    async def FetchDirectories(self, user: UserContextABC) -> List[DirectoryEntity]:
+    async def fetch_directories(self, user: UserContextABC) -> List[DirectoryEntity]:
         object_refs = await self._permission_repo.lookup(
             Relationship(
                 resource=ObjectRef(object_type="directory", object_id=UNDEFINED),
@@ -212,7 +212,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepoABC):
             )
         return entities
 
-    async def DeleteDirectory(self, entity: DirectoryEntity) -> bool:
+    async def delete_directory(self, entity: DirectoryEntity) -> bool:
         if entity.id in (UNDEFINED, None):
             raise ValueError("Directory ID is required for deletion")
 
