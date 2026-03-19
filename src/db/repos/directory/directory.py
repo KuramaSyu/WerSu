@@ -14,8 +14,11 @@ from src.api.user_context import UserContextABC
 from src.db.database import Database
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.repos.note.permission import (
+    DirectoryRelationEnum,
     NotePermissionRepo,
+    NoteRelationEnum,
     ObjectRef,
+    ObjectTypeEnum,
     Relationship,
     SubjectRef,
 )
@@ -69,6 +72,22 @@ class DirectoryRepo(ABC):
         -------
         List[DirectoryEntity]
             Directories the user can view.
+        """
+        ...
+
+    @abstractmethod
+    async def list_note_directories(self, note_id: str) -> List[DirectoryEntity]:
+        """Lookup directories that are related to a specific note.
+
+        Parameters
+        ----------
+        note_id : str
+            Note ID to lookup.
+
+        Returns
+        -------
+        List[DirectoryEntity]
+            Distinct directory entities referenced by the note.
         """
         ...
 
@@ -200,6 +219,60 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
 
         entities: List[DirectoryEntity] = []
         for row, rel_data in zip(rows, parent_and_relations):
+            parent_id, relations = rel_data
+            entities.append(
+                DirectoryEntity(
+                    id=str(row["id"]),
+                    name=row["name"],
+                    image_url=row["image_url"],
+                    parent_id=parent_id,
+                    relations=relations,
+                )
+            )
+        return entities
+
+    async def list_note_directories(self, note_id: str) -> List[DirectoryEntity]:
+
+        # fetch all Relationships with <note_id>:note#parent_directory@directory
+        response_stream = self._spicedb_client.ExportBulkRelationships(
+            BulkExportRelationshipsRequest(
+                optional_relationship_filter=RelationshipFilter(
+                    resource_type="note",
+                    optional_resource_id=note_id,
+                    optional_relation=NoteRelationEnum.PARENT_DIRECTORY
+                )
+            )
+        )
+
+        directory_ids: set[str] = set()
+        async for response in response_stream:
+            subject = response.relationship.subject.object
+            if subject.object_type == ObjectTypeEnum.DIRECTORY and subject.object_id:
+                directory_ids.add(str(subject.object_id))
+
+        if not directory_ids:
+            return []
+
+        # for each directory in the relationship, get the actual directory entity
+        directories = await self._db.fetch(
+            """
+            SELECT id, name, image_url
+            FROM note.directory
+            WHERE id = ANY($1)
+            """,
+            list(directory_ids),
+        )
+        if not directories:
+            return []
+
+        # fetch relations for all directories
+        parent_and_relations = await asyncio.gather(
+            *(self._fetch_spicedb_relations(str(dir_["id"])) for dir_ in directories)
+        )
+
+        # build entity out of SQL-Directory entity and it's relations
+        entities: List[DirectoryEntity] = []
+        for row, rel_data in zip(directories, parent_and_relations):
             parent_id, relations = rel_data
             entities.append(
                 DirectoryEntity(
