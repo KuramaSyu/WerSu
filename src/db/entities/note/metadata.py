@@ -4,6 +4,8 @@ from datetime import datetime
 
 from asyncpg import Record
 
+from src.db.repos.note.permission import PartialRelationship, Relationship
+
 
 from .embedding import NoteEmbeddingEntity
 from .permission import NotePermissionEntity
@@ -19,7 +21,7 @@ class NoteEntity:
     author_id: UndefinedNoneOr[str] = UNDEFINED
     content: UndefinedNoneOr[str] = UNDEFINED
     embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED
-    permissions: UndefinedOr[List[NotePermissionEntity]] = UNDEFINED
+    permissions: UndefinedOr[List[PartialRelationship]] = UNDEFINED
 
     @staticmethod
     def from_record(record: Record | Dict[str, Any]) -> "NoteEntity":

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from operator import ge
 import re
-from typing import Any, List, Protocol
+from typing import Any, List, Optional, Protocol
 
 from asyncpg import Record
 from authzed.api.v1.permission_service_pb2 import ImportBulkRelationshipsRequest
@@ -40,11 +40,15 @@ class ObjectRef:
 class SubjectRef(ObjectRef):
     pass
 
-class Relationship:
-    def __init__(self, resource: ObjectRef, relation: str, subject: SubjectRef) -> None:
-        self.resource = resource
+class PartialRelationship:
+    def __init__(self, relation: str, subject: SubjectRef) -> None:
         self.relation = relation
         self.subject = subject
+
+class Relationship(PartialRelationship):
+    def __init__(self, resource: ObjectRef, relation: str, subject: SubjectRef) -> None:
+        self.resource = resource
+        super.__init__(relation, subject)
 
 class PermissionConverterABC(ABC):
 

@@ -13,6 +13,7 @@ from src.api.types import Pagination
 from src.api.undefined import UNDEFINED
 from src.db.entities import NoteEntity
 from src.db.repos.note.note import NoteRepoFacadeABC, SearchType, UserContext
+from src.db.repos.note.permission import Relationship, SubjectRef
 from src.db.repos.user.user import UserRepoABC
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod import (
@@ -49,13 +50,14 @@ class GrpcNoteService(NoteServiceServicer):
 
     async def PostNote(self, request: PostNoteRequest, context: ServicerContext) -> Note:
         try:
+            user_context = UserContext(request.author_id)
             note_entity = await self.repo.insert(
                 NoteEntity(
                     note_id=UNDEFINED,
                     author_id=request.author_id,
                     content=request.content,
                     embeddings=[],
-                    permissions=[],
+                    permissions=[Relationship(resource=None, relation="owner", subject=SubjectRef(object_type="user", object_id=user_context.user_id))],
                     title=request.title,
                     updated_at=datetime.now(),
                 )
