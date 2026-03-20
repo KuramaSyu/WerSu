@@ -61,7 +61,7 @@ class DirectoryRepo(ABC):
         ...
 
     @abstractmethod
-    async def fetch_directories(self, user: UserContextABC) -> List[DirectoryEntity]:
+    async def list_user_directory_ids(self, user: UserContextABC) -> List[DirectoryEntity]:
         """Fetch all directories visible to a user.
 
         Parameters
