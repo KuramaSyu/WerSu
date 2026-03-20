@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 from datetime import datetime
 
 from asyncpg import Record
@@ -21,9 +21,9 @@ class NoteEntity:
     updated_at: UndefinedNoneOr[datetime] = UNDEFINED
     author_id: UndefinedNoneOr[str] = UNDEFINED
     content: UndefinedNoneOr[str] = UNDEFINED
-    embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED
-    permissions: UndefinedOr[List[PartialRelationship]] = UNDEFINED
-    parent_dir_id: UndefinedOr[DirectoryEntity] = UNDEFINED
+    embeddings: UndefinedOr[Sequence[NoteEmbeddingEntity]] = UNDEFINED
+    permissions: UndefinedOr[Sequence[PartialRelationship]] = UNDEFINED
+    parent_dir_id: UndefinedOr[str] = UNDEFINED
 
     @staticmethod
     def from_record(record: Record | Dict[str, Any]) -> "NoteEntity":
