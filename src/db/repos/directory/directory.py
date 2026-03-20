@@ -8,6 +8,7 @@ from authzed.api.v1 import (
     DeleteRelationshipsRequest,
     RelationshipFilter,
 )
+from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest
 
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
@@ -76,7 +77,7 @@ class DirectoryRepo(ABC):
         ...
 
     @abstractmethod
-    async def list_note_directories(self, note_id: str) -> List[DirectoryEntity]:
+    async def list_note_directory_ids(self, note_id: str) -> List[str]:
         """Lookup directories that are related to a specific note.
 
         Parameters
@@ -86,8 +87,8 @@ class DirectoryRepo(ABC):
 
         Returns
         -------
-        List[DirectoryEntity]
-            Distinct directory entities referenced by the note.
+        List[str]
+            Distinct directory IDs referenced by the note.
         """
         ...
 
@@ -151,7 +152,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
                 relationships.append(
                     Relationship(
                         resource=ObjectRef(object_type="directory", object_id=directory_id),
-                        relation=rel.relation,
+                        relation=rel.relation,  # type: ignore
                         subject=rel.subject,
                     )
                 )
@@ -231,11 +232,11 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
             )
         return entities
 
-    async def list_note_directories(self, note_id: str) -> List[DirectoryEntity]:
+    async def list_note_directory_ids(self, note_id: str) -> List[str]:
 
         # fetch all Relationships with <note_id>:note#parent_directory@directory
         response_stream = self._spicedb_client.ExportBulkRelationships(
-            BulkExportRelationshipsRequest(
+            ExportBulkRelationshipsRequest(
                 optional_relationship_filter=RelationshipFilter(
                     resource_type="note",
                     optional_resource_id=note_id,
@@ -246,44 +247,12 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
 
         directory_ids: set[str] = set()
         async for response in response_stream:
-            subject = response.relationship.subject.object
-            if subject.object_type == ObjectTypeEnum.DIRECTORY and subject.object_id:
-                directory_ids.add(str(subject.object_id))
+            for relationship in response.relationships:
+                subject = relationship.subject.object
+                if subject.object_type == ObjectTypeEnum.DIRECTORY and subject.object_id:
+                    directory_ids.add(str(subject.object_id))
 
-        if not directory_ids:
-            return []
-
-        # for each directory in the relationship, get the actual directory entity
-        directories = await self._db.fetch(
-            """
-            SELECT id, name, image_url
-            FROM note.directory
-            WHERE id = ANY($1)
-            """,
-            list(directory_ids),
-        )
-        if not directories:
-            return []
-
-        # fetch relations for all directories
-        parent_and_relations = await asyncio.gather(
-            *(self._fetch_spicedb_relations(str(dir_["id"])) for dir_ in directories)
-        )
-
-        # build entity out of SQL-Directory entity and it's relations
-        entities: List[DirectoryEntity] = []
-        for row, rel_data in zip(directories, parent_and_relations):
-            parent_id, relations = rel_data
-            entities.append(
-                DirectoryEntity(
-                    id=str(row["id"]),
-                    name=row["name"],
-                    image_url=row["image_url"],
-                    parent_id=parent_id,
-                    relations=relations,
-                )
-            )
-        return entities
+        return list(directory_ids)
 
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         if entity.id in (UNDEFINED, None):
@@ -310,7 +279,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
     async def _fetch_spicedb_relations(self, directory_id: str) -> Tuple[Optional[str], List[Relationship]]:
         """Fetch parent ID and user relations from SpiceDB."""
         response_stream = self._spicedb_client.ExportBulkRelationships(
-            BulkExportRelationshipsRequest(
+            ExportBulkRelationshipsRequest(
                 optional_relationship_filter=RelationshipFilter(
                     resource_type="directory",
                     optional_resource_id=directory_id,
@@ -322,25 +291,24 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         relations: List[Relationship] = []
 
         async for response in response_stream:
-            relationship = response.relationship
-            relation_name = relationship.relation
-            subject_object = relationship.subject.object
-            subject_ref = SubjectRef(
-                object_type=subject_object.object_type,
-                object_id=subject_object.object_id,
-            )
-
-            if relation_name == "parent" and subject_ref.object_type == "directory":
-                parent_id = str(subject_ref.object_id)
-                continue
-
-            if subject_ref.object_type == "user":
-                relations.append(
-                    Relationship(
-                        resource=ObjectRef(object_type="directory", object_id=directory_id),
-                        relation=relation_name,
-                        subject=subject_ref,
-                    )
+            for relationship in response.relationships:
+                relation_name = relationship.relation
+                subject_ref = SubjectRef(
+                    object_type=relationship.subject.object.object_type,  # type: ignore
+                    object_id=relationship.subject.object.object_id,
                 )
+
+                if relation_name == "parent" and subject_ref.object_type == "directory":
+                    parent_id = str(subject_ref.object_id)
+                    continue
+
+                if subject_ref.object_type == "user":
+                    relations.append(
+                        Relationship(
+                            resource=ObjectRef(object_type="directory", object_id=directory_id),
+                            relation=relation_name,  # type: ignore
+                            subject=subject_ref,
+                        )
+                    )
 
         return parent_id, relations
