@@ -187,7 +187,7 @@ class NoteRepoFacade(NoteRepoFacadeABC):
 
     
     async def insert(self, note: NoteEntity, user: UserContextABC):
-        NOTE_SPICEDB_TYPE = "note"
+        DEFAULT_DIRECTORY_NAME = "fleeting"
         # insert note itself
         query = f"""
         INSERT INTO {self.content_table_name}(title, content, updated_at, author_id)
@@ -215,8 +215,14 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             )
             note.embeddings.append(embedding)
 
-        # get directory
-        self._d
+        # get default directory
+        directories = [
+            await self._directory_repo.fetch_directory(directory_id) 
+            for directory_id 
+            in await self._directory_repo.list_user_directory_ids(user)
+        ]
+        directories = [d for d in directories if d and d.name == DEFAULT_DIRECTORY_NAME]
+        assert len(directories) == 1
         
         # insert permissions
         owner_relation = Relationship(
@@ -224,9 +230,13 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             relation=NoteRelationEnum.OWNER, 
             subject=SubjectRef(ObjectTypeEnum.USER, user.user_id)
         )
-        
-        self._permission_repo.insert()
-        note.permissions = []  # to ensure it's the same value as the SQL return
+        parent_dir_relation = Relationship(
+            resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
+            relation=NoteRelationEnum.PARENT_DIRECTORY,
+            subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directories[0].id)
+        )
+        relations = await self._permission_repo.insert([owner_relation, parent_dir_relation])
+        note.permissions = relations  # to ensure it's the same value as the SQL return
         note.note_id = note_id
         return note
     
