@@ -119,7 +119,7 @@ class Relationship(PartialRelationship):
         subject: SubjectRef,
     ) -> None:
         self.resource = resource
-        super.__init__(relation, subject)
+        super().__init__(relation, subject)
 
 class PermissionConverterABC(ABC):
 
