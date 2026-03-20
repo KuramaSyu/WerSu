@@ -25,6 +25,7 @@ class DirectoryEntity:
 
     id: UndefinedOr[str] = UNDEFINED
     name: UndefinedNoneOr[str] = UNDEFINED
+    display_name: UndefinedNoneOr[str] = UNDEFINED
     image_url: UndefinedNoneOr[str] = UNDEFINED
     parent_id: UndefinedNoneOr[str] = UNDEFINED
     relations: UndefinedOr[List[Relationship]] = UNDEFINED

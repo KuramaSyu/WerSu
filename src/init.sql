@@ -51,5 +51,6 @@ CREATE TABLE IF NOT EXISTS note.embedding (
 CREATE TABLE IF NOT EXISTS note.directory (
     id TEXT PRIMARY KEY DEFAULT uuidv7()::text,
     name TEXT NOT NULL,
+    display_name TEXT NULL,
     image_url TEXT -- relation to top directory or users stored in spicedb
 );
