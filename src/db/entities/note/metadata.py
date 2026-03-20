@@ -23,7 +23,7 @@ class NoteEntity:
     content: UndefinedNoneOr[str] = UNDEFINED
     embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED
     permissions: UndefinedOr[List[PartialRelationship]] = UNDEFINED
-    parent_dir: UndefinedOr[DirectoryEntity] = UNDEFINED
+    parent_dir_id: UndefinedOr[DirectoryEntity] = UNDEFINED
 
     @staticmethod
     def from_record(record: Record | Dict[str, Any]) -> "NoteEntity":
