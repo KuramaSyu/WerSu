@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from dataclasses import replace
 from enum import Enum
 from typing import List, Optional, Type
-import typing
 
 import asyncpg
 
@@ -17,7 +16,6 @@ from src.db.repos.note.content import NoteContentRepo
 from src.db.repos.note.permission import NotePermissionRepo, NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.db.table import TableABC
 from src.api.undefined import UNDEFINED
-from src.db.entities.note.permission import NotePermissionEntity
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 
 
@@ -185,6 +183,35 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         self._directory_repo = directory_repo
         self.log = logging_provider(__name__, self)
 
+    async def _fetch_note_permissions(
+        self,
+        note_id: str,
+    ) -> List[Relationship]:
+        """Fetch all direct relationships stored for a note.
+
+        Parameters
+        ----------
+        note_id : str
+            Note ID to load relationships for.
+
+        Returns
+        -------
+        List[Relationship]
+            Direct relationships on the note (for example `owner` and
+            `parent_directory`) as stored in the permission backend.
+        """
+        relations = await self._permission_repo.list_relationships(
+            resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
+        )
+        return sorted(
+            relations,
+            key=lambda rel: (
+                str(rel.relation),
+                str(rel.subject.object_type),
+                "" if rel.subject.object_id is UNDEFINED else str(rel.subject.object_id),
+            ),
+        )
+
     
     async def insert(self, note: NoteEntity, user: UserContextABC):
         DEFAULT_DIRECTORY_NAME = "fleeting"
@@ -235,8 +262,8 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             relation=NoteRelationEnum.PARENT_DIRECTORY,
             subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directories[0].id)
         )
-        relations = await self._permission_repo.insert([owner_relation, parent_dir_relation])
-        note.permissions = relations  # to ensure it's the same value as the SQL return
+        await self._permission_repo.insert([owner_relation, parent_dir_relation])
+        note.permissions = await self._fetch_note_permissions(note_id=note_id)
         note.note_id = note_id
         return note
     
@@ -270,22 +297,7 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         )
         record.embeddings = embeddings
 
-        # fetch permissions
-        select_permissions = getattr(self._permission_repo, "select", None)
-        if callable(select_permissions):
-            select_permissions = typing.cast(
-                typing.Callable[[NotePermissionEntity], typing.Awaitable[List[NotePermissionEntity]]],
-                select_permissions,
-            )
-            permissions = await select_permissions(
-                NotePermissionEntity(
-                    note_id=note_id,
-                    role_id=UNDEFINED,
-                )
-            )
-        else:
-            permissions = []
-        record.permissions = permissions
+        record.permissions = await self._fetch_note_permissions(note_id=note_id)
         return record
 
     async def search_notes(
