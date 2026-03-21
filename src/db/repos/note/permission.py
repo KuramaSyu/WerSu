@@ -3,12 +3,11 @@ from copy import deepcopy
 from enum import StrEnum
 from operator import ge
 import re
-from typing import Any, List, Literal, Optional, Protocol, TypeAlias
+from typing import Any, List, Literal, Optional, Protocol, TypeAlias, cast
 
 from asyncpg import Record
-from authzed.api.v1.permission_service_pb2 import ImportBulkRelationshipsRequest
+from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest, ImportBulkRelationshipsRequest
 from src.api.user_context import UserContextABC
-from src.db.entities import NotePermissionEntity
 from src.db.table import TableABC
 from src.utils import asdict
 
@@ -241,6 +240,23 @@ class NotePermissionRepo(ABC):
         ...
 
     @abstractmethod
+    async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
+        """List stored relationships for a specific resource.
+
+        Parameters
+        ----------
+        resource : ObjectRef
+            Resource whose direct relationships should be returned.
+            `object_id` must be set.
+
+        Returns
+        -------
+        List[Relationship]
+            Stored relationships for `resource` including relation and subject.
+        """
+        ...
+
+    @abstractmethod
     async def has_permission(
         self,
         user: UserContextABC,
@@ -371,7 +387,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         async for resp in result:
             objects.append(
                 ObjectRef(
-                    object_type=relationship.resource.object_type,
+                    object_type=ObjectTypeEnum(str(relationship.resource.object_type)),
                     object_id=resp.resource_object_id
                 )
             )
@@ -384,7 +400,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
                 object_type="note",
                 object_id=UNDEFINED
             ),
-            relation=permission,
+            relation=NoteRelationEnum(permission),
             subject=SubjectRef(
                 object_type="user",
                 object_id=user_id
@@ -392,28 +408,43 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         )
         return await self.lookup(relationship)
 
+    async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
+        assert resource.object_id != UNDEFINED, "object_id must be provided to list relationships"
+
+        response_stream = self.client.ExportBulkRelationships(
+            ExportBulkRelationshipsRequest(
+                optional_relationship_filter=RelationshipFilter(
+                    resource_type=resource.object_type,
+                    optional_resource_id=str(resource.object_id),
+                )
+            )
+        )
+
+        relationships: List[Relationship] = []
+        async for response in response_stream:
+            for relationship in response.relationships:
+                relationships.append(
+                    Relationship(
+                        resource=ObjectRef(
+                            object_type=ObjectTypeEnum(relationship.resource.object_type),
+                            object_id=relationship.resource.object_id,
+                        ),
+                        relation=cast(RelationName, relationship.relation),
+                        subject=SubjectRef(
+                            object_type=ObjectTypeEnum(relationship.subject.object.object_type),
+                            object_id=relationship.subject.object.object_id,
+                        ),
+                    )
+                )
+
+        return relationships
+
     async def has_permission(
         self,
         user: UserContextABC,
         permission: str,
         resource: ObjectRef,
     ) -> bool:
-        """Check whether a user has a permission on a resource.
-
-        Parameters
-        ----------
-        user : UserContextABC
-            Current user context.
-        permission : str
-            Permission to verify.
-        resource : ObjectRef
-            Resource to check.
-
-        Returns
-        -------
-        bool
-            True if granted by SpiceDB.
-        """
         assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
 
         response = await self.client.CheckPermission(
@@ -432,20 +463,6 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         return response.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
 
     async def get_permissions(self, user: UserContextABC, resource: ObjectRef) -> List[str]:
-        """List effective permissions for a user on a resource.
-
-        Parameters
-        ----------
-        user : UserContextABC
-            Current user context.
-        resource : ObjectRef
-            Resource to evaluate.
-
-        Returns
-        -------
-        List[str]
-            Permissions granted by configured candidates.
-        """
         assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
 
         candidates = self._permission_candidates_by_object_type.get(resource.object_type, [])
@@ -522,7 +539,7 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
             if obj_match and rel_match and subj_match:
                 results.append(
                     ObjectRef(
-                        object_type=stored.resource.object_type,
+                        object_type=ObjectTypeEnum(str(stored.resource.object_type)),
                         object_id=stored.resource.object_id
                     )
                 )
@@ -532,10 +549,23 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
         user_id = user.user_id
         relationship = Relationship(
             resource=ObjectRef(object_type="note", object_id=UNDEFINED),
-            relation=permission,
+            relation=NoteRelationEnum(permission),
             subject=SubjectRef(object_type="user", object_id=user_id),
         )
         return await self.lookup(relationship)
+
+    async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
+        assert resource.object_id != UNDEFINED, "object_id must be provided to list relationships"
+
+        relationships: List[Relationship] = []
+        for stored in self._store:
+            if (
+                stored.resource.object_type == resource.object_type
+                and stored.resource.object_id == resource.object_id
+            ):
+                relationships.append(deepcopy(stored))
+
+        return relationships
 
     async def has_permission(
         self,
@@ -543,40 +573,10 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
         permission: str,
         resource: ObjectRef,
     ) -> bool:
-        """Check whether a user has a permission on a resource.
-
-        Parameters
-        ----------
-        user : UserContextABC
-            Current user context.
-        permission : str
-            Permission to verify.
-        resource : ObjectRef
-            Resource to check.
-
-        Returns
-        -------
-        bool
-            True when permission is present.
-        """
         permissions = await self.get_permissions(user=user, resource=resource)
         return permission in permissions
 
     async def get_permissions(self, user: UserContextABC, resource: ObjectRef) -> List[str]:
-        """List effective permissions for a user on a resource.
-
-        Parameters
-        ----------
-        user : UserContextABC
-            Current user context.
-        resource : ObjectRef
-            Resource to evaluate.
-
-        Returns
-        -------
-        List[str]
-            Sorted unique permission names.
-        """
         assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
 
         direct_relations: List[str] = []
