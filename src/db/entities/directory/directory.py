@@ -15,6 +15,8 @@ class DirectoryEntity:
         Directory identifier from Postgres.
     name : UndefinedNoneOr[str], default=UNDEFINED
         Human-readable directory name.
+    display_name : UndefinedNoneOr[str], default=UNDEFINED
+        Display name for the directory.
     image_url : UndefinedNoneOr[str], default=UNDEFINED
         Optional image URL for the directory.
     parent_id : UndefinedNoneOr[str], default=UNDEFINED
