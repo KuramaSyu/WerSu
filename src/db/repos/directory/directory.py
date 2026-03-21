@@ -61,8 +61,8 @@ class DirectoryRepo(ABC):
         ...
 
     @abstractmethod
-    async def list_user_directory_ids(self, user: UserContextABC) -> List[DirectoryEntity]:
-        """Fetch all directories visible to a user.
+    async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
+        """Fetch all directory IDs visible to a user.
 
         Parameters
         ----------
@@ -231,6 +231,20 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
                 )
             )
         return entities
+
+    async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
+        object_refs = await self._permission_repo.lookup(
+            Relationship(
+                resource=ObjectRef(object_type="directory", object_id=UNDEFINED),
+                relation=DirectoryRelationEnum.VIEW,
+                subject=SubjectRef(object_type="user", object_id=user.user_id),
+            )
+        )
+        return [
+            str(obj.object_id)
+            for obj in object_refs
+            if obj.object_id not in (UNDEFINED, None)
+        ]
 
     async def list_note_directory_ids(self, note_id: str) -> List[str]:
 
