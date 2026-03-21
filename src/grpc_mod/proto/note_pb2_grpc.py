@@ -270,3 +270,204 @@ class NoteService(object):
             timeout,
             metadata,
             _registered_method=True)
+
+
+class PermissionServiceStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.GetPermissions = channel.unary_unary(
+                '/proto.PermissionService/GetPermissions',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetPermissionsRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+                _registered_method=True)
+        self.CreatePermission = channel.unary_unary(
+                '/proto.PermissionService/CreatePermission',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.CreatePermissionRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+                _registered_method=True)
+        self.DeletePermission = channel.unary_unary(
+                '/proto.PermissionService/DeletePermission',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeletePermissionRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+                _registered_method=True)
+        self.ReplacePermissions = channel.unary_unary(
+                '/proto.PermissionService/ReplacePermissions',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.ReplacePermissionsRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+                _registered_method=True)
+
+
+class PermissionServiceServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def GetPermissions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreatePermission(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeletePermission(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReplacePermissions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_PermissionServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'GetPermissions': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetPermissions,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetPermissionsRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.SerializeToString,
+            ),
+            'CreatePermission': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreatePermission,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.CreatePermissionRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.SerializeToString,
+            ),
+            'DeletePermission': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeletePermission,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeletePermissionRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.SerializeToString,
+            ),
+            'ReplacePermissions': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReplacePermissions,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.ReplacePermissionsRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'proto.PermissionService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('proto.PermissionService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class PermissionService(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def GetPermissions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.PermissionService/GetPermissions',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetPermissionsRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreatePermission(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.PermissionService/CreatePermission',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.CreatePermissionRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeletePermission(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.PermissionService/DeletePermission',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.DeletePermissionRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReplacePermissions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.PermissionService/ReplacePermissions',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.ReplacePermissionsRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)

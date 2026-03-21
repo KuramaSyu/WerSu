@@ -20,6 +20,23 @@ else:
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
+class _PermissionObjectType:
+    ValueType = typing.NewType("ValueType", builtins.int)
+    V: typing_extensions.TypeAlias = ValueType
+
+class _PermissionObjectTypeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_PermissionObjectType.ValueType], builtins.type):
+    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+    PERMISSION_OBJECT_TYPE_UNSPECIFIED: _PermissionObjectType.ValueType  # 0
+    PERMISSION_OBJECT_TYPE_NOTE: _PermissionObjectType.ValueType  # 1
+    PERMISSION_OBJECT_TYPE_DIRECTORY: _PermissionObjectType.ValueType  # 2
+
+class PermissionObjectType(_PermissionObjectType, metaclass=_PermissionObjectTypeEnumTypeWrapper): ...
+
+PERMISSION_OBJECT_TYPE_UNSPECIFIED: PermissionObjectType.ValueType  # 0
+PERMISSION_OBJECT_TYPE_NOTE: PermissionObjectType.ValueType  # 1
+PERMISSION_OBJECT_TYPE_DIRECTORY: PermissionObjectType.ValueType  # 2
+Global___PermissionObjectType: typing_extensions.TypeAlias = PermissionObjectType
+
 @typing.final
 class GetNoteRequest(google.protobuf.message.Message):
     """Request for getting a note by id"""
@@ -277,3 +294,161 @@ class AlterNoteRequest(google.protobuf.message.Message):
     def WhichOneof(self, oneof_group: typing.Literal["_title", b"_title"]) -> typing.Literal["title"] | None: ...
 
 Global___AlterNoteRequest: typing_extensions.TypeAlias = AlterNoteRequest
+
+@typing.final
+class PermissionSubject(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    OBJECT_TYPE_FIELD_NUMBER: builtins.int
+    OBJECT_ID_FIELD_NUMBER: builtins.int
+    object_type: builtins.str
+    object_id: builtins.str
+    def __init__(
+        self,
+        *,
+        object_type: builtins.str = ...,
+        object_id: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type"]) -> None: ...
+
+Global___PermissionSubject: typing_extensions.TypeAlias = PermissionSubject
+
+@typing.final
+class PermissionRelationship(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    RELATION_FIELD_NUMBER: builtins.int
+    SUBJECT_FIELD_NUMBER: builtins.int
+    relation: builtins.str
+    @property
+    def subject(self) -> Global___PermissionSubject: ...
+    def __init__(
+        self,
+        *,
+        relation: builtins.str = ...,
+        subject: Global___PermissionSubject | None = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["subject", b"subject"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["relation", b"relation", "subject", b"subject"]) -> None: ...
+
+Global___PermissionRelationship: typing_extensions.TypeAlias = PermissionRelationship
+
+@typing.final
+class GetPermissionsRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    OBJECT_TYPE_FIELD_NUMBER: builtins.int
+    OBJECT_ID_FIELD_NUMBER: builtins.int
+    USER_ID_FIELD_NUMBER: builtins.int
+    object_type: Global___PermissionObjectType.ValueType
+    object_id: builtins.str
+    user_id: builtins.str
+    def __init__(
+        self,
+        *,
+        object_type: Global___PermissionObjectType.ValueType = ...,
+        object_id: builtins.str = ...,
+        user_id: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type", "user_id", b"user_id"]) -> None: ...
+
+Global___GetPermissionsRequest: typing_extensions.TypeAlias = GetPermissionsRequest
+
+@typing.final
+class CreatePermissionRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    OBJECT_TYPE_FIELD_NUMBER: builtins.int
+    OBJECT_ID_FIELD_NUMBER: builtins.int
+    RELATIONSHIP_FIELD_NUMBER: builtins.int
+    USER_ID_FIELD_NUMBER: builtins.int
+    object_type: Global___PermissionObjectType.ValueType
+    object_id: builtins.str
+    user_id: builtins.str
+    @property
+    def relationship(self) -> Global___PermissionRelationship: ...
+    def __init__(
+        self,
+        *,
+        object_type: Global___PermissionObjectType.ValueType = ...,
+        object_id: builtins.str = ...,
+        relationship: Global___PermissionRelationship | None = ...,
+        user_id: builtins.str = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["relationship", b"relationship"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationship", b"relationship", "user_id", b"user_id"]) -> None: ...
+
+Global___CreatePermissionRequest: typing_extensions.TypeAlias = CreatePermissionRequest
+
+@typing.final
+class DeletePermissionRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    OBJECT_TYPE_FIELD_NUMBER: builtins.int
+    OBJECT_ID_FIELD_NUMBER: builtins.int
+    RELATIONSHIP_FIELD_NUMBER: builtins.int
+    USER_ID_FIELD_NUMBER: builtins.int
+    object_type: Global___PermissionObjectType.ValueType
+    object_id: builtins.str
+    user_id: builtins.str
+    @property
+    def relationship(self) -> Global___PermissionRelationship: ...
+    def __init__(
+        self,
+        *,
+        object_type: Global___PermissionObjectType.ValueType = ...,
+        object_id: builtins.str = ...,
+        relationship: Global___PermissionRelationship | None = ...,
+        user_id: builtins.str = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["relationship", b"relationship"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationship", b"relationship", "user_id", b"user_id"]) -> None: ...
+
+Global___DeletePermissionRequest: typing_extensions.TypeAlias = DeletePermissionRequest
+
+@typing.final
+class ReplacePermissionsRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    OBJECT_TYPE_FIELD_NUMBER: builtins.int
+    OBJECT_ID_FIELD_NUMBER: builtins.int
+    RELATIONSHIPS_FIELD_NUMBER: builtins.int
+    USER_ID_FIELD_NUMBER: builtins.int
+    object_type: Global___PermissionObjectType.ValueType
+    object_id: builtins.str
+    user_id: builtins.str
+    @property
+    def relationships(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
+    def __init__(
+        self,
+        *,
+        object_type: Global___PermissionObjectType.ValueType = ...,
+        object_id: builtins.str = ...,
+        relationships: collections.abc.Iterable[Global___PermissionRelationship] | None = ...,
+        user_id: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationships", b"relationships", "user_id", b"user_id"]) -> None: ...
+
+Global___ReplacePermissionsRequest: typing_extensions.TypeAlias = ReplacePermissionsRequest
+
+@typing.final
+class PermissionsResponse(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    OBJECT_TYPE_FIELD_NUMBER: builtins.int
+    OBJECT_ID_FIELD_NUMBER: builtins.int
+    RELATIONSHIPS_FIELD_NUMBER: builtins.int
+    object_type: Global___PermissionObjectType.ValueType
+    object_id: builtins.str
+    @property
+    def relationships(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
+    def __init__(
+        self,
+        *,
+        object_type: Global___PermissionObjectType.ValueType = ...,
+        object_id: builtins.str = ...,
+        relationships: collections.abc.Iterable[Global___PermissionRelationship] | None = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationships", b"relationships"]) -> None: ...
+
+Global___PermissionsResponse: typing_extensions.TypeAlias = PermissionsResponse

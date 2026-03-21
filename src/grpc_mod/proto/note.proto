@@ -80,6 +80,55 @@ message AlterNoteRequest {
     optional string author_id = 4;
 }
 
+enum PermissionObjectType {
+    PERMISSION_OBJECT_TYPE_UNSPECIFIED = 0;
+    PERMISSION_OBJECT_TYPE_NOTE = 1;
+    PERMISSION_OBJECT_TYPE_DIRECTORY = 2;
+}
+
+message PermissionSubject {
+    string object_type = 1;
+    string object_id = 2;
+}
+
+message PermissionRelationship {
+    string relation = 1;
+    PermissionSubject subject = 2;
+}
+
+message GetPermissionsRequest {
+    PermissionObjectType object_type = 1;
+    string object_id = 2;
+    string user_id = 3;
+}
+
+message CreatePermissionRequest {
+    PermissionObjectType object_type = 1;
+    string object_id = 2;
+    PermissionRelationship relationship = 3;
+    string user_id = 4;
+}
+
+message DeletePermissionRequest {
+    PermissionObjectType object_type = 1;
+    string object_id = 2;
+    PermissionRelationship relationship = 3;
+    string user_id = 4;
+}
+
+message ReplacePermissionsRequest {
+    PermissionObjectType object_type = 1;
+    string object_id = 2;
+    repeated PermissionRelationship relationships = 3;
+    string user_id = 4;
+}
+
+message PermissionsResponse {
+    PermissionObjectType object_type = 1;
+    string object_id = 2;
+    repeated PermissionRelationship relationships = 3;
+}
+
 // Note Service
 service NoteService {
     rpc GetNote(GetNoteRequest) returns (Note);
@@ -87,4 +136,11 @@ service NoteService {
     rpc PatchNote(AlterNoteRequest) returns (Note);
     rpc DeleteNote(DeleteNoteRequest) returns (Note);
     rpc SearchNotes(GetSearchNotesRequest) returns (stream MinimalNote);
+}
+
+service PermissionService {
+    rpc GetPermissions(GetPermissionsRequest) returns (PermissionsResponse);
+    rpc CreatePermission(CreatePermissionRequest) returns (PermissionsResponse);
+    rpc DeletePermission(DeletePermissionRequest) returns (PermissionsResponse);
+    rpc ReplacePermissions(ReplacePermissionsRequest) returns (PermissionsResponse);
 }
