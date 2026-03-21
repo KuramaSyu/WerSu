@@ -54,7 +54,7 @@ async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_rep
         updated_at=datetime.now(), 
         author_id=test_user.id
     )
-    note = await note_repo_facade.insert(test_note)
+    note = await note_repo_facade.insert(test_note, ctx)
     assert isinstance(note.note_id, str)
     assert UUID(note.note_id).version == 7
 
