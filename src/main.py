@@ -12,17 +12,19 @@ from colorama import Fore, Style, init
 from grpcutil import insecure_bearer_token_credentials
 
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
+from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
 from src.db.repos.note.permission import NotePermissionRepoSpicedb
+from src.services.roles import PermissionServiceRepo
 from src.utils import logging_provider
 from src.db.database import Database
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
 from src.db.repos.user.user import UserRepoABC, UserPostgresRepo
 from src.db.table import Table, setup_table_logging
-from src.grpc_mod.proto.note_pb2_grpc import add_NoteServiceServicer_to_server
+from src.grpc_mod.proto.note_pb2_grpc import add_NoteServiceServicer_to_server, add_PermissionServiceServicer_to_server
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteRepoFacade
-from src.grpc_mod.service import GrpcNoteService, GrpcUserService
+from src.grpc_mod.service import GrpcNoteService, GrpcPermissionService, GrpcUserService
 from src.ai.embedding_generator import EmbeddingGenerator, Models
 
 
@@ -110,6 +112,13 @@ async def serve():
     log.info(f"Embedding model initialized in {time.perf_counter() - model_init_started:.2f}s")
 
     log.info("Setting up NoteRepoFacade, sub repos and embedding generator...")
+    permission_repo = NotePermissionRepoSpicedb(client=spicedb_client)
+    directory_repo = DirectoryRepoSpicedbPostgres(
+        db=db,
+        permission_repo=permission_repo,
+        spicedb_client=spicedb_client,
+    )
+
     repo: NoteRepoFacade = NoteRepoFacade(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
@@ -117,9 +126,8 @@ async def serve():
             table=embedding_table,
             embedding_generator=embedding_generator
         ),
-        permission_repo=NotePermissionRepoSpicedb(
-            client=spicedb_client
-        ),
+        permission_repo=permission_repo,
+        directory_repo=directory_repo,
         logging_provider=logging_provider,
     )
 
@@ -127,6 +135,17 @@ async def serve():
     log.info("Setting up gRPC services...")
     note_service = GrpcNoteService(repo=repo, log=logging_provider)
     add_NoteServiceServicer_to_server(note_service, server)
+
+    permission_service = PermissionServiceRepo(
+        permission_repo=permission_repo,
+        note_repo=repo,
+        directory_repo=directory_repo,
+    )
+    grpc_permission_service = GrpcPermissionService(
+        permission_service=permission_service,
+        log=logging_provider,
+    )
+    add_PermissionServiceServicer_to_server(grpc_permission_service, server)
 
     # setup gRPC user service
     user_repo: UserRepoABC = UserPostgresRepo(db=db)
