@@ -23,6 +23,8 @@ async def test_create_note(db: Database, note_repo_facade: NoteRepoFacadeABC, us
     """Creates a test user, and creates a note for this user"""
     log = logging_provider(__name__)
     user = await user_repo.insert(test_user)
+    assert user.id
+    ctx = UserContext(user_id=user.id)
 
     updated_at = datetime(2024, 1, 1, 12, 0, 0)
     test_note = NoteEntity(
@@ -31,7 +33,7 @@ async def test_create_note(db: Database, note_repo_facade: NoteRepoFacadeABC, us
         updated_at=updated_at, 
         author_id=user.id
     )
-    ret_note = await note_repo_facade.insert(test_note)
+    ret_note = await note_repo_facade.insert(test_note, ctx)
     assert ret_note.note_id is not UNDEFINED
     test_note = replace(test_note, note_id=ret_note.note_id)
     log.debug(f"Created note: {ret_note}; expected: {test_note}")
@@ -50,7 +52,7 @@ async def test_update_note(db: Database, note_repo_facade: NoteRepoFacadeABC, us
         updated_at=updated_at, 
         author_id=user.id
     )
-    test_note = await note_repo_facade.insert(test_note)
+    test_note = await note_repo_facade.insert(test_note, ctx)
     updated_note = replace(
         test_note, 
         title="Updated Test Note", 
@@ -78,13 +80,23 @@ async def test_create_and_remove_note(
         updated_at=updated_at, 
         author_id=user.id
     )
-    test_note_insert = await note_repo_facade.insert(test_note)
+    test_note_insert = await note_repo_facade.insert(test_note, ctx)
     assert isinstance(test_note_insert.note_id, str)  # inserted note should have an ID
     assert UUID(test_note_insert.note_id).version == 7
 
     test_note_select = await note_repo_facade.select_by_id(note_id=test_note_insert.note_id, ctx=ctx)
     assert test_note_select  # select should return a note
-    assert test_note_select == test_note_insert  # selected note should equal inserted note
+    # Relationship objects are compared by identity, so compare relation values explicitly.
+    selected_permissions = {
+        (str(rel.relation), str(rel.subject.object_type), str(rel.subject.object_id))
+        for rel in (test_note_select.permissions or [])
+    }
+    inserted_permissions = {
+        (str(rel.relation), str(rel.subject.object_type), str(rel.subject.object_id))
+        for rel in (test_note_insert.permissions or [])
+    }
+    assert replace(test_note_select, permissions=[]) == replace(test_note_insert, permissions=[])
+    assert selected_permissions == inserted_permissions
 
     test_notes_delete = await note_repo_facade.delete(test_note_insert.note_id, ctx)
     
@@ -123,7 +135,7 @@ async def test_search_by_context(
             updated_at=datetime.now(), 
             author_id=user.id
         )
-        await note_repo_facade.insert(test_note)
+        await note_repo_facade.insert(test_note, ctx)
 
     async def search(search_query: str, should_contain: str, negative_search: bool = False) -> bool:
         """Small helper function to make a positive or negative search"""
@@ -166,6 +178,8 @@ async def test_search_by_web_lexme_matching(
 ):
     """Creates a test user, and creates multiple notes for this user, then searches by fuzzy matching"""
     user = await user_repo.insert(test_user)
+    assert user.id
+    ctx = UserContext(user_id=user.id)
 
     note_titles = [
         "Zelda totk means Tears of the Kingdom.",
@@ -184,7 +198,7 @@ async def test_search_by_web_lexme_matching(
             updated_at=datetime.now(), 
             author_id=user.id
         )
-        await note_repo_facade.insert(test_note)
+        await note_repo_facade.insert(test_note, ctx)
 
     async def search(search_query: str, should_contain: str, negative_search: bool = False) -> bool:
         """Small helper function to make a positive search"""
@@ -239,6 +253,8 @@ async def test_search_by_similarity(
     then searches by similarity
     """
     user = await user_repo.insert(test_user)
+    assert user.id
+    ctx = UserContext(user_id=user.id)
 
     note_titles = [
         "Tears of the Kingdom is a game for Nintendo Switch.",
@@ -253,7 +269,7 @@ async def test_search_by_similarity(
             updated_at=datetime.now(), 
             author_id=user.id
         )
-        await note_repo_facade.insert(test_note)
+        await note_repo_facade.insert(test_note, ctx)
 
     async def search(search_query: str, should_contain: str) -> bool:
         """Small helper function to make a positive search"""
@@ -289,6 +305,7 @@ async def test_search_no_filter(
     """
     user = await user_repo.insert(test_user)
     assert user.id
+    ctx = UserContext(user_id=user.id)
 
     note_titles = [
         "First note content.",
@@ -303,7 +320,7 @@ async def test_search_no_filter(
             updated_at=datetime.now(), 
             author_id=user.id
         )
-        await note_repo_facade.insert(test_note)
+        await note_repo_facade.insert(test_note, ctx)
 
     search_results = await note_repo_facade.search_notes(
         search_type=SearchType.NO_SEARCH,
