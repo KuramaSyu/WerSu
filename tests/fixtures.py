@@ -1,9 +1,12 @@
 import asyncio
-from typing import Iterator
+from typing import Iterator, List, Optional
 import asyncpg
 import pytest
 from testcontainers.postgres import PostgresContainer
+from src.api.user_context import UserContextABC
 from src.ai.embedding_generator import EmbeddingGenerator, Models
+from src.db.entities.directory.directory import DirectoryEntity
+from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
 from src.db.repos.note.note import NoteRepoFacade, NoteRepoFacadeABC
@@ -13,6 +16,25 @@ from src.db.entities.user.user import UserEntity
 from src.db.repos.user.user import UserRepoABC
 from src.db.repos import UserPostgresRepo, Database
 from src.utils import logging_provider
+
+
+class _TestDirectoryRepo(DirectoryRepo):
+    DEFAULT_DIRECTORY_NAME = "fleeting"
+
+    async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
+        raise NotImplementedError()
+
+    async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
+        return DirectoryEntity(id=id, name=self.DEFAULT_DIRECTORY_NAME)
+
+    async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
+        return [f"{self.DEFAULT_DIRECTORY_NAME}-{user.user_id}"]
+
+    async def list_note_directory_ids(self, note_id: str) -> List[str]:
+        return []
+
+    async def delete_directory(self, entity: DirectoryEntity) -> bool:
+        raise NotImplementedError()
 
 def create_postgres_dsn(postgres_container: PostgresContainer) -> str:
     return (
@@ -91,6 +113,7 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
         ),
         # TODO: testing with SpiceDB could get hard. Maybe make a Fake which does not do any checks 
         permission_repo=NotePermissionRepoInMemory(),
+        directory_repo=_TestDirectoryRepo(),
         logging_provider=logging_provider
     )
     return repo
