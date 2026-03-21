@@ -1,8 +1,6 @@
 from datetime import datetime
 import traceback
-from logging import getLogger
-import logging
-from typing import AsyncIterator, Callable, List, Optional
+from typing import AsyncIterator, List, Sequence
 
 import grpc
 from grpc.aio import ServicerContext
@@ -12,21 +10,40 @@ from src.api import LoggingProvider
 from src.api.types import Pagination
 from src.api.undefined import UNDEFINED
 from src.db.entities import NoteEntity
-from src.db.repos.note.note import NoteRepoFacadeABC, SearchType, UserContext
-from src.db.repos.note.permission import Relationship, SubjectRef
+from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
+from src.db.repos.note.permission import ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.db.repos.user.user import UserRepoABC
 from src.db.entities.user.user import UserEntity
-from src.grpc_mod import (
-    GetNoteRequest, NoteEmbedding, 
-    NotePermission, PostNoteRequest, Note,
-    NoteService, NoteServiceServicer,
-    UserServiceServicer, GetUserRequest, User, 
-    AlterUserRequest, DeleteUserRequest, 
-    DeleteUserResponse, PostUserRequest,
-)
 from src.grpc_mod.converter import to_grpc_note, to_grpc_user
 from src.grpc_mod.converter.note_entity_converter import to_grpc_minimal_note, to_search_type
-from src.grpc_mod.proto.note_pb2 import AlterNoteRequest, DeleteNoteRequest, GetSearchNotesRequest, MinimalNote
+from src.grpc_mod.proto.note_pb2 import (
+    AlterNoteRequest,
+    CreatePermissionRequest,
+    DeleteNoteRequest,
+    DeletePermissionRequest,
+    GetNoteRequest,
+    GetPermissionsRequest,
+    GetSearchNotesRequest,
+    MinimalNote,
+    Note,
+    PermissionObjectType,
+    PermissionRelationship,
+    PermissionSubject,
+    PermissionsResponse,
+    PostNoteRequest,
+    ReplacePermissionsRequest,
+)
+from src.grpc_mod.proto.note_pb2_grpc import NoteServiceServicer, PermissionServiceServicer
+from src.grpc_mod.proto.user_pb2 import (
+    AlterUserRequest,
+    DeleteUserRequest,
+    DeleteUserResponse,
+    GetUserRequest,
+    PostUserRequest,
+    User,
+)
+from src.grpc_mod.proto.user_pb2_grpc import UserServiceServicer
+from src.services.roles import PermissionServiceABC
 
 
 class GrpcNoteService(NoteServiceServicer):
@@ -57,10 +74,11 @@ class GrpcNoteService(NoteServiceServicer):
                     author_id=request.author_id,
                     content=request.content,
                     embeddings=[],
-                    permissions=[Relationship(resource=None, relation="owner", subject=SubjectRef(object_type="user", object_id=user_context.user_id))],
+                    permissions=UNDEFINED,
                     title=request.title,
                     updated_at=datetime.now(),
-                )
+                ),
+                user=user_context,
             )
             return to_grpc_note(note_entity)
         except asyncpg.UniqueViolationError as e:
@@ -125,6 +143,141 @@ class GrpcNoteService(NoteServiceServicer):
         )
         for note in notes:
             yield to_grpc_minimal_note(note)
+
+
+class GrpcPermissionService(PermissionServiceServicer):
+    """gRPC adapter for application-level permission management."""
+
+    def __init__(self, permission_service: PermissionServiceABC, log: LoggingProvider):
+        self._permission_service = permission_service
+        self.log = log(__name__, self)
+
+    async def GetPermissions(self, request: GetPermissionsRequest, context: ServicerContext) -> PermissionsResponse:
+        try:
+            resource = self._to_object_ref(request.object_type, request.object_id)
+            relationships = await self._permission_service.list_relationships(
+                resource=resource,
+                actor=UserContext(request.user_id),
+            )
+            return self._to_permissions_response(resource, relationships)
+        except Exception as exc:
+            return self._handle_permissions_exception(exc, context)
+
+    async def CreatePermission(self, request: CreatePermissionRequest, context: ServicerContext) -> PermissionsResponse:
+        try:
+            resource = self._to_object_ref(request.object_type, request.object_id)
+            relationship = self._to_relationship(resource, request.relationship)
+            relationships = await self._permission_service.create_relationship(
+                relationship=relationship,
+                actor=UserContext(request.user_id),
+            )
+            return self._to_permissions_response(resource, relationships)
+        except Exception as exc:
+            return self._handle_permissions_exception(exc, context)
+
+    async def DeletePermission(self, request: DeletePermissionRequest, context: ServicerContext) -> PermissionsResponse:
+        try:
+            resource = self._to_object_ref(request.object_type, request.object_id)
+            relationship = self._to_relationship(resource, request.relationship)
+            relationships = await self._permission_service.delete_relationship(
+                relationship=relationship,
+                actor=UserContext(request.user_id),
+            )
+            return self._to_permissions_response(resource, relationships)
+        except Exception as exc:
+            return self._handle_permissions_exception(exc, context)
+
+    async def ReplacePermissions(self, request: ReplacePermissionsRequest, context: ServicerContext) -> PermissionsResponse:
+        try:
+            resource = self._to_object_ref(request.object_type, request.object_id)
+            relationships = [
+                self._to_relationship(resource, rel)
+                for rel in request.relationships
+            ]
+            updated = await self._permission_service.replace_relationships(
+                resource=resource,
+                relationships=relationships,
+                actor=UserContext(request.user_id),
+            )
+            return self._to_permissions_response(resource, updated)
+        except Exception as exc:
+            return self._handle_permissions_exception(exc, context)
+
+    def _to_object_ref(self, object_type: int, object_id: str) -> ObjectRef:
+        if not object_id:
+            raise ValueError("object_id is required")
+
+        if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_NOTE:
+            return ObjectRef(object_type=ObjectTypeEnum.NOTE, object_id=object_id)
+        if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY:
+            return ObjectRef(object_type=ObjectTypeEnum.DIRECTORY, object_id=object_id)
+
+        raise ValueError("Unsupported object_type")
+
+    def _to_relationship(self, resource: ObjectRef, relationship: PermissionRelationship) -> Relationship:
+        if not relationship.relation:
+            raise ValueError("relationship.relation is required")
+        if not relationship.subject.object_type:
+            raise ValueError("relationship.subject.object_type is required")
+        if not relationship.subject.object_id:
+            raise ValueError("relationship.subject.object_id is required")
+
+        return Relationship(
+            resource=resource,
+            relation=relationship.relation,
+            subject=SubjectRef(
+                object_type=relationship.subject.object_type,
+                object_id=relationship.subject.object_id,
+            ),
+        )
+
+    def _to_permissions_response(
+        self,
+        resource: ObjectRef,
+        relationships: Sequence[Relationship],
+    ) -> PermissionsResponse:
+        if resource.object_type == ObjectTypeEnum.NOTE:
+            object_type = PermissionObjectType.PERMISSION_OBJECT_TYPE_NOTE
+        elif resource.object_type == ObjectTypeEnum.DIRECTORY:
+            object_type = PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY
+        else:
+            object_type = PermissionObjectType.PERMISSION_OBJECT_TYPE_UNSPECIFIED
+
+        return PermissionsResponse(
+            object_type=object_type,
+            object_id=str(resource.object_id),
+            relationships=[
+                PermissionRelationship(
+                    relation=str(rel.relation),
+                    subject=PermissionSubject(
+                        object_type=str(rel.subject.object_type),
+                        object_id=str(rel.subject.object_id),
+                    ),
+                )
+                for rel in relationships
+            ],
+        )
+
+    def _handle_permissions_exception(self, exc: Exception, context: ServicerContext) -> PermissionsResponse:
+        if isinstance(exc, PermissionError):
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(exc))
+            return PermissionsResponse()
+
+        if isinstance(exc, LookupError):
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details(str(exc))
+            return PermissionsResponse()
+
+        if isinstance(exc, ValueError):
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(exc))
+            return PermissionsResponse()
+
+        self.log.error(f"Error handling permissions: {traceback.format_exc()}")
+        context.set_code(grpc.StatusCode.INTERNAL)
+        context.set_details("Internal server error while managing permissions")
+        return PermissionsResponse()
 
 
 class GrpcUserService(UserServiceServicer):
