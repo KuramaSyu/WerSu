@@ -111,6 +111,13 @@ class PartialRelationship:
         self.subject = subject
 
 class Relationship(PartialRelationship):
+    """
+    Representa a relationship which is used to store permissions and relations between notes, users and directories. 
+    The notation is like the following:
+    - general form: <object_type>:<object_id>#<relation>@<subject_type>:<subject_id>
+    - example: note:123#writer@user:alice -> Alice is a writer of note with id 123
+    - example: directory:456#parent@directory:789 -> Directory with id 456 has parent directory with id 789
+    """
     def __init__(
         self,
         resource: ObjectRef,
