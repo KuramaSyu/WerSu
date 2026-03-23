@@ -1,6 +1,6 @@
 from datetime import datetime
 import traceback
-from typing import AsyncIterator, List, Sequence
+from typing import AsyncIterator, List, Sequence, cast
 
 import grpc
 from grpc.aio import ServicerContext
@@ -11,7 +11,7 @@ from src.api.types import Pagination
 from src.api.undefined import UNDEFINED
 from src.db.entities import NoteEntity
 from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
-from src.db.repos.note.permission import ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
+from src.db.repos.note.permission import ObjectRef, ObjectTypeEnum, RelationEnum, Relationship, SubjectRef
 from src.db.repos.user.user import UserRepoABC
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod.converter import to_grpc_note, to_grpc_user
@@ -224,9 +224,9 @@ class GrpcPermissionService(PermissionServiceServicer):
 
         return Relationship(
             resource=resource,
-            relation=relationship.relation,
+            relation=cast(RelationEnum, relationship.relation),
             subject=SubjectRef(
-                object_type=relationship.subject.object_type,
+                object_type=ObjectTypeEnum(relationship.subject.object_type),
                 object_id=relationship.subject.object_id,
             ),
         )
