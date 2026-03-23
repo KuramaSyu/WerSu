@@ -4,11 +4,12 @@ from typing import List, Self
 
 from asyncpg import Record
 from src.api.types import Pagination
+from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.ai.embedding_generator import EmbeddingGenerator, EmbeddingGeneratorABC, Models
 from src.db.database import Database, DatabaseABC
 from src.db.entities import NoteEntity
-from src.db.repos.note.permission import NotePermissionRepo
+from src.db.repos.note.permission import NotePermissionRepo, NoteRelationEnum, RelationEnum
 from src.db.table import TableABC
 
 
@@ -64,6 +65,15 @@ class NoteSearchStrategy(ABC):
         """
         self.offset = offset
         return self
+
+    async def _get_user_note_ids(self) -> List[str]:
+        """Helper method which provides a list of note ids 
+        that the user has access to based on their permissions."""
+        note_objs = await self.note_permissions.lookup_notes(
+            self.user_context, 
+            NoteRelationEnum.VIEW
+        )
+        return [o.object_id for o in note_objs if isinstance(o.object_id, str)]
     
     @abstractmethod
     async def search(self) -> list["NoteEntity"]:
@@ -166,13 +176,14 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
 
     async def search(self) -> list["NoteEntity"]:
         model = Models.MINI_LM_L6_V2
+        note_ids = await self._get_user_note_ids()
         query = f"""
         SELECT id, title, author_id, content, updated_at, (embedding <=> $1::vector) AS similarity
         FROM note.embedding
         JOIN 
             note.content on note.content.id = note.embedding.note_id 
         WHERE note.embedding.model = $2
-            AND note.content.author_id = $3
+            AND note.content.id = ANY($3)
         ORDER BY similarity ASC
         LIMIT {self.limit}
         OFFSET {self.offset}
@@ -180,7 +191,10 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         query_embedding = self.generator.generate(self.query)
         query_embedding_str = self.generator.tensor_to_str_vec(query_embedding)
         start = datetime.now()
-        records = await self.db.fetch(query, query_embedding_str, model.value, self.user_context.user_id)
+        records = await self.db.fetch(
+            query, query_embedding_str, 
+            model.value, note_ids,
+        )
 
         if not records:
             raise RuntimeError("Failed to fetch notes by context.")
