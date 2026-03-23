@@ -319,6 +319,7 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             "limit": pagination.limit,
             "offset": pagination.offset,
             "user_context": ctx,
+            "note_permissions": self._permission_repo,
         }
         if search_type == SearchType.NO_SEARCH:
             strategy = DateNoteSearchStrategy(**common_init_parameters)

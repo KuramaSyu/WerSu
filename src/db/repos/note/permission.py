@@ -482,12 +482,20 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
 
 
 class NotePermissionRepoInMemory(NotePermissionRepo):
-    """In-memory implementation of NotePermissionRepo for unit testing."""
+    """In-memory implementation of NotePermissionRepo for unit testing.
+
+    This test double simulates a small, deterministic subset of SpiceDB behavior:
+    - Stores explicit relationships exactly as written.
+    - Resolves implied permissions from direct relations (for example owner -> view).
+    - Supports resource lookup by effective permission for note objects.
+    It intentionally does not simulate Zanzibar graph traversal semantics in full.
+    """
     _relation_implied_permissions = {
         "note": {
             "admin": {"admin", "delete", "write", "view"},
             "writer": {"writer", "write", "view"},
             "reader": {"reader", "view"},
+            "owner": {"owner", "admin", "delete", "write", "view"},
         },
         "directory": {
             "admin": {"admin", "delete", "write", "view"},
@@ -526,6 +534,8 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
         return relationship
 
     async def lookup(self, relationship: Relationship) -> List[ObjectRef]:
+        # Simulates a direct relationship lookup (equivalent to filtering stored tuples),
+        # not transitive permission expansion.
         results: List[ObjectRef] = []
         for stored in self._store:
             obj_match = (
@@ -553,13 +563,28 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
         return results
 
     async def lookup_notes(self, user: UserContextABC, permission: str) -> List[ObjectRef]:
+        # Simulates SpiceDB LookupResources for notes by checking effective permissions
+        # derived from each stored direct relation for the current user.
         user_id = user.user_id
-        relationship = Relationship(
-            resource=ObjectRef(object_type="note", object_id=UNDEFINED),
-            relation=NoteRelationEnum(permission),
-            subject=SubjectRef(object_type="user", object_id=user_id),
-        )
-        return await self.lookup(relationship)
+        matched: dict[str, ObjectRef] = {}
+        note_implied = self._relation_implied_permissions.get("note", {})
+        requested_permission = str(permission)
+
+        for stored in self._store:
+            if str(stored.resource.object_type) != ObjectTypeEnum.NOTE.value:
+                continue
+            if str(stored.subject.object_type) != ObjectTypeEnum.USER.value or stored.subject.object_id != user_id:
+                continue
+
+            stored_relation = str(stored.relation)
+            implied_permissions = note_implied.get(stored_relation, {stored_relation})
+            if requested_permission in implied_permissions and isinstance(stored.resource.object_id, str):
+                matched[stored.resource.object_id] = ObjectRef(
+                    object_type=ObjectTypeEnum.NOTE,
+                    object_id=stored.resource.object_id,
+                )
+
+        return list(matched.values())
 
     async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
         assert resource.object_id != UNDEFINED, "object_id must be provided to list relationships"
@@ -586,6 +611,8 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
     async def get_permissions(self, user: UserContextABC, resource: ObjectRef) -> List[str]:
         assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
 
+        # Collect direct relationships for this user-resource pair,
+        # then expand to effective permissions via the static implication map.
         direct_relations: List[str] = []
         for stored in self._store:
             if (
