@@ -3,10 +3,12 @@ from datetime import datetime
 from typing import List, Self
 
 from asyncpg import Record
+from src.api.types import Pagination
 from src.api.user_context import UserContextABC
 from src.ai.embedding_generator import EmbeddingGenerator, EmbeddingGeneratorABC, Models
 from src.db.database import Database, DatabaseABC
 from src.db.entities import NoteEntity
+from src.db.repos.note.permission import NotePermissionRepo
 from src.db.table import TableABC
 
 
@@ -15,17 +17,19 @@ class NoteSearchStrategy(ABC):
 
     def __init__(
         self,
-        db: DatabaseABC,
         query: str,
         limit: int,
         offset: int,
+        db: DatabaseABC,
         user_context: UserContextABC,
+        note_permissions: NotePermissionRepo,
     ) -> None:
         self.db = db
         self.query = query
         self.limit = limit
         self.offset = offset
         self.user_context = user_context
+        self.note_permissions = note_permissions
 
 
     def set_query(self, query: str) -> Self:
@@ -147,8 +151,17 @@ class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
 
 class ContextNoteSearchStrategy(NoteSearchStrategy):
     """Return notes based on semantic search using embeddings."""
-    def __init__(self, db: DatabaseABC, query: str, limit: int, offset: int, user_context: UserContextABC, generator: EmbeddingGeneratorABC) -> None:
-        super().__init__(db, query, limit, offset, user_context)
+    def __init__(
+        self, 
+        db: DatabaseABC, 
+        query: str, 
+        limit: int, 
+        offset: int, 
+        user_context: UserContextABC, 
+        generator: EmbeddingGeneratorABC,
+        note_permissions: NotePermissionRepo,
+    ) -> None:
+        super().__init__(query, limit, offset, db, user_context, note_permissions)
         self.generator = generator
 
     async def search(self) -> list["NoteEntity"]:
