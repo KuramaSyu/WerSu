@@ -17,7 +17,12 @@ from src.db.repos.note.permission import NotePermissionRepo, NoteRelationEnum, O
 from src.db.table import TableABC
 from src.api.undefined import UNDEFINED
 from src.db.repos.note.embedding import NoteEmbeddingRepo
-
+from src.db.repos.note.search_strategy import (
+    ContextNoteSearchStrategy,
+    DateNoteSearchStrategy,
+    FuzzyTitleContentSearchStrategy,
+    WebNoteSearchStrategy,
+)
 
 class SearchType(Enum):
     NO_SEARCH = 1
@@ -307,21 +312,13 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         ctx: UserContext,
         pagination: Pagination
     ) -> List[NoteEntity]:
-
-        from src.db.repos.note.search_strategy import (
-            ContextNoteSearchStrategy,
-            DateNoteSearchStrategy,
-            FuzzyTitleContentSearchStrategy,
-            WebNoteSearchStrategy,
-        )
-
         # these parameters are common to all strategies __init__ fn
         common_init_parameters = {
             "db": self._db,
             "query": query,
             "limit": pagination.limit,
             "offset": pagination.offset,
-            "user_id": ctx.user_id,
+            "user_context": ctx,
         }
         if search_type == SearchType.NO_SEARCH:
             strategy = DateNoteSearchStrategy(**common_init_parameters)
