@@ -12,6 +12,7 @@ definition directory {
 
 }
 definition note {
+    relation owner: user
     relation admin: user
     relation writer: user
     relation reader: user
@@ -21,7 +22,7 @@ definition note {
     * permission delete is granted to admins or parent 
     * directory users with delete permission
     */
-    permission delete = admin + parent_directory->delete
-    permission write = writer + admin + parent_directory->write
+    permission delete = owner + admin + parent_directory->delete
+    permission write = owner + writer + admin + parent_directory->write
     permission view = reader + write
 }
