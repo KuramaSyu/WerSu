@@ -85,11 +85,6 @@ async def serve():
         table_name="note.content", 
         id_fields=["id"]
     )
-    permission_table = Table(
-        **common_table_kwargs, 
-        table_name="note.permission", 
-        id_fields=["note_id", "role_id"]
-    )
     embedding_table = Table(
         **common_table_kwargs,
         table_name="note.embedding",
