@@ -1,6 +1,7 @@
 import asyncio
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple
+from dataclasses import dataclass
+from typing import ClassVar, List, Optional, Sequence, Tuple
 
 from authzed.api.v1 import (
     AsyncClient,
@@ -26,8 +27,55 @@ from src.db.repos.note.permission import (
 )
 
 
+@dataclass(frozen=True)
+class DefaultDirectorySpec:
+    name: str
+    display_name: str
+    description: str
+
+
 class DirectoryRepo(ABC):
     """Abstract repository interface for directory persistence and relations."""
+
+    DEFAULT_DIRECTORY_SPECS: ClassVar[Sequence[DefaultDirectorySpec]] = (
+        DefaultDirectorySpec(
+            name="fleeting_notes",
+            display_name="Fleeting Notes",
+            description=(
+                "Capture quick, raw thoughts with minimal friction. "
+                "In the zettelkasten flow, these are temporary inbox notes "
+                "to revisit, refine, or discard soon."
+            ),
+        ),
+        DefaultDirectorySpec(
+            name="literature_notes",
+            display_name="Literature Notes",
+            description=(
+                "Store notes extracted from sources like books, papers, and articles. "
+                "In zettelkasten, literature notes summarize references in your own words "
+                "before transforming them into permanent notes."
+            ),
+        ),
+        DefaultDirectorySpec(
+            name="permanent_notes",
+            display_name="Permanent Notes",
+            description=(
+                "Keep evergreen, atomic ideas that connect to other notes over time. "
+                "These are the durable knowledge units in a zettelkasten, written clearly "
+                "for future reuse and linking."
+            ),
+        ),
+    )
+
+    def get_default_directory_specs(self) -> Sequence[DefaultDirectorySpec]:
+        """Return the default zettelkasten directory specifications.
+
+        Returns
+        -------
+        Sequence[DefaultDirectorySpec]
+            Immutable specification sequence used for new user bootstrap.
+        """
+        return self.DEFAULT_DIRECTORY_SPECS
 
     @abstractmethod
     async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:

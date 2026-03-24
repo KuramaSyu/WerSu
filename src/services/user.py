@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Optional, Sequence
+from typing import Optional
 
 from src.api.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
@@ -16,13 +15,6 @@ from src.db.repos.note.permission import (
 from src.db.repos.user.user import UserRepoABC
 
 
-@dataclass(frozen=True)
-class DefaultDirectorySpec:
-    name: str
-    display_name: str
-    description: str
-
-
 class UserServiceABC(ABC):
     @abstractmethod
     async def get_user(self, user_id: Optional[str] = None, discord_id: Optional[int] = None) -> Optional[UserEntity]:
@@ -35,36 +27,6 @@ class UserServiceABC(ABC):
 
 class UserServiceRepo(UserServiceABC):
     """Application service for user lifecycle and bootstrap directories."""
-
-    _DEFAULT_DIRECTORIES: Sequence[DefaultDirectorySpec] = (
-        DefaultDirectorySpec(
-            name="fleeting_notes",
-            display_name="Fleeting Notes",
-            description=(
-                "Capture quick, raw thoughts with minimal friction. "
-                "In the zettelkasten flow, these are temporary inbox notes "
-                "to revisit, refine, or discard soon."
-            ),
-        ),
-        DefaultDirectorySpec(
-            name="literature_notes",
-            display_name="Literature Notes",
-            description=(
-                "Store notes extracted from sources like books, papers, and articles. "
-                "In zettelkasten, literature notes summarize references in your own words "
-                "before transforming them into permanent notes."
-            ),
-        ),
-        DefaultDirectorySpec(
-            name="permanent_notes",
-            display_name="Permanent Notes",
-            description=(
-                "Keep evergreen, atomic ideas that connect to other notes over time. "
-                "These are the durable knowledge units in a zettelkasten, written clearly "
-                "for future reuse and linking."
-            ),
-        ),
-    )
 
     def __init__(self, user_repo: UserRepoABC, directory_repo: DirectoryRepo):
         self._user_repo = user_repo
@@ -87,7 +49,7 @@ class UserServiceRepo(UserServiceABC):
             subject=SubjectRef(object_type=ObjectTypeEnum.USER, object_id=str(created_user.id)),
         )
 
-        for spec in self._DEFAULT_DIRECTORIES:
+        for spec in self._directory_repo.get_default_directory_specs():
             await self._directory_repo.create_directory(
                 DirectoryEntity(
                     name=spec.name,

@@ -219,7 +219,7 @@ class NoteRepoFacade(NoteRepoFacadeABC):
 
     
     async def insert(self, note: NoteEntity, user: UserContextABC):
-        DEFAULT_DIRECTORY_NAME = "fleeting"
+        DEFAULT_DIRECTORY_NAME = self._directory_repo.get_default_directory_specs()[0].name
         # insert note itself
         query = f"""
         INSERT INTO {self.content_table_name}(title, content, updated_at, author_id)
