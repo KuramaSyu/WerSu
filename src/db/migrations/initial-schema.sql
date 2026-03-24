@@ -48,5 +48,6 @@ CREATE TABLE IF NOT EXISTS note.directory (
     id TEXT PRIMARY KEY DEFAULT uuidv7()::text,
     name TEXT NOT NULL,
     display_name TEXT NULL,
-    image_url TEXT
+    description TEXT NULL,
+    image_url TEXT NULL
 );

@@ -17,6 +17,8 @@ class DirectoryEntity:
         Human-readable directory name.
     display_name : UndefinedNoneOr[str], default=UNDEFINED
         Display name for the directory.
+    description : UndefinedNoneOr[str], default=UNDEFINED
+        Optional description shown for the directory purpose.
     image_url : UndefinedNoneOr[str], default=UNDEFINED
         Optional image URL for the directory.
     parent_id : UndefinedNoneOr[str], default=UNDEFINED
@@ -28,6 +30,7 @@ class DirectoryEntity:
     id: UndefinedOr[str] = UNDEFINED
     name: UndefinedNoneOr[str] = UNDEFINED
     display_name: UndefinedNoneOr[str] = UNDEFINED
+    description: UndefinedNoneOr[str] = UNDEFINED
     image_url: UndefinedNoneOr[str] = UNDEFINED
     parent_id: UndefinedNoneOr[str] = UNDEFINED
     relations: UndefinedOr[List[Relationship]] = UNDEFINED
