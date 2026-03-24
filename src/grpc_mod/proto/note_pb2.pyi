@@ -208,14 +208,19 @@ Global___NoteEmbedding: typing_extensions.TypeAlias = NoteEmbedding
 class NotePermission(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    ROLE_ID_FIELD_NUMBER: builtins.int
-    role_id: builtins.int
+    RELATION_FIELD_NUMBER: builtins.int
+    SUBJECT_FIELD_NUMBER: builtins.int
+    relation: builtins.str
+    @property
+    def subject(self) -> Global___PermissionSubject: ...
     def __init__(
         self,
         *,
-        role_id: builtins.int = ...,
+        relation: builtins.str = ...,
+        subject: Global___PermissionSubject | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["role_id", b"role_id"]) -> None: ...
+    def HasField(self, field_name: typing.Literal["subject", b"subject"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["relation", b"relation", "subject", b"subject"]) -> None: ...
 
 Global___NotePermission: typing_extensions.TypeAlias = NotePermission
 

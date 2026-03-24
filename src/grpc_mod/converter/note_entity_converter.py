@@ -37,8 +37,15 @@ def to_grpc_note(note_entity: NoteEntity | None) -> Note:
     assert isinstance(note_entity.permissions, list)
     perms: list[NotePermission] = []
     for p in note_entity.permissions:
-        assert isinstance(p.role_id, int)
-        perms.append(NotePermission(role_id=p.role_id))
+        perms.append(
+            NotePermission(
+                relation=str(p.relation),
+                subject={
+                    "object_type": str(p.subject.object_type),
+                    "object_id": str(p.subject.object_id),
+                },
+            )
+        )
 
     return Note(
         **basic_args,
