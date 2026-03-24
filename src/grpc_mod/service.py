@@ -1,6 +1,6 @@
 from datetime import datetime
 import traceback
-from typing import AsyncIterator, List, Sequence, cast
+from typing import AsyncIterator, List, Sequence
 
 import grpc
 from grpc.aio import ServicerContext
@@ -11,9 +11,16 @@ from src.api.types import Pagination
 from src.api.undefined import UNDEFINED
 from src.db.entities import NoteEntity
 from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
-from src.db.repos.note.permission import ObjectRef, ObjectTypeEnum, RelationEnum, Relationship, SubjectRef
+from src.db.repos.note.permission import ObjectRef, ObjectTypeEnum, Relationship
 from src.db.entities.user.user import UserEntity
-from src.grpc_mod.converter import to_grpc_note, to_grpc_user
+from src.grpc_mod.converter import (
+    to_grpc_note,
+    to_grpc_user,
+    to_object_ref,
+    to_permission_object_type,
+    to_permission_resource,
+    to_relationship,
+)
 from src.grpc_mod.converter.note_entity_converter import to_grpc_minimal_note, to_search_type
 from src.grpc_mod.proto.note_pb2 import (
     AlterNoteRequest,
@@ -25,7 +32,6 @@ from src.grpc_mod.proto.note_pb2 import (
     GetSearchNotesRequest,
     MinimalNote,
     Note,
-    PermissionObjectType,
     PermissionRelationship,
     PermissionSubject,
     PermissionsResponse,
@@ -146,7 +152,12 @@ class GrpcNoteService(NoteServiceServicer):
 
 
 class GrpcPermissionService(PermissionServiceServicer):
-    """gRPC adapter for application-level permission management."""
+    """gRPC adapter for permission relationship management.
+
+    This service validates request payloads, delegates authorization/business
+    checks to ``PermissionServiceABC``, and maps domain models to/from protobuf
+    messages.
+    """
 
     def __init__(self, permission_service: PermissionServiceABC, log: LoggingProvider):
         self._permission_service = permission_service
@@ -154,7 +165,7 @@ class GrpcPermissionService(PermissionServiceServicer):
 
     async def GetPermissions(self, request: GetPermissionsRequest, context: ServicerContext) -> PermissionsResponse:
         try:
-            resource = self._to_object_ref(request.object_type, request.object_id)
+            resource = to_object_ref(request.object_type, request.object_id)
             relationships = await self._permission_service.list_relationships(
                 resource=resource,
                 actor=UserContext(request.user_id),
@@ -165,8 +176,8 @@ class GrpcPermissionService(PermissionServiceServicer):
 
     async def CreatePermission(self, request: CreatePermissionRequest, context: ServicerContext) -> PermissionsResponse:
         try:
-            resource = self._to_object_ref(request.object_type, request.object_id)
-            relationship = self._to_relationship(resource, request.relationship)
+            resource = to_object_ref(request.object_type, request.object_id)
+            relationship = to_relationship(resource, request.relationship)
             relationships = await self._permission_service.create_relationship(
                 relationship=relationship,
                 actor=UserContext(request.user_id),
@@ -177,8 +188,8 @@ class GrpcPermissionService(PermissionServiceServicer):
 
     async def DeletePermission(self, request: DeletePermissionRequest, context: ServicerContext) -> PermissionsResponse:
         try:
-            resource = self._to_object_ref(request.object_type, request.object_id)
-            relationship = self._to_relationship(resource, request.relationship)
+            resource = to_object_ref(request.object_type, request.object_id)
+            relationship = to_relationship(resource, request.relationship)
             relationships = await self._permission_service.delete_relationship(
                 relationship=relationship,
                 actor=UserContext(request.user_id),
@@ -189,9 +200,9 @@ class GrpcPermissionService(PermissionServiceServicer):
 
     async def ReplacePermissions(self, request: ReplacePermissionsRequest, context: ServicerContext) -> PermissionsResponse:
         try:
-            resource = self._to_object_ref(request.object_type, request.object_id)
+            resource = to_object_ref(request.object_type, request.object_id)
             relationships = [
-                self._to_relationship(resource, rel)
+                to_relationship(resource, rel)
                 for rel in request.relationships
             ]
             updated = await self._permission_service.replace_relationships(
@@ -203,45 +214,12 @@ class GrpcPermissionService(PermissionServiceServicer):
         except Exception as exc:
             return self._handle_permissions_exception(exc, context)
 
-    def _to_object_ref(self, object_type: int, object_id: str) -> ObjectRef:
-        if not object_id:
-            raise ValueError("object_id is required")
-
-        if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_NOTE:
-            return ObjectRef(object_type=ObjectTypeEnum.NOTE, object_id=object_id)
-        if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY:
-            return ObjectRef(object_type=ObjectTypeEnum.DIRECTORY, object_id=object_id)
-
-        raise ValueError("Unsupported object_type")
-
-    def _to_relationship(self, resource: ObjectRef, relationship: PermissionRelationship) -> Relationship:
-        if not relationship.relation:
-            raise ValueError("relationship.relation is required")
-        if not relationship.subject.object_type:
-            raise ValueError("relationship.subject.object_type is required")
-        if not relationship.subject.object_id:
-            raise ValueError("relationship.subject.object_id is required")
-
-        return Relationship(
-            resource=resource,
-            relation=cast(RelationEnum, relationship.relation),
-            subject=SubjectRef(
-                object_type=ObjectTypeEnum(relationship.subject.object_type),
-                object_id=relationship.subject.object_id,
-            ),
-        )
-
     def _to_permissions_response(
         self,
         resource: ObjectRef,
         relationships: Sequence[Relationship],
     ) -> PermissionsResponse:
-        if resource.object_type == ObjectTypeEnum.NOTE:
-            object_type = PermissionObjectType.PERMISSION_OBJECT_TYPE_NOTE
-        elif resource.object_type == ObjectTypeEnum.DIRECTORY:
-            object_type = PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY
-        else:
-            object_type = PermissionObjectType.PERMISSION_OBJECT_TYPE_UNSPECIFIED
+        object_type = to_permission_object_type(resource.object_type)
 
         return PermissionsResponse(
             object_type=object_type,
@@ -253,6 +231,7 @@ class GrpcPermissionService(PermissionServiceServicer):
                         object_type=str(rel.subject.object_type),
                         object_id=str(rel.subject.object_id),
                     ),
+                    resource=to_permission_resource(rel.resource),
                 )
                 for rel in relationships
             ],
