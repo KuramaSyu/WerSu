@@ -5,6 +5,7 @@ import asyncpg
 from asyncpg import Pool, Connection, Record
 
 from src.api.types import LoggingProvider
+from src.api.undefined import UNDEFINED
 from src.utils.singleton import SingletonMeta
 
 
@@ -22,6 +23,35 @@ def strip_args(*args: Any) -> List[Any]:
         else:
             stripped.append(repr(arg))
     return stripped
+
+
+def _assert_no_undefined(value: Any, path: str = "arg") -> None:
+    """Raise when UNDEFINED is present in query arguments."""
+    if value is UNDEFINED:
+        raise ValueError(
+            f"UNDEFINED is not a valid database parameter at {path}; convert to None or a concrete value first"
+        )
+
+    if isinstance(value, tuple):
+        for i, inner in enumerate(value):
+            _assert_no_undefined(inner, f"{path}[{i}]")
+        return
+
+    if isinstance(value, list):
+        for i, inner in enumerate(value):
+            _assert_no_undefined(inner, f"{path}[{i}]")
+        return
+
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            _assert_no_undefined(inner, f"{path}.{key}")
+
+
+def validate_query_args(*args: Any) -> tuple[Any, ...]:
+    """Validate query arguments before passing them to asyncpg."""
+    for i, arg in enumerate(args):
+        _assert_no_undefined(arg, f"arg[{i}]")
+    return args
 
 def acquire(func: Callable[..., Any]) -> Callable[..., Any]:
     """
@@ -160,8 +190,9 @@ class Database(DatabaseABC):
 
         args: Query arguments.
         """
-        self._log.debug(f"{query} ;; {strip_args(*args)}")
-        return await _cxn.execute(query, *args)
+        validated_args = validate_query_args(*args)
+        self._log.debug(f"{query} ;; {strip_args(*validated_args)}")
+        return await _cxn.execute(query, *validated_args)
 
     
     @acquire
@@ -173,8 +204,9 @@ class Database(DatabaseABC):
         List[Record]:
             the records from the selection/return
         """
-        self._log.debug(f"{query} ;; {strip_args(*args)}")
-        return await _cxn.fetch(query, *args)
+        validated_args = validate_query_args(*args)
+        self._log.debug(f"{query} ;; {strip_args(*validated_args)}")
+        return await _cxn.fetch(query, *validated_args)
 
     @acquire
     async def fetchrow(self, query: str, *args: Any, _cxn: Connection) -> Optional[Record]:
@@ -185,5 +217,6 @@ class Database(DatabaseABC):
         Optional[Record]:
             the record from the selection/return or None
         """
-        self._log.debug(f"{query} ;; {strip_args(*args)}")
-        return await _cxn.fetchrow(query, *args)
+        validated_args = validate_query_args(*args)
+        self._log.debug(f"{query} ;; {strip_args(*validated_args)}")
+        return await _cxn.fetchrow(query, *validated_args)
