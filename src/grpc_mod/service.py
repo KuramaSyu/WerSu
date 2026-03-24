@@ -290,6 +290,15 @@ class GrpcUserService(UserServiceServicer):
         self.log = log(__name__, self)
 
     async def GetUser(self, request: GetUserRequest, context: ServicerContext) -> User:
+        try:
+            return await self._GetUser(request, context)
+        except Exception:
+            self.log.error(f"Error fetching user: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while fetching user")
+            return User()
+
+    async def _GetUser(self, request: GetUserRequest, context: ServicerContext) -> User:
         if request.HasField("id"):
             user_entity = await self.repo.select(user_id=request.id)
         elif request.HasField("discord_id"):
