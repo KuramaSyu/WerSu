@@ -12,7 +12,6 @@ from src.api.undefined import UNDEFINED
 from src.db.entities import NoteEntity
 from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
 from src.db.repos.note.permission import ObjectRef, ObjectTypeEnum, RelationEnum, Relationship, SubjectRef
-from src.db.repos.user.user import UserRepoABC
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod.converter import to_grpc_note, to_grpc_user
 from src.grpc_mod.converter.note_entity_converter import to_grpc_minimal_note, to_search_type
@@ -44,6 +43,7 @@ from src.grpc_mod.proto.user_pb2 import (
 )
 from src.grpc_mod.proto.user_pb2_grpc import UserServiceServicer
 from src.services.roles import PermissionServiceABC
+from src.services.user import UserServiceABC
 
 
 class GrpcNoteService(NoteServiceServicer):
@@ -285,8 +285,8 @@ class GrpcUserService(UserServiceServicer):
     Implements the gRPC service defined in grpc/proto/user.proto
     """
 
-    def __init__(self, user_repo: UserRepoABC, log: LoggingProvider):
-        self.repo = user_repo
+    def __init__(self, user_service: UserServiceABC, log: LoggingProvider):
+        self.user_service = user_service
         self.log = log(__name__, self)
 
     async def GetUser(self, request: GetUserRequest, context: ServicerContext) -> User:
@@ -300,9 +300,9 @@ class GrpcUserService(UserServiceServicer):
 
     async def _GetUser(self, request: GetUserRequest, context: ServicerContext) -> User:
         if request.HasField("id"):
-            user_entity = await self.repo.select(user_id=request.id)
+            user_entity = await self.user_service.get_user(user_id=request.id)
         elif request.HasField("discord_id"):
-            user_entity = await self.repo.select_by_discord_id(discord_id=request.discord_id)
+            user_entity = await self.user_service.get_user(discord_id=request.discord_id)
         else:
             # Neither id nor discord_id provided
             context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
@@ -326,7 +326,7 @@ class GrpcUserService(UserServiceServicer):
     
     async def PostUser(self, request: PostUserRequest, context: ServicerContext) -> User:
         try:
-            user_entity = await self.repo.insert(
+            user_entity = await self.user_service.create_user(
                 UserEntity(
                     id=None,
                     discord_id=request.discord_id,

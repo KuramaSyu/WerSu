@@ -17,10 +17,11 @@ from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos.note.permission import NotePermissionRepoSpicedb
 from src.services.roles import PermissionServiceRepo
+from src.services.user import UserServiceRepo
 from src.utils import logging_provider
 from src.db.database import Database
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
-from src.db.repos.user.user import UserRepoABC, UserPostgresRepo
+from src.db.repos.user.user import UserPostgresRepo
 from src.db.table import Table, setup_table_logging
 from src.grpc_mod.proto.note_pb2_grpc import add_NoteServiceServicer_to_server, add_PermissionServiceServicer_to_server
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
@@ -157,9 +158,10 @@ async def serve():
     add_PermissionServiceServicer_to_server(grpc_permission_service, server)
 
     # setup gRPC user service
-    user_repo: UserRepoABC = UserPostgresRepo(db=db)
-    user_service = GrpcUserService(user_repo=user_repo, log=logging_provider)
-    add_UserServiceServicer_to_server(user_service, server)
+    user_repo = UserPostgresRepo(db=db)
+    app_user_service = UserServiceRepo(user_repo=user_repo, directory_repo=directory_repo)
+    grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider)
+    add_UserServiceServicer_to_server(grpc_user_service, server)
 
     # configure server
     listen_addr = f"{grpc_host}:{grpc_port}"
