@@ -13,6 +13,8 @@ from src.db.repos.note.note import NoteRepoFacade, NoteRepoFacadeABC
 from src.db.repos.note.permission import NotePermissionRepoInMemory
 from src.db.table import Table
 from src.db.entities.user.user import UserEntity
+from src.db.migrations.context import MigrationContext
+from src.db.migrations.runner import MigrationRunner
 from src.db.repos.user.user import UserRepoABC
 from src.db.repos import UserPostgresRepo, Database
 from src.utils import logging_provider
@@ -35,6 +37,11 @@ class _TestDirectoryRepo(DirectoryRepo):
 
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         raise NotImplementedError()
+
+
+class _TestSpiceDbClient:
+    async def WriteSchema(self, request) -> None:
+        return None
 
 def create_postgres_dsn(postgres_container: PostgresContainer) -> str:
     return (
@@ -74,10 +81,21 @@ async def db(dsn):
     db = Database(dsn, logging_provider, init_file="src/init.sql")
     await db.init_db()
 
+    # apply migrations for test database setup
+    migration_runner = MigrationRunner(
+        ctx=MigrationContext(
+            db=db,
+            spicedb_client=_TestSpiceDbClient(),
+        ),
+        log_provider=logging_provider,
+    )
+    await migration_runner.run_pending_migrations()
+
     # clean state
     await db.execute("""
     TRUNCATE TABLE
         users,
+        note.directory,
         note.content
     CASCADE;
     """)
