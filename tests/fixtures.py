@@ -21,16 +21,18 @@ from src.utils import logging_provider
 
 
 class _TestDirectoryRepo(DirectoryRepo):
-    DEFAULT_DIRECTORY_NAME = "fleeting"
+    @property
+    def _default_directory_name(self) -> str:
+        return self.get_default_directory_specs()[0].name
 
     async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
         raise NotImplementedError()
 
     async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
-        return DirectoryEntity(id=id, name=self.DEFAULT_DIRECTORY_NAME)
+        return DirectoryEntity(id=id, name=self._default_directory_name)
 
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
-        return [f"{self.DEFAULT_DIRECTORY_NAME}-{user.user_id}"]
+        return [f"{self._default_directory_name}-{user.user_id}"]
 
     async def list_note_directory_ids(self, note_id: str) -> List[str]:
         return []
