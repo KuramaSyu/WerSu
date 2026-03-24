@@ -167,7 +167,7 @@ class Note(google.protobuf.message.Message):
     @property
     def updated_at(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
     @property
-    def permissions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___NotePermission]:
+    def permissions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]:
         """repeated NoteEmbedding embeddings = 6;"""
 
     def __init__(
@@ -178,7 +178,7 @@ class Note(google.protobuf.message.Message):
         content: builtins.str = ...,
         updated_at: google.protobuf.timestamp_pb2.Timestamp | None = ...,
         author_id: builtins.str = ...,
-        permissions: collections.abc.Iterable[Global___NotePermission] | None = ...,
+        permissions: collections.abc.Iterable[Global___PermissionRelationship] | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["updated_at", b"updated_at"]) -> builtins.bool: ...
     def ClearField(self, field_name: typing.Literal["author_id", b"author_id", "content", b"content", "id", b"id", "permissions", b"permissions", "title", b"title", "updated_at", b"updated_at"]) -> None: ...
@@ -203,26 +203,6 @@ class NoteEmbedding(google.protobuf.message.Message):
     def ClearField(self, field_name: typing.Literal["embedding", b"embedding", "model", b"model"]) -> None: ...
 
 Global___NoteEmbedding: typing_extensions.TypeAlias = NoteEmbedding
-
-@typing.final
-class NotePermission(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    RELATION_FIELD_NUMBER: builtins.int
-    SUBJECT_FIELD_NUMBER: builtins.int
-    relation: builtins.str
-    @property
-    def subject(self) -> Global___PermissionSubject: ...
-    def __init__(
-        self,
-        *,
-        relation: builtins.str = ...,
-        subject: Global___PermissionSubject | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["subject", b"subject"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["relation", b"relation", "subject", b"subject"]) -> None: ...
-
-Global___NotePermission: typing_extensions.TypeAlias = NotePermission
 
 @typing.final
 class PostNoteRequest(google.protobuf.message.Message):
@@ -319,22 +299,44 @@ class PermissionSubject(google.protobuf.message.Message):
 Global___PermissionSubject: typing_extensions.TypeAlias = PermissionSubject
 
 @typing.final
+class PermissionResource(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    OBJECT_TYPE_FIELD_NUMBER: builtins.int
+    OBJECT_ID_FIELD_NUMBER: builtins.int
+    object_type: Global___PermissionObjectType.ValueType
+    object_id: builtins.str
+    def __init__(
+        self,
+        *,
+        object_type: Global___PermissionObjectType.ValueType = ...,
+        object_id: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type"]) -> None: ...
+
+Global___PermissionResource: typing_extensions.TypeAlias = PermissionResource
+
+@typing.final
 class PermissionRelationship(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     RELATION_FIELD_NUMBER: builtins.int
     SUBJECT_FIELD_NUMBER: builtins.int
+    RESOURCE_FIELD_NUMBER: builtins.int
     relation: builtins.str
     @property
     def subject(self) -> Global___PermissionSubject: ...
+    @property
+    def resource(self) -> Global___PermissionResource: ...
     def __init__(
         self,
         *,
         relation: builtins.str = ...,
         subject: Global___PermissionSubject | None = ...,
+        resource: Global___PermissionResource | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["subject", b"subject"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["relation", b"relation", "subject", b"subject"]) -> None: ...
+    def HasField(self, field_name: typing.Literal["resource", b"resource", "subject", b"subject"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["relation", b"relation", "resource", b"resource", "subject", b"subject"]) -> None: ...
 
 Global___PermissionRelationship: typing_extensions.TypeAlias = PermissionRelationship
 

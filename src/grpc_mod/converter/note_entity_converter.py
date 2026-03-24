@@ -4,9 +4,25 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.note import SearchType
-from src.grpc_mod.proto.note_pb2 import GetSearchNotesRequest, MinimalNote, Note, NoteEmbedding, NotePermission
+from src.db.repos.note.permission import ObjectTypeEnum
+from src.grpc_mod.proto.note_pb2 import (
+    GetSearchNotesRequest,
+    MinimalNote,
+    Note,
+    NoteEmbedding,
+    PermissionObjectType,
+    PermissionRelationship,
+)
 from src.utils import asdict
 from src.utils.dict_helper import drop_except_keys, drop_undefined
+
+
+def _to_permission_object_type(object_type: str) -> PermissionObjectType.ValueType:
+    if object_type == ObjectTypeEnum.NOTE.value:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_NOTE
+    if object_type == ObjectTypeEnum.DIRECTORY.value:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY
+    return PermissionObjectType.PERMISSION_OBJECT_TYPE_UNSPECIFIED
 
 
 
@@ -35,14 +51,18 @@ def to_grpc_note(note_entity: NoteEntity | None) -> Note:
 
     # convert permissions
     assert isinstance(note_entity.permissions, list)
-    perms: list[NotePermission] = []
+    perms: list[PermissionRelationship] = []
     for p in note_entity.permissions:
         perms.append(
-            NotePermission(
+            PermissionRelationship(
                 relation=str(p.relation),
                 subject={
                     "object_type": str(p.subject.object_type),
                     "object_id": str(p.subject.object_id),
+                },
+                resource={
+                    "object_type": _to_permission_object_type(str(p.resource.object_type)),
+                    "object_id": str(p.resource.object_id),
                 },
             )
         )

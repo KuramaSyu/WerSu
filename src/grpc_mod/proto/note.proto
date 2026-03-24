@@ -48,17 +48,12 @@ message Note {
     google.protobuf.Timestamp updated_at = 4;
     string author_id = 5;
     //repeated NoteEmbedding embeddings = 6;
-    repeated NotePermission permissions = 7;
+    repeated PermissionRelationship permissions = 7;
 }
 
 message NoteEmbedding {
     string model = 1;
     repeated float embedding = 2;
-}
-
-message NotePermission {
-    string relation = 1;
-    PermissionSubject subject = 2;
 }
 
 // Request to add a note
@@ -92,9 +87,15 @@ message PermissionSubject {
     string object_id = 2;
 }
 
+message PermissionResource {
+    PermissionObjectType object_type = 1;
+    string object_id = 2;
+}
+
 message PermissionRelationship {
     string relation = 1;
     PermissionSubject subject = 2;
+    PermissionResource resource = 3;
 }
 
 message GetPermissionsRequest {

@@ -1,7 +1,3 @@
-from google.protobuf.timestamp_pb2 import Timestamp
-
-from src.db.entities.note.metadata import NoteEntity
-from src.grpc_mod.proto.note_pb2 import Note, NoteEmbedding, NotePermission
 from src.grpc_mod import User
 from src.db.entities.user.user import UserEntity
 
