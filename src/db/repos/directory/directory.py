@@ -14,6 +14,7 @@ from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.database import Database
 from src.db.entities.directory.directory import DirectoryEntity
+from src.utils import convert_entity_for_db
 from src.db.repos.note.permission import (
     DirectoryRelationEnum,
     NotePermissionRepo,
@@ -123,14 +124,17 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         self._spicedb_client = spicedb_client
 
     async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
+        entity_data = convert_entity_for_db(entity)
         record = await self._db.fetchrow(
             """
-            INSERT INTO note.directory(name, image_url)
-            VALUES ($1, $2)
-            RETURNING id, name, image_url
+            INSERT INTO note.directory(name, display_name, description, image_url)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, name, display_name, description, image_url
             """,
-            entity.name,
-            entity.image_url,
+            entity_data.name,
+            entity_data.display_name,
+            entity_data.description,
+            entity_data.image_url,
         )
         if not record:
             raise RuntimeError("Failed to create directory")
@@ -138,17 +142,17 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         directory_id = str(record["id"])
         relationships: List[Relationship] = []
 
-        if entity.parent_id not in (UNDEFINED, None):
+        if entity_data.parent_id not in (UNDEFINED, None):
             relationships.append(
                 Relationship(
                     resource=ObjectRef(object_type="directory", object_id=directory_id),
                     relation="parent",
-                    subject=SubjectRef(object_type="directory", object_id=entity.parent_id),
+                    subject=SubjectRef(object_type="directory", object_id=entity_data.parent_id),
                 )
             )
 
-        if isinstance(entity.relations, list):
-            for rel in entity.relations:
+        if isinstance(entity_data.relations, list):
+            for rel in entity_data.relations:
                 relationships.append(
                     Relationship(
                         resource=ObjectRef(object_type="directory", object_id=directory_id),
@@ -163,15 +167,17 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         return DirectoryEntity(
             id=directory_id,
             name=record["name"],
+            display_name=record["display_name"],
+            description=record["description"],
             image_url=record["image_url"],
-            parent_id=entity.parent_id,
-            relations=entity.relations if isinstance(entity.relations, list) else [],
+            parent_id=entity_data.parent_id,
+            relations=entity_data.relations if isinstance(entity_data.relations, list) else [],
         )
 
     async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
         record = await self._db.fetchrow(
             """
-            SELECT id, name, image_url
+            SELECT id, name, display_name, description, image_url
             FROM note.directory
             WHERE id = $1
             """,
@@ -185,6 +191,8 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         return DirectoryEntity(
             id=str(record["id"]),
             name=record["name"],
+            display_name=record["display_name"],
+            description=record["description"],
             image_url=record["image_url"],
             parent_id=parent_id,
             relations=relations,
@@ -205,7 +213,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
 
         rows = await self._db.fetch(
             """
-            SELECT id, name, image_url
+            SELECT id, name, display_name, description, image_url
             FROM note.directory
             WHERE id = ANY($1::text[])
             """,
@@ -225,6 +233,8 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
                 DirectoryEntity(
                     id=str(row["id"]),
                     name=row["name"],
+                    display_name=row["display_name"],
+                    description=row["description"],
                     image_url=row["image_url"],
                     parent_id=parent_id,
                     relations=relations,
