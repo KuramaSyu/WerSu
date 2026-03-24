@@ -13,6 +13,8 @@ from grpcutil import insecure_bearer_token_credentials
 
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
+from src.db.migrations.context import MigrationContext
+from src.db.migrations.runner import MigrationRunner
 from src.db.repos.note.permission import NotePermissionRepoSpicedb
 from src.services.roles import PermissionServiceRepo
 from src.utils import logging_provider
@@ -76,6 +78,18 @@ async def serve():
         grpc_spicedb_address,
         insecure_bearer_token_credentials(grpc_spicedb_credentials)
     )
+
+    # run migrations with dependency container
+    log.info("Running migrations...")
+    migration_runner = MigrationRunner(
+        ctx=MigrationContext(
+            db=db,
+            spicedb_client=spicedb_client,
+        ),
+        log_provider=logging_provider,
+    )
+    await migration_runner.run_pending_migrations()
+    log.info("Migrations completed")
 
     # setup db tables and their primary keys
     log.info("Setting up database tables...")
