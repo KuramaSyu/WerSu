@@ -202,7 +202,7 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         Returns
         -------
         List[Relationship]
-            Direct relationships on the note (for example `owner` and
+            Direct relationships on the note (for example `admin` and
             `parent_directory`) as stored in the permission backend.
         """
         relations = await self._permission_repo.list_relationships(
@@ -247,25 +247,37 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             )
             note.embeddings.append(embedding)
 
-        # get default directory
-        directories = [
-            await self._directory_repo.fetch_directory(directory_id) 
-            for directory_id 
-            in await self._directory_repo.list_user_directory_ids(user)
-        ]
-        directories = [d for d in directories if d and d.name == DEFAULT_DIRECTORY_NAME]
-        assert len(directories) == 1
+        # resolve parent directory
+        user_directory_ids = await self._directory_repo.list_user_directory_ids(user)
+        requested_parent_dir_id = note.parent_dir_id if note.parent_dir_id not in (UNDEFINED, None) else None
+
+        if requested_parent_dir_id is not None:
+            requested_parent_dir_id = str(requested_parent_dir_id)
+            if requested_parent_dir_id not in user_directory_ids:
+                raise ValueError(
+                    f"Provided parent_dir_id '{requested_parent_dir_id}' is not accessible for user '{user.user_id}'"
+                )
+            parent_directory_id = requested_parent_dir_id
+        else:
+            directories = [
+                await self._directory_repo.fetch_directory(directory_id)
+                for directory_id in user_directory_ids
+            ]
+            directories = [d for d in directories if d and d.name == DEFAULT_DIRECTORY_NAME]
+            assert len(directories) == 1
+            assert directories[0].id not in (UNDEFINED, None)
+            parent_directory_id = str(directories[0].id)
         
         # insert permissions
         owner_relation = Relationship(
             resource=ObjectRef(ObjectTypeEnum.NOTE, note_id), 
-            relation=NoteRelationEnum.OWNER, 
+            relation=NoteRelationEnum.OWNER,
             subject=SubjectRef(ObjectTypeEnum.USER, user.user_id)
         )
         parent_dir_relation = Relationship(
             resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
             relation=NoteRelationEnum.PARENT_DIRECTORY,
-            subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directories[0].id)
+            subject=SubjectRef(ObjectTypeEnum.DIRECTORY, parent_directory_id)
         )
         await self._permission_repo.insert([owner_relation, parent_dir_relation])
         note.permissions = await self._fetch_note_permissions(note_id=note_id)
