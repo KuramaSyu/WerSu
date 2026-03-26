@@ -202,7 +202,7 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         Returns
         -------
         List[Relationship]
-            Direct relationships on the note (for example `admin` and
+            Direct relationships on the note (for example `owner` and
             `parent_directory`) as stored in the permission backend.
         """
         relations = await self._permission_repo.list_relationships(
@@ -348,6 +348,31 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             raise ValueError(f"Unknown SearchType: {search_type}")
 
         note_entities = await strategy.search()
+        # set permissions to [] if they are UNDEFINED
+        for note in note_entities:
+            if note.permissions is UNDEFINED:
+                note.permissions = []
+        # convert to Dict[ID, NoteEntity] for easier access
+        note_entities_dict = {note.note_id: note for note in note_entities if note.note_id is not UNDEFINED}
+
+        # fetch permissions in batches by user directories (avoid N note lookups)
+        # (dir is parent of note -> only this is needed right now. extend later)
+        user_directory_ids = await self._directory_repo.list_user_directory_ids(ctx)
+        for directory_id in user_directory_ids:
+            objects = await self._permission_repo.lookup(Relationship(
+                resource=ObjectRef(ObjectTypeEnum.NOTE, UNDEFINED),
+                relation=NoteRelationEnum.PARENT_DIRECTORY,
+                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directory_id)
+            ))
+            for obj in objects:
+                note_id = obj.object_id
+                if note_id not in (UNDEFINED, None) and note_entities_dict.get(note_id):
+                    note_entities_dict[note_id].permissions.append(Relationship(
+                        resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
+                        relation=NoteRelationEnum.PARENT_DIRECTORY,
+                        subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directory_id)
+                    ))
+                    
         return note_entities
 
 
