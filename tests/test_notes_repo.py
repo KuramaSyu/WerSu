@@ -7,6 +7,7 @@ from testcontainers.postgres import PostgresContainer
 from src.api.types import Pagination
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
+from src.db.repos.note.permission import NoteRelationEnum, ObjectTypeEnum
 from src.db.repos.note.content import NoteContentPostgresRepo, NoteContentRepo
 from src.db.repos.note.note import NoteRepoFacade, NoteRepoFacadeABC, SearchType, UserContext
 from src.db.table import Table
@@ -332,4 +333,89 @@ async def test_search_no_filter(
     assert search_results[2].content == "First note content."
     assert search_results[1].content == "Second note content."
     assert search_results[0].content == "Third note content."
+
+
+async def test_search_assigns_parent_directory_permission(
+    note_repo_facade: NoteRepoFacadeABC,
+    user_repo: UserRepoABC,
+    test_user: UserEntity,
+):
+    """Test if inserted notes, which should automatically get a directory, have 
+    a directory relation within the permissions of the searched notes"""
+    user = await user_repo.insert(test_user)
+    ctx = UserContext(user_id=user.id)
+
+    inserted = await note_repo_facade.insert(
+        NoteEntity(
+            title="Permission test",
+            content="Search should contain parent directory relation.",
+            updated_at=datetime.now(),
+            author_id=user.id,
+        ),
+        ctx,
+    )
+
+    search_results = await note_repo_facade.search_notes(
+        search_type=SearchType.NO_SEARCH,
+        query="",
+        pagination=Pagination(limit=10, offset=0),
+        ctx=ctx,
+    )
+
+    found = next((n for n in search_results if n.note_id == inserted.note_id), None)
+    assert found is not None
+
+    parent_directory_permissions = [
+        rel for rel in (found.permissions or [])
+        if str(rel.relation) == NoteRelationEnum.PARENT_DIRECTORY.value
+    ]
+    assert len(parent_directory_permissions) == 1
+
+    parent_permission = parent_directory_permissions[0]
+    assert str(parent_permission.resource.object_type) == ObjectTypeEnum.NOTE.value
+    assert parent_permission.resource.object_id == inserted.note_id
+    assert str(parent_permission.subject.object_type) == ObjectTypeEnum.DIRECTORY.value
+    assert parent_permission.subject.object_id not in (UNDEFINED, None)
+
+
+async def test_search_only_assigns_permissions_for_returned_notes(
+    note_repo_facade: NoteRepoFacadeABC,
+    user_repo: UserRepoABC,
+    test_user: UserEntity,
+):
+    """Tests that the permissions returned in the search results are related to the note id"""
+    user = await user_repo.insert(test_user)
+    ctx = UserContext(user_id=user.id)
+
+    await note_repo_facade.insert(
+        NoteEntity(
+            title="First permission note",
+            content="First note content",
+            updated_at=datetime.now(),
+            author_id=user.id,
+        ),
+        ctx,
+    )
+    await note_repo_facade.insert(
+        NoteEntity(
+            title="Second permission note",
+            content="Second note content",
+            updated_at=datetime.now(),
+            author_id=user.id,
+        ),
+        ctx,
+    )
+
+    search_results = await note_repo_facade.search_notes(
+        search_type=SearchType.NO_SEARCH,
+        query="",
+        pagination=Pagination(limit=1, offset=0),
+        ctx=ctx,
+    )
+
+    assert len(search_results) == 1
+    returned_note = search_results[0]
+
+    for rel in (returned_note.permissions or []):
+        assert rel.resource.object_id == returned_note.note_id
 
