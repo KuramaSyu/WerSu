@@ -225,6 +225,25 @@ class NotePermissionRepo(ABC):
         ...
 
     @abstractmethod
+    async def lookup_relationships(
+        self,
+        relationship: Relationship,
+    ) -> List[Relationship]:
+        """Select stored direct relationships by a relationship-shaped filter.
+
+        Args:
+        -----
+        relationship: `Relationship`
+            filter where `UNDEFINED` values act as wildcards for ids.
+
+        Returns:
+        --------
+        `List[Relationship]`:
+            matching stored direct relationships.
+        """
+        ...
+
+    @abstractmethod
     async def lookup_notes(
         self,
         user: UserContextABC,
@@ -254,7 +273,8 @@ class NotePermissionRepo(ABC):
         ----------
         resource : ObjectRef
             Resource whose direct relationships should be returned.
-            `object_id` must be set.
+            If `object_id` is `UNDEFINED`, all relationships for that
+            resource type are returned.
 
         Returns
         -------
@@ -400,6 +420,42 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
             )
         return objects
 
+
+    async def lookup_relationships(self, relationship: Relationship) -> List[Relationship]:
+        subject_filter = SubjectFilter(subject_type=relationship.subject.object_type)
+        if relationship.subject.object_id != UNDEFINED:
+            subject_filter.optional_subject_id = str(relationship.subject.object_id)
+
+        relation_filter = RelationshipFilter(
+            resource_type=relationship.resource.object_type,
+            optional_relation=relationship.relation,
+            optional_subject_filter=subject_filter,
+        )
+        if relationship.resource.object_id != UNDEFINED:
+            relation_filter.optional_resource_id = str(relationship.resource.object_id)
+
+        response_stream = self.client.ExportBulkRelationships(
+            ExportBulkRelationshipsRequest(optional_relationship_filter=relation_filter)
+        )
+
+        relationships: List[Relationship] = []
+        async for response in response_stream:
+            for stored in response.relationships:
+                relationships.append(
+                    Relationship(
+                        resource=ObjectRef(
+                            object_type=ObjectTypeEnum(stored.resource.object_type),
+                            object_id=stored.resource.object_id,
+                        ),
+                        relation=cast(RelationName, stored.relation),
+                        subject=SubjectRef(
+                            object_type=ObjectTypeEnum(stored.subject.object.object_type),
+                            object_id=stored.subject.object.object_id,
+                        ),
+                    )
+                )
+        return relationships
+
     async def lookup_notes(self, user: UserContextABC, permission: str) -> List[ObjectRef]:
         user_id = user.user_id
         relationship = Relationship(
@@ -416,15 +472,12 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         return await self.lookup(relationship)
 
     async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
-        assert resource.object_id != UNDEFINED, "object_id must be provided to list relationships"
+        relation_filter = RelationshipFilter(resource_type=resource.object_type)
+        if resource.object_id != UNDEFINED:
+            relation_filter.optional_resource_id = str(resource.object_id)
 
         response_stream = self.client.ExportBulkRelationships(
-            ExportBulkRelationshipsRequest(
-                optional_relationship_filter=RelationshipFilter(
-                    resource_type=resource.object_type,
-                    optional_resource_id=str(resource.object_id),
-                )
-            )
+            ExportBulkRelationshipsRequest(optional_relationship_filter=relation_filter)
         )
 
         relationships: List[Relationship] = []
@@ -562,6 +615,50 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
                 )
         return results
 
+    async def lookup_relationships(self, relationship: Relationship) -> List[Relationship]:
+        relationships: List[Relationship] = []
+        for stored in self._store:
+            obj_match = (
+                stored.resource.object_type == relationship.resource.object_type
+                and (
+                    relationship.resource.object_id is UNDEFINED
+                    or stored.resource.object_id == relationship.resource.object_id
+                )
+            )
+            rel_match = stored.relation == relationship.relation
+            subj_match = (
+                stored.subject.object_type == relationship.subject.object_type
+                and (
+                    relationship.subject.object_id is UNDEFINED
+                    or stored.subject.object_id == relationship.subject.object_id
+                )
+            )
+            if obj_match and rel_match and subj_match:
+                relationships.append(deepcopy(stored))
+        return relationships
+
+    async def lookup_relationships(self, relationship: Relationship) -> List[Relationship]:
+        relationships: List[Relationship] = []
+        for stored in self._store:
+            obj_match = (
+                stored.resource.object_type == relationship.resource.object_type
+                and (
+                    relationship.resource.object_id is UNDEFINED
+                    or stored.resource.object_id == relationship.resource.object_id
+                )
+            )
+            rel_match = stored.relation == relationship.relation
+            subj_match = (
+                stored.subject.object_type == relationship.subject.object_type
+                and (
+                    relationship.subject.object_id is UNDEFINED
+                    or stored.subject.object_id == relationship.subject.object_id
+                )
+            )
+            if obj_match and rel_match and subj_match:
+                relationships.append(deepcopy(stored))
+        return relationships
+
     async def lookup_notes(self, user: UserContextABC, permission: str) -> List[ObjectRef]:
         # Simulates SpiceDB LookupResources for notes by checking effective permissions
         # derived from each stored direct relation for the current user.
@@ -587,13 +684,14 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
         return list(matched.values())
 
     async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
-        assert resource.object_id != UNDEFINED, "object_id must be provided to list relationships"
-
         relationships: List[Relationship] = []
         for stored in self._store:
             if (
                 stored.resource.object_type == resource.object_type
-                and stored.resource.object_id == resource.object_id
+                and (
+                    resource.object_id is UNDEFINED
+                    or stored.resource.object_id == resource.object_id
+                )
             ):
                 relationships.append(deepcopy(stored))
 
