@@ -127,6 +127,7 @@ class MinimalNote(google.protobuf.message.Message):
     AUTHOR_ID_FIELD_NUMBER: builtins.int
     UPDATED_AT_FIELD_NUMBER: builtins.int
     STRIPPED_CONTENT_FIELD_NUMBER: builtins.int
+    PERMISSIONS_FIELD_NUMBER: builtins.int
     id: builtins.str
     """Note ID (UUIDv4 string)"""
     title: builtins.str
@@ -134,6 +135,8 @@ class MinimalNote(google.protobuf.message.Message):
     stripped_content: builtins.str
     @property
     def updated_at(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
+    @property
+    def permissions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
     def __init__(
         self,
         *,
@@ -142,9 +145,10 @@ class MinimalNote(google.protobuf.message.Message):
         author_id: builtins.str = ...,
         updated_at: google.protobuf.timestamp_pb2.Timestamp | None = ...,
         stripped_content: builtins.str = ...,
+        permissions: collections.abc.Iterable[Global___PermissionRelationship] | None = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["updated_at", b"updated_at"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["author_id", b"author_id", "id", b"id", "stripped_content", b"stripped_content", "title", b"title", "updated_at", b"updated_at"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["author_id", b"author_id", "id", b"id", "permissions", b"permissions", "stripped_content", b"stripped_content", "title", b"title", "updated_at", b"updated_at"]) -> None: ...
 
 Global___MinimalNote: typing_extensions.TypeAlias = MinimalNote
 

@@ -37,6 +37,7 @@ message MinimalNote {
     string author_id = 3;
     google.protobuf.Timestamp updated_at = 4;
     string stripped_content = 5;
+    repeated PermissionRelationship permissions = 6;
 }
 
 // Response: represents a Note

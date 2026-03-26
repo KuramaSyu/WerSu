@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dsrc/grpc_mod/proto/note.proto\x12\x05proto\x1a\x1fgoogle/protobuf/timestamp.proto\"-\n\x0eGetNoteRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\"\xea\x01\n\x15GetSearchNotesRequest\x12<\n\x0bsearch_type\x18\x01 \x01(\x0e\x32\'.proto.GetSearchNotesRequest.SearchType\x12\r\n\x05query\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\x05\x12\x0e\n\x06offset\x18\x04 \x01(\x05\x12\x0f\n\x07user_id\x18\x05 \x01(\t\"T\n\nSearchType\x12\r\n\tUndefined\x10\x00\x12\x0c\n\x08NoSearch\x10\x01\x12\x11\n\rFullTextTitle\x10\x02\x12\t\n\x05\x46uzzy\x10\x03\x12\x0b\n\x07\x43ontext\x10\x04\"\x85\x01\n\x0bMinimalNote\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12\x11\n\tauthor_id\x18\x03 \x01(\t\x12.\n\nupdated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x18\n\x10stripped_content\x18\x05 \x01(\t\"\xaf\x01\n\x04Note\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\x12.\n\nupdated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tauthor_id\x18\x05 \x01(\t\x12\x32\n\x0bpermissions\x18\x07 \x03(\x0b\x32\x1d.proto.PermissionRelationshipJ\x04\x08\x06\x10\x07\"1\n\rNoteEmbedding\x12\r\n\x05model\x18\x01 \x01(\t\x12\x11\n\tembedding\x18\x02 \x03(\x02\"U\n\x0fPostNoteRequest\x12\r\n\x05title\x18\x01 \x01(\t\x12\x14\n\x07\x63ontent\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x11\n\tauthor_id\x18\x03 \x01(\tB\n\n\x08_content\"2\n\x11\x44\x65leteNoteRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x11\n\tauthor_id\x18\x02 \x01(\t\"\x84\x01\n\x10\x41lterNoteRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x12\n\x05title\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x14\n\x07\x63ontent\x18\x03 \x01(\tH\x01\x88\x01\x01\x12\x16\n\tauthor_id\x18\x04 \x01(\tH\x02\x88\x01\x01\x42\x08\n\x06_titleB\n\n\x08_contentB\x0c\n\n_author_id\";\n\x11PermissionSubject\x12\x13\n\x0bobject_type\x18\x01 \x01(\t\x12\x11\n\tobject_id\x18\x02 \x01(\t\"Y\n\x12PermissionResource\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\"\x82\x01\n\x16PermissionRelationship\x12\x10\n\x08relation\x18\x01 \x01(\t\x12)\n\x07subject\x18\x02 \x01(\x0b\x32\x18.proto.PermissionSubject\x12+\n\x08resource\x18\x03 \x01(\x0b\x32\x19.proto.PermissionResource\"m\n\x15GetPermissionsRequest\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\"\xa4\x01\n\x17\x43reatePermissionRequest\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\x12\x33\n\x0crelationship\x18\x03 \x01(\x0b\x32\x1d.proto.PermissionRelationship\x12\x0f\n\x07user_id\x18\x04 \x01(\t\"\xa4\x01\n\x17\x44\x65letePermissionRequest\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\x12\x33\n\x0crelationship\x18\x03 \x01(\x0b\x32\x1d.proto.PermissionRelationship\x12\x0f\n\x07user_id\x18\x04 \x01(\t\"\xa7\x01\n\x19ReplacePermissionsRequest\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\x12\x34\n\rrelationships\x18\x03 \x03(\x0b\x32\x1d.proto.PermissionRelationship\x12\x0f\n\x07user_id\x18\x04 \x01(\t\"\x90\x01\n\x13PermissionsResponse\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\x12\x34\n\rrelationships\x18\x03 \x03(\x0b\x32\x1d.proto.PermissionRelationship*\x85\x01\n\x14PermissionObjectType\x12&\n\"PERMISSION_OBJECT_TYPE_UNSPECIFIED\x10\x00\x12\x1f\n\x1bPERMISSION_OBJECT_TYPE_NOTE\x10\x01\x12$\n PERMISSION_OBJECT_TYPE_DIRECTORY\x10\x02\x32\x98\x02\n\x0bNoteService\x12-\n\x07GetNote\x12\x15.proto.GetNoteRequest\x1a\x0b.proto.Note\x12/\n\x08PostNote\x12\x16.proto.PostNoteRequest\x1a\x0b.proto.Note\x12\x31\n\tPatchNote\x12\x17.proto.AlterNoteRequest\x1a\x0b.proto.Note\x12\x33\n\nDeleteNote\x12\x18.proto.DeleteNoteRequest\x1a\x0b.proto.Note\x12\x41\n\x0bSearchNotes\x12\x1c.proto.GetSearchNotesRequest\x1a\x12.proto.MinimalNote0\x01\x32\xd3\x02\n\x11PermissionService\x12J\n\x0eGetPermissions\x12\x1c.proto.GetPermissionsRequest\x1a\x1a.proto.PermissionsResponse\x12N\n\x10\x43reatePermission\x12\x1e.proto.CreatePermissionRequest\x1a\x1a.proto.PermissionsResponse\x12N\n\x10\x44\x65letePermission\x12\x1e.proto.DeletePermissionRequest\x1a\x1a.proto.PermissionsResponse\x12R\n\x12ReplacePermissions\x12 .proto.ReplacePermissionsRequest\x1a\x1a.proto.PermissionsResponseB1Z/github.com/KuramaSyu/Wersu-Rest/src/proto;protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dsrc/grpc_mod/proto/note.proto\x12\x05proto\x1a\x1fgoogle/protobuf/timestamp.proto\"-\n\x0eGetNoteRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\"\xea\x01\n\x15GetSearchNotesRequest\x12<\n\x0bsearch_type\x18\x01 \x01(\x0e\x32\'.proto.GetSearchNotesRequest.SearchType\x12\r\n\x05query\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\x05\x12\x0e\n\x06offset\x18\x04 \x01(\x05\x12\x0f\n\x07user_id\x18\x05 \x01(\t\"T\n\nSearchType\x12\r\n\tUndefined\x10\x00\x12\x0c\n\x08NoSearch\x10\x01\x12\x11\n\rFullTextTitle\x10\x02\x12\t\n\x05\x46uzzy\x10\x03\x12\x0b\n\x07\x43ontext\x10\x04\"\xb9\x01\n\x0bMinimalNote\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12\x11\n\tauthor_id\x18\x03 \x01(\t\x12.\n\nupdated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x18\n\x10stripped_content\x18\x05 \x01(\t\x12\x32\n\x0bpermissions\x18\x06 \x03(\x0b\x32\x1d.proto.PermissionRelationship\"\xaf\x01\n\x04Note\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\x12.\n\nupdated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tauthor_id\x18\x05 \x01(\t\x12\x32\n\x0bpermissions\x18\x07 \x03(\x0b\x32\x1d.proto.PermissionRelationshipJ\x04\x08\x06\x10\x07\"1\n\rNoteEmbedding\x12\r\n\x05model\x18\x01 \x01(\t\x12\x11\n\tembedding\x18\x02 \x03(\x02\"U\n\x0fPostNoteRequest\x12\r\n\x05title\x18\x01 \x01(\t\x12\x14\n\x07\x63ontent\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x11\n\tauthor_id\x18\x03 \x01(\tB\n\n\x08_content\"2\n\x11\x44\x65leteNoteRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x11\n\tauthor_id\x18\x02 \x01(\t\"\x84\x01\n\x10\x41lterNoteRequest\x12\n\n\x02id\x18\x01 \x01(\t\x12\x12\n\x05title\x18\x02 \x01(\tH\x00\x88\x01\x01\x12\x14\n\x07\x63ontent\x18\x03 \x01(\tH\x01\x88\x01\x01\x12\x16\n\tauthor_id\x18\x04 \x01(\tH\x02\x88\x01\x01\x42\x08\n\x06_titleB\n\n\x08_contentB\x0c\n\n_author_id\";\n\x11PermissionSubject\x12\x13\n\x0bobject_type\x18\x01 \x01(\t\x12\x11\n\tobject_id\x18\x02 \x01(\t\"Y\n\x12PermissionResource\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\"\x82\x01\n\x16PermissionRelationship\x12\x10\n\x08relation\x18\x01 \x01(\t\x12)\n\x07subject\x18\x02 \x01(\x0b\x32\x18.proto.PermissionSubject\x12+\n\x08resource\x18\x03 \x01(\x0b\x32\x19.proto.PermissionResource\"m\n\x15GetPermissionsRequest\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\"\xa4\x01\n\x17\x43reatePermissionRequest\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\x12\x33\n\x0crelationship\x18\x03 \x01(\x0b\x32\x1d.proto.PermissionRelationship\x12\x0f\n\x07user_id\x18\x04 \x01(\t\"\xa4\x01\n\x17\x44\x65letePermissionRequest\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\x12\x33\n\x0crelationship\x18\x03 \x01(\x0b\x32\x1d.proto.PermissionRelationship\x12\x0f\n\x07user_id\x18\x04 \x01(\t\"\xa7\x01\n\x19ReplacePermissionsRequest\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\x12\x34\n\rrelationships\x18\x03 \x03(\x0b\x32\x1d.proto.PermissionRelationship\x12\x0f\n\x07user_id\x18\x04 \x01(\t\"\x90\x01\n\x13PermissionsResponse\x12\x30\n\x0bobject_type\x18\x01 \x01(\x0e\x32\x1b.proto.PermissionObjectType\x12\x11\n\tobject_id\x18\x02 \x01(\t\x12\x34\n\rrelationships\x18\x03 \x03(\x0b\x32\x1d.proto.PermissionRelationship*\x85\x01\n\x14PermissionObjectType\x12&\n\"PERMISSION_OBJECT_TYPE_UNSPECIFIED\x10\x00\x12\x1f\n\x1bPERMISSION_OBJECT_TYPE_NOTE\x10\x01\x12$\n PERMISSION_OBJECT_TYPE_DIRECTORY\x10\x02\x32\x98\x02\n\x0bNoteService\x12-\n\x07GetNote\x12\x15.proto.GetNoteRequest\x1a\x0b.proto.Note\x12/\n\x08PostNote\x12\x16.proto.PostNoteRequest\x1a\x0b.proto.Note\x12\x31\n\tPatchNote\x12\x17.proto.AlterNoteRequest\x1a\x0b.proto.Note\x12\x33\n\nDeleteNote\x12\x18.proto.DeleteNoteRequest\x1a\x0b.proto.Note\x12\x41\n\x0bSearchNotes\x12\x1c.proto.GetSearchNotesRequest\x1a\x12.proto.MinimalNote0\x01\x32\xd3\x02\n\x11PermissionService\x12J\n\x0eGetPermissions\x12\x1c.proto.GetPermissionsRequest\x1a\x1a.proto.PermissionsResponse\x12N\n\x10\x43reatePermission\x12\x1e.proto.CreatePermissionRequest\x1a\x1a.proto.PermissionsResponse\x12N\n\x10\x44\x65letePermission\x12\x1e.proto.DeletePermissionRequest\x1a\x1a.proto.PermissionsResponse\x12R\n\x12ReplacePermissions\x12 .proto.ReplacePermissionsRequest\x1a\x1a.proto.PermissionsResponseB1Z/github.com/KuramaSyu/Wersu-Rest/src/proto;protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,8 +33,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'src.grpc_mod.proto.note_pb2
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z/github.com/KuramaSyu/Wersu-Rest/src/proto;proto'
-  _globals['_PERMISSIONOBJECTTYPE']._serialized_start=2044
-  _globals['_PERMISSIONOBJECTTYPE']._serialized_end=2177
+  _globals['_PERMISSIONOBJECTTYPE']._serialized_start=2096
+  _globals['_PERMISSIONOBJECTTYPE']._serialized_end=2229
   _globals['_GETNOTEREQUEST']._serialized_start=73
   _globals['_GETNOTEREQUEST']._serialized_end=118
   _globals['_GETSEARCHNOTESREQUEST']._serialized_start=121
@@ -42,35 +42,35 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_GETSEARCHNOTESREQUEST_SEARCHTYPE']._serialized_start=271
   _globals['_GETSEARCHNOTESREQUEST_SEARCHTYPE']._serialized_end=355
   _globals['_MINIMALNOTE']._serialized_start=358
-  _globals['_MINIMALNOTE']._serialized_end=491
-  _globals['_NOTE']._serialized_start=494
-  _globals['_NOTE']._serialized_end=669
-  _globals['_NOTEEMBEDDING']._serialized_start=671
-  _globals['_NOTEEMBEDDING']._serialized_end=720
-  _globals['_POSTNOTEREQUEST']._serialized_start=722
-  _globals['_POSTNOTEREQUEST']._serialized_end=807
-  _globals['_DELETENOTEREQUEST']._serialized_start=809
-  _globals['_DELETENOTEREQUEST']._serialized_end=859
-  _globals['_ALTERNOTEREQUEST']._serialized_start=862
-  _globals['_ALTERNOTEREQUEST']._serialized_end=994
-  _globals['_PERMISSIONSUBJECT']._serialized_start=996
-  _globals['_PERMISSIONSUBJECT']._serialized_end=1055
-  _globals['_PERMISSIONRESOURCE']._serialized_start=1057
-  _globals['_PERMISSIONRESOURCE']._serialized_end=1146
-  _globals['_PERMISSIONRELATIONSHIP']._serialized_start=1149
-  _globals['_PERMISSIONRELATIONSHIP']._serialized_end=1279
-  _globals['_GETPERMISSIONSREQUEST']._serialized_start=1281
-  _globals['_GETPERMISSIONSREQUEST']._serialized_end=1390
-  _globals['_CREATEPERMISSIONREQUEST']._serialized_start=1393
-  _globals['_CREATEPERMISSIONREQUEST']._serialized_end=1557
-  _globals['_DELETEPERMISSIONREQUEST']._serialized_start=1560
-  _globals['_DELETEPERMISSIONREQUEST']._serialized_end=1724
-  _globals['_REPLACEPERMISSIONSREQUEST']._serialized_start=1727
-  _globals['_REPLACEPERMISSIONSREQUEST']._serialized_end=1894
-  _globals['_PERMISSIONSRESPONSE']._serialized_start=1897
-  _globals['_PERMISSIONSRESPONSE']._serialized_end=2041
-  _globals['_NOTESERVICE']._serialized_start=2180
-  _globals['_NOTESERVICE']._serialized_end=2460
-  _globals['_PERMISSIONSERVICE']._serialized_start=2463
-  _globals['_PERMISSIONSERVICE']._serialized_end=2802
+  _globals['_MINIMALNOTE']._serialized_end=543
+  _globals['_NOTE']._serialized_start=546
+  _globals['_NOTE']._serialized_end=721
+  _globals['_NOTEEMBEDDING']._serialized_start=723
+  _globals['_NOTEEMBEDDING']._serialized_end=772
+  _globals['_POSTNOTEREQUEST']._serialized_start=774
+  _globals['_POSTNOTEREQUEST']._serialized_end=859
+  _globals['_DELETENOTEREQUEST']._serialized_start=861
+  _globals['_DELETENOTEREQUEST']._serialized_end=911
+  _globals['_ALTERNOTEREQUEST']._serialized_start=914
+  _globals['_ALTERNOTEREQUEST']._serialized_end=1046
+  _globals['_PERMISSIONSUBJECT']._serialized_start=1048
+  _globals['_PERMISSIONSUBJECT']._serialized_end=1107
+  _globals['_PERMISSIONRESOURCE']._serialized_start=1109
+  _globals['_PERMISSIONRESOURCE']._serialized_end=1198
+  _globals['_PERMISSIONRELATIONSHIP']._serialized_start=1201
+  _globals['_PERMISSIONRELATIONSHIP']._serialized_end=1331
+  _globals['_GETPERMISSIONSREQUEST']._serialized_start=1333
+  _globals['_GETPERMISSIONSREQUEST']._serialized_end=1442
+  _globals['_CREATEPERMISSIONREQUEST']._serialized_start=1445
+  _globals['_CREATEPERMISSIONREQUEST']._serialized_end=1609
+  _globals['_DELETEPERMISSIONREQUEST']._serialized_start=1612
+  _globals['_DELETEPERMISSIONREQUEST']._serialized_end=1776
+  _globals['_REPLACEPERMISSIONSREQUEST']._serialized_start=1779
+  _globals['_REPLACEPERMISSIONSREQUEST']._serialized_end=1946
+  _globals['_PERMISSIONSRESPONSE']._serialized_start=1949
+  _globals['_PERMISSIONSRESPONSE']._serialized_end=2093
+  _globals['_NOTESERVICE']._serialized_start=2232
+  _globals['_NOTESERVICE']._serialized_end=2512
+  _globals['_PERMISSIONSERVICE']._serialized_start=2515
+  _globals['_PERMISSIONSERVICE']._serialized_end=2854
 # @@protoc_insertion_point(module_scope)
