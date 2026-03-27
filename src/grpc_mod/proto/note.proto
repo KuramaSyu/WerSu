@@ -81,10 +81,11 @@ enum PermissionObjectType {
     PERMISSION_OBJECT_TYPE_UNSPECIFIED = 0;
     PERMISSION_OBJECT_TYPE_NOTE = 1;
     PERMISSION_OBJECT_TYPE_DIRECTORY = 2;
+    PERMISSION_OBJECT_TYPE_USER = 3;
 }
 
 message PermissionSubject {
-    string object_type = 1;
+    PermissionObjectType object_type = 1;
     string object_id = 2;
 }
 
