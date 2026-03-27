@@ -637,28 +637,6 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
                 relationships.append(deepcopy(stored))
         return relationships
 
-    async def lookup_relationships(self, relationship: Relationship) -> List[Relationship]:
-        relationships: List[Relationship] = []
-        for stored in self._store:
-            obj_match = (
-                stored.resource.object_type == relationship.resource.object_type
-                and (
-                    relationship.resource.object_id is UNDEFINED
-                    or stored.resource.object_id == relationship.resource.object_id
-                )
-            )
-            rel_match = stored.relation == relationship.relation
-            subj_match = (
-                stored.subject.object_type == relationship.subject.object_type
-                and (
-                    relationship.subject.object_id is UNDEFINED
-                    or stored.subject.object_id == relationship.subject.object_id
-                )
-            )
-            if obj_match and rel_match and subj_match:
-                relationships.append(deepcopy(stored))
-        return relationships
-
     async def lookup_notes(self, user: UserContextABC, permission: str) -> List[ObjectRef]:
         # Simulates SpiceDB LookupResources for notes by checking effective permissions
         # derived from each stored direct relation for the current user.
