@@ -12,6 +12,8 @@ from src.grpc_mod.proto.note_pb2 import (
     NoteEmbedding,
     PermissionObjectType,
     PermissionRelationship,
+    PermissionResource,
+    PermissionSubject,
 )
 from src.utils import asdict
 from src.utils.dict_helper import drop_except_keys, drop_undefined
@@ -22,6 +24,8 @@ def _to_permission_object_type(object_type: str) -> PermissionObjectType.ValueTy
         return PermissionObjectType.PERMISSION_OBJECT_TYPE_NOTE
     if object_type == ObjectTypeEnum.DIRECTORY.value:
         return PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY
+    if object_type == ObjectTypeEnum.USER.value:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_USER
     return PermissionObjectType.PERMISSION_OBJECT_TYPE_UNSPECIFIED
 
 
@@ -44,7 +48,7 @@ def to_grpc_note(note_entity: NoteEntity | None) -> Note:
     basic_args = drop_undefined(
         drop_except_keys(
             asdict(note_entity), 
-            {"note_id", "title", "content", "author_id"}
+            {"note_id", "title", "content", "author_id", "updated_at", "permissions"}
         )
     )
     basic_args["id"] = basic_args.pop("note_id")
@@ -52,20 +56,23 @@ def to_grpc_note(note_entity: NoteEntity | None) -> Note:
     # convert permissions
     assert isinstance(note_entity.permissions, list)
     perms: list[PermissionRelationship] = []
-    for p in note_entity.permissions:
-        perms.append(
+    perms = basic_args.pop("permissions", [])
+    converted_perms = []
+    for perm in note_entity.permissions:
+        converted_perms.append(
             PermissionRelationship(
-                relation=str(p.relation),
-                subject={
-                    "object_type": str(p.subject.object_type),
-                    "object_id": str(p.subject.object_id),
-                },
-                resource={
-                    "object_type": _to_permission_object_type(str(p.resource.object_type)),
-                    "object_id": str(p.resource.object_id),
-                },
+                relation=str(perm.relation),
+                subject=PermissionSubject(
+                    object_type=_to_permission_object_type(str(perm.subject.object_type)),
+                    object_id=str(perm.subject.object_id),
+                ),
+                resource=PermissionResource(
+                    object_type=_to_permission_object_type(str(perm.resource.object_type)),  # type: ignore
+                    object_id=str(perm.resource.object_id),  # type: ignore
+                ),
             )
         )
+    basic_args["permissions"] = converted_perms
 
     return Note(
         **basic_args,
@@ -85,9 +92,27 @@ def to_grpc_minimal_note(note_entity: NoteEntity) -> MinimalNote:
     basic_args = drop_undefined(
         drop_except_keys(
             asdict(note_entity), 
-            {"note_id", "title", "content", "author_id", "updated_at"}
+            {"note_id", "title", "content", "author_id", "updated_at", "permissions"}
         )
     )
+
+    perms = basic_args.pop("permissions", [])
+    converted_perms = []
+    for perm in perms:
+        converted_perms.append(
+            PermissionRelationship(
+                relation=str(perm.relation),
+                subject=PermissionSubject(
+                    object_type=_to_permission_object_type(str(perm.subject.object_type)),
+                    object_id=str(perm.subject.object_id),
+                ),
+                resource=PermissionResource(
+                    object_type=_to_permission_object_type(str(perm.resource.object_type)),
+                    object_id=str(perm.resource.object_id),
+                ),
+            )
+        )
+    basic_args["permissions"] = converted_perms
     basic_args["id"] = basic_args.pop("note_id")
     basic_args["stripped_content"] = basic_args.pop("content")
 

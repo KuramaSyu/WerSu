@@ -29,12 +29,14 @@ class _PermissionObjectTypeEnumTypeWrapper(google.protobuf.internal.enum_type_wr
     PERMISSION_OBJECT_TYPE_UNSPECIFIED: _PermissionObjectType.ValueType  # 0
     PERMISSION_OBJECT_TYPE_NOTE: _PermissionObjectType.ValueType  # 1
     PERMISSION_OBJECT_TYPE_DIRECTORY: _PermissionObjectType.ValueType  # 2
+    PERMISSION_OBJECT_TYPE_USER: _PermissionObjectType.ValueType  # 3
 
 class PermissionObjectType(_PermissionObjectType, metaclass=_PermissionObjectTypeEnumTypeWrapper): ...
 
 PERMISSION_OBJECT_TYPE_UNSPECIFIED: PermissionObjectType.ValueType  # 0
 PERMISSION_OBJECT_TYPE_NOTE: PermissionObjectType.ValueType  # 1
 PERMISSION_OBJECT_TYPE_DIRECTORY: PermissionObjectType.ValueType  # 2
+PERMISSION_OBJECT_TYPE_USER: PermissionObjectType.ValueType  # 3
 Global___PermissionObjectType: typing_extensions.TypeAlias = PermissionObjectType
 
 @typing.final
@@ -290,12 +292,12 @@ class PermissionSubject(google.protobuf.message.Message):
 
     OBJECT_TYPE_FIELD_NUMBER: builtins.int
     OBJECT_ID_FIELD_NUMBER: builtins.int
-    object_type: builtins.str
+    object_type: Global___PermissionObjectType.ValueType
     object_id: builtins.str
     def __init__(
         self,
         *,
-        object_type: builtins.str = ...,
+        object_type: Global___PermissionObjectType.ValueType = ...,
         object_id: builtins.str = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type"]) -> None: ...

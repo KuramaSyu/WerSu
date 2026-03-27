@@ -43,10 +43,17 @@ def to_object_ref(object_type: int, object_id: str) -> ObjectRef:
     if not object_id:
         raise ValueError("object_id is required")
 
+    return ObjectRef(object_type=to_object_type(object_type), object_id=object_id)
+
+
+def to_object_type(object_type: int) -> ObjectTypeEnum:
+    """Convert proto ``PermissionObjectType`` to domain ``ObjectTypeEnum``."""
     if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_NOTE:
-        return ObjectRef(object_type=ObjectTypeEnum.NOTE, object_id=object_id)
+        return ObjectTypeEnum.NOTE
     if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY:
-        return ObjectRef(object_type=ObjectTypeEnum.DIRECTORY, object_id=object_id)
+        return ObjectTypeEnum.DIRECTORY
+    if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_USER:
+        return ObjectTypeEnum.USER
 
     raise ValueError("Unsupported object_type")
 
@@ -59,7 +66,7 @@ def to_relationship(fallback_resource: ObjectRef, relationship: PermissionRelati
     """
     if not relationship.relation:
         raise ValueError("relationship.relation is required")
-    if not relationship.subject.object_type:
+    if relationship.subject.object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_UNSPECIFIED:
         raise ValueError("relationship.subject.object_type is required")
     if not relationship.subject.object_id:
         raise ValueError("relationship.subject.object_id is required")
@@ -78,7 +85,7 @@ def to_relationship(fallback_resource: ObjectRef, relationship: PermissionRelati
         resource=resource,
         relation=cast(RelationEnum, relationship.relation),
         subject=SubjectRef(
-            object_type=ObjectTypeEnum(relationship.subject.object_type),
+            object_type=to_object_type(relationship.subject.object_type),
             object_id=relationship.subject.object_id,
         ),
     )
@@ -90,6 +97,8 @@ def to_permission_object_type(object_type: ObjectTypeEnum) -> PermissionObjectTy
         return PermissionObjectType.PERMISSION_OBJECT_TYPE_NOTE
     if object_type == ObjectTypeEnum.DIRECTORY:
         return PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY
+    if object_type == ObjectTypeEnum.USER:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_USER
     return PermissionObjectType.PERMISSION_OBJECT_TYPE_UNSPECIFIED
 
 

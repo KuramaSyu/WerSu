@@ -22,7 +22,7 @@ class NoteEntity:
     author_id: UndefinedNoneOr[str] = UNDEFINED
     content: UndefinedNoneOr[str] = UNDEFINED
     embeddings: UndefinedOr[Sequence[NoteEmbeddingEntity]] = UNDEFINED
-    permissions: UndefinedOr[Sequence[PartialRelationship]] = UNDEFINED
+    permissions: UndefinedOr[Sequence[Relationship]] = UNDEFINED
     parent_dir_id: UndefinedOr[str] = UNDEFINED
 
     @staticmethod

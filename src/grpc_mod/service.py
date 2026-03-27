@@ -5,6 +5,7 @@ from typing import AsyncIterator, List, Sequence
 import grpc
 from grpc.aio import ServicerContext
 import asyncpg
+from pprint import pformat
 
 from src.api import LoggingProvider
 from src.api.types import Pagination
@@ -148,7 +149,9 @@ class GrpcNoteService(NoteServiceServicer):
             ctx=UserContext(user_id=request.user_id),
         )
         for note in notes:
-            yield to_grpc_minimal_note(note)
+            grpc_note = to_grpc_minimal_note(note)
+            self.log.debug(f"[SearchNotes] yielding note: {pformat(grpc_note)}")
+            yield grpc_note
 
 
 class GrpcPermissionService(PermissionServiceServicer):
@@ -219,7 +222,7 @@ class GrpcPermissionService(PermissionServiceServicer):
         resource: ObjectRef,
         relationships: Sequence[Relationship],
     ) -> PermissionsResponse:
-        object_type = to_permission_object_type(resource.object_type)
+        object_type = to_permission_object_type(ObjectTypeEnum(str(resource.object_type)))
 
         return PermissionsResponse(
             object_type=object_type,
@@ -228,7 +231,7 @@ class GrpcPermissionService(PermissionServiceServicer):
                 PermissionRelationship(
                     relation=str(rel.relation),
                     subject=PermissionSubject(
-                        object_type=str(rel.subject.object_type),
+                        object_type=to_permission_object_type(ObjectTypeEnum(str(rel.subject.object_type))),
                         object_id=str(rel.subject.object_id),
                     ),
                     resource=to_permission_resource(rel.resource),
