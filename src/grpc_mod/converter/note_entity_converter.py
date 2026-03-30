@@ -41,6 +41,7 @@ def to_grpc_note(note_entity: NoteEntity | None) -> Note:
     assert note_entity.content is not None
     assert note_entity.author_id is not None
 
+    # convert updated_at manually since it would be string otherwise
     updated_at_ts = Timestamp()
     if note_entity.updated_at:
         updated_at_ts.FromDatetime(note_entity.updated_at)
@@ -48,7 +49,7 @@ def to_grpc_note(note_entity: NoteEntity | None) -> Note:
     basic_args = drop_undefined(
         drop_except_keys(
             asdict(note_entity), 
-            {"note_id", "title", "content", "author_id", "updated_at", "permissions"}
+            {"note_id", "title", "content", "author_id", "permissions"}
         )
     )
     basic_args["id"] = basic_args.pop("note_id")
