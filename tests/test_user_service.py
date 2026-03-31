@@ -71,8 +71,14 @@ class _InMemoryDirectoryRepo(DirectoryRepo):
                 return directory
         return None
 
+    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
+        return entity
+
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
         return [str(directory.id) for directory in self.created if directory.id is not UNDEFINED]
+
+    async def fetch_all_directories(self) -> List[DirectoryEntity]:
+        return list(self.created)
 
     async def list_note_directory_ids(self, note_id: str) -> List[str]:
         return []

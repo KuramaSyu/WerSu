@@ -65,7 +65,13 @@ class _StubDirectoryRepo(DirectoryRepo):
             return DirectoryEntity(id=id, name="test")
         return None
 
+    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
+        raise NotImplementedError()
+
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
+        raise NotImplementedError()
+
+    async def fetch_all_directories(self) -> List[DirectoryEntity]:
         raise NotImplementedError()
 
     async def list_note_directory_ids(self, note_id: str) -> List[str]:

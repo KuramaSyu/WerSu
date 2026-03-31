@@ -31,8 +31,14 @@ class _TestDirectoryRepo(DirectoryRepo):
     async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
         return DirectoryEntity(id=id, name=self._default_directory_name)
 
+    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
+        return entity
+
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
         return [f"{self._default_directory_name}-{user.user_id}"]
+
+    async def fetch_all_directories(self) -> List[DirectoryEntity]:
+        return []
 
     async def list_note_directory_ids(self, note_id: str) -> List[str]:
         return []
