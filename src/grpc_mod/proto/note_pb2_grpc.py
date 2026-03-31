@@ -286,6 +286,11 @@ class DirectoryServiceStub(object):
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
                 _registered_method=True)
+        self.GetDirectories = channel.unary_stream(
+                '/proto.DirectoryService/GetDirectories',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoriesRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+                _registered_method=True)
         self.CreateDirectory = channel.unary_unary(
                 '/proto.DirectoryService/CreateDirectory',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.CreateDirectoryRequest.SerializeToString,
@@ -307,6 +312,12 @@ class DirectoryServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def GetDirectory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetDirectories(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -336,6 +347,11 @@ def add_DirectoryServiceServicer_to_server(servicer, server):
             'GetDirectory': grpc.unary_unary_rpc_method_handler(
                     servicer.GetDirectory,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
+            ),
+            'GetDirectories': grpc.unary_stream_rpc_method_handler(
+                    servicer.GetDirectories,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoriesRequest.FromString,
                     response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
             ),
             'CreateDirectory': grpc.unary_unary_rpc_method_handler(
@@ -380,6 +396,33 @@ class DirectoryService(object):
             target,
             '/proto.DirectoryService/GetDirectory',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDirectories(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/proto.DirectoryService/GetDirectories',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoriesRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
             options,
             channel_credentials,

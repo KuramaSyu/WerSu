@@ -341,6 +341,37 @@ class GetDirectoryRequest(google.protobuf.message.Message):
 Global___GetDirectoryRequest: typing_extensions.TypeAlias = GetDirectoryRequest
 
 @typing.final
+class GetDirectoriesRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    USER_ID_FIELD_NUMBER: builtins.int
+    PARENT_ID_FIELD_NUMBER: builtins.int
+    LIMIT_FIELD_NUMBER: builtins.int
+    OFFSET_FIELD_NUMBER: builtins.int
+    user_id: builtins.str
+    parent_id: builtins.str
+    limit: builtins.int
+    offset: builtins.int
+    def __init__(
+        self,
+        *,
+        user_id: builtins.str = ...,
+        parent_id: builtins.str | None = ...,
+        limit: builtins.int | None = ...,
+        offset: builtins.int | None = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id", "user_id", b"user_id"]) -> None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_limit", b"_limit"]) -> typing.Literal["limit"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_offset", b"_offset"]) -> typing.Literal["offset"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_parent_id", b"_parent_id"]) -> typing.Literal["parent_id"] | None: ...
+
+Global___GetDirectoriesRequest: typing_extensions.TypeAlias = GetDirectoriesRequest
+
+@typing.final
 class CreateDirectoryRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
