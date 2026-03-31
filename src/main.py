@@ -23,11 +23,11 @@ from src.db.database import Database
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.table import Table, setup_table_logging
-from src.grpc_mod.proto.note_pb2_grpc import add_NoteServiceServicer_to_server, add_PermissionServiceServicer_to_server
+from src.grpc_mod.proto.note_pb2_grpc import add_DirectoryServiceServicer_to_server, add_NoteServiceServicer_to_server, add_PermissionServiceServicer_to_server
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteRepoFacade
-from src.grpc_mod.service import GrpcNoteService, GrpcPermissionService, GrpcUserService
+from src.grpc_mod.service import GrpcDirectoryService, GrpcNoteService, GrpcPermissionService, GrpcUserService
 from src.ai.embedding_generator import EmbeddingGenerator, Models
 
 
@@ -145,6 +145,12 @@ async def serve():
     log.info("Setting up gRPC services...")
     note_service = GrpcNoteService(repo=repo, log=logging_provider)
     add_NoteServiceServicer_to_server(note_service, server)
+
+    directory_service = GrpcDirectoryService(
+        directory_repo=directory_repo,
+        log=logging_provider,
+    )
+    add_DirectoryServiceServicer_to_server(directory_service, server)
 
     permission_service = PermissionServiceRepo(
         permission_repo=permission_repo,

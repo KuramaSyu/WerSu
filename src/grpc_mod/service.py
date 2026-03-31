@@ -10,11 +10,14 @@ from pprint import pformat
 from src.api import LoggingProvider
 from src.api.types import Pagination
 from src.api.undefined import UNDEFINED
+from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities import NoteEntity
+from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
 from src.db.repos.note.permission import ObjectRef, ObjectTypeEnum, Relationship
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod.converter import (
+    to_grpc_directory,
     to_grpc_note,
     to_grpc_user,
     to_object_ref,
@@ -25,9 +28,15 @@ from src.grpc_mod.converter import (
 from src.grpc_mod.converter.note_entity_converter import to_grpc_minimal_note, to_search_type
 from src.grpc_mod.proto.note_pb2 import (
     AlterNoteRequest,
+    AlterDirectoryRequest,
+    CreateDirectoryRequest,
+    DeleteDirectoryRequest,
     CreatePermissionRequest,
+    Directory,
     DeleteNoteRequest,
     DeletePermissionRequest,
+    GetDirectoryRequest,
+    GetDirectoriesRequest,
     GetNoteRequest,
     GetPermissionsRequest,
     GetSearchNotesRequest,
@@ -39,7 +48,7 @@ from src.grpc_mod.proto.note_pb2 import (
     PostNoteRequest,
     ReplacePermissionsRequest,
 )
-from src.grpc_mod.proto.note_pb2_grpc import NoteServiceServicer, PermissionServiceServicer
+from src.grpc_mod.proto.note_pb2_grpc import DirectoryServiceServicer, NoteServiceServicer, PermissionServiceServicer
 from src.grpc_mod.proto.user_pb2 import (
     AlterUserRequest,
     DeleteUserRequest,
@@ -152,6 +161,132 @@ class GrpcNoteService(NoteServiceServicer):
             grpc_note = to_grpc_minimal_note(note)
             self.log.debug(f"[SearchNotes] yielding note: {pformat(grpc_note)}")
             yield grpc_note
+
+
+class GrpcDirectoryService(DirectoryServiceServicer):
+    """gRPC adapter for directory read/write operations."""
+
+    def __init__(self, directory_repo: DirectoryRepo, log: LoggingProvider):
+        self._directory_repo = directory_repo
+        self.log = log(__name__, self)
+
+    async def GetDirectory(self, request: GetDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
+        try:
+            if not request.id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("id is required")
+                return Directory()
+
+            directory = await self._directory_repo.fetch_directory(request.id)
+            if directory is None:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details("Directory not found")
+                return Directory()
+
+            return to_grpc_directory(directory)
+        except Exception:
+            self.log.error(f"Error fetching directory: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while fetching directory")
+            return Directory()
+
+    async def GetDirectories(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, request: GetDirectoriesRequest, context: ServicerContext
+    ) -> AsyncIterator[Directory]:
+        try:
+            if not request.user_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("user_id is required")
+                return
+
+            if request.HasField("offset") and request.offset < 0:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("offset must be greater than or equal to 0")
+                return
+            if request.HasField("limit") and request.limit < 0:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("limit must be greater than or equal to 0")
+                return
+
+            directory_ids = await self._directory_repo.list_user_directory_ids(
+                UserContext(user_id=request.user_id)
+            )
+            directories = []
+            for directory_id in directory_ids:
+                directory = await self._directory_repo.fetch_directory(directory_id)
+                if directory is not None:
+                    directories.append(directory)
+
+            if request.HasField("parent_id"):
+                directories = [
+                    directory
+                    for directory in directories
+                    if directory.parent_id not in (UNDEFINED, None)
+                    and str(directory.parent_id) == request.parent_id
+                ]
+
+            offset = request.offset if request.HasField("offset") else 0
+            if request.HasField("limit"):
+                directories = directories[offset: offset + request.limit]
+            else:
+                directories = directories[offset:]
+
+            for directory in directories:
+                yield to_grpc_directory(directory)
+        except Exception:
+            self.log.error(f"Error fetching directories: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while fetching directories")
+            return
+
+    async def CreateDirectory(self, request: CreateDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
+        try:
+            if not request.name:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("name is required")
+                return Directory()
+
+            directory = await self._directory_repo.create_directory(
+                DirectoryEntity(
+                    name=request.name,
+                    display_name=request.display_name if request.HasField("display_name") else UNDEFINED,
+                    description=request.description if request.HasField("description") else UNDEFINED,
+                    image_url=request.image_url if request.HasField("image_url") else UNDEFINED,
+                    parent_id=request.parent_id if request.HasField("parent_id") else UNDEFINED,
+                    relations=[],
+                )
+            )
+            return to_grpc_directory(directory)
+        except Exception:
+            self.log.error(f"Error creating directory: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while creating directory")
+            return Directory()
+
+    async def PatchDirectory(self, request: AlterDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("PatchDirectory is not implemented")
+        return Directory()
+
+    async def DeleteDirectory(self, request: DeleteDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
+        try:
+            if not request.id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("id is required")
+                return Directory()
+
+            deleted = await self._directory_repo.delete_directory(DirectoryEntity(id=request.id))
+            if not deleted:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details("Directory not found")
+                return Directory()
+
+            return Directory(id=request.id)
+        except Exception:
+            self.log.error(f"Error deleting directory: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while deleting directory")
+            return Directory()
 
 
 class GrpcPermissionService(PermissionServiceServicer):
