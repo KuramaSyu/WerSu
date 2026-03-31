@@ -272,6 +272,207 @@ class NoteService(object):
             _registered_method=True)
 
 
+class DirectoryServiceStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.GetDirectory = channel.unary_unary(
+                '/proto.DirectoryService/GetDirectory',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+                _registered_method=True)
+        self.CreateDirectory = channel.unary_unary(
+                '/proto.DirectoryService/CreateDirectory',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.CreateDirectoryRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+                _registered_method=True)
+        self.PatchDirectory = channel.unary_unary(
+                '/proto.DirectoryService/PatchDirectory',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterDirectoryRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+                _registered_method=True)
+        self.DeleteDirectory = channel.unary_unary(
+                '/proto.DirectoryService/DeleteDirectory',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteDirectoryRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+                _registered_method=True)
+
+
+class DirectoryServiceServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def GetDirectory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreateDirectory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PatchDirectory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteDirectory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_DirectoryServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'GetDirectory': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDirectory,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
+            ),
+            'CreateDirectory': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateDirectory,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.CreateDirectoryRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
+            ),
+            'PatchDirectory': grpc.unary_unary_rpc_method_handler(
+                    servicer.PatchDirectory,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterDirectoryRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
+            ),
+            'DeleteDirectory': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteDirectory,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteDirectoryRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'proto.DirectoryService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('proto.DirectoryService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class DirectoryService(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def GetDirectory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.DirectoryService/GetDirectory',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateDirectory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.DirectoryService/CreateDirectory',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.CreateDirectoryRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PatchDirectory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.DirectoryService/PatchDirectory',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterDirectoryRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteDirectory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.DirectoryService/DeleteDirectory',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteDirectoryRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
 class PermissionServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 

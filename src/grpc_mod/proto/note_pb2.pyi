@@ -287,6 +287,161 @@ class AlterNoteRequest(google.protobuf.message.Message):
 Global___AlterNoteRequest: typing_extensions.TypeAlias = AlterNoteRequest
 
 @typing.final
+class Directory(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    ID_FIELD_NUMBER: builtins.int
+    NAME_FIELD_NUMBER: builtins.int
+    DISPLAY_NAME_FIELD_NUMBER: builtins.int
+    DESCRIPTION_FIELD_NUMBER: builtins.int
+    IMAGE_URL_FIELD_NUMBER: builtins.int
+    PARENT_ID_FIELD_NUMBER: builtins.int
+    RELATIONSHIPS_FIELD_NUMBER: builtins.int
+    id: builtins.str
+    name: builtins.str
+    display_name: builtins.str
+    description: builtins.str
+    image_url: builtins.str
+    parent_id: builtins.str
+    @property
+    def relationships(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
+    def __init__(
+        self,
+        *,
+        id: builtins.str = ...,
+        name: builtins.str = ...,
+        display_name: builtins.str = ...,
+        description: builtins.str = ...,
+        image_url: builtins.str = ...,
+        parent_id: builtins.str | None = ...,
+        relationships: collections.abc.Iterable[Global___PermissionRelationship] | None = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["_parent_id", b"_parent_id", "parent_id", b"parent_id"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "relationships", b"relationships"]) -> None: ...
+    def WhichOneof(self, oneof_group: typing.Literal["_parent_id", b"_parent_id"]) -> typing.Literal["parent_id"] | None: ...
+
+Global___Directory: typing_extensions.TypeAlias = Directory
+
+@typing.final
+class GetDirectoryRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    ID_FIELD_NUMBER: builtins.int
+    USER_ID_FIELD_NUMBER: builtins.int
+    id: builtins.str
+    user_id: builtins.str
+    def __init__(
+        self,
+        *,
+        id: builtins.str = ...,
+        user_id: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["id", b"id", "user_id", b"user_id"]) -> None: ...
+
+Global___GetDirectoryRequest: typing_extensions.TypeAlias = GetDirectoryRequest
+
+@typing.final
+class CreateDirectoryRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    NAME_FIELD_NUMBER: builtins.int
+    DISPLAY_NAME_FIELD_NUMBER: builtins.int
+    DESCRIPTION_FIELD_NUMBER: builtins.int
+    IMAGE_URL_FIELD_NUMBER: builtins.int
+    PARENT_ID_FIELD_NUMBER: builtins.int
+    USER_ID_FIELD_NUMBER: builtins.int
+    name: builtins.str
+    display_name: builtins.str
+    description: builtins.str
+    image_url: builtins.str
+    parent_id: builtins.str
+    user_id: builtins.str
+    def __init__(
+        self,
+        *,
+        name: builtins.str = ...,
+        display_name: builtins.str | None = ...,
+        description: builtins.str | None = ...,
+        image_url: builtins.str | None = ...,
+        parent_id: builtins.str | None = ...,
+        user_id: builtins.str = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "parent_id", b"parent_id"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "user_id", b"user_id"]) -> None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_description", b"_description"]) -> typing.Literal["description"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_display_name", b"_display_name"]) -> typing.Literal["display_name"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_image_url", b"_image_url"]) -> typing.Literal["image_url"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_parent_id", b"_parent_id"]) -> typing.Literal["parent_id"] | None: ...
+
+Global___CreateDirectoryRequest: typing_extensions.TypeAlias = CreateDirectoryRequest
+
+@typing.final
+class AlterDirectoryRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    ID_FIELD_NUMBER: builtins.int
+    NAME_FIELD_NUMBER: builtins.int
+    DISPLAY_NAME_FIELD_NUMBER: builtins.int
+    DESCRIPTION_FIELD_NUMBER: builtins.int
+    IMAGE_URL_FIELD_NUMBER: builtins.int
+    PARENT_ID_FIELD_NUMBER: builtins.int
+    USER_ID_FIELD_NUMBER: builtins.int
+    id: builtins.str
+    name: builtins.str
+    display_name: builtins.str
+    description: builtins.str
+    image_url: builtins.str
+    parent_id: builtins.str
+    user_id: builtins.str
+    def __init__(
+        self,
+        *,
+        id: builtins.str = ...,
+        name: builtins.str | None = ...,
+        display_name: builtins.str | None = ...,
+        description: builtins.str | None = ...,
+        image_url: builtins.str | None = ...,
+        parent_id: builtins.str | None = ...,
+        user_id: builtins.str = ...,
+    ) -> None: ...
+    def HasField(self, field_name: typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "user_id", b"user_id"]) -> None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_description", b"_description"]) -> typing.Literal["description"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_display_name", b"_display_name"]) -> typing.Literal["display_name"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_image_url", b"_image_url"]) -> typing.Literal["image_url"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_name", b"_name"]) -> typing.Literal["name"] | None: ...
+    @typing.overload
+    def WhichOneof(self, oneof_group: typing.Literal["_parent_id", b"_parent_id"]) -> typing.Literal["parent_id"] | None: ...
+
+Global___AlterDirectoryRequest: typing_extensions.TypeAlias = AlterDirectoryRequest
+
+@typing.final
+class DeleteDirectoryRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    ID_FIELD_NUMBER: builtins.int
+    USER_ID_FIELD_NUMBER: builtins.int
+    id: builtins.str
+    user_id: builtins.str
+    def __init__(
+        self,
+        *,
+        id: builtins.str = ...,
+        user_id: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["id", b"id", "user_id", b"user_id"]) -> None: ...
+
+Global___DeleteDirectoryRequest: typing_extensions.TypeAlias = DeleteDirectoryRequest
+
+@typing.final
 class PermissionSubject(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
