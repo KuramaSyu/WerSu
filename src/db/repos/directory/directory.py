@@ -110,6 +110,14 @@ class DirectoryRepo(ABC):
         ...
 
     @abstractmethod
+    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
+        """Partially update a directory by ID.
+
+        Fields set to ``UNDEFINED`` are left unchanged.
+        """
+        ...
+
+    @abstractmethod
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
         """Fetch all directory IDs visible to a user.
 
@@ -245,6 +253,62 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
             parent_id=parent_id,
             relations=relations,
         )
+
+    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
+        if entity.id in (UNDEFINED, None):
+            raise ValueError("Directory ID is required for update")
+
+        updates: list[str] = []
+        args: list[str | None] = []
+
+        if entity.name is not UNDEFINED:
+            updates.append(f"name = ${len(args) + 1}")
+            args.append(None if entity.name is None else str(entity.name))
+        if entity.display_name is not UNDEFINED:
+            updates.append(f"display_name = ${len(args) + 1}")
+            args.append(None if entity.display_name is None else str(entity.display_name))
+        if entity.description is not UNDEFINED:
+            updates.append(f"description = ${len(args) + 1}")
+            args.append(None if entity.description is None else str(entity.description))
+        if entity.image_url is not UNDEFINED:
+            updates.append(f"image_url = ${len(args) + 1}")
+            args.append(None if entity.image_url is None else str(entity.image_url))
+
+        if updates:
+            args.append(str(entity.id))
+            query = f"""
+            UPDATE note.directory
+            SET {", ".join(updates)}
+            WHERE id = ${len(args)}
+            """
+            await self._db.execute(query, *args)
+
+        if entity.parent_id is not UNDEFINED:
+            existing = await self.fetch_directory(str(entity.id))
+            if existing is None:
+                return None
+
+            if existing.parent_id not in (UNDEFINED, None):
+                await self._permission_repo.delete(
+                    Relationship(
+                        resource=ObjectRef(object_type="directory", object_id=str(entity.id)),
+                        relation=DirectoryRelationEnum.PARENT,
+                        subject=SubjectRef(object_type="directory", object_id=str(existing.parent_id)),
+                    )
+                )
+
+            if entity.parent_id not in (None, ""):
+                await self._permission_repo.insert(
+                    [
+                        Relationship(
+                            resource=ObjectRef(object_type="directory", object_id=str(entity.id)),
+                            relation=DirectoryRelationEnum.PARENT,
+                            subject=SubjectRef(object_type="directory", object_id=str(entity.parent_id)),
+                        )
+                    ]
+                )
+
+        return await self.fetch_directory(str(entity.id))
 
     async def fetch_directories(self, user: UserContextABC) -> List[DirectoryEntity]:
         object_refs = await self._permission_repo.lookup(
