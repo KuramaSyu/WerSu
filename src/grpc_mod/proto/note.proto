@@ -77,6 +77,52 @@ message AlterNoteRequest {
     optional string author_id = 4;
 }
 
+message Directory {
+    string id = 1;
+    string name = 2;
+    string display_name = 3;
+    string description = 4;
+    string image_url = 5;
+    optional string parent_id = 6;
+    repeated PermissionRelationship relationships = 7;
+}
+
+message GetDirectoryRequest {
+    string id = 1;
+    string user_id = 2;
+}
+
+message GetDirectoriesRequest {
+    string user_id = 1;
+    optional string parent_id = 2;
+    optional int32 limit = 3;
+    optional int32 offset = 4;
+}
+
+message CreateDirectoryRequest {
+    string name = 1;
+    optional string display_name = 2;
+    optional string description = 3;
+    optional string image_url = 4;
+    optional string parent_id = 5;
+    string user_id = 6;
+}
+
+message AlterDirectoryRequest {
+    string id = 1;
+    optional string name = 2;
+    optional string display_name = 3;
+    optional string description = 4;
+    optional string image_url = 5;
+    optional string parent_id = 6;
+    string user_id = 7;
+}
+
+message DeleteDirectoryRequest {
+    string id = 1;
+    string user_id = 2;
+}
+
 enum PermissionObjectType {
     PERMISSION_OBJECT_TYPE_UNSPECIFIED = 0;
     PERMISSION_OBJECT_TYPE_NOTE = 1;
@@ -140,6 +186,14 @@ service NoteService {
     rpc PatchNote(AlterNoteRequest) returns (Note);
     rpc DeleteNote(DeleteNoteRequest) returns (Note);
     rpc SearchNotes(GetSearchNotesRequest) returns (stream MinimalNote);
+}
+
+service DirectoryService {
+    rpc GetDirectory(GetDirectoryRequest) returns (Directory);
+    rpc GetDirectories(GetDirectoriesRequest) returns (stream Directory);
+    rpc CreateDirectory(CreateDirectoryRequest) returns (Directory);
+    rpc PatchDirectory(AlterDirectoryRequest) returns (Directory);
+    rpc DeleteDirectory(DeleteDirectoryRequest) returns (Directory);
 }
 
 service PermissionService {
