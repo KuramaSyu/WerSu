@@ -264,9 +264,34 @@ class GrpcDirectoryService(DirectoryServiceServicer):
             return Directory()
 
     async def PatchDirectory(self, request: AlterDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details("PatchDirectory is not implemented")
-        return Directory()
+        try:
+            if not request.id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("id is required")
+                return Directory()
+
+            updated = await self._directory_repo.update_directory(
+                DirectoryEntity(
+                    id=request.id,
+                    name=request.name if request.HasField("name") else UNDEFINED,
+                    display_name=request.display_name if request.HasField("display_name") else UNDEFINED,
+                    description=request.description if request.HasField("description") else UNDEFINED,
+                    image_url=request.image_url if request.HasField("image_url") else UNDEFINED,
+                    parent_id=request.parent_id if request.HasField("parent_id") else UNDEFINED,
+                    relations=UNDEFINED,
+                )
+            )
+            if updated is None:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details("Directory not found")
+                return Directory()
+
+            return to_grpc_directory(updated)
+        except Exception:
+            self.log.error(f"Error patching directory: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while patching directory")
+            return Directory()
 
     async def DeleteDirectory(self, request: DeleteDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
         try:
