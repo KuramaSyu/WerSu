@@ -1,6 +1,10 @@
 from .proto.note_pb2_grpc import (
+    add_DirectoryServiceServicer_to_server,
     add_NoteServiceServicer_to_server,
     add_PermissionServiceServicer_to_server,
+    DirectoryService,
+    DirectoryServiceServicer,
+    DirectoryServiceStub,
     NoteService,
     NoteServiceServicer,
     NoteServiceStub,
@@ -9,8 +13,14 @@ from .proto.note_pb2_grpc import (
     PermissionServiceStub,
 )
 from .proto.note_pb2 import (
+    AlterDirectoryRequest,
+    CreateDirectoryRequest,
+    DeleteDirectoryRequest,
+    Directory,
     CreatePermissionRequest,
     DeletePermissionRequest,
+    GetDirectoryRequest,
+    GetDirectoriesRequest,
     GetNoteRequest,
     GetPermissionsRequest,
     GetSearchNotesRequest,
