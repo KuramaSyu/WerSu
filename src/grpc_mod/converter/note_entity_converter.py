@@ -79,7 +79,6 @@ def to_grpc_note(note_entity: NoteEntity | None) -> Note:
         **basic_args,
         updated_at=updated_at_ts,
         # embeddings disabled and reserved in proto file
-        permissions=perms,
     )
 
 def to_grpc_minimal_note(note_entity: NoteEntity) -> MinimalNote:
