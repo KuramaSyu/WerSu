@@ -1,0 +1,4 @@
+CREATE USER spicedb WITH PASSWORD 'spicedb';
+CREATE DATABASE spicedb OWNER spicedb;
+
+GRANT ALL PRIVILEGES ON DATABASE spicedb TO spicedb;

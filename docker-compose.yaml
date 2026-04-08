@@ -1,7 +1,7 @@
 services:
   postgres:
     image: pgvector/pgvector:0.8.1-pg18-trixie
-    container_name: postgres
+    container_name: postgres-wersu
     restart: always
     environment:
       POSTGRES_USER: postgres
@@ -11,6 +11,13 @@ services:
       - "5433:5432"
     volumes:
       - ./data/pgvector:/var/lib/postgresql
+      - ./pgvector_init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "psql -U spicedb -d spicedb -c 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   pgweb:
     container_name: pgweb_helper
@@ -23,16 +30,40 @@ services:
     environment:
       - PGWEB_DATABASE_URL=postgres://postgres:postgres@postgres:5432/db?sslmode=disable
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+
+  # when using postgres as datastore for spicedb, we need to run the migrate command before starting the server
+  spicedb-migrate:
+    image: authzed/spicedb:latest
+    container_name: spicedb-migrate
+    command:
+      - datastore
+      - migrate
+      - head
+      - --datastore-engine=postgres
+      - --datastore-conn-uri=postgres://spicedb:spicedb@postgres:5432/spicedb?sslmode=disable
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
       
   spicedb:
     image: authzed/spicedb:latest
     container_name: spicedb
     command:
       - serve
-      - --http-enabled=true
+      - --http-enabled=false
       - --grpc-preshared-key=somerandomkeyhere
+      - --datastore-engine=postgres
+      # user is created in the pgvector_init.sql
+      - --datastore-conn-uri=postgres://spicedb:spicedb@postgres:5432/spicedb?sslmode=disable  
     ports:
       - "50051:50051" # gRPC
       - "8443:8443"   # HTTP
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      spicedb-migrate:
+        condition: service_completed_successfully
