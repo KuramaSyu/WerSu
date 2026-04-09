@@ -121,6 +121,7 @@ class WebNoteSearchStrategy(NoteSearchStrategy):
     """
     
     async def search(self) -> list["NoteEntity"]:
+        note_ids = await self._get_user_note_ids()
         query = f"""
         SELECT id, title, author_id, content, updated_at,
             ts_rank(
@@ -129,13 +130,13 @@ class WebNoteSearchStrategy(NoteSearchStrategy):
             ) AS fts_rank
         FROM note.content
         WHERE 
-            author_id = $2
+            id = ANY($2)
             AND search_vector @@ websearch_to_tsquery('english', $1)
         ORDER BY fts_rank DESC
         LIMIT {self.limit}
         OFFSET {self.offset};
         """
-        records = await self.db.fetch(query, self.query, self.user_context.user_id)
+        records = await self.db.fetch(query, self.query, note_ids)
         if not records:
             raise RuntimeError("Failed to fetch notes by exact title.")
         return [NoteEntity.from_record(record) for record in records]
@@ -145,15 +146,16 @@ class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
     """Return notes where the title or content is similar to the query"""
     
     async def search(self) -> list["NoteEntity"]:
+        note_ids = await self._get_user_note_ids()
         query = f"""
         SELECT id, title, author_id, content, updated_at
         FROM note.content
-        WHERE author_id = $2
+        WHERE id = ANY($2)
         ORDER BY similarity(title || ' ' || content, $1) DESC
         LIMIT {self.limit}
         OFFSET {self.offset};
         """
-        records = await self.db.fetch(query, self.query, self.user_context.user_id)
+        records = await self.db.fetch(query, self.query, note_ids)
         if not records:
             raise RuntimeError("Failed to fetch notes by fuzzy title/content.")
         return [NoteEntity.from_record(record) for record in records]
