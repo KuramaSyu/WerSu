@@ -351,6 +351,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         )
 
     async def insert(self, relationships: List[Relationship]) -> List[Relationship]:
+        # SpiceDB bulk import API consumes a request stream; we send a single batched request.
         requests = [ImportBulkRelationshipsRequest(
             relationships=[self.converter.convert_relationship(rel) for rel in relationships]
         )]
@@ -366,6 +367,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
             assert rel.resource.object_id != UNDEFINED, "object_id must be provided for delete operation"
             assert rel.subject.object_id != UNDEFINED, "subject_id must be provided for delete operation"
             
+            # Build the fully-qualified tuple filter for the specific relationship.
             filter = RelationshipFilter(
                 resource_type=rel.resource.object_type,
                 optional_resource_id=str(rel.resource.object_id),
@@ -402,6 +404,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         if relationship.subject.object_id != UNDEFINED:
             filter.optional_subject_filter
         
+        # LookupResources resolves effective permission, not only direct tuples.
         result = self.client.LookupResources(
             LookupResourcesRequest(
                 resource_object_type=relationship.resource.object_type,
@@ -440,6 +443,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
 
         relationships: List[Relationship] = []
         async for response in response_stream:
+            # Export API is paged/streamed, so flatten every message into the result list.
             for stored in response.relationships:
                 relationships.append(
                     Relationship(
@@ -476,6 +480,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         if resource.object_id != UNDEFINED:
             relation_filter.optional_resource_id = str(resource.object_id)
 
+        # Export direct tuples for a resource type/id and map them back to domain entities.
         response_stream = self.client.ExportBulkRelationships(
             ExportBulkRelationshipsRequest(optional_relationship_filter=relation_filter)
         )
@@ -528,6 +533,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         candidates = self._permission_candidates_by_object_type.get(resource.object_type, [])
         permissions: List[str] = []
         for permission in candidates:
+            # Evaluate candidate permissions one by one through SpiceDB CheckPermission.
             if await self.has_permission(user=user, permission=permission, resource=resource):
                 permissions.append(permission)
         return permissions
