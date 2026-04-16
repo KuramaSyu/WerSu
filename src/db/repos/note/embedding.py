@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 
-from typing import TYPE_CHECKING, Any, List, Protocol, Sequence
+from typing import TYPE_CHECKING, Any, Dict, List, Protocol, Sequence
 
 from asyncpg import Record
+from src.api.undefined import UNDEFINED
 from src.db.entities import NoteEmbeddingEntity
 from src.db.table import TableABC
 
@@ -59,7 +60,7 @@ class NoteEmbeddingRepo(ABC):
         ...
 
     @abstractmethod
-    async def update(
+    async def _update(
         self,
         set: NoteEmbeddingEntity,
         where: NoteEmbeddingEntity,
@@ -68,13 +69,40 @@ class NoteEmbeddingRepo(ABC):
         
         Args:
         -----
-        embedding: `NoteEmbeddingEntity`
-            the embedding of a note
+        set: `NoteEmbeddingEntity`
+            the fields to update (note_id and model should be UNDEFINED, only embedding should be set)
+        where: `NoteEmbeddingEntity`
+            the conditions to find the embedding to update (only note_id should be set, model and embedding should be UNDEFINED)
 
         Returns:
         --------
         `NoteEmbeddingEntity`:
             the updated entity
+        """
+        ...
+
+    @abstractmethod
+    async def update(
+        self,
+        note_id: str,
+        title: str,
+        content: str,
+    ) -> NoteEmbeddingEntity:
+        """generates the embedding and upserts it (update if exists, insert if not)
+        
+        Args:
+        -----
+        note_id: `str`
+            the ID of the note
+        title: `str`
+            the note title, used to generate the embedding
+        content: `str`
+            the note content, used to generate the embedding
+
+        Returns:
+        --------
+        `NoteEmbeddingEntity`:
+            the updated embedding (updated ID)
         """
         ...
 
@@ -152,9 +180,30 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
         )
         return embedding
 
-    async def update(self, set: NoteEmbeddingEntity, where: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
+    async def update(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:      
+        # generate embedding
+        embedding_content = f"{title}\n{content}"
+        embedding = self._embedding_generator.generate(embedding_content)
+        embedding_seq = self._embedding_generator.tensor_to_sequence(embedding)
+
+        # make entity with just the embedding (update fields)
+        update_fields = NoteEmbeddingEntity(note_id=UNDEFINED, model=UNDEFINED, embedding=embedding_seq)
+        
+        # now update it by note_id
+        return await self._update(
+            set=update_fields,
+            where=NoteEmbeddingEntity(note_id, UNDEFINED, UNDEFINED)
+        )
+
+    async def _update(self, set: NoteEmbeddingEntity, where: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
+        set_dict = asdict(set)
+        if isinstance(set.embedding, list):
+            set_dict["embedding"] = self._embedding_generator.list_to_str_vec(set.embedding) 
+        where_dict = asdict(where)
+        if isinstance(where.embedding, list):
+            where_dict["embedding"] = self._embedding_generator.list_to_str_vec(where.embedding) 
         record = await self._table.update(
-            set=asdict(set),
+            set=set_dict,
             where=asdict(where)
         )
         if not record:
