@@ -15,7 +15,7 @@ def _str_vec_to_list(vec_str: str) -> Sequence[float]:
 class NoteEmbeddingEntity:
     """Represents one record of note.embedding which contains the model which craeted the embedding,
     the embedding and the note it belongs to"""
-    note_id: str
+    note_id: UndefinedOr[str]
     model: UndefinedOr[str]
     embedding: UndefinedOr[Sequence[float]]
 
