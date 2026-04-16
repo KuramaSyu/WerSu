@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Sequence
+from typing import List, Sequence
 
 from src.api.undefined import *
 
 
-def _str_vec_to_list(vec_str: str) -> Sequence[float]:
+def _str_vec_to_list(vec_str: str) -> List[float]:
     vec_str = vec_str.strip().lstrip("[").rstrip("]")
     if not vec_str:
         return []
@@ -17,7 +17,7 @@ class NoteEmbeddingEntity:
     the embedding and the note it belongs to"""
     note_id: UndefinedOr[str]
     model: UndefinedOr[str]
-    embedding: UndefinedOr[Sequence[float]]
+    embedding: UndefinedOr[List[float]]
 
     def __post_init__(self):
         if isinstance(self.embedding, str):

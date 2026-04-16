@@ -21,8 +21,8 @@ class NoteEntity:
     updated_at: UndefinedNoneOr[datetime] = UNDEFINED
     author_id: UndefinedNoneOr[str] = UNDEFINED
     content: UndefinedNoneOr[str] = UNDEFINED
-    embeddings: UndefinedOr[Sequence[NoteEmbeddingEntity]] = UNDEFINED
-    permissions: UndefinedOr[Sequence[Relationship]] = UNDEFINED
+    embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED
+    permissions: UndefinedOr[List[Relationship]] = UNDEFINED
     parent_dir_id: UndefinedOr[str] = UNDEFINED
 
     @staticmethod
