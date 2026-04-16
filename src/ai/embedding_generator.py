@@ -46,6 +46,30 @@ class EmbeddingGeneratorABC(ABC):
         return f"[{','.join(str(x) for x in tensor.tolist())}]"
 
     @staticmethod
+    def tensor_to_sequence(tensor: Tensor) -> Sequence[float]:
+        """
+        Convert a tensor to a sequence of floats.
+
+        Args
+        ----
+        tensor : Tensor
+            A tensor-like object that implements tolist() (e.g., torch.Tensor,
+            numpy.ndarray). Intended for 1-D tensors.
+        
+        Returns
+        -------
+        Sequence[float]
+            A sequence of floats extracted from the tensor.
+
+        Examples
+        ---------
+        - 1-D tensor `[1.0, 2.0, 3.0]` -> `[1.0, 2.0, 3.0]`
+        - 2-D tensor `[[1, 2], [3, 4]]` -> `[1.0, 2.0, 3.0, 4.0]`
+        """
+        return [float(x) for x in tensor.tolist()]
+       
+
+    @staticmethod
     def str_vec_to_list(vec_str: str) -> Sequence[float]:
         """
         Convert a string representation of a vector back to a list of floats.
@@ -70,6 +94,28 @@ class EmbeddingGeneratorABC(ABC):
         if not vec_str:
             return []
         return [float(x) for x in vec_str.split(",")]
+
+    @staticmethod
+    def list_to_str_vec(vec_list: Sequence[float]) -> str:
+        """
+        Convert a list of floats to a string representation of a vector.
+
+        Args
+        ----
+        vec_list : Sequence[float]
+            A sequence of floats to be converted into a string representation.
+
+        Returns
+        -------
+        str
+            A string representing the list as a bracketed, comma-separated vector.
+
+        Examples
+        ---------
+        - Input: `[1.0, 2.0, 3.0]` -> Output: `"[1.0,2.0,3.0]"`
+        - Input: `[[1.0, 2.0], [3.0, 4.0]]` -> Output: `"[[1.0,2.0],[3.0,4.0]]"`
+        """
+        return f"[{','.join(str(x) for x in vec_list)}]"
 
     @property
     @abstractmethod
