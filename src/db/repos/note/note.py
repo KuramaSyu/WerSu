@@ -282,22 +282,21 @@ class NoteRepoFacade(NoteRepoFacadeABC):
     
     async def update(self, note: NoteEntity, ctx: UserContext) -> NoteEntity:
         # update content
-        note_entity = await self._content_repo.update(
+        _updated_note_entity = await self._content_repo.update(
             set=replace(note, embeddings=UNDEFINED, permissions=UNDEFINED, note_id=UNDEFINED),
             where=NoteEntity(note_id=note.note_id)
         )
 
         # update embedding
-        note.embeddings = []
         if note.content and note.note_id:
             embedding = await self._embedding_repo.update(
                 note.note_id,
                 note.title if note.title else "",
                 note.content
             )
-            note.embeddings.append(embedding)
+            note.embeddings = [embedding]
         
-        return note_entity
+        return note
 
     async def delete(self, note_id: str, ctx: UserContext) -> Optional[List[NoteEntity]]:
         return await self._content_repo.delete(NoteEntity(note_id=note_id, author_id=ctx.user_id))
