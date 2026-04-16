@@ -235,10 +235,6 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         # insert embeddings
         assert note.embeddings == [] or note.embeddings is UNDEFINED
         note.embeddings = []
-        query = f"""
-        INSERT INTO {self.embedding_table_name}(note_id, model, embedding)
-        VALUES ($1, $2, $3)
-        """
         if note.content:
             embedding = await self._embedding_repo.insert(
                 note_id,
@@ -291,9 +287,16 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             where=NoteEntity(note_id=note.note_id)
         )
 
-        # add removed embeddings and permissions
-        note_entity.embeddings = note.embeddings or []
-        note_entity.permissions = note.permissions or []
+        # update embedding
+        note.embeddings = []
+        if note.content and note.note_id:
+            embedding = await self._embedding_repo.update(
+                note.note_id,
+                note.title if note.title else "",
+                note.content
+            )
+            note.embeddings.append(embedding)
+        
         return note_entity
 
     async def delete(self, note_id: str, ctx: UserContext) -> Optional[List[NoteEntity]]:
@@ -367,7 +370,7 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             for obj in objects:
                 note_id = obj.object_id
                 if note_id not in (UNDEFINED, None) and note_entities_dict.get(note_id):
-                    note_entities_dict[note_id].permissions.append(Relationship(
+                    note_entities_dict[note_id].permissions.append(Relationship(  # type: ignore
                         resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
                         relation=NoteRelationEnum.PARENT_DIRECTORY,
                         subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directory_id)
