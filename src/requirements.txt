@@ -1,14 +1,10 @@
-
 numpy
 pandas
 requests
 grpclib
 python-dotenv
-
 asyncpg
-
 torch
 sentence-transformers
-
 colorama
 authzed

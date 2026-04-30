@@ -3,9 +3,10 @@ from datetime import datetime
 from enum import Enum
 
 import numpy as np
-from typing import List, Any, Sequence
 
-from torch import Tensor
+from typing import TYPE_CHECKING, List, Any, Sequence
+
+from tensorflow import Tensor
 from src.api import LoggingProvider
 
 
