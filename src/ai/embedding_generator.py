@@ -6,7 +6,7 @@ import numpy as np
 
 from typing import TYPE_CHECKING, List, Any, Sequence
 
-from tensorflow import Tensor
+from torch import Tensor
 from src.api import LoggingProvider
 
 
