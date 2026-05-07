@@ -67,3 +67,23 @@ services:
         condition: service_healthy
       spicedb-migrate:
         condition: service_completed_successfully
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: i-will-find-it-app
+    restart: unless-stopped
+    environment:
+      DATABASE_DSN: postgres://postgres:postgres@postgres:5432/db?sslmode=disable
+      GRPC_HOST: 0.0.0.0
+      GRPC_PORT: "50052"
+      GRPC_SPICEDB_CREDENTIALS: SOME_LONG_PASSWORD
+      GRPC_SPICEDB_ADDRESS: spicedb:50051
+    ports:
+      - "50052:50052"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      spicedb:
+        condition: service_started
