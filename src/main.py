@@ -9,7 +9,6 @@ from typing import Optional, Callable
 from authzed.api.v1 import AsyncClient
 import grpc
 from colorama import Fore, Style, init
-from grpcutil import insecure_bearer_token_credentials
 
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
@@ -29,6 +28,7 @@ from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteRepoFacade
 from src.grpc_mod.service import GrpcDirectoryService, GrpcNoteService, GrpcPermissionService, GrpcUserService
 from src.ai.embedding_generator import EmbeddingGenerator, Models
+from src.utils.spicedb_client import create_spicedb_async_client
 
 
 
@@ -75,9 +75,9 @@ async def serve():
 
     # connect to spicedb permission service
     log.info("Connecting to SpiceDB permission service...")
-    spicedb_client = AsyncClient(
-        grpc_spicedb_address,
-        insecure_bearer_token_credentials(grpc_spicedb_credentials)
+    spicedb_client = create_spicedb_async_client(
+        target=grpc_spicedb_address,
+        bearer_token=grpc_spicedb_credentials,
     )
 
     # run migrations with dependency container

@@ -78,7 +78,7 @@ services:
       DATABASE_DSN: postgres://postgres:postgres@postgres:5432/db?sslmode=disable
       GRPC_HOST: 0.0.0.0
       GRPC_PORT: "50052"
-      GRPC_SPICEDB_CREDENTIALS: SOME_LONG_PASSWORD
+      GRPC_SPICEDB_CREDENTIALS: somerandomkeyhere
       GRPC_SPICEDB_ADDRESS: spicedb:50051
     ports:
       - "50052:50052"
