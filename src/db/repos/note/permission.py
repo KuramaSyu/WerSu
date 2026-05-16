@@ -4,9 +4,13 @@ from enum import StrEnum
 from operator import ge
 import re
 from typing import Any, List, Literal, Optional, Protocol, TypeAlias, cast
+from functools import wraps
+import inspect
 
 from asyncpg import Record
 from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest, ImportBulkRelationshipsRequest
+import grpc
+from src.api.service_unavailable_error import ServiceUnavailableError
 from src.api.user_context import UserContextABC
 from src.db.table import TableABC
 from src.utils import asdict
@@ -331,6 +335,86 @@ class NotePermissionRepo(ABC):
         ...
 
     
+def handle_error(func):
+    """Decorator for instance methods that wraps exceptions using `self._wrap_grpc_error`.
+
+    Works with async and sync methods.
+    """
+    if inspect.iscoroutinefunction(func):
+        @wraps(func)
+        async def _async_wrapper(self, *args, **kwargs):
+            try:
+                return await func(self, *args, **kwargs)
+            except Exception as e:
+                if isinstance(e, grpc.aio.AioRpcError) and e.code() == grpc.StatusCode.UNAVAILABLE:
+                    address = None
+                    client = getattr(self, "client", None)
+                    if client is not None:
+                        # try known channel locations safely
+                        ch = getattr(client, "_channel", None)
+                        try:
+                            if ch is not None and hasattr(ch, "target"):
+                                address = ch.target()
+                        except Exception:
+                            address = None
+
+                        if address is None:
+                            trans = getattr(client, "_transport", None)
+                            if trans is not None:
+                                ch2 = getattr(trans, "_channel", None)
+                                try:
+                                    if ch2 is not None and hasattr(ch2, "target"):
+                                        address = ch2.target()
+                                except Exception:
+                                    address = None
+
+                        if address is None:
+                            maybe_target = getattr(client, "target", None)
+                            if isinstance(maybe_target, str):
+                                address = maybe_target
+
+                    raise ServiceUnavailableError(name="SpiceDB", address=address)
+                raise
+
+        return _async_wrapper
+
+    @wraps(func)
+    def _sync_wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except Exception as e:
+            if isinstance(e, grpc.aio.AioRpcError) and e.code() == grpc.StatusCode.UNAVAILABLE:
+                address = None
+                client = getattr(self, "client", None)
+                if client is not None:
+                    ch = getattr(client, "_channel", None)
+                    try:
+                        if ch is not None and hasattr(ch, "target"):
+                            address = ch.target()
+                    except Exception:
+                        address = None
+
+                    if address is None:
+                        trans = getattr(client, "_transport", None)
+                        if trans is not None:
+                            ch2 = getattr(trans, "_channel", None)
+                            try:
+                                if ch2 is not None and hasattr(ch2, "target"):
+                                    address = ch2.target()
+                            except Exception:
+                                address = None
+
+                    if address is None:
+                        maybe_target = getattr(client, "target", None)
+                        if isinstance(maybe_target, str):
+                            address = maybe_target
+
+                raise ServiceUnavailableError(name="SpiceDB", address=address)
+            raise
+
+    return _sync_wrapper
+
+
 class NotePermissionRepoSpicedb(NotePermissionRepo):
     converter = SpicedbPermissionConverter()
     _default_permission_candidates_by_object_type = {
@@ -350,6 +434,16 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
             else self._default_permission_candidates_by_object_type
         )
 
+    
+    def _wrap_grpc_error(self, error: Exception) -> Exception:
+        """
+        Wraps gRPC errors in a ServiceUnavailableError if they indicate that SpiceDB is unavailable.
+        """
+        if isinstance(error, grpc.aio.AioRpcError) and error.code() == grpc.StatusCode.UNAVAILABLE:
+            return ServiceUnavailableError(name="SpiceDB", address=self.client._channel.target())
+        return error
+
+    @handle_error
     async def insert(self, relationships: List[Relationship]) -> List[Relationship]:
         # SpiceDB bulk import API consumes a request stream; we send a single batched request.
         requests = [ImportBulkRelationshipsRequest(
@@ -358,15 +452,16 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         await self.client.ImportBulkRelationships((req for req in requests))
         return relationships
 
+    @handle_error
     async def delete(self, relationship: Relationship) -> Relationship:
         # spicedb does not support bulk delete, so we need to delete one by one
         deleted_relationships = []
         filter = RelationshipFilter()
-        
+
         def get_filter(rel: Relationship) -> RelationshipFilter:
             assert rel.resource.object_id != UNDEFINED, "object_id must be provided for delete operation"
             assert rel.subject.object_id != UNDEFINED, "subject_id must be provided for delete operation"
-            
+
             # Build the fully-qualified tuple filter for the specific relationship.
             filter = RelationshipFilter(
                 resource_type=rel.resource.object_type,
@@ -374,21 +469,22 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
                 optional_relation=rel.relation,
                 optional_subject_filter=SubjectFilter(
                     subject_type=rel.subject.object_type,
-                    optional_subject_id=str(rel.subject.object_id)
+                    optional_subject_id=str(rel.subject.object.object_id)
                 )
             )
             return filter
-       
-        
+
+
         result = await self.client.DeleteRelationships(
             DeleteRelationshipsRequest(
                 relationship_filter=get_filter(relationship)
             )
         )
-        
+
         assert result.DELETION_PROGRESS_COMPLETE
         return relationship
 
+    @handle_error
     async def lookup(self, relationship: Relationship) -> List[ObjectRef]:
         # spicedb does not support bulk lookup, so we need to lookup one by one
         filter = RelationshipFilter(
@@ -424,6 +520,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         return objects
 
 
+    @handle_error
     async def lookup_relationships(self, relationship: Relationship) -> List[Relationship]:
         subject_filter = SubjectFilter(subject_type=relationship.subject.object_type)
         if relationship.subject.object_id != UNDEFINED:
@@ -475,6 +572,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         )
         return await self.lookup(relationship)
 
+    @handle_error
     async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
         relation_filter = RelationshipFilter(resource_type=resource.object_type)
         if resource.object_id != UNDEFINED:
@@ -527,6 +625,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         )
         return response.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
 
+    @handle_error
     async def get_permissions(self, user: UserContextABC, resource: ObjectRef) -> List[str]:
         assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
 
