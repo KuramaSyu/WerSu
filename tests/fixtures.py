@@ -10,6 +10,7 @@ from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
 from src.db.repos.note.note import NoteRepoFacade, NoteRepoFacadeABC
+from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.note.permission import NotePermissionRepoInMemory
 from src.db.table import Table
 from src.db.entities.user.user import UserEntity
@@ -104,7 +105,9 @@ async def db(dsn):
     TRUNCATE TABLE
         users,
         note.directory,
-        note.content
+        note.content,
+        note.version_snapshot,
+        note.version_delta
     CASCADE;
     """)
 
@@ -126,6 +129,23 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
         id_fields=["note_id", "model"],
         error_log=True
     )
+    version_snapshot_table = Table(
+        **common_table_kwargs,
+        table_name="note.version_snapshot",
+        id_fields=["snapshot_id"],
+        error_log=True,
+    )
+    version_delta_table = Table(
+        **common_table_kwargs,
+        table_name="note.version_delta",
+        id_fields=["delta_id"],
+        error_log=True,
+    )
+    version_repo = NoteVersionPostgresRepo(
+        snapshot_table=version_snapshot_table,
+        delta_table=version_delta_table,
+        max_deltas_per_snapshot=2,
+    )
 
     repo = NoteRepoFacade(
         db=db,
@@ -140,7 +160,8 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
         # TODO: testing with SpiceDB could get hard. Maybe make a Fake which does not do any checks 
         permission_repo=NotePermissionRepoInMemory(),
         directory_repo=_TestDirectoryRepo(),
-        logging_provider=logging_provider
+        logging_provider=logging_provider,
+        version_repo=version_repo,
     )
     return repo
 
