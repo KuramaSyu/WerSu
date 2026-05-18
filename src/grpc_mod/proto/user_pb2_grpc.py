@@ -5,7 +5,7 @@ import warnings
 
 from src.grpc_mod.proto import user_pb2 as src_dot_grpc__mod_dot_proto_dot_user__pb2
 
-GRPC_GENERATED_VERSION = '1.76.0'
+GRPC_GENERATED_VERSION = '1.80.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 

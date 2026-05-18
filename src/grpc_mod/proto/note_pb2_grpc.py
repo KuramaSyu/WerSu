@@ -5,7 +5,7 @@ import warnings
 
 from src.grpc_mod.proto import note_pb2 as src_dot_grpc__mod_dot_proto_dot_note__pb2
 
-GRPC_GENERATED_VERSION = '1.76.0'
+GRPC_GENERATED_VERSION = '1.80.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -706,6 +706,164 @@ class PermissionService(object):
             '/proto.PermissionService/ReplacePermissions',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.ReplacePermissionsRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
+class NoteVersionServiceStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.GetNoteVersions = channel.unary_stream(
+                '/proto.NoteVersionService/GetNoteVersions',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionsRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.FromString,
+                _registered_method=True)
+        self.GetNoteVersionContent = channel.unary_unary(
+                '/proto.NoteVersionService/GetNoteVersionContent',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionContentRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionContent.FromString,
+                _registered_method=True)
+        self.RestoreNoteVersion = channel.unary_unary(
+                '/proto.NoteVersionService/RestoreNoteVersion',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.RestoreNoteVersionRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+                _registered_method=True)
+
+
+class NoteVersionServiceServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def GetNoteVersions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetNoteVersionContent(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RestoreNoteVersion(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_NoteVersionServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'GetNoteVersions': grpc.unary_stream_rpc_method_handler(
+                    servicer.GetNoteVersions,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionsRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.SerializeToString,
+            ),
+            'GetNoteVersionContent': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetNoteVersionContent,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionContentRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionContent.SerializeToString,
+            ),
+            'RestoreNoteVersion': grpc.unary_unary_rpc_method_handler(
+                    servicer.RestoreNoteVersion,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.RestoreNoteVersionRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'proto.NoteVersionService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('proto.NoteVersionService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class NoteVersionService(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def GetNoteVersions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/proto.NoteVersionService/GetNoteVersions',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionsRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetNoteVersionContent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.NoteVersionService/GetNoteVersionContent',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionContentRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionContent.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RestoreNoteVersion(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.NoteVersionService/RestoreNoteVersion',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.RestoreNoteVersionRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
             options,
             channel_credentials,
             insecure,

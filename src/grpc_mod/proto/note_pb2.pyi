@@ -3,29 +3,29 @@
 isort:skip_file
 """
 
-import builtins
-import collections.abc
-import google.protobuf.descriptor
-import google.protobuf.internal.containers
-import google.protobuf.internal.enum_type_wrapper
-import google.protobuf.message
-import google.protobuf.timestamp_pb2
+from collections import abc as _abc
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import message as _message
+from google.protobuf import timestamp_pb2 as _timestamp_pb2
+from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+import builtins as _builtins
 import sys
-import typing
+import typing as _typing
 
-if sys.version_info >= (3, 10):
-    import typing as typing_extensions
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    import typing_extensions
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
-DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+DESCRIPTOR: _descriptor.FileDescriptor
 
 class _PermissionObjectType:
-    ValueType = typing.NewType("ValueType", builtins.int)
-    V: typing_extensions.TypeAlias = ValueType
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
 
-class _PermissionObjectTypeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_PermissionObjectType.ValueType], builtins.type):
-    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+class _PermissionObjectTypeEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_PermissionObjectType.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
     PERMISSION_OBJECT_TYPE_UNSPECIFIED: _PermissionObjectType.ValueType  # 0
     PERMISSION_OBJECT_TYPE_NOTE: _PermissionObjectType.ValueType  # 1
     PERMISSION_OBJECT_TYPE_DIRECTORY: _PermissionObjectType.ValueType  # 2
@@ -37,38 +37,42 @@ PERMISSION_OBJECT_TYPE_UNSPECIFIED: PermissionObjectType.ValueType  # 0
 PERMISSION_OBJECT_TYPE_NOTE: PermissionObjectType.ValueType  # 1
 PERMISSION_OBJECT_TYPE_DIRECTORY: PermissionObjectType.ValueType  # 2
 PERMISSION_OBJECT_TYPE_USER: PermissionObjectType.ValueType  # 3
-Global___PermissionObjectType: typing_extensions.TypeAlias = PermissionObjectType
+Global___PermissionObjectType: _TypeAlias = PermissionObjectType  # noqa: Y015
 
-@typing.final
-class GetNoteRequest(google.protobuf.message.Message):
+@_typing.final
+class GetNoteRequest(_message.Message):
     """Request for getting a note by id"""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ID_FIELD_NUMBER: builtins.int
-    USER_ID_FIELD_NUMBER: builtins.int
-    id: builtins.str
-    user_id: builtins.str
+    ID_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
-        id: builtins.str = ...,
-        user_id: builtins.str = ...,
+        id: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["id", b"id", "user_id", b"user_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___GetNoteRequest: typing_extensions.TypeAlias = GetNoteRequest
+Global___GetNoteRequest: _TypeAlias = GetNoteRequest  # noqa: Y015
 
-@typing.final
-class GetSearchNotesRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class GetSearchNotesRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
     class _SearchType:
-        ValueType = typing.NewType("ValueType", builtins.int)
-        V: typing_extensions.TypeAlias = ValueType
+        ValueType = _typing.NewType("ValueType", _builtins.int)
+        V: _TypeAlias = ValueType  # noqa: Y015
 
-    class _SearchTypeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[GetSearchNotesRequest._SearchType.ValueType], builtins.type):
-        DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+    class _SearchTypeEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[GetSearchNotesRequest._SearchType.ValueType], _builtins.type):
+        DESCRIPTOR: _descriptor.EnumDescriptor
         Undefined: GetSearchNotesRequest._SearchType.ValueType  # 0
         """default"""
         NoSearch: GetSearchNotesRequest._SearchType.ValueType  # 1
@@ -92,562 +96,823 @@ class GetSearchNotesRequest(google.protobuf.message.Message):
     Context: GetSearchNotesRequest.SearchType.ValueType  # 4
     """semantic search using embeddings"""
 
-    SEARCH_TYPE_FIELD_NUMBER: builtins.int
-    QUERY_FIELD_NUMBER: builtins.int
-    LIMIT_FIELD_NUMBER: builtins.int
-    OFFSET_FIELD_NUMBER: builtins.int
-    USER_ID_FIELD_NUMBER: builtins.int
+    SEARCH_TYPE_FIELD_NUMBER: _builtins.int
+    QUERY_FIELD_NUMBER: _builtins.int
+    LIMIT_FIELD_NUMBER: _builtins.int
+    OFFSET_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     search_type: Global___GetSearchNotesRequest.SearchType.ValueType
     """Search parameters"""
-    query: builtins.str
-    limit: builtins.int
+    query: _builtins.str
+    limit: _builtins.int
     """Pagination"""
-    offset: builtins.int
-    user_id: builtins.str
+    offset: _builtins.int
+    user_id: _builtins.str
     """authentication"""
     def __init__(
         self,
         *,
         search_type: Global___GetSearchNotesRequest.SearchType.ValueType = ...,
-        query: builtins.str = ...,
-        limit: builtins.int = ...,
-        offset: builtins.int = ...,
-        user_id: builtins.str = ...,
+        query: _builtins.str = ...,
+        limit: _builtins.int = ...,
+        offset: _builtins.int = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["limit", b"limit", "offset", b"offset", "query", b"query", "search_type", b"search_type", "user_id", b"user_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["limit", b"limit", "offset", b"offset", "query", b"query", "search_type", b"search_type", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___GetSearchNotesRequest: typing_extensions.TypeAlias = GetSearchNotesRequest
+Global___GetSearchNotesRequest: _TypeAlias = GetSearchNotesRequest  # noqa: Y015
 
-@typing.final
-class MinimalNote(google.protobuf.message.Message):
+@_typing.final
+class MinimalNote(_message.Message):
     """Response: represents a minimal Note for search results"""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ID_FIELD_NUMBER: builtins.int
-    TITLE_FIELD_NUMBER: builtins.int
-    AUTHOR_ID_FIELD_NUMBER: builtins.int
-    UPDATED_AT_FIELD_NUMBER: builtins.int
-    STRIPPED_CONTENT_FIELD_NUMBER: builtins.int
-    PERMISSIONS_FIELD_NUMBER: builtins.int
-    id: builtins.str
+    ID_FIELD_NUMBER: _builtins.int
+    TITLE_FIELD_NUMBER: _builtins.int
+    AUTHOR_ID_FIELD_NUMBER: _builtins.int
+    UPDATED_AT_FIELD_NUMBER: _builtins.int
+    STRIPPED_CONTENT_FIELD_NUMBER: _builtins.int
+    PERMISSIONS_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
     """Note ID (UUIDv4 string)"""
-    title: builtins.str
-    author_id: builtins.str
-    stripped_content: builtins.str
-    @property
-    def updated_at(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
-    @property
-    def permissions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
+    title: _builtins.str
+    author_id: _builtins.str
+    stripped_content: _builtins.str
+    @_builtins.property
+    def updated_at(self) -> _timestamp_pb2.Timestamp: ...
+    @_builtins.property
+    def permissions(self) -> _containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
     def __init__(
         self,
         *,
-        id: builtins.str = ...,
-        title: builtins.str = ...,
-        author_id: builtins.str = ...,
-        updated_at: google.protobuf.timestamp_pb2.Timestamp | None = ...,
-        stripped_content: builtins.str = ...,
-        permissions: collections.abc.Iterable[Global___PermissionRelationship] | None = ...,
+        id: _builtins.str = ...,
+        title: _builtins.str = ...,
+        author_id: _builtins.str = ...,
+        updated_at: _timestamp_pb2.Timestamp | None = ...,
+        stripped_content: _builtins.str = ...,
+        permissions: _abc.Iterable[Global___PermissionRelationship] | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["updated_at", b"updated_at"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["author_id", b"author_id", "id", b"id", "permissions", b"permissions", "stripped_content", b"stripped_content", "title", b"title", "updated_at", b"updated_at"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["updated_at", b"updated_at"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "id", b"id", "permissions", b"permissions", "stripped_content", b"stripped_content", "title", b"title", "updated_at", b"updated_at"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___MinimalNote: typing_extensions.TypeAlias = MinimalNote
+Global___MinimalNote: _TypeAlias = MinimalNote  # noqa: Y015
 
-@typing.final
-class Note(google.protobuf.message.Message):
+@_typing.final
+class Note(_message.Message):
     """Response: represents a Note"""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ID_FIELD_NUMBER: builtins.int
-    TITLE_FIELD_NUMBER: builtins.int
-    CONTENT_FIELD_NUMBER: builtins.int
-    UPDATED_AT_FIELD_NUMBER: builtins.int
-    AUTHOR_ID_FIELD_NUMBER: builtins.int
-    PERMISSIONS_FIELD_NUMBER: builtins.int
-    id: builtins.str
-    title: builtins.str
-    content: builtins.str
-    author_id: builtins.str
-    @property
-    def updated_at(self) -> google.protobuf.timestamp_pb2.Timestamp: ...
-    @property
-    def permissions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]:
+    ID_FIELD_NUMBER: _builtins.int
+    TITLE_FIELD_NUMBER: _builtins.int
+    CONTENT_FIELD_NUMBER: _builtins.int
+    UPDATED_AT_FIELD_NUMBER: _builtins.int
+    AUTHOR_ID_FIELD_NUMBER: _builtins.int
+    PERMISSIONS_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    title: _builtins.str
+    content: _builtins.str
+    author_id: _builtins.str
+    @_builtins.property
+    def updated_at(self) -> _timestamp_pb2.Timestamp: ...
+    @_builtins.property
+    def permissions(self) -> _containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]:
         """repeated NoteEmbedding embeddings = 6;"""
 
     def __init__(
         self,
         *,
-        id: builtins.str = ...,
-        title: builtins.str = ...,
-        content: builtins.str = ...,
-        updated_at: google.protobuf.timestamp_pb2.Timestamp | None = ...,
-        author_id: builtins.str = ...,
-        permissions: collections.abc.Iterable[Global___PermissionRelationship] | None = ...,
+        id: _builtins.str = ...,
+        title: _builtins.str = ...,
+        content: _builtins.str = ...,
+        updated_at: _timestamp_pb2.Timestamp | None = ...,
+        author_id: _builtins.str = ...,
+        permissions: _abc.Iterable[Global___PermissionRelationship] | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["updated_at", b"updated_at"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["author_id", b"author_id", "content", b"content", "id", b"id", "permissions", b"permissions", "title", b"title", "updated_at", b"updated_at"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["updated_at", b"updated_at"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "content", b"content", "id", b"id", "permissions", b"permissions", "title", b"title", "updated_at", b"updated_at"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___Note: typing_extensions.TypeAlias = Note
+Global___Note: _TypeAlias = Note  # noqa: Y015
 
-@typing.final
-class NoteEmbedding(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class NoteEmbedding(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    MODEL_FIELD_NUMBER: builtins.int
-    EMBEDDING_FIELD_NUMBER: builtins.int
-    model: builtins.str
-    @property
-    def embedding(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.float]: ...
+    MODEL_FIELD_NUMBER: _builtins.int
+    EMBEDDING_FIELD_NUMBER: _builtins.int
+    model: _builtins.str
+    @_builtins.property
+    def embedding(self) -> _containers.RepeatedScalarFieldContainer[_builtins.float]: ...
     def __init__(
         self,
         *,
-        model: builtins.str = ...,
-        embedding: collections.abc.Iterable[builtins.float] | None = ...,
+        model: _builtins.str = ...,
+        embedding: _abc.Iterable[_builtins.float] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["embedding", b"embedding", "model", b"model"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["embedding", b"embedding", "model", b"model"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___NoteEmbedding: typing_extensions.TypeAlias = NoteEmbedding
+Global___NoteEmbedding: _TypeAlias = NoteEmbedding  # noqa: Y015
 
-@typing.final
-class PostNoteRequest(google.protobuf.message.Message):
+@_typing.final
+class PostNoteRequest(_message.Message):
     """Request to add a note"""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    TITLE_FIELD_NUMBER: builtins.int
-    CONTENT_FIELD_NUMBER: builtins.int
-    AUTHOR_ID_FIELD_NUMBER: builtins.int
-    title: builtins.str
-    content: builtins.str
-    author_id: builtins.str
+    TITLE_FIELD_NUMBER: _builtins.int
+    CONTENT_FIELD_NUMBER: _builtins.int
+    AUTHOR_ID_FIELD_NUMBER: _builtins.int
+    title: _builtins.str
+    content: _builtins.str
+    author_id: _builtins.str
     def __init__(
         self,
         *,
-        title: builtins.str = ...,
-        content: builtins.str | None = ...,
-        author_id: builtins.str = ...,
+        title: _builtins.str = ...,
+        content: _builtins.str | None = ...,
+        author_id: _builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_content", b"_content", "content", b"content"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_content", b"_content", "author_id", b"author_id", "content", b"content", "title", b"title"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_content", b"_content"]) -> typing.Literal["content"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_content", b"_content", "content", b"content"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_content", b"_content", "author_id", b"author_id", "content", b"content", "title", b"title"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__content: _TypeAlias = _typing.Literal["content"]  # noqa: Y015
+    _WhichOneofArgType__content: _TypeAlias = _typing.Literal["_content", b"_content"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__content) -> _WhichOneofReturnType__content | None: ...
 
-Global___PostNoteRequest: typing_extensions.TypeAlias = PostNoteRequest
+Global___PostNoteRequest: _TypeAlias = PostNoteRequest  # noqa: Y015
 
-@typing.final
-class DeleteNoteRequest(google.protobuf.message.Message):
+@_typing.final
+class DeleteNoteRequest(_message.Message):
     """Request to delete a note"""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ID_FIELD_NUMBER: builtins.int
-    AUTHOR_ID_FIELD_NUMBER: builtins.int
-    id: builtins.str
-    author_id: builtins.str
+    ID_FIELD_NUMBER: _builtins.int
+    AUTHOR_ID_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    author_id: _builtins.str
     def __init__(
         self,
         *,
-        id: builtins.str = ...,
-        author_id: builtins.str = ...,
+        id: _builtins.str = ...,
+        author_id: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["author_id", b"author_id", "id", b"id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "id", b"id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___DeleteNoteRequest: typing_extensions.TypeAlias = DeleteNoteRequest
+Global___DeleteNoteRequest: _TypeAlias = DeleteNoteRequest  # noqa: Y015
 
-@typing.final
-class AlterNoteRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class AlterNoteRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ID_FIELD_NUMBER: builtins.int
-    TITLE_FIELD_NUMBER: builtins.int
-    CONTENT_FIELD_NUMBER: builtins.int
-    AUTHOR_ID_FIELD_NUMBER: builtins.int
-    id: builtins.str
-    title: builtins.str
-    content: builtins.str
-    author_id: builtins.str
+    ID_FIELD_NUMBER: _builtins.int
+    TITLE_FIELD_NUMBER: _builtins.int
+    CONTENT_FIELD_NUMBER: _builtins.int
+    AUTHOR_ID_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    title: _builtins.str
+    content: _builtins.str
+    author_id: _builtins.str
     def __init__(
         self,
         *,
-        id: builtins.str = ...,
-        title: builtins.str | None = ...,
-        content: builtins.str | None = ...,
-        author_id: builtins.str | None = ...,
+        id: _builtins.str = ...,
+        title: _builtins.str | None = ...,
+        content: _builtins.str | None = ...,
+        author_id: _builtins.str | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "title", b"title"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "id", b"id", "title", b"title"]) -> None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_author_id", b"_author_id"]) -> typing.Literal["author_id"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_content", b"_content"]) -> typing.Literal["content"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_title", b"_title"]) -> typing.Literal["title"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "title", b"title"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "id", b"id", "title", b"title"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__author_id: _TypeAlias = _typing.Literal["author_id"]  # noqa: Y015
+    _WhichOneofArgType__author_id: _TypeAlias = _typing.Literal["_author_id", b"_author_id"]  # noqa: Y015
+    _WhichOneofReturnType__content: _TypeAlias = _typing.Literal["content"]  # noqa: Y015
+    _WhichOneofArgType__content: _TypeAlias = _typing.Literal["_content", b"_content"]  # noqa: Y015
+    _WhichOneofReturnType__title: _TypeAlias = _typing.Literal["title"]  # noqa: Y015
+    _WhichOneofArgType__title: _TypeAlias = _typing.Literal["_title", b"_title"]  # noqa: Y015
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__author_id) -> _WhichOneofReturnType__author_id | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__content) -> _WhichOneofReturnType__content | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__title) -> _WhichOneofReturnType__title | None: ...
 
-Global___AlterNoteRequest: typing_extensions.TypeAlias = AlterNoteRequest
+Global___AlterNoteRequest: _TypeAlias = AlterNoteRequest  # noqa: Y015
 
-@typing.final
-class Directory(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class Directory(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ID_FIELD_NUMBER: builtins.int
-    NAME_FIELD_NUMBER: builtins.int
-    DISPLAY_NAME_FIELD_NUMBER: builtins.int
-    DESCRIPTION_FIELD_NUMBER: builtins.int
-    IMAGE_URL_FIELD_NUMBER: builtins.int
-    PARENT_ID_FIELD_NUMBER: builtins.int
-    RELATIONSHIPS_FIELD_NUMBER: builtins.int
-    id: builtins.str
-    name: builtins.str
-    display_name: builtins.str
-    description: builtins.str
-    image_url: builtins.str
-    parent_id: builtins.str
-    @property
-    def relationships(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
+    ID_FIELD_NUMBER: _builtins.int
+    NAME_FIELD_NUMBER: _builtins.int
+    DISPLAY_NAME_FIELD_NUMBER: _builtins.int
+    DESCRIPTION_FIELD_NUMBER: _builtins.int
+    IMAGE_URL_FIELD_NUMBER: _builtins.int
+    PARENT_ID_FIELD_NUMBER: _builtins.int
+    RELATIONSHIPS_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    name: _builtins.str
+    display_name: _builtins.str
+    description: _builtins.str
+    image_url: _builtins.str
+    parent_id: _builtins.str
+    @_builtins.property
+    def relationships(self) -> _containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
     def __init__(
         self,
         *,
-        id: builtins.str = ...,
-        name: builtins.str = ...,
-        display_name: builtins.str = ...,
-        description: builtins.str = ...,
-        image_url: builtins.str = ...,
-        parent_id: builtins.str | None = ...,
-        relationships: collections.abc.Iterable[Global___PermissionRelationship] | None = ...,
+        id: _builtins.str = ...,
+        name: _builtins.str = ...,
+        display_name: _builtins.str = ...,
+        description: _builtins.str = ...,
+        image_url: _builtins.str = ...,
+        parent_id: _builtins.str | None = ...,
+        relationships: _abc.Iterable[Global___PermissionRelationship] | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_parent_id", b"_parent_id", "parent_id", b"parent_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "relationships", b"relationships"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_parent_id", b"_parent_id"]) -> typing.Literal["parent_id"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id", "parent_id", b"parent_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "relationships", b"relationships"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__parent_id: _TypeAlias = _typing.Literal["parent_id"]  # noqa: Y015
+    _WhichOneofArgType__parent_id: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__parent_id) -> _WhichOneofReturnType__parent_id | None: ...
 
-Global___Directory: typing_extensions.TypeAlias = Directory
+Global___Directory: _TypeAlias = Directory  # noqa: Y015
 
-@typing.final
-class GetDirectoryRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class GetDirectoryRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ID_FIELD_NUMBER: builtins.int
-    USER_ID_FIELD_NUMBER: builtins.int
-    id: builtins.str
-    user_id: builtins.str
+    ID_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
-        id: builtins.str = ...,
-        user_id: builtins.str = ...,
+        id: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["id", b"id", "user_id", b"user_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___GetDirectoryRequest: typing_extensions.TypeAlias = GetDirectoryRequest
+Global___GetDirectoryRequest: _TypeAlias = GetDirectoryRequest  # noqa: Y015
 
-@typing.final
-class GetDirectoriesRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class GetDirectoriesRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    USER_ID_FIELD_NUMBER: builtins.int
-    PARENT_ID_FIELD_NUMBER: builtins.int
-    LIMIT_FIELD_NUMBER: builtins.int
-    OFFSET_FIELD_NUMBER: builtins.int
-    user_id: builtins.str
-    parent_id: builtins.str
-    limit: builtins.int
-    offset: builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    PARENT_ID_FIELD_NUMBER: _builtins.int
+    LIMIT_FIELD_NUMBER: _builtins.int
+    OFFSET_FIELD_NUMBER: _builtins.int
+    user_id: _builtins.str
+    parent_id: _builtins.str
+    limit: _builtins.int
+    offset: _builtins.int
     def __init__(
         self,
         *,
-        user_id: builtins.str = ...,
-        parent_id: builtins.str | None = ...,
-        limit: builtins.int | None = ...,
-        offset: builtins.int | None = ...,
+        user_id: _builtins.str = ...,
+        parent_id: _builtins.str | None = ...,
+        limit: _builtins.int | None = ...,
+        offset: _builtins.int | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id", "user_id", b"user_id"]) -> None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_limit", b"_limit"]) -> typing.Literal["limit"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_offset", b"_offset"]) -> typing.Literal["offset"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_parent_id", b"_parent_id"]) -> typing.Literal["parent_id"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__limit: _TypeAlias = _typing.Literal["limit"]  # noqa: Y015
+    _WhichOneofArgType__limit: _TypeAlias = _typing.Literal["_limit", b"_limit"]  # noqa: Y015
+    _WhichOneofReturnType__offset: _TypeAlias = _typing.Literal["offset"]  # noqa: Y015
+    _WhichOneofArgType__offset: _TypeAlias = _typing.Literal["_offset", b"_offset"]  # noqa: Y015
+    _WhichOneofReturnType__parent_id: _TypeAlias = _typing.Literal["parent_id"]  # noqa: Y015
+    _WhichOneofArgType__parent_id: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id"]  # noqa: Y015
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__limit) -> _WhichOneofReturnType__limit | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__offset) -> _WhichOneofReturnType__offset | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__parent_id) -> _WhichOneofReturnType__parent_id | None: ...
 
-Global___GetDirectoriesRequest: typing_extensions.TypeAlias = GetDirectoriesRequest
+Global___GetDirectoriesRequest: _TypeAlias = GetDirectoriesRequest  # noqa: Y015
 
-@typing.final
-class CreateDirectoryRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class CreateDirectoryRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    NAME_FIELD_NUMBER: builtins.int
-    DISPLAY_NAME_FIELD_NUMBER: builtins.int
-    DESCRIPTION_FIELD_NUMBER: builtins.int
-    IMAGE_URL_FIELD_NUMBER: builtins.int
-    PARENT_ID_FIELD_NUMBER: builtins.int
-    USER_ID_FIELD_NUMBER: builtins.int
-    name: builtins.str
-    display_name: builtins.str
-    description: builtins.str
-    image_url: builtins.str
-    parent_id: builtins.str
-    user_id: builtins.str
+    NAME_FIELD_NUMBER: _builtins.int
+    DISPLAY_NAME_FIELD_NUMBER: _builtins.int
+    DESCRIPTION_FIELD_NUMBER: _builtins.int
+    IMAGE_URL_FIELD_NUMBER: _builtins.int
+    PARENT_ID_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    name: _builtins.str
+    display_name: _builtins.str
+    description: _builtins.str
+    image_url: _builtins.str
+    parent_id: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
-        name: builtins.str = ...,
-        display_name: builtins.str | None = ...,
-        description: builtins.str | None = ...,
-        image_url: builtins.str | None = ...,
-        parent_id: builtins.str | None = ...,
-        user_id: builtins.str = ...,
+        name: _builtins.str = ...,
+        display_name: _builtins.str | None = ...,
+        description: _builtins.str | None = ...,
+        image_url: _builtins.str | None = ...,
+        parent_id: _builtins.str | None = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "parent_id", b"parent_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "user_id", b"user_id"]) -> None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_description", b"_description"]) -> typing.Literal["description"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_display_name", b"_display_name"]) -> typing.Literal["display_name"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_image_url", b"_image_url"]) -> typing.Literal["image_url"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_parent_id", b"_parent_id"]) -> typing.Literal["parent_id"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "parent_id", b"parent_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__description: _TypeAlias = _typing.Literal["description"]  # noqa: Y015
+    _WhichOneofArgType__description: _TypeAlias = _typing.Literal["_description", b"_description"]  # noqa: Y015
+    _WhichOneofReturnType__display_name: _TypeAlias = _typing.Literal["display_name"]  # noqa: Y015
+    _WhichOneofArgType__display_name: _TypeAlias = _typing.Literal["_display_name", b"_display_name"]  # noqa: Y015
+    _WhichOneofReturnType__image_url: _TypeAlias = _typing.Literal["image_url"]  # noqa: Y015
+    _WhichOneofArgType__image_url: _TypeAlias = _typing.Literal["_image_url", b"_image_url"]  # noqa: Y015
+    _WhichOneofReturnType__parent_id: _TypeAlias = _typing.Literal["parent_id"]  # noqa: Y015
+    _WhichOneofArgType__parent_id: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id"]  # noqa: Y015
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__description) -> _WhichOneofReturnType__description | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__display_name) -> _WhichOneofReturnType__display_name | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__image_url) -> _WhichOneofReturnType__image_url | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__parent_id) -> _WhichOneofReturnType__parent_id | None: ...
 
-Global___CreateDirectoryRequest: typing_extensions.TypeAlias = CreateDirectoryRequest
+Global___CreateDirectoryRequest: _TypeAlias = CreateDirectoryRequest  # noqa: Y015
 
-@typing.final
-class AlterDirectoryRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class AlterDirectoryRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ID_FIELD_NUMBER: builtins.int
-    NAME_FIELD_NUMBER: builtins.int
-    DISPLAY_NAME_FIELD_NUMBER: builtins.int
-    DESCRIPTION_FIELD_NUMBER: builtins.int
-    IMAGE_URL_FIELD_NUMBER: builtins.int
-    PARENT_ID_FIELD_NUMBER: builtins.int
-    USER_ID_FIELD_NUMBER: builtins.int
-    id: builtins.str
-    name: builtins.str
-    display_name: builtins.str
-    description: builtins.str
-    image_url: builtins.str
-    parent_id: builtins.str
-    user_id: builtins.str
+    ID_FIELD_NUMBER: _builtins.int
+    NAME_FIELD_NUMBER: _builtins.int
+    DISPLAY_NAME_FIELD_NUMBER: _builtins.int
+    DESCRIPTION_FIELD_NUMBER: _builtins.int
+    IMAGE_URL_FIELD_NUMBER: _builtins.int
+    PARENT_ID_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    name: _builtins.str
+    display_name: _builtins.str
+    description: _builtins.str
+    image_url: _builtins.str
+    parent_id: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
-        id: builtins.str = ...,
-        name: builtins.str | None = ...,
-        display_name: builtins.str | None = ...,
-        description: builtins.str | None = ...,
-        image_url: builtins.str | None = ...,
-        parent_id: builtins.str | None = ...,
-        user_id: builtins.str = ...,
+        id: _builtins.str = ...,
+        name: _builtins.str | None = ...,
+        display_name: _builtins.str | None = ...,
+        description: _builtins.str | None = ...,
+        image_url: _builtins.str | None = ...,
+        parent_id: _builtins.str | None = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "user_id", b"user_id"]) -> None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_description", b"_description"]) -> typing.Literal["description"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_display_name", b"_display_name"]) -> typing.Literal["display_name"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_image_url", b"_image_url"]) -> typing.Literal["image_url"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_name", b"_name"]) -> typing.Literal["name"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_parent_id", b"_parent_id"]) -> typing.Literal["parent_id"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__description: _TypeAlias = _typing.Literal["description"]  # noqa: Y015
+    _WhichOneofArgType__description: _TypeAlias = _typing.Literal["_description", b"_description"]  # noqa: Y015
+    _WhichOneofReturnType__display_name: _TypeAlias = _typing.Literal["display_name"]  # noqa: Y015
+    _WhichOneofArgType__display_name: _TypeAlias = _typing.Literal["_display_name", b"_display_name"]  # noqa: Y015
+    _WhichOneofReturnType__image_url: _TypeAlias = _typing.Literal["image_url"]  # noqa: Y015
+    _WhichOneofArgType__image_url: _TypeAlias = _typing.Literal["_image_url", b"_image_url"]  # noqa: Y015
+    _WhichOneofReturnType__name: _TypeAlias = _typing.Literal["name"]  # noqa: Y015
+    _WhichOneofArgType__name: _TypeAlias = _typing.Literal["_name", b"_name"]  # noqa: Y015
+    _WhichOneofReturnType__parent_id: _TypeAlias = _typing.Literal["parent_id"]  # noqa: Y015
+    _WhichOneofArgType__parent_id: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id"]  # noqa: Y015
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__description) -> _WhichOneofReturnType__description | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__display_name) -> _WhichOneofReturnType__display_name | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__image_url) -> _WhichOneofReturnType__image_url | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__name) -> _WhichOneofReturnType__name | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__parent_id) -> _WhichOneofReturnType__parent_id | None: ...
 
-Global___AlterDirectoryRequest: typing_extensions.TypeAlias = AlterDirectoryRequest
+Global___AlterDirectoryRequest: _TypeAlias = AlterDirectoryRequest  # noqa: Y015
 
-@typing.final
-class DeleteDirectoryRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class DeleteDirectoryRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ID_FIELD_NUMBER: builtins.int
-    USER_ID_FIELD_NUMBER: builtins.int
-    id: builtins.str
-    user_id: builtins.str
+    ID_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
-        id: builtins.str = ...,
-        user_id: builtins.str = ...,
+        id: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["id", b"id", "user_id", b"user_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___DeleteDirectoryRequest: typing_extensions.TypeAlias = DeleteDirectoryRequest
+Global___DeleteDirectoryRequest: _TypeAlias = DeleteDirectoryRequest  # noqa: Y015
 
-@typing.final
-class PermissionSubject(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class PermissionSubject(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    OBJECT_TYPE_FIELD_NUMBER: builtins.int
-    OBJECT_ID_FIELD_NUMBER: builtins.int
+    OBJECT_TYPE_FIELD_NUMBER: _builtins.int
+    OBJECT_ID_FIELD_NUMBER: _builtins.int
     object_type: Global___PermissionObjectType.ValueType
-    object_id: builtins.str
+    object_id: _builtins.str
     def __init__(
         self,
         *,
         object_type: Global___PermissionObjectType.ValueType = ...,
-        object_id: builtins.str = ...,
+        object_id: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___PermissionSubject: typing_extensions.TypeAlias = PermissionSubject
+Global___PermissionSubject: _TypeAlias = PermissionSubject  # noqa: Y015
 
-@typing.final
-class PermissionResource(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class PermissionResource(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    OBJECT_TYPE_FIELD_NUMBER: builtins.int
-    OBJECT_ID_FIELD_NUMBER: builtins.int
+    OBJECT_TYPE_FIELD_NUMBER: _builtins.int
+    OBJECT_ID_FIELD_NUMBER: _builtins.int
     object_type: Global___PermissionObjectType.ValueType
-    object_id: builtins.str
+    object_id: _builtins.str
     def __init__(
         self,
         *,
         object_type: Global___PermissionObjectType.ValueType = ...,
-        object_id: builtins.str = ...,
+        object_id: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___PermissionResource: typing_extensions.TypeAlias = PermissionResource
+Global___PermissionResource: _TypeAlias = PermissionResource  # noqa: Y015
 
-@typing.final
-class PermissionRelationship(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class PermissionRelationship(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    RELATION_FIELD_NUMBER: builtins.int
-    SUBJECT_FIELD_NUMBER: builtins.int
-    RESOURCE_FIELD_NUMBER: builtins.int
-    relation: builtins.str
-    @property
+    RELATION_FIELD_NUMBER: _builtins.int
+    SUBJECT_FIELD_NUMBER: _builtins.int
+    RESOURCE_FIELD_NUMBER: _builtins.int
+    relation: _builtins.str
+    @_builtins.property
     def subject(self) -> Global___PermissionSubject: ...
-    @property
+    @_builtins.property
     def resource(self) -> Global___PermissionResource: ...
     def __init__(
         self,
         *,
-        relation: builtins.str = ...,
+        relation: _builtins.str = ...,
         subject: Global___PermissionSubject | None = ...,
         resource: Global___PermissionResource | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["resource", b"resource", "subject", b"subject"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["relation", b"relation", "resource", b"resource", "subject", b"subject"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["resource", b"resource", "subject", b"subject"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["relation", b"relation", "resource", b"resource", "subject", b"subject"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___PermissionRelationship: typing_extensions.TypeAlias = PermissionRelationship
+Global___PermissionRelationship: _TypeAlias = PermissionRelationship  # noqa: Y015
 
-@typing.final
-class GetPermissionsRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class GetPermissionsRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    OBJECT_TYPE_FIELD_NUMBER: builtins.int
-    OBJECT_ID_FIELD_NUMBER: builtins.int
-    USER_ID_FIELD_NUMBER: builtins.int
+    OBJECT_TYPE_FIELD_NUMBER: _builtins.int
+    OBJECT_ID_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     object_type: Global___PermissionObjectType.ValueType
-    object_id: builtins.str
-    user_id: builtins.str
+    object_id: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
         object_type: Global___PermissionObjectType.ValueType = ...,
-        object_id: builtins.str = ...,
-        user_id: builtins.str = ...,
+        object_id: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type", "user_id", b"user_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___GetPermissionsRequest: typing_extensions.TypeAlias = GetPermissionsRequest
+Global___GetPermissionsRequest: _TypeAlias = GetPermissionsRequest  # noqa: Y015
 
-@typing.final
-class CreatePermissionRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class CreatePermissionRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    OBJECT_TYPE_FIELD_NUMBER: builtins.int
-    OBJECT_ID_FIELD_NUMBER: builtins.int
-    RELATIONSHIP_FIELD_NUMBER: builtins.int
-    USER_ID_FIELD_NUMBER: builtins.int
+    OBJECT_TYPE_FIELD_NUMBER: _builtins.int
+    OBJECT_ID_FIELD_NUMBER: _builtins.int
+    RELATIONSHIP_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     object_type: Global___PermissionObjectType.ValueType
-    object_id: builtins.str
-    user_id: builtins.str
-    @property
+    object_id: _builtins.str
+    user_id: _builtins.str
+    @_builtins.property
     def relationship(self) -> Global___PermissionRelationship: ...
     def __init__(
         self,
         *,
         object_type: Global___PermissionObjectType.ValueType = ...,
-        object_id: builtins.str = ...,
+        object_id: _builtins.str = ...,
         relationship: Global___PermissionRelationship | None = ...,
-        user_id: builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["relationship", b"relationship"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationship", b"relationship", "user_id", b"user_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["relationship", b"relationship"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationship", b"relationship", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___CreatePermissionRequest: typing_extensions.TypeAlias = CreatePermissionRequest
+Global___CreatePermissionRequest: _TypeAlias = CreatePermissionRequest  # noqa: Y015
 
-@typing.final
-class DeletePermissionRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class DeletePermissionRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    OBJECT_TYPE_FIELD_NUMBER: builtins.int
-    OBJECT_ID_FIELD_NUMBER: builtins.int
-    RELATIONSHIP_FIELD_NUMBER: builtins.int
-    USER_ID_FIELD_NUMBER: builtins.int
+    OBJECT_TYPE_FIELD_NUMBER: _builtins.int
+    OBJECT_ID_FIELD_NUMBER: _builtins.int
+    RELATIONSHIP_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     object_type: Global___PermissionObjectType.ValueType
-    object_id: builtins.str
-    user_id: builtins.str
-    @property
+    object_id: _builtins.str
+    user_id: _builtins.str
+    @_builtins.property
     def relationship(self) -> Global___PermissionRelationship: ...
     def __init__(
         self,
         *,
         object_type: Global___PermissionObjectType.ValueType = ...,
-        object_id: builtins.str = ...,
+        object_id: _builtins.str = ...,
         relationship: Global___PermissionRelationship | None = ...,
-        user_id: builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["relationship", b"relationship"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationship", b"relationship", "user_id", b"user_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["relationship", b"relationship"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationship", b"relationship", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___DeletePermissionRequest: typing_extensions.TypeAlias = DeletePermissionRequest
+Global___DeletePermissionRequest: _TypeAlias = DeletePermissionRequest  # noqa: Y015
 
-@typing.final
-class ReplacePermissionsRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ReplacePermissionsRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    OBJECT_TYPE_FIELD_NUMBER: builtins.int
-    OBJECT_ID_FIELD_NUMBER: builtins.int
-    RELATIONSHIPS_FIELD_NUMBER: builtins.int
-    USER_ID_FIELD_NUMBER: builtins.int
+    OBJECT_TYPE_FIELD_NUMBER: _builtins.int
+    OBJECT_ID_FIELD_NUMBER: _builtins.int
+    RELATIONSHIPS_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     object_type: Global___PermissionObjectType.ValueType
-    object_id: builtins.str
-    user_id: builtins.str
-    @property
-    def relationships(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
+    object_id: _builtins.str
+    user_id: _builtins.str
+    @_builtins.property
+    def relationships(self) -> _containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
     def __init__(
         self,
         *,
         object_type: Global___PermissionObjectType.ValueType = ...,
-        object_id: builtins.str = ...,
-        relationships: collections.abc.Iterable[Global___PermissionRelationship] | None = ...,
-        user_id: builtins.str = ...,
+        object_id: _builtins.str = ...,
+        relationships: _abc.Iterable[Global___PermissionRelationship] | None = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationships", b"relationships", "user_id", b"user_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationships", b"relationships", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___ReplacePermissionsRequest: typing_extensions.TypeAlias = ReplacePermissionsRequest
+Global___ReplacePermissionsRequest: _TypeAlias = ReplacePermissionsRequest  # noqa: Y015
 
-@typing.final
-class PermissionsResponse(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class PermissionsResponse(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    OBJECT_TYPE_FIELD_NUMBER: builtins.int
-    OBJECT_ID_FIELD_NUMBER: builtins.int
-    RELATIONSHIPS_FIELD_NUMBER: builtins.int
+    OBJECT_TYPE_FIELD_NUMBER: _builtins.int
+    OBJECT_ID_FIELD_NUMBER: _builtins.int
+    RELATIONSHIPS_FIELD_NUMBER: _builtins.int
     object_type: Global___PermissionObjectType.ValueType
-    object_id: builtins.str
-    @property
-    def relationships(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
+    object_id: _builtins.str
+    @_builtins.property
+    def relationships(self) -> _containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
     def __init__(
         self,
         *,
         object_type: Global___PermissionObjectType.ValueType = ...,
-        object_id: builtins.str = ...,
-        relationships: collections.abc.Iterable[Global___PermissionRelationship] | None = ...,
+        object_id: _builtins.str = ...,
+        relationships: _abc.Iterable[Global___PermissionRelationship] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationships", b"relationships"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationships", b"relationships"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___PermissionsResponse: typing_extensions.TypeAlias = PermissionsResponse
+Global___PermissionsResponse: _TypeAlias = PermissionsResponse  # noqa: Y015
+
+@_typing.final
+class NoteVersionSummary(_message.Message):
+    """Versioning requests and responses"""
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    VERSION_ID_FIELD_NUMBER: _builtins.int
+    NOTE_ID_FIELD_NUMBER: _builtins.int
+    VERSION_INDEX_FIELD_NUMBER: _builtins.int
+    CREATED_AT_FIELD_NUMBER: _builtins.int
+    AUTHOR_ID_FIELD_NUMBER: _builtins.int
+    IS_SNAPSHOT_FIELD_NUMBER: _builtins.int
+    SNAPSHOT_ID_FIELD_NUMBER: _builtins.int
+    version_id: _builtins.str
+    note_id: _builtins.str
+    version_index: _builtins.int
+    author_id: _builtins.str
+    is_snapshot: _builtins.bool
+    snapshot_id: _builtins.str
+    @_builtins.property
+    def created_at(self) -> _timestamp_pb2.Timestamp: ...
+    def __init__(
+        self,
+        *,
+        version_id: _builtins.str = ...,
+        note_id: _builtins.str = ...,
+        version_index: _builtins.int = ...,
+        created_at: _timestamp_pb2.Timestamp | None = ...,
+        author_id: _builtins.str = ...,
+        is_snapshot: _builtins.bool = ...,
+        snapshot_id: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["created_at", b"created_at"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "created_at", b"created_at", "is_snapshot", b"is_snapshot", "note_id", b"note_id", "snapshot_id", b"snapshot_id", "version_id", b"version_id", "version_index", b"version_index"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___NoteVersionSummary: _TypeAlias = NoteVersionSummary  # noqa: Y015
+
+@_typing.final
+class GetNoteVersionsRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    NOTE_ID_FIELD_NUMBER: _builtins.int
+    LIMIT_FIELD_NUMBER: _builtins.int
+    OFFSET_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    note_id: _builtins.str
+    limit: _builtins.int
+    offset: _builtins.int
+    user_id: _builtins.str
+    def __init__(
+        self,
+        *,
+        note_id: _builtins.str = ...,
+        limit: _builtins.int | None = ...,
+        offset: _builtins.int | None = ...,
+        user_id: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_limit", b"_limit", "_offset", b"_offset", "limit", b"limit", "offset", b"offset"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_limit", b"_limit", "_offset", b"_offset", "limit", b"limit", "note_id", b"note_id", "offset", b"offset", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__limit: _TypeAlias = _typing.Literal["limit"]  # noqa: Y015
+    _WhichOneofArgType__limit: _TypeAlias = _typing.Literal["_limit", b"_limit"]  # noqa: Y015
+    _WhichOneofReturnType__offset: _TypeAlias = _typing.Literal["offset"]  # noqa: Y015
+    _WhichOneofArgType__offset: _TypeAlias = _typing.Literal["_offset", b"_offset"]  # noqa: Y015
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__limit) -> _WhichOneofReturnType__limit | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__offset) -> _WhichOneofReturnType__offset | None: ...
+
+Global___GetNoteVersionsRequest: _TypeAlias = GetNoteVersionsRequest  # noqa: Y015
+
+@_typing.final
+class NoteVersionContent(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    NOTE_ID_FIELD_NUMBER: _builtins.int
+    VERSION_INDEX_FIELD_NUMBER: _builtins.int
+    CREATED_AT_FIELD_NUMBER: _builtins.int
+    AUTHOR_ID_FIELD_NUMBER: _builtins.int
+    TITLE_FIELD_NUMBER: _builtins.int
+    CONTENT_FIELD_NUMBER: _builtins.int
+    note_id: _builtins.str
+    version_index: _builtins.int
+    author_id: _builtins.str
+    title: _builtins.str
+    content: _builtins.str
+    @_builtins.property
+    def created_at(self) -> _timestamp_pb2.Timestamp: ...
+    def __init__(
+        self,
+        *,
+        note_id: _builtins.str = ...,
+        version_index: _builtins.int = ...,
+        created_at: _timestamp_pb2.Timestamp | None = ...,
+        author_id: _builtins.str = ...,
+        title: _builtins.str = ...,
+        content: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["created_at", b"created_at"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "content", b"content", "created_at", b"created_at", "note_id", b"note_id", "title", b"title", "version_index", b"version_index"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___NoteVersionContent: _TypeAlias = NoteVersionContent  # noqa: Y015
+
+@_typing.final
+class GetNoteVersionContentRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    NOTE_ID_FIELD_NUMBER: _builtins.int
+    VERSION_INDEX_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    note_id: _builtins.str
+    version_index: _builtins.int
+    user_id: _builtins.str
+    def __init__(
+        self,
+        *,
+        note_id: _builtins.str = ...,
+        version_index: _builtins.int = ...,
+        user_id: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["note_id", b"note_id", "user_id", b"user_id", "version_index", b"version_index"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___GetNoteVersionContentRequest: _TypeAlias = GetNoteVersionContentRequest  # noqa: Y015
+
+@_typing.final
+class RestoreNoteVersionRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    NOTE_ID_FIELD_NUMBER: _builtins.int
+    VERSION_INDEX_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    note_id: _builtins.str
+    version_index: _builtins.int
+    user_id: _builtins.str
+    def __init__(
+        self,
+        *,
+        note_id: _builtins.str = ...,
+        version_index: _builtins.int = ...,
+        user_id: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["note_id", b"note_id", "user_id", b"user_id", "version_index", b"version_index"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___RestoreNoteVersionRequest: _TypeAlias = RestoreNoteVersionRequest  # noqa: Y015
