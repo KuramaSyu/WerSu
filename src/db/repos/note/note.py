@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import replace
+from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Type
 
@@ -17,6 +18,7 @@ from src.db.repos.note.permission import NotePermissionRepo, NoteRelationEnum, O
 from src.db.table import TableABC
 from src.api.undefined import UNDEFINED
 from src.db.repos.note.embedding import NoteEmbeddingRepo
+from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.db.repos.note.search_strategy import (
     ContextNoteSearchStrategy,
     DateNoteSearchStrategy,
@@ -180,12 +182,14 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         permission_repo: NotePermissionRepo,
         directory_repo: DirectoryRepo,
         logging_provider: LoggingProvider,
+        version_repo: NoteVersionRepoABC | None = None,
     ):
         self._db = db
         self._content_repo = content_repo
         self._embedding_repo = embedding_repo
         self._permission_repo = permission_repo
         self._directory_repo = directory_repo
+        self._version_repo = version_repo
         self.log = logging_provider(__name__, self)
 
     async def _fetch_note_permissions(
@@ -278,9 +282,22 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         await self._permission_repo.insert([owner_relation, parent_dir_relation])
         note.permissions = await self._fetch_note_permissions(note_id=note_id)
         note.note_id = note_id
+
+        # record initial snapshot after we have a note id
+        if self._version_repo is not None:
+            await self._version_repo.record_initial_snapshot(
+                note_id=note_id,
+                title=note.title if note.title is not UNDEFINED else None,
+                content=note.content if note.content is not UNDEFINED else None,
+                author_id=str(note.author_id) if note.author_id not in (UNDEFINED, None) else user.user_id,
+                created_at=note.updated_at if note.updated_at not in (UNDEFINED, None) else datetime.now(),
+            )
         return note
     
     async def update(self, note: NoteEntity, ctx: UserContext) -> NoteEntity:
+        # fetch current state for versioning before applying updates
+        current = await self._content_repo.select_by_id(str(note.note_id))
+
         # update content
         _updated_note_entity = await self._content_repo.update(
             set=replace(note, embeddings=UNDEFINED, permissions=UNDEFINED, note_id=UNDEFINED),
@@ -295,6 +312,27 @@ class NoteRepoFacade(NoteRepoFacadeABC):
                 note.content
             )
             note.embeddings = [embedding]
+
+        # gRPC conversion expects a list; keep permissions predictable.
+        if note.permissions is UNDEFINED:
+            note.permissions = []
+
+        # record version entry using previous and current data
+        if self._version_repo is not None:
+            new_title = note.title if note.title is not UNDEFINED else current.title
+            new_content = note.content if note.content is not UNDEFINED else current.content
+            new_author_id = note.author_id if note.author_id is not UNDEFINED else current.author_id
+            new_updated_at = note.updated_at if note.updated_at is not UNDEFINED else datetime.now()
+
+            await self._version_repo.append_version(
+                note_id=str(note.note_id),
+                old_title=current.title,
+                old_content=current.content,
+                new_title=new_title,
+                new_content=new_content,
+                author_id=str(new_author_id),
+                created_at=new_updated_at,
+            )
         
         return note
 
