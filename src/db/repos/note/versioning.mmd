@@ -1,0 +1,7 @@
+flowchart TD
+    %% Note versioning flow (snapshot + delta)
+    A["note.content (current)"] -->|"initial create"| B["note.version_snapshot"]
+    B -->|"update"| C["note.version_delta"]
+    C -->|"apply deltas"| D["reconstructed content"]
+    D --> E["restore note.content"]
+    C -->|"threshold reached"| F["new note.version_snapshot"]
