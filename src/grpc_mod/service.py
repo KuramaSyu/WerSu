@@ -6,6 +6,7 @@ import grpc
 from grpc.aio import ServicerContext
 import asyncpg
 from pprint import pformat
+from google.protobuf.timestamp_pb2 import Timestamp
 
 from src.api import LoggingProvider
 from src.api.types import Pagination
@@ -14,6 +15,7 @@ from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities import NoteEntity
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
+from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.db.repos.note.permission import ObjectRef, ObjectTypeEnum, Relationship
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod.converter import (
@@ -37,18 +39,28 @@ from src.grpc_mod.proto.note_pb2 import (
     DeletePermissionRequest,
     GetDirectoryRequest,
     GetDirectoriesRequest,
+    GetNoteVersionContentRequest,
+    GetNoteVersionsRequest,
     GetNoteRequest,
     GetPermissionsRequest,
     GetSearchNotesRequest,
     MinimalNote,
     Note,
+    NoteVersionContent,
+    NoteVersionSummary,
     PermissionRelationship,
     PermissionSubject,
     PermissionsResponse,
     PostNoteRequest,
+    RestoreNoteVersionRequest,
     ReplacePermissionsRequest,
 )
-from src.grpc_mod.proto.note_pb2_grpc import DirectoryServiceServicer, NoteServiceServicer, PermissionServiceServicer
+from src.grpc_mod.proto.note_pb2_grpc import (
+    DirectoryServiceServicer,
+    NoteServiceServicer,
+    NoteVersionServiceServicer,
+    PermissionServiceServicer,
+)
 from src.grpc_mod.proto.user_pb2 import (
     AlterUserRequest,
     DeleteUserRequest,
@@ -312,6 +324,112 @@ class GrpcDirectoryService(DirectoryServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while deleting directory")
             return Directory()
+
+
+class GrpcNoteVersionService(NoteVersionServiceServicer):
+    """gRPC adapter for note version history and restore operations."""
+
+    def __init__(
+        self,
+        note_repo: NoteRepoFacadeABC,
+        version_repo: NoteVersionRepoABC,
+        log: LoggingProvider,
+    ) -> None:
+        self._note_repo = note_repo
+        self._version_repo = version_repo
+        self.log = log(__name__, self)
+
+    async def GetNoteVersions(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, request: GetNoteVersionsRequest, context: ServicerContext
+    ) -> AsyncIterator[NoteVersionSummary]:
+        try:
+            if not request.note_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("note_id is required")
+                return
+
+            limit = request.limit if request.HasField("limit") else 25
+            offset = request.offset if request.HasField("offset") else 0
+            entries = await self._version_repo.list_versions(request.note_id, limit, offset)
+            for entry in entries:
+                ts = Timestamp()
+                ts.FromDatetime(entry.created_at)
+                yield NoteVersionSummary(
+                    version_id=entry.version_id,
+                    note_id=entry.note_id,
+                    version_index=entry.version_index,
+                    created_at=ts,
+                    author_id=entry.author_id,
+                    is_snapshot=entry.is_snapshot,
+                    snapshot_id=entry.snapshot_id or "",
+                )
+        except Exception:
+            self.log.error(f"Error fetching note versions: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while fetching note versions")
+            return
+
+    async def GetNoteVersionContent(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, request: GetNoteVersionContentRequest, context: ServicerContext
+    ) -> NoteVersionContent:
+        try:
+            if not request.note_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("note_id is required")
+                return NoteVersionContent()
+
+            version = await self._version_repo.get_content_at_version(
+                note_id=request.note_id,
+                version_index=request.version_index,
+            )
+            ts = Timestamp()
+            ts.FromDatetime(version.created_at)
+            return NoteVersionContent(
+                note_id=version.note_id,
+                version_index=version.version_index,
+                created_at=ts,
+                author_id=version.author_id,
+                title=version.title,
+                content=version.content,
+            )
+        except Exception:
+            self.log.error(f"Error fetching note version content: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while fetching note version content")
+            return NoteVersionContent()
+
+    async def RestoreNoteVersion(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, request: RestoreNoteVersionRequest, context: ServicerContext
+    ) -> Note:
+        try:
+            if not request.note_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("note_id is required")
+                return Note()
+
+            version = await self._version_repo.get_content_at_version(
+                note_id=request.note_id,
+                version_index=request.version_index,
+            )
+            # Apply the reconstructed content via the existing note update pipeline.
+            updated = await self._note_repo.update(
+                NoteEntity(
+                    note_id=request.note_id,
+                    author_id=version.author_id,
+                    title=version.title,
+                    content=version.content,
+                    updated_at=datetime.now(),
+                    embeddings=UNDEFINED,
+                    permissions=UNDEFINED,
+                ),
+                UserContext(user_id=request.user_id),
+            )
+            return to_grpc_note(updated)
+        except Exception:
+            self.log.error(f"Error restoring note version: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while restoring note version")
+            return Note()
 
 
 class GrpcPermissionService(PermissionServiceServicer):
