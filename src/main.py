@@ -20,13 +20,25 @@ from src.services.user import UserServiceRepo
 from src.utils import logging_provider
 from src.db.database import Database
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
+from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.table import Table, setup_table_logging
-from src.grpc_mod.proto.note_pb2_grpc import add_DirectoryServiceServicer_to_server, add_NoteServiceServicer_to_server, add_PermissionServiceServicer_to_server
+from src.grpc_mod.proto.note_pb2_grpc import (
+    add_DirectoryServiceServicer_to_server,
+    add_NoteServiceServicer_to_server,
+    add_PermissionServiceServicer_to_server,
+    add_NoteVersionServiceServicer_to_server,
+)
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteRepoFacade
-from src.grpc_mod.service import GrpcDirectoryService, GrpcNoteService, GrpcPermissionService, GrpcUserService
+from src.grpc_mod.service import (
+    GrpcDirectoryService,
+    GrpcNoteService,
+    GrpcNoteVersionService,
+    GrpcPermissionService,
+    GrpcUserService,
+)
 from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.utils.spicedb_client import create_spicedb_async_client
 
@@ -60,6 +72,7 @@ async def serve():
     grpc_port = get_os_env_variable("GRPC_PORT", log, "50052")
     grpc_spicedb_credentials = get_os_env_variable("GRPC_SPICEDB_CREDENTIALS", log, UNDEFINED)
     grpc_spicedb_address = get_os_env_variable("GRPC_SPICEDB_ADDRESS", log, UNDEFINED)
+    max_note_deltas = int(get_os_env_variable("NOTE_VERSION_MAX_DELTAS", log, "10"))
     
 
     # create server 
@@ -105,6 +118,16 @@ async def serve():
         table_name="note.embedding",
         id_fields=["note_id", "model"]
     )
+    version_snapshot_table = Table(
+        **common_table_kwargs,
+        table_name="note.version_snapshot",
+        id_fields=["snapshot_id"],
+    )
+    version_delta_table = Table(
+        **common_table_kwargs,
+        table_name="note.version_delta",
+        id_fields=["delta_id"],
+    )
 
     # setup note repo via DI
     log.info("Importing repo and service modules...")
@@ -129,6 +152,12 @@ async def serve():
         spicedb_client=spicedb_client,
     )
 
+    version_repo = NoteVersionPostgresRepo(
+        snapshot_table=version_snapshot_table,
+        delta_table=version_delta_table,
+        max_deltas_per_snapshot=max_note_deltas,
+    )
+
     repo: NoteRepoFacade = NoteRepoFacade(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
@@ -139,12 +168,20 @@ async def serve():
         permission_repo=permission_repo,
         directory_repo=directory_repo,
         logging_provider=logging_provider,
+        version_repo=version_repo,
     )
 
     # setup gRPC note service
     log.info("Setting up gRPC services...")
     note_service = GrpcNoteService(repo=repo, log=logging_provider)
     add_NoteServiceServicer_to_server(note_service, server)
+
+    note_version_service = GrpcNoteVersionService(
+        note_repo=repo,
+        version_repo=version_repo,
+        log=logging_provider,
+    )
+    add_NoteVersionServiceServicer_to_server(note_version_service, server)
 
     directory_service = GrpcDirectoryService(
         directory_repo=directory_repo,
