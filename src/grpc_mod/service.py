@@ -41,6 +41,7 @@ from src.grpc_mod.proto.note_pb2 import (
     GetDirectoriesRequest,
     GetNoteVersionContentRequest,
     GetNoteVersionsRequest,
+    GetDirectoryActivityRequest,
     GetNoteRequest,
     GetPermissionsRequest,
     GetSearchNotesRequest,
@@ -72,6 +73,7 @@ from src.grpc_mod.proto.user_pb2 import (
 from src.grpc_mod.proto.user_pb2_grpc import UserServiceServicer
 from src.services.roles import PermissionServiceABC
 from src.services.user import UserServiceABC
+from src.services.versioning import DirectoryActivityServiceABC
 
 
 class GrpcNoteService(NoteServiceServicer):
@@ -333,10 +335,12 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
         self,
         note_repo: NoteRepoFacadeABC,
         version_repo: NoteVersionRepoABC,
+        directory_activity_service: DirectoryActivityServiceABC,
         log: LoggingProvider,
     ) -> None:
         self._note_repo = note_repo
         self._version_repo = version_repo
+        self._directory_activity_service = directory_activity_service
         self.log = log(__name__, self)
 
     async def GetNoteVersions(  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -430,6 +434,54 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while restoring note version")
             return Note()
+
+    async def GetDirectoryActivity(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, request: GetDirectoryActivityRequest, context: ServicerContext
+    ) -> AsyncIterator[NoteVersionSummary]:
+        try:
+            if not request.user_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("user_id is required")
+                return
+
+            directory_id = (
+                request.directory_id
+                if request.HasField("directory_id") and request.directory_id
+                else None
+            )
+            max_depth = request.max_depth if request.HasField("max_depth") else 10
+            limit = request.limit if request.HasField("limit") else 25
+            offset = request.offset if request.HasField("offset") else 0
+
+            entries = await self._directory_activity_service.list_directory_activity(
+                directory_id=directory_id,
+                actor=UserContext(user_id=request.user_id),
+                max_depth=max_depth,
+                limit=limit,
+                offset=offset,
+            )
+
+            for entry in entries:
+                ts = Timestamp()
+                ts.FromDatetime(entry.created_at)
+                yield NoteVersionSummary(
+                    version_id=entry.version_id,
+                    note_id=entry.note_id,
+                    version_index=entry.version_index,
+                    created_at=ts,
+                    author_id=entry.author_id,
+                    is_snapshot=entry.is_snapshot,
+                    snapshot_id=entry.snapshot_id or "",
+                )
+        except PermissionError as exc:
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(exc))
+            return
+        except Exception:
+            self.log.error(f"Error fetching directory activity: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while fetching directory activity")
+            return
 
 
 class GrpcPermissionService(PermissionServiceServicer):
