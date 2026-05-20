@@ -731,6 +731,11 @@ class NoteVersionServiceStub(object):
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionsRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.FromString,
                 _registered_method=True)
+        self.GetDirectoryActivity = channel.unary_stream(
+                '/proto.NoteVersionService/GetDirectoryActivity',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryActivityRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.FromString,
+                _registered_method=True)
         self.GetNoteVersionContent = channel.unary_unary(
                 '/proto.NoteVersionService/GetNoteVersionContent',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionContentRequest.SerializeToString,
@@ -747,6 +752,12 @@ class NoteVersionServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def GetNoteVersions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetDirectoryActivity(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -770,6 +781,11 @@ def add_NoteVersionServiceServicer_to_server(servicer, server):
             'GetNoteVersions': grpc.unary_stream_rpc_method_handler(
                     servicer.GetNoteVersions,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionsRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.SerializeToString,
+            ),
+            'GetDirectoryActivity': grpc.unary_stream_rpc_method_handler(
+                    servicer.GetDirectoryActivity,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryActivityRequest.FromString,
                     response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.SerializeToString,
             ),
             'GetNoteVersionContent': grpc.unary_unary_rpc_method_handler(
@@ -809,6 +825,33 @@ class NoteVersionService(object):
             target,
             '/proto.NoteVersionService/GetNoteVersions',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionsRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDirectoryActivity(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/proto.NoteVersionService/GetDirectoryActivity',
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryActivityRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.FromString,
             options,
             channel_credentials,

@@ -833,6 +833,52 @@ class GetNoteVersionsRequest(_message.Message):
 Global___GetNoteVersionsRequest: _TypeAlias = GetNoteVersionsRequest  # noqa: Y015
 
 @_typing.final
+class GetDirectoryActivityRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    DIRECTORY_ID_FIELD_NUMBER: _builtins.int
+    MAX_DEPTH_FIELD_NUMBER: _builtins.int
+    LIMIT_FIELD_NUMBER: _builtins.int
+    OFFSET_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    directory_id: _builtins.str
+    max_depth: _builtins.int
+    limit: _builtins.int
+    offset: _builtins.int
+    user_id: _builtins.str
+    def __init__(
+        self,
+        *,
+        directory_id: _builtins.str | None = ...,
+        max_depth: _builtins.int | None = ...,
+        limit: _builtins.int | None = ...,
+        offset: _builtins.int | None = ...,
+        user_id: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_directory_id", b"_directory_id", "_limit", b"_limit", "_max_depth", b"_max_depth", "_offset", b"_offset", "directory_id", b"directory_id", "limit", b"limit", "max_depth", b"max_depth", "offset", b"offset"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_directory_id", b"_directory_id", "_limit", b"_limit", "_max_depth", b"_max_depth", "_offset", b"_offset", "directory_id", b"directory_id", "limit", b"limit", "max_depth", b"max_depth", "offset", b"offset", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__directory_id: _TypeAlias = _typing.Literal["directory_id"]  # noqa: Y015
+    _WhichOneofArgType__directory_id: _TypeAlias = _typing.Literal["_directory_id", b"_directory_id"]  # noqa: Y015
+    _WhichOneofReturnType__limit: _TypeAlias = _typing.Literal["limit"]  # noqa: Y015
+    _WhichOneofArgType__limit: _TypeAlias = _typing.Literal["_limit", b"_limit"]  # noqa: Y015
+    _WhichOneofReturnType__max_depth: _TypeAlias = _typing.Literal["max_depth"]  # noqa: Y015
+    _WhichOneofArgType__max_depth: _TypeAlias = _typing.Literal["_max_depth", b"_max_depth"]  # noqa: Y015
+    _WhichOneofReturnType__offset: _TypeAlias = _typing.Literal["offset"]  # noqa: Y015
+    _WhichOneofArgType__offset: _TypeAlias = _typing.Literal["_offset", b"_offset"]  # noqa: Y015
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__directory_id) -> _WhichOneofReturnType__directory_id | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__limit) -> _WhichOneofReturnType__limit | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__max_depth) -> _WhichOneofReturnType__max_depth | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__offset) -> _WhichOneofReturnType__offset | None: ...
+
+Global___GetDirectoryActivityRequest: _TypeAlias = GetDirectoryActivityRequest  # noqa: Y015
+
+@_typing.final
 class NoteVersionContent(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 

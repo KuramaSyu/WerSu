@@ -197,6 +197,14 @@ message GetNoteVersionsRequest {
     string user_id = 4;
 }
 
+message GetDirectoryActivityRequest {
+    optional string directory_id = 1;
+    optional int32 max_depth = 2;
+    optional int32 limit = 3;
+    optional int32 offset = 4;
+    string user_id = 5;
+}
+
 message NoteVersionContent {
     string note_id = 1;
     int64 version_index = 2;
@@ -244,6 +252,7 @@ service PermissionService {
 
 service NoteVersionService {
     rpc GetNoteVersions(GetNoteVersionsRequest) returns (stream NoteVersionSummary);
+    rpc GetDirectoryActivity(GetDirectoryActivityRequest) returns (stream NoteVersionSummary);
     rpc GetNoteVersionContent(GetNoteVersionContentRequest) returns (NoteVersionContent);
     rpc RestoreNoteVersion(RestoreNoteVersionRequest) returns (Note);
 }

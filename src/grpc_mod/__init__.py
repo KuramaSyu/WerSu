@@ -21,6 +21,7 @@ from .proto.note_pb2 import (
     DeletePermissionRequest,
     GetDirectoryRequest,
     GetDirectoriesRequest,
+    GetDirectoryActivityRequest,
     GetNoteRequest,
     GetPermissionsRequest,
     GetSearchNotesRequest,
