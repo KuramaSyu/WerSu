@@ -86,6 +86,14 @@ class _InMemoryDirectoryRepo(DirectoryRepo):
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         return False
 
+    async def resolve_files_of_directory(
+        self,
+        directory_id: Optional[str],
+        actor: UserContextABC,
+        max_depth: int = 10,
+    ) -> List[str]:
+        return []
+
 
 def _make_test_user() -> UserEntity:
     return UserEntity(

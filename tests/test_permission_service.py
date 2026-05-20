@@ -80,6 +80,14 @@ class _StubDirectoryRepo(DirectoryRepo):
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         raise NotImplementedError()
 
+    async def resolve_files_of_directory(
+        self,
+        directory_id: Optional[str],
+        actor: UserContextABC,
+        max_depth: int = 10,
+    ) -> List[str]:
+        return []
+
 
 async def test_permission_service_create_and_list_note_relationships() -> None:
     """Creates a note relation and verifies listing returns all stored relations."""

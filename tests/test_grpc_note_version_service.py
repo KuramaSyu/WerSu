@@ -16,7 +16,18 @@ from src.grpc_mod.proto.note_pb2 import (
     RestoreNoteVersionRequest,
 )
 from src.grpc_mod.service import GrpcNoteVersionService
+from src.services.versioning import DirectoryActivityServiceABC
 
+class _FakeDirectoryActivityService(DirectoryActivityServiceABC):
+    async def list_directory_activity(
+        self,
+        directory_id: Optional[str],
+        actor: UserContext,
+        max_depth: int = 10,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> List[NoteVersionEntry]:
+        return []
 
 class _FakeContext:
     def __init__(self) -> None:
@@ -101,6 +112,7 @@ async def test_get_note_versions_returns_entries() -> None:
         note_repo=_StubNoteRepo(),
         version_repo=_StubVersionRepo(),
         log=_log_provider,
+        directory_activity_service=_FakeDirectoryActivityService(),
     )
     context = _FakeContext()
 
@@ -118,6 +130,7 @@ async def test_get_note_version_content_returns_payload() -> None:
         note_repo=_StubNoteRepo(),
         version_repo=_StubVersionRepo(),
         log=_log_provider,
+        directory_activity_service=_FakeDirectoryActivityService(),
     )
     context = _FakeContext()
 
@@ -136,6 +149,7 @@ async def test_restore_note_version_updates_note() -> None:
         note_repo=note_repo,
         version_repo=_StubVersionRepo(),
         log=_log_provider,
+        directory_activity_service=_FakeDirectoryActivityService(),
     )
     context = _FakeContext()
 

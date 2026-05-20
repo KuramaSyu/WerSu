@@ -70,6 +70,14 @@ class _StubDirectoryRepo(DirectoryRepo):
         self.deleted_ids.append(directory_id)
         return directory_id in self._by_id
 
+    async def resolve_files_of_directory(
+        self,
+        directory_id: Optional[str],
+        actor,
+        max_depth: int = 10,
+    ) -> List[str]:
+        return []
+
 
 def _log_provider(*_args, **_kwargs):
     return logging.getLogger("test.grpc.directory")

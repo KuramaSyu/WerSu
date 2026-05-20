@@ -47,6 +47,14 @@ class _TestDirectoryRepo(DirectoryRepo):
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         raise NotImplementedError()
 
+    async def resolve_files_of_directory(
+        self,
+        directory_id: Optional[str],
+        actor: UserContextABC,
+        max_depth: int = 10,
+    ) -> List[str]:
+        return []
+
 
 class _TestSpiceDbClient:
     async def WriteSchema(self, request) -> None:
