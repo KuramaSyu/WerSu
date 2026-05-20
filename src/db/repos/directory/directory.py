@@ -165,6 +165,32 @@ class DirectoryRepo(ABC):
         """
         ...
 
+    @abstractmethod
+    async def resolve_files_of_directory(
+        self,
+        directory_id: Optional[str],
+        actor: UserContextABC,
+        max_depth: int = 10,
+    ) -> List[str]:
+        """Resolve note IDs that belong to a directory and its subdirectories.
+
+        Parameters
+        ----------
+        directory_id : Optional[str]
+            Directory ID to start from. If `None` or empty, resolve all files
+            for directories visible to the user.
+        actor : UserContextABC
+            Current user context.
+        max_depth : int
+            Maximum recursion depth (0 means only the provided directory).
+
+        Returns
+        -------
+        List[str]
+            Note IDs discovered in the directory subtree.
+        """
+        ...
+
 
 class DirectoryRepoSpicedbPostgres(DirectoryRepo):
     """Directory repository backed by Postgres and SpiceDB."""
@@ -411,6 +437,73 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
             )
         )
         return result == "DELETE 1"
+
+    async def resolve_files_of_directory(
+        self,
+        directory_id: Optional[str],
+        actor: UserContextABC,
+        max_depth: int = 10,
+    ) -> List[str]:
+        if max_depth < 0:
+            raise ValueError("max_depth must be >= 0")
+
+        if directory_id in (None, ""):
+            start_directories = await self.list_user_directory_ids(actor)
+        else:
+            start_directories = [str(directory_id)]
+            can_view = await self._permission_repo.has_permission(
+                actor,
+                "view",
+                ObjectRef(ObjectTypeEnum.DIRECTORY, str(directory_id)),
+            )
+            if not can_view:
+                raise PermissionError("User does not have view access to the directory")
+
+        if not start_directories:
+            return []
+
+        visited: set[str] = set()
+        note_ids: set[str] = set()
+        queue: list[tuple[str, int]] = [(directory_id, 0) for directory_id in start_directories]
+
+        while queue:
+            current_id, depth = queue.pop(0)
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+            if depth > max_depth:
+                continue
+
+            note_relations = await self._permission_repo.lookup_relationships(
+                Relationship(
+                    resource=ObjectRef(ObjectTypeEnum.NOTE, UNDEFINED),
+                    relation=NoteRelationEnum.PARENT_DIRECTORY,
+                    subject=SubjectRef(ObjectTypeEnum.DIRECTORY, current_id),
+                )
+            )
+            for rel in note_relations:
+                if rel.resource.object_id not in (UNDEFINED, None):
+                    note_ids.add(str(rel.resource.object_id))
+
+            if depth >= max_depth:
+                continue
+
+            child_relations = await self._permission_repo.lookup_relationships(
+                Relationship(
+                    resource=ObjectRef(ObjectTypeEnum.DIRECTORY, UNDEFINED),
+                    relation=DirectoryRelationEnum.PARENT,
+                    subject=SubjectRef(ObjectTypeEnum.DIRECTORY, current_id),
+                )
+            )
+            for rel in child_relations:
+                if rel.resource.object_id in (UNDEFINED, None):
+                    continue
+                child_id = str(rel.resource.object_id)
+                if child_id in visited:
+                    continue
+                queue.append((child_id, depth + 1))
+
+        return sorted(note_ids)
 
     async def _fetch_spicedb_relations(self, directory_id: str) -> Tuple[Optional[str], List[Relationship]]:
         """Fetch parent ID and user relations from SpiceDB."""
