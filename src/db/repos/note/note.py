@@ -281,6 +281,19 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         )
         await self._permission_repo.insert([owner_relation, parent_dir_relation])
         note.permissions = await self._fetch_note_permissions(note_id=note_id)
+        # Ensure newly created notes always return the parent directory relationship
+        # even if the permission backend is eventually consistent.
+        has_parent_dir = any(
+            str(rel.relation) == str(NoteRelationEnum.PARENT_DIRECTORY)
+            and str(rel.subject.object_type) == str(ObjectTypeEnum.DIRECTORY)
+            and str(rel.subject.object_id) == str(parent_directory_id)
+            for rel in note.permissions
+        )
+        if not has_parent_dir:
+            self.log.warning(
+                "Parent directory relationship missing in fetched permissions; adding it to response"
+            )
+            note.permissions.append(parent_dir_relation)
         note.note_id = note_id
 
         # record initial snapshot after we have a note id
