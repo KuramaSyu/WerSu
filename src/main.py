@@ -17,6 +17,7 @@ from src.db.migrations.runner import MigrationRunner
 from src.db.repos.note.permission import NotePermissionRepoSpicedb
 from src.services.roles import PermissionServiceRepo
 from src.services.user import UserServiceRepo
+from src.services.versioning import DirectoryActivityService
 from src.utils import logging_provider
 from src.db.database import Database
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
@@ -176,9 +177,15 @@ async def serve():
     note_service = GrpcNoteService(repo=repo, log=logging_provider)
     add_NoteServiceServicer_to_server(note_service, server)
 
+    directory_activity_service = DirectoryActivityService(
+        version_repo=version_repo,
+        directory_repo=directory_repo,
+        log=logging_provider,
+    )
     note_version_service = GrpcNoteVersionService(
         note_repo=repo,
         version_repo=version_repo,
+        directory_activity_service=directory_activity_service,
         log=logging_provider,
     )
     add_NoteVersionServiceServicer_to_server(note_version_service, server)
