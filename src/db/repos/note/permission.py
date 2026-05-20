@@ -469,7 +469,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
                 optional_relation=rel.relation,
                 optional_subject_filter=SubjectFilter(
                     subject_type=rel.subject.object_type,
-                    optional_subject_id=str(rel.subject.object.object_id)
+                    optional_subject_id=str(rel.subject.object_id)
                 )
             )
             return filter
