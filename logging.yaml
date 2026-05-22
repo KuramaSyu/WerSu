@@ -1,0 +1,6 @@
+level: INFO
+file: grpc_server.log
+loggers:
+  __main__: DEBUG
+  src: DEBUG
+  src.db.database: INFO

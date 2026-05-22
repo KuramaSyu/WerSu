@@ -9,3 +9,4 @@ sentence-transformers
 colorama
 authzed
 typing_extensions
+pyyaml

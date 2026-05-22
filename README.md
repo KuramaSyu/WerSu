@@ -7,6 +7,20 @@
 - don't regenerate embedding generator too often 
 
 # Development Docs
+### Logging configuration
+Logging levels can be configured with a YAML file. By default the app looks for `logging.yaml` in the workspace root, or you can override the path with `LOGGING_CONFIG_PATH`.
+
+Example:
+```yaml
+level: INFO
+loggers:
+    __main__: DEBUG
+    src: DEBUG
+    src.db.database: WARNING
+```
+
+Logger names use the most specific match, so `src.db.database` wins over `src`.
+
 ### Compile Protobufs (`.proto` files):
 1. install requirements:
     ```bash
