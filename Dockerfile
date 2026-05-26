@@ -15,5 +15,6 @@ RUN pip install --upgrade pip \
     && pip install -r /tmp/requirements.txt
 
 COPY src /app/src
+COPY logging.yaml /app/logging.yaml
 
 CMD ["python", "-m", "src.main"]
