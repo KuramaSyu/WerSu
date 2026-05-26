@@ -7,6 +7,10 @@ from grpc.aio import ServicerContext
 import asyncpg
 from pprint import pformat
 from google.protobuf.timestamp_pb2 import Timestamp
+import time
+import functools
+import logging
+import inspect
 
 from src.api import LoggingProvider
 from src.api.types import Pagination
@@ -76,6 +80,89 @@ from src.services.user import UserServiceABC
 from src.services.versioning import DirectoryActivityServiceABC
 
 
+# Decorator factory must be defined before use on service methods
+def _log_service_call_factory(logger_name: str = "src.services", measure_time: bool = True):
+    """Decorator factory for logging service method entry/exit and timing.
+
+    Logs at INFO level for entry/exit summary, DEBUG level for detailed args/timing.
+    Handles both async coroutine methods and async generator methods (streaming).
+    The decorator will prefer a `self.log` logger on the instance if present;
+    otherwise it will use `logging.getLogger(logger_name)`.
+    """
+
+    def decorator(func):
+        is_generator = inspect.isasyncgenfunction(func)
+
+        if is_generator:
+            @functools.wraps(func)
+            async def generator_wrapper(*args, **kwargs):
+                self = args[0] if args else None
+                logger = getattr(self, "log", None) or logging.getLogger(logger_name)
+                class_name = self.__class__.__name__ if self else ""
+                
+                logger.info("Calling %s.%s", class_name, func.__name__)
+                try:
+                    logger.debug("  args=%s kwargs=%s", args[1:] if self else args, kwargs)
+                except Exception:
+                    pass
+
+                start = time.perf_counter() if measure_time else None
+                try:
+                    async for item in func(*args, **kwargs):
+                        yield item
+                except Exception:
+                    try:
+                        logger.exception("Exception in %s.%s", class_name, func.__name__)
+                    except Exception:
+                        pass
+                    raise
+                finally:
+                    if measure_time and start is not None:
+                        elapsed = time.perf_counter() - start
+                        logger.info("Completed %s.%s in %.3fs", class_name, func.__name__, elapsed)
+
+            return generator_wrapper
+        else:
+            @functools.wraps(func)
+            async def coroutine_wrapper(*args, **kwargs):
+                self = args[0] if args else None
+                logger = getattr(self, "log", None) or logging.getLogger(logger_name)
+                class_name = self.__class__.__name__ if self else ""
+                
+                logger.info("Calling %s.%s", class_name, func.__name__)
+                try:
+                    logger.debug("  args=%s kwargs=%s", args[1:] if self else args, kwargs)
+                except Exception:
+                    pass
+
+                start = time.perf_counter() if measure_time else None
+                try:
+                    result = await func(*args, **kwargs)
+                    return result
+                except Exception:
+                    try:
+                        logger.exception("Exception in %s.%s", class_name, func.__name__)
+                    except Exception:
+                        pass
+                    raise
+                finally:
+                    if measure_time and start is not None:
+                        elapsed = time.perf_counter() - start
+                        logger.info("Completed %s.%s in %.3fs", class_name, func.__name__, elapsed)
+
+            return coroutine_wrapper
+
+    return decorator
+
+
+def log_service_call(logger_name: str = "src.services", measure_time: bool = True):
+    """Convenience factory used as `@log_service_call()` or `@log_service_call("my.logger")`.
+
+    Returns the actual decorator produced by `_log_service_call_factory`.
+    """
+    return _log_service_call_factory(logger_name=logger_name, measure_time=measure_time)
+
+
 class GrpcNoteService(NoteServiceServicer):
     """
     Implements the gRPC service defined in grpc/proto/note.proto
@@ -84,7 +171,9 @@ class GrpcNoteService(NoteServiceServicer):
     def __init__(self, repo: NoteRepoFacadeABC, log: LoggingProvider):
         self.repo = repo
         self.log = log(__name__, self)
+        self._svc_logger = logging.getLogger("src.services")
  
+    @log_service_call()
     async def GetNote(self, request: GetNoteRequest, context: ServicerContext) -> Note:
         try:
             note_entity = await self.repo.select_by_id(request.id, UserContext(user_id=request.user_id))
@@ -95,6 +184,7 @@ class GrpcNoteService(NoteServiceServicer):
             context.set_details("Internal server error while fetching note")
             return Note()
 
+    @log_service_call()
     async def PostNote(self, request: PostNoteRequest, context: ServicerContext) -> Note:
         try:
             user_context = UserContext(request.author_id)
@@ -121,6 +211,7 @@ class GrpcNoteService(NoteServiceServicer):
             context.set_details("Internal server error while creating note")
             return Note()
 
+    @log_service_call()
     async def PatchNote(self, request: AlterNoteRequest, context: ServicerContext) -> Note:
         try:
             note_entity = await self.repo.update(
@@ -143,6 +234,7 @@ class GrpcNoteService(NoteServiceServicer):
             context.set_details("Internal server error while updating note")
             return Note()
 
+    @log_service_call()
     async def DeleteNote(self, request: DeleteNoteRequest, context: ServicerContext) -> Note:
         try:
             deleted_note_entities = await self.repo.delete(
@@ -162,6 +254,7 @@ class GrpcNoteService(NoteServiceServicer):
             context.set_details("Internal server error while deleting note")
             return Note()
         
+    @log_service_call()
     async def SearchNotes(
         self, request: GetSearchNotesRequest, context: ServicerContext
     ) -> AsyncIterator[MinimalNote]:
@@ -184,6 +277,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
         self._directory_repo = directory_repo
         self.log = log(__name__, self)
 
+    @log_service_call()
     async def GetDirectory(self, request: GetDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
         try:
             if not request.id:
@@ -204,6 +298,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
             context.set_details("Internal server error while fetching directory")
             return Directory()
 
+    @log_service_call()
     async def GetDirectories(  # pyright: ignore[reportIncompatibleMethodOverride]
         self, request: GetDirectoriesRequest, context: ServicerContext
     ) -> AsyncIterator[Directory]:
@@ -253,6 +348,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
             context.set_details("Internal server error while fetching directories")
             return
 
+    @log_service_call()
     async def CreateDirectory(self, request: CreateDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
         try:
             if not request.name:
@@ -277,6 +373,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
             context.set_details("Internal server error while creating directory")
             return Directory()
 
+    @log_service_call()
     async def PatchDirectory(self, request: AlterDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
         try:
             if not request.id:
@@ -307,6 +404,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
             context.set_details("Internal server error while patching directory")
             return Directory()
 
+    @log_service_call()
     async def DeleteDirectory(self, request: DeleteDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
         try:
             if not request.id:
@@ -343,6 +441,7 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
         self._directory_activity_service = directory_activity_service
         self.log = log(__name__, self)
 
+    @log_service_call()
     async def GetNoteVersions(  # pyright: ignore[reportIncompatibleMethodOverride]
         self, request: GetNoteVersionsRequest, context: ServicerContext
     ) -> AsyncIterator[NoteVersionSummary]:
@@ -373,6 +472,7 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
             context.set_details("Internal server error while fetching note versions")
             return
 
+    @log_service_call()
     async def GetNoteVersionContent(  # pyright: ignore[reportIncompatibleMethodOverride]
         self, request: GetNoteVersionContentRequest, context: ServicerContext
     ) -> NoteVersionContent:
@@ -402,6 +502,7 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
             context.set_details("Internal server error while fetching note version content")
             return NoteVersionContent()
 
+    @log_service_call()
     async def RestoreNoteVersion(  # pyright: ignore[reportIncompatibleMethodOverride]
         self, request: RestoreNoteVersionRequest, context: ServicerContext
     ) -> Note:
@@ -435,6 +536,7 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
             context.set_details("Internal server error while restoring note version")
             return Note()
 
+    @log_service_call()
     async def GetDirectoryActivity(  # pyright: ignore[reportIncompatibleMethodOverride]
         self, request: GetDirectoryActivityRequest, context: ServicerContext
     ) -> AsyncIterator[NoteVersionSummary]:
@@ -496,6 +598,7 @@ class GrpcPermissionService(PermissionServiceServicer):
         self._permission_service = permission_service
         self.log = log(__name__, self)
 
+    @log_service_call()
     async def GetPermissions(self, request: GetPermissionsRequest, context: ServicerContext) -> PermissionsResponse:
         try:
             resource = to_object_ref(request.object_type, request.object_id)
@@ -507,6 +610,7 @@ class GrpcPermissionService(PermissionServiceServicer):
         except Exception as exc:
             return self._handle_permissions_exception(exc, context)
 
+    @log_service_call()
     async def CreatePermission(self, request: CreatePermissionRequest, context: ServicerContext) -> PermissionsResponse:
         try:
             resource = to_object_ref(request.object_type, request.object_id)
@@ -519,6 +623,7 @@ class GrpcPermissionService(PermissionServiceServicer):
         except Exception as exc:
             return self._handle_permissions_exception(exc, context)
 
+    @log_service_call()
     async def DeletePermission(self, request: DeletePermissionRequest, context: ServicerContext) -> PermissionsResponse:
         try:
             resource = to_object_ref(request.object_type, request.object_id)
@@ -531,6 +636,7 @@ class GrpcPermissionService(PermissionServiceServicer):
         except Exception as exc:
             return self._handle_permissions_exception(exc, context)
 
+    @log_service_call()
     async def ReplacePermissions(self, request: ReplacePermissionsRequest, context: ServicerContext) -> PermissionsResponse:
         try:
             resource = to_object_ref(request.object_type, request.object_id)
@@ -601,6 +707,7 @@ class GrpcUserService(UserServiceServicer):
         self.user_service = user_service
         self.log = log(__name__, self)
 
+    @log_service_call()
     async def GetUser(self, request: GetUserRequest, context: ServicerContext) -> User:
         try:
             return await self._GetUser(request, context)
@@ -610,6 +717,7 @@ class GrpcUserService(UserServiceServicer):
             context.set_details("Internal server error while fetching user")
             return User()
 
+    @log_service_call()
     async def _GetUser(self, request: GetUserRequest, context: ServicerContext) -> User:
         if request.HasField("id"):
             user_entity = await self.user_service.get_user(user_id=request.id)
@@ -630,12 +738,15 @@ class GrpcUserService(UserServiceServicer):
         # user found and converted to gRPC User Message
         return to_grpc_user(user_entity)
 
+    @log_service_call()
     async def AlterUser(self, request: AlterUserRequest, context: ServicerContext) -> User:
         ...
     
+    @log_service_call()
     async def DeleteUser(self, request: DeleteUserRequest, context: ServicerContext) -> DeleteUserResponse:
         ...
     
+    @log_service_call()
     async def PostUser(self, request: PostUserRequest, context: ServicerContext) -> User:
         try:
             user_entity = await self.user_service.create_user(
