@@ -71,6 +71,17 @@ def _normalize_level(level: Optional[str]) -> int:
     return level_value if isinstance(level_value, int) else logging.INFO
 
 
+def _apply_logger_levels(config: Dict[str, Any]) -> None:
+    """Apply configured logger levels to all named loggers (including third-party ones).
+    
+    This must be called as soon as the config is available, before other code
+    has a chance to emit logs. It applies levels to loggers that already exist
+    and will be inherited by child loggers.
+    """
+    for logger_name, logger_level in config.get("loggers", {}).items():
+        logging.getLogger(logger_name).setLevel(logger_level)
+
+
 def _load_config() -> Dict[str, Any]:
     global _CONFIG_CACHE
     if _CONFIG_CACHE is not None:
@@ -99,6 +110,10 @@ def _load_config() -> Dict[str, Any]:
             normalized_loggers[name] = _normalize_level(level)
     config["loggers"] = normalized_loggers
 
+    # Apply logger levels immediately so third-party loggers (like httpx)
+    # are configured before they emit their first log
+    _apply_logger_levels(config)
+
     _CONFIG_CACHE = config
     return _CONFIG_CACHE
 
@@ -112,7 +127,7 @@ def _configure_handlers() -> None:
     config = _load_config()
 
     root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
+    root.setLevel(config.get("level", logging.INFO))
 
     formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s")
 
@@ -131,6 +146,7 @@ def _configure_handlers() -> None:
 
     root.addHandler(file_handler)
     root.addHandler(stdout_handler)
+
     _HANDLERS_CONFIGURED = True
 
 
