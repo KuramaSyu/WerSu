@@ -206,6 +206,11 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         self._spicedb_client = spicedb_client
 
     async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
+        """
+        Notes
+        ------
+        - entity.relations are iterated, and resource.object_id is set to the created directory ID before insertion into SpiceDB
+        """
         entity_data = convert_entity_for_db(entity)
         record = await self._db.fetchrow(
             """

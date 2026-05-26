@@ -37,12 +37,14 @@ from src.api import UNDEFINED, UndefinedNoneOr, UndefinedOr
 
 
 class ObjectTypeEnum(StrEnum):
+    """Represents SpiceDB objects/resources"""
     NOTE = "note"
     DIRECTORY = "directory"
     USER = "user"
 
 
 class NoteRelationEnum(StrEnum):
+    """Represents SpiceDB relations/permissions for note objects"""
     ADMIN = "admin"
     WRITER = "writer"
     READER = "reader"
@@ -54,6 +56,7 @@ class NoteRelationEnum(StrEnum):
 
 
 class DirectoryRelationEnum(StrEnum):
+    """Represents SpiceDB relations/permissions for directory objects"""
     PARENT = "parent"
     ADMIN = "admin"
     WRITER = "writer"

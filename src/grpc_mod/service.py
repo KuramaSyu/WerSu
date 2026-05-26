@@ -20,7 +20,7 @@ from src.db.entities import NoteEntity
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
 from src.db.repos.note.versioning import NoteVersionRepoABC
-from src.db.repos.note.permission import ObjectRef, ObjectTypeEnum, Relationship
+from src.db.repos.note.permission import NoteRelationEnum, ObjectRef, ObjectTypeEnum, RelationEnum, Relationship
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod.converter import (
     to_grpc_directory,
@@ -355,6 +355,13 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
                 context.set_details("name is required")
                 return Directory()
+            
+            # directory:UNDEFINED#admin@user:user_id <-- this gets updated in SpiceDB Directory Repo
+            user_admin_relation = Relationship(
+                resource=ObjectRef(object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED),
+                relation=NoteRelationEnum.ADMIN,
+                subject=ObjectRef(object_type=ObjectTypeEnum.USER, object_id=request.user_id),
+            )
 
             directory = await self._directory_repo.create_directory(
                 DirectoryEntity(
@@ -363,7 +370,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                     description=request.description if request.HasField("description") else UNDEFINED,
                     image_url=request.image_url if request.HasField("image_url") else UNDEFINED,
                     parent_id=request.parent_id if request.HasField("parent_id") else UNDEFINED,
-                    relations=[],
+                    relations=[user_admin_relation],
                 )
             )
             return to_grpc_directory(directory)
