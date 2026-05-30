@@ -87,3 +87,18 @@ services:
         condition: service_healthy
       spicedb:
         condition: service_started
+
+  openinary:
+    image: openinary/openinary:v0.1.7
+    platform: linux/amd64
+    #ports:
+    #  - "3000:3000"
+    # it seems like 3 ports are used: 3001 for web, 3002 for api and 3000 as proxy for both
+    # hence forward port 3000 with traeffik
+    environment:
+      BETTER_AUTH_URL: ${OPENINARY_URL}
+      CORS_ORIGIN: ${OPENINARY_CORS_ORIGIN:-http://localhost:5173}
+    volumes:
+      - ./data/openinary/cache:/app/apps/api/cache
+      - ./data/openinary/public:/app/apps/api/public
+      - ./data/openinary/db:/app/data
