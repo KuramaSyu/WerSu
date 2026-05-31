@@ -1,6 +1,7 @@
 definition user {}
 definition directory {
     relation parent: directory
+    relation owner: user
     relation admin: user
     relation writer: user
     relation reader: user
@@ -8,6 +9,7 @@ definition directory {
     permission delete = admin
     permission write = writer + admin
     permission view = reader + write
+    permission edit_permissions = admin + owner
 
 
 }
@@ -25,4 +27,5 @@ definition note {
     permission delete = owner + admin + parent_directory->delete
     permission write = owner + writer + admin + parent_directory->write
     permission view = reader + write
+    permission edit_permissions = owner + admin + parent_directory->edit_permissions
 }

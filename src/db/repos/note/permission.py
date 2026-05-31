@@ -653,13 +653,13 @@ class NotePermissionRepoInMemory(NotePermissionRepo):
     """
     _relation_implied_permissions = {
         "note": {
-            "admin": {"admin", "delete", "write", "view"},
+            "admin": {"admin", "delete", "write", "view", "edit_permissions"},
             "writer": {"writer", "write", "view"},
             "reader": {"reader", "view"},
-            "owner": {"owner", "admin", "delete", "write", "view"},
+            "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions"},
         },
         "directory": {
-            "admin": {"admin", "delete", "write", "view"},
+            "admin": {"admin", "delete", "write", "view", "edit_permissions"},
             "writer": {"writer", "write", "view"},
             "reader": {"reader", "view"},
         },

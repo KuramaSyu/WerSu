@@ -70,3 +70,15 @@ docker compose down; rm -r data; docker compose up --build -d; env PYTHONTRACEMA
     ```bash
     pytest -o addopts='' tests/
     ```
+
+# SpiceDB and Zanzibar
+Zanzibar is a way to store relations between objects. One implementation for it is SpiceDB. Let's say you want to 
+say that a user has admin rights for a Note, because it's the creator, then you would typically create an entity
+for the note, persist it so that it gets an ID. Now you could store a `has_admin` in the note relation where the 
+note is also stored. But this has a view limitations. Let's first take a look on how to do it right:
+Create a Zanzibar Relation in the following format:
+`resource:resource_id#relation@object:object_id`
+in the case of giving a user admin-rights for a file it would look like this:
+`note:note_id#admin@user:user_id` (read as user `user_id` has admin permission for note `note_id`).
+Now you can not only store permissions, but also create relations like storing what directory a note belongs to:
+`directory:directory_id#parent@note:note_id`
