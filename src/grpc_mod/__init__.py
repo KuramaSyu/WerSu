@@ -1,3 +1,9 @@
+from .proto.attachments_pb2_grpc import (
+    add_AttachmentServiceServicer_to_server,
+    AttachmentService,
+    AttachmentServiceServicer,
+    AttachmentServiceStub,
+)
 from .proto.note_pb2_grpc import (
     add_DirectoryServiceServicer_to_server,
     add_NoteServiceServicer_to_server,
@@ -11,6 +17,15 @@ from .proto.note_pb2_grpc import (
     PermissionService,
     PermissionServiceServicer,
     PermissionServiceStub,
+)
+from .proto.attachments_pb2 import (
+    Attachment,
+    AttachmentMetadata,
+    DeleteAttachmentRequest,
+    DeleteAttachmentResponse,
+    GetAttachmentMetadataRequest,
+    GetAttachmentRequest,
+    PostAttachmentRequest,
 )
 from .proto.note_pb2 import (
     AlterDirectoryRequest,

@@ -21,8 +21,11 @@ from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.db.repos.note.permission import NoteRelationEnum, ObjectRef, ObjectTypeEnum, RelationEnum, Relationship
+from src.db.repos.attachments.attachments import Attachment as AttachmentEntity
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod.converter import (
+    to_grpc_attachment,
+    to_grpc_attachment_metadata,
     to_grpc_directory,
     to_grpc_note,
     to_grpc_user,
@@ -31,6 +34,18 @@ from src.grpc_mod.converter import (
     to_permission_resource,
     to_relationship,
 )
+from src.grpc_mod.proto.attachments_pb2 import (
+    Attachment as GrpcAttachment,
+    AttachmentMetadata as GrpcAttachmentMetadata,
+    DeleteAttachmentLinkRequest,
+    DeleteAttachmentRequest,
+    DeleteAttachmentResponse,
+    GetAttachmentMetadataRequest,
+    GetAttachmentRequest,
+    PostAttachmentLinkRequest,
+    PostAttachmentRequest,
+)
+from src.grpc_mod.proto.attachments_pb2_grpc import AttachmentServiceServicer
 from src.grpc_mod.converter.note_entity_converter import to_grpc_minimal_note, to_search_type
 from src.grpc_mod.proto.note_pb2 import (
     AlterNoteRequest,
@@ -75,6 +90,7 @@ from src.grpc_mod.proto.user_pb2 import (
     User,
 )
 from src.grpc_mod.proto.user_pb2_grpc import UserServiceServicer
+from src.services.attachments import AttachmentFacadeABC
 from src.services.roles import PermissionServiceABC
 from src.services.user import UserServiceABC
 from src.services.versioning import DirectoryActivityServiceABC
@@ -777,3 +793,110 @@ class GrpcUserService(UserServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while creating user")
             return User()
+
+
+class GrpcAttachmentService(AttachmentServiceServicer):
+    """Implements the gRPC service defined in grpc/proto/attachments.proto."""
+
+    def __init__(self, attachment_service: AttachmentFacadeABC, log: LoggingProvider):
+        self.attachment_service = attachment_service
+        self.log = log(__name__, self)
+
+    @log_service_call()
+    async def PostAttachment(
+        self, request: PostAttachmentRequest, context: ServicerContext
+    ) -> GrpcAttachment:
+        try:
+            now = datetime.utcnow().isoformat()
+            attachment = AttachmentEntity(
+                key=UNDEFINED,
+                filename=request.filename,
+                filepath=request.filepath,
+                content_type=request.content_type or "application/octet-stream",
+                size=len(request.content),
+                created_at=now,
+                updated_at=now,
+                content=request.content,
+            )
+            created = await self.attachment_service.post_attachment(attachment)
+            return to_grpc_attachment(created)
+        except ValueError as exc:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(exc))
+            return GrpcAttachment()
+        except Exception:
+            self.log.error(f"Error creating attachment: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while creating attachment")
+            return GrpcAttachment()
+
+    @log_service_call()
+    async def GetAttachment(
+        self, request: GetAttachmentRequest, context: ServicerContext
+    ) -> GrpcAttachment:
+        try:
+            attachment = await self.attachment_service.get_attachment(request.key)
+            return to_grpc_attachment(attachment)
+        except KeyError as exc:
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details(str(exc))
+            return GrpcAttachment()
+        except Exception:
+            self.log.error(f"Error fetching attachment: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while fetching attachment")
+            return GrpcAttachment()
+
+    @log_service_call()
+    async def GetAttachmentMetadata(
+        self, request: GetAttachmentMetadataRequest, context: ServicerContext
+    ) -> GrpcAttachmentMetadata:
+        try:
+            attachment = await self.attachment_service.get_metadata(request.key)
+            return to_grpc_attachment_metadata(attachment)
+        except KeyError as exc:
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            context.set_details(str(exc))
+            return GrpcAttachmentMetadata()
+        except Exception:
+            self.log.error(f"Error fetching attachment metadata: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while fetching attachment metadata")
+            return GrpcAttachmentMetadata()
+
+    @log_service_call()
+    async def DeleteAttachment(
+        self, request: DeleteAttachmentRequest, context: ServicerContext
+    ) -> DeleteAttachmentResponse:
+        try:
+            await self.attachment_service.delete_attachment(request.key)
+            return DeleteAttachmentResponse(success=True)
+        except Exception:
+            self.log.error(f"Error deleting attachment: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while deleting attachment")
+            return DeleteAttachmentResponse(success=False)
+        
+    @log_service_call()
+    async def PostAttachmentLink(self, request: PostAttachmentLinkRequest, context: ServicerContext) -> None:
+        try:
+            await self.attachment_service.link_attachment_to_note(
+                attachment_key=request.attachment_key,
+                note_id=request.note_id,
+            )
+        except Exception:
+            self.log.error(f"Error linking attachment: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while linking attachment")
+
+    @log_service_call()
+    async def DeleteAttachmentLink(self, request: DeleteAttachmentLinkRequest, context: ServicerContext) -> None:
+        try:
+            await self.attachment_service.unlink_attachment_from_note(
+                attachment_key=request.attachment_key,
+                note_id=request.note_id,
+            )
+        except Exception:
+            self.log.error(f"Error linking attachment: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while unlinking attachment")        

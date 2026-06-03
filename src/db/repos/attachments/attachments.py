@@ -5,12 +5,13 @@ import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, List, Optional, Protocol
+from typing import List, Optional, Protocol
 
 from asyncpg import Record
 
 from src.api.undefined import UNDEFINED, UndefinedOr
 from src.db.table import TableABC
+from src.utils import convert_entity_for_db
 
 @dataclass
 class Attachment:
@@ -28,16 +29,20 @@ class Attachment:
     filepath: str
     content_type: str
     size: int
-    created_at: str
-    updated_at: str
     content: bytes
+    
+    created_at: UndefinedOr[datetime] = UNDEFINED,  # set by storage repo if not provided
+    updated_at: UndefinedOr[datetime] = UNDEFINED,  # set by storage repo if not provided
+    checksum: UndefinedOr[str] = UNDEFINED
 
     @property
     def sha256(self) -> str:
+        if self.checksum is not UNDEFINED:
+            return str(self.checksum)
         return hashlib.sha256(self.content).hexdigest()
 
 
-class AttachmentsRepo(ABC):
+class AttachmentsRepoABC(ABC):
     @abstractmethod
     async def post_attachment(self, attachment: Attachment) -> str:
         """Upload an attachment and return its key."""
@@ -45,7 +50,14 @@ class AttachmentsRepo(ABC):
     
     @abstractmethod
     async def get_attachment(self, key: str) -> Attachment:
-        """Download an attachment by key."""
+        """Download an attachment by key.
+
+        Raises
+        ------
+        KeyError
+            If the attachment is not found for the given key.
+        
+        """
         ...
     
     @abstractmethod
@@ -53,7 +65,7 @@ class AttachmentsRepo(ABC):
         """Delete an attachment by key."""
         ...
 
-class AttachmentsMetadataRepo(ABC):
+class AttachmentsMetadataRepoABC(ABC):
     @abstractmethod
     async def post_metadata(self, attachment: Attachment) -> None:
         """Save attachment metadata to the database."""
@@ -70,7 +82,7 @@ class AttachmentsMetadataRepo(ABC):
         ...
 
 
-class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepo):
+class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepoABC):
     """Postgres-backed metadata repository for attachments."""
 
     def __init__(self, table: TableABC[List[Record]]):
@@ -79,19 +91,10 @@ class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepo):
     async def post_metadata(self, attachment: Attachment) -> None:
         if attachment.key is UNDEFINED:
             raise ValueError("Attachment key must be set before storing metadata")
+        
+        attachment_as_dict = convert_entity_for_db(attachment)
 
-        await self._table.insert(
-            {
-                "key": attachment.key,
-                "filename": attachment.filename,
-                "filepath": attachment.filepath,
-                "content_type": attachment.content_type,
-                "size": attachment.size,
-                "created_at": attachment.created_at,
-                "updated_at": attachment.updated_at,
-                "sha256": attachment.sha256,
-            },
-            returning="key",
+        await self._table.insert(attachment_as_dict, returning="key",
         )
 
     async def get_metadata(self, key: str) -> Attachment:
@@ -101,6 +104,7 @@ class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepo):
         )
         if not record:
             raise KeyError(f"Attachment metadata not found for key={key}")
+        
 
         return Attachment(
             key=record["key"],
@@ -111,13 +115,14 @@ class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepo):
             created_at=_to_iso_string(record["created_at"]),
             updated_at=_to_iso_string(record["updated_at"]),
             content=b"",
+            checksum=record["sha256"],
         )
 
     async def delete_metadata(self, key: str) -> None:
         await self._table.delete(where={"key": key}, returning="key")
 
 
-class AttachmentsS3Repo(AttachmentsRepo):
+class AttachmentsS3Repo(AttachmentsRepoABC):
     """S3-compatible attachment repository using a sync boto3 client.
 
     Notes
@@ -200,6 +205,17 @@ def _new_key() -> str:
 
 def _now_iso() -> str:
     return datetime.utcnow().isoformat()
+
+
+def _to_datetime(value: object) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return datetime.utcnow()
+    return datetime.utcnow()
 
 
 def _to_iso_string(value: Optional[object]) -> str:

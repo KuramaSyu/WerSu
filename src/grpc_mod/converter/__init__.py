@@ -1,3 +1,4 @@
+from .attachment_converter import to_grpc_attachment, to_grpc_attachment_metadata
 from .directory_entity_converter import to_grpc_directory
 from .note_entity_converter import to_grpc_note
 from .permission_relationship_converter import (

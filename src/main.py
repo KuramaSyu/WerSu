@@ -6,6 +6,7 @@ import time
 
 import asyncio
 from typing import Optional, Callable
+import boto3
 from authzed.api.v1 import AsyncClient
 import grpc
 from colorama import Fore, Style, init
@@ -18,12 +19,20 @@ from src.db.repos.note.permission import NotePermissionRepoSpicedb
 from src.services.roles import PermissionServiceRepo
 from src.services.user import UserServiceRepo
 from src.services.versioning import DirectoryActivityService
+from src.services.attachments import AttachmentFacade
 from src.utils import logging_provider
 from src.db.database import Database
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
+from src.db.repos.attachments.attachments import (
+    AttachmentsMetadataPostgresRepo,
+    AttachmentsMetadataRepoABC,
+    AttachmentsRepoABC,
+    AttachmentsS3Repo,
+)
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.table import Table, setup_table_logging
+from src.grpc_mod.proto.attachments_pb2_grpc import add_AttachmentServiceServicer_to_server
 from src.grpc_mod.proto.note_pb2_grpc import (
     add_DirectoryServiceServicer_to_server,
     add_NoteServiceServicer_to_server,
@@ -34,6 +43,7 @@ from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteRepoFacade
 from src.grpc_mod.service import (
+    GrpcAttachmentService,
     GrpcDirectoryService,
     GrpcNoteService,
     GrpcNoteVersionService,
@@ -74,6 +84,11 @@ async def serve():
     grpc_spicedb_credentials = get_os_env_variable("GRPC_SPICEDB_CREDENTIALS", log, UNDEFINED)
     grpc_spicedb_address = get_os_env_variable("GRPC_SPICEDB_ADDRESS", log, UNDEFINED)
     max_note_deltas = int(get_os_env_variable("NOTE_VERSION_MAX_DELTAS", log, "10"))
+    s3_endpoint = get_os_env_variable("S3_ENDPOINT", log, "http://localhost:3900")
+    s3_region = get_os_env_variable("S3_REGION", log, "garage")
+    s3_access_key = get_os_env_variable("GARAGE_DEFAULT_ACCESS_KEY", log, UNDEFINED)
+    s3_secret_key = get_os_env_variable("GARAGE_DEFAULT_SECRET_KEY",log, UNDEFINED)
+    s3_bucket = get_os_env_variable("GARAGE_DEFAULT_BUCKET", log, UNDEFINED)
     
 
     # create server 
@@ -129,6 +144,25 @@ async def serve():
         table_name="note.version_delta",
         id_fields=["delta_id"],
     )
+    attachments_table = Table(
+        **common_table_kwargs,
+        table_name="note.attachment",
+        id_fields=["key"],
+    )
+    attachments_note_link_table = Table(
+        **common_table_kwargs,
+        table_name="note.attachment_note_link",
+        id_fields=["note_id", "attachment_key"],
+    )
+
+    # setup S3 connection
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=s3_endpoint,
+        aws_access_key_id=s3_access_key,
+        aws_secret_access_key=s3_secret_key,
+        region_name=s3_region,
+    )
 
     # setup note repo via DI
     log.info("Importing repo and service modules...")
@@ -145,7 +179,7 @@ async def serve():
     )
     log.info(f"Embedding model initialized in {time.perf_counter() - model_init_started:.2f}s")
 
-    log.info("Setting up NoteRepoFacade, sub repos and embedding generator...")
+    user_repo = UserPostgresRepo(db=db)
     permission_repo = NotePermissionRepoSpicedb(client=spicedb_client)
     directory_repo = DirectoryRepoSpicedbPostgres(
         db=db,
@@ -170,6 +204,19 @@ async def serve():
         directory_repo=directory_repo,
         logging_provider=logging_provider,
         version_repo=version_repo,
+    )
+    attachments_repo: AttachmentsRepoABC = AttachmentsS3Repo(
+        client=s3_client,
+        bucket=s3_bucket,
+    )
+    metadata_repo: AttachmentsMetadataRepoABC = AttachmentsMetadataPostgresRepo(
+        table=attachments_table
+    )
+    attachment_service = AttachmentFacade(
+        attachment_repo=attachments_repo,
+        metadata_repo=metadata_repo,
+        attachments_note_link_table=attachments_note_link_table,
+        log=logging_provider,
     )
 
     # setup gRPC note service
@@ -208,10 +255,16 @@ async def serve():
     add_PermissionServiceServicer_to_server(grpc_permission_service, server)
 
     # setup gRPC user service
-    user_repo = UserPostgresRepo(db=db)
     app_user_service = UserServiceRepo(user_repo=user_repo, directory_repo=directory_repo)
     grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider)
     add_UserServiceServicer_to_server(grpc_user_service, server)
+
+    # setup gRPC attachment service
+    grpc_attachment_service = GrpcAttachmentService(
+        attachment_service=attachment_service,
+        log=logging_provider,
+    )
+    add_AttachmentServiceServicer_to_server(grpc_attachment_service, server)
 
     # configure server
     listen_addr = f"{grpc_host}:{grpc_port}"
