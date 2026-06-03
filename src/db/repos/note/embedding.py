@@ -65,7 +65,7 @@ class NoteEmbeddingRepo(ABC):
         set: NoteEmbeddingEntity,
         where: NoteEmbeddingEntity,
     ) -> NoteEmbeddingEntity:
-        """updates embedding
+        """updates embedding (just inserting it, given with the `set` parameter)
         
         Args:
         -----
