@@ -130,6 +130,9 @@ class _StubEmbeddingRepo(NoteEmbeddingRepo):
 
     async def select(self, embedding):
         return []
+    
+    async def _update(self, set, where):
+        raise NotImplementedError
 
     @property
     def embedding_generator(self):

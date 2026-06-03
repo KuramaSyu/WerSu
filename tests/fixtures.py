@@ -112,6 +112,8 @@ async def db(dsn):
     await db.execute("""
     TRUNCATE TABLE
         users,
+        note.attachment,
+        note.attachment_note_link,
         note.directory,
         note.content,
         note.version_snapshot,
