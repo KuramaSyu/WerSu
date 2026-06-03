@@ -88,17 +88,23 @@ services:
       spicedb:
         condition: service_started
 
-  openinary:
-    image: openinary/openinary:v0.1.7
-    platform: linux/amd64
-    #ports:
-    #  - "3000:3000"
-    # it seems like 3 ports are used: 3001 for web, 3002 for api and 3000 as proxy for both
-    # hence forward port 3000 with traeffik
-    environment:
-      BETTER_AUTH_URL: ${OPENINARY_URL}
-      CORS_ORIGIN: ${OPENINARY_CORS_ORIGIN:-http://localhost:5173}
+  garage:
+    image: dxflrs/garage:v2.3.0
+    container_name: garage-container
+    command:
+      - /garage
+      - server
+      - --single-node
+      - --default-bucket
+    ports:
+      - "3900:3900"
+      - "3901:3901"
+      - "3902:3902"
+      - "3903:3903"
     volumes:
-      - ./data/openinary/cache:/app/apps/api/cache
-      - ./data/openinary/public:/app/apps/api/public
-      - ./data/openinary/db:/app/data
+      - ./infrastructure/garage.toml:/etc/garage.toml:ro
+      - ./data/garage/meta:/tmp/meta  # from garage.toml
+      - ./data/garage/data:/tmp/data  # from garage.toml
+    env_file:
+      - ./infrastructure/.garage.env
+    restart: unless-stopped
