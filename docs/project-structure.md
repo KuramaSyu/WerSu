@@ -1,4 +1,4 @@
-# Project Structure
+# Architecture
 WerSu uses a microservice-architecture. The main component is the **WerSu-gRPC-Service**. It handles:
 - note creation as well as the embedding creation
 - search algorithms like vector search
@@ -17,11 +17,16 @@ is the main access point for frontends like the react app. It's responsiblititie
 Next there is the Image Proxy _imgproxy_ which just takes the S3 bucket key out of the request URL, fetches it and
 generates an image preview for it. It supports image previews for images and PDFs. 
 
+The _WerSu Frontend_ is the main user interface, which interacts with the _REST Proxy_ for currently all operations 
+you can do on the website.
+
 Lastly there are the storage solutions:
-- **SpiceDB**: handles permissions. For that it implements Zanzibar, which is a way to represent permissions.
+- **SpiceDB**: handles permissions. For that it implements Zanzibar, which is a way to represent them.
   Example permissions are:
   - has a user permission to view a note? Done with `note:42#view@user:alice`
   - has a user transitive permissions, like view on the parent directory of note with id 42, then it returns also true
   - has a user file permissions? Here it also checks transitive permissions of the note and directory
+- **PostgreSQL**: Used from WerSu gRPC Service to store notes, users and other app related data
+- **Garage**: Garage is the S3 Bucket, used to store note attachments as well as images.
   
-![img](wersu-structure.drawio.png)
+![img](../wersu-structure.drawio.png)
