@@ -1,0 +1,67 @@
+syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+package proto;
+option go_package = "github.com/KuramaSyu/WerSu-Rest/src/proto;proto";
+
+message AttachmentMetadata {
+    string key = 1;
+    string filename = 2;
+    string filepath = 3;
+    string content_type = 4;
+    int64 size = 5;
+    google.protobuf.Timestamp created_at = 6;
+    google.protobuf.Timestamp updated_at = 7;
+    string sha256 = 8;
+
+}
+
+message Attachment {
+    AttachmentMetadata metadata = 1;
+    bytes content = 2;
+}
+
+message PostAttachmentRequest {
+    string filename = 1;
+    string filepath = 2;
+    string content_type = 3;
+    bytes content = 4;
+}
+
+message PostAttachmentLinkRequest {
+    string attachment_key = 1;
+    string note_id = 2;
+}
+
+message DeleteAttachmentLinkRequest {
+    string attachment_key = 1;
+    string note_id = 2;
+}
+
+message GetAttachmentRequest {
+    string key = 1;
+}
+
+message GetAttachmentMetadataRequest {
+    string key = 1;
+}
+
+message DeleteAttachmentRequest {
+    string key = 1;
+}
+
+message DeleteAttachmentResponse {
+    bool success = 1;
+}
+
+service AttachmentService {
+    rpc PostAttachment(PostAttachmentRequest) returns (Attachment);
+    rpc GetAttachment(GetAttachmentRequest) returns (Attachment);
+    rpc GetAttachmentMetadata(GetAttachmentMetadataRequest) returns (AttachmentMetadata);
+    rpc DeleteAttachment(DeleteAttachmentRequest) returns (DeleteAttachmentResponse);
+
+    // either works -> no return or fails completely with an error, so no need for a response message
+    rpc PostAttachmentLink(PostAttachmentLinkRequest) returns (google.protobuf.Empty);
+    rpc DeleteAttachmentLink(DeleteAttachmentLinkRequest) returns (google.protobuf.Empty);
+}
