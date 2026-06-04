@@ -5,7 +5,7 @@ import warnings
 
 from src.grpc_mod.proto import user_pb2 as src_dot_grpc__mod_dot_proto_dot_user__pb2
 
-GRPC_GENERATED_VERSION = '1.81.0'
+GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -25,7 +25,7 @@ if _version_not_supported:
     )
 
 
-class UserServiceStub:
+class UserServiceStub(object):
     """User Service
     """
 
@@ -57,7 +57,7 @@ class UserServiceStub:
                 _registered_method=True)
 
 
-class UserServiceServicer:
+class UserServiceServicer(object):
     """User Service
     """
 
@@ -116,7 +116,7 @@ def add_UserServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class UserService:
+class UserService(object):
     """User Service
     """
 

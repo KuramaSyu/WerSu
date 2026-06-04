@@ -10,10 +10,10 @@ import builtins as _builtins
 import sys
 import typing as _typing
 
-if sys.version_info >= (3, 11):
-    from typing import TypeAlias as _TypeAlias, Never as _Never
+if sys.version_info >= (3, 10):
+    from typing import TypeAlias as _TypeAlias
 else:
-    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
+    from typing_extensions import TypeAlias as _TypeAlias
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -55,7 +55,6 @@ class AttachmentMetadata(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["content_type", b"content_type", "created_at", b"created_at", "filename", b"filename", "filepath", b"filepath", "key", b"key", "sha256", b"sha256", "size", b"size", "updated_at", b"updated_at"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___AttachmentMetadata: _TypeAlias = AttachmentMetadata  # noqa: Y015
 
@@ -78,7 +77,6 @@ class Attachment(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["content", b"content", "metadata", b"metadata"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___Attachment: _TypeAlias = Attachment  # noqa: Y015
 
@@ -90,10 +88,12 @@ class PostAttachmentRequest(_message.Message):
     FILEPATH_FIELD_NUMBER: _builtins.int
     CONTENT_TYPE_FIELD_NUMBER: _builtins.int
     CONTENT_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     filename: _builtins.str
     filepath: _builtins.str
     content_type: _builtins.str
     content: _builtins.bytes
+    user_id: _builtins.str
     def __init__(
         self,
         *,
@@ -101,12 +101,10 @@ class PostAttachmentRequest(_message.Message):
         filepath: _builtins.str = ...,
         content_type: _builtins.str = ...,
         content: _builtins.bytes = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["content", b"content", "content_type", b"content_type", "filename", b"filename", "filepath", b"filepath"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["content", b"content", "content_type", b"content_type", "filename", b"filename", "filepath", b"filepath", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___PostAttachmentRequest: _TypeAlias = PostAttachmentRequest  # noqa: Y015
 
@@ -116,19 +114,19 @@ class PostAttachmentLinkRequest(_message.Message):
 
     ATTACHMENT_KEY_FIELD_NUMBER: _builtins.int
     NOTE_ID_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     attachment_key: _builtins.str
     note_id: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
         attachment_key: _builtins.str = ...,
         note_id: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["attachment_key", b"attachment_key", "note_id", b"note_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["attachment_key", b"attachment_key", "note_id", b"note_id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___PostAttachmentLinkRequest: _TypeAlias = PostAttachmentLinkRequest  # noqa: Y015
 
@@ -138,19 +136,19 @@ class DeleteAttachmentLinkRequest(_message.Message):
 
     ATTACHMENT_KEY_FIELD_NUMBER: _builtins.int
     NOTE_ID_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     attachment_key: _builtins.str
     note_id: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
         attachment_key: _builtins.str = ...,
         note_id: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["attachment_key", b"attachment_key", "note_id", b"note_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["attachment_key", b"attachment_key", "note_id", b"note_id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DeleteAttachmentLinkRequest: _TypeAlias = DeleteAttachmentLinkRequest  # noqa: Y015
 
@@ -159,17 +157,17 @@ class GetAttachmentRequest(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
     KEY_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     key: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
         key: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___GetAttachmentRequest: _TypeAlias = GetAttachmentRequest  # noqa: Y015
 
@@ -178,17 +176,17 @@ class GetAttachmentMetadataRequest(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
     KEY_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     key: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
         key: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___GetAttachmentMetadataRequest: _TypeAlias = GetAttachmentMetadataRequest  # noqa: Y015
 
@@ -197,17 +195,17 @@ class DeleteAttachmentRequest(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
     KEY_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     key: _builtins.str
+    user_id: _builtins.str
     def __init__(
         self,
         *,
         key: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DeleteAttachmentRequest: _TypeAlias = DeleteAttachmentRequest  # noqa: Y015
 
@@ -222,10 +220,7 @@ class DeleteAttachmentResponse(_message.Message):
         *,
         success: _builtins.bool = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
-    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["success", b"success"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DeleteAttachmentResponse: _TypeAlias = DeleteAttachmentResponse  # noqa: Y015

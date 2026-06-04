@@ -6,7 +6,7 @@ import warnings
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 from src.grpc_mod.proto import attachments_pb2 as src_dot_grpc__mod_dot_proto_dot_attachments__pb2
 
-GRPC_GENERATED_VERSION = '1.81.0'
+GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -26,7 +26,7 @@ if _version_not_supported:
     )
 
 
-class AttachmentServiceStub:
+class AttachmentServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -67,7 +67,7 @@ class AttachmentServiceStub:
                 _registered_method=True)
 
 
-class AttachmentServiceServicer:
+class AttachmentServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def PostAttachment(self, request, context):
@@ -148,7 +148,7 @@ def add_AttachmentServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class AttachmentService:
+class AttachmentService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
