@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import traceback
 from typing import AsyncIterator, List, Sequence
 
@@ -20,7 +20,7 @@ from src.db.entities import NoteEntity
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
 from src.db.repos.note.versioning import NoteVersionRepoABC
-from src.db.repos.note.permission import NoteRelationEnum, ObjectRef, ObjectTypeEnum, RelationEnum, Relationship
+from src.db.repos.note.permission import NoteRelationEnum, ObjectRef, ObjectTypeEnum, RelationEnum, Relationship, SubjectRef
 from src.db.repos.attachments.attachments import Attachment as AttachmentEntity
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod.converter import (
@@ -94,6 +94,7 @@ from src.services.attachments import AttachmentFacadeABC
 from src.services.roles import PermissionServiceABC
 from src.services.user import UserServiceABC
 from src.services.versioning import DirectoryActivityServiceABC
+from src.db import UserContext
 
 
 # Decorator factory must be defined before use on service methods
@@ -372,11 +373,11 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 context.set_details("name is required")
                 return Directory()
             
-            # directory:UNDEFINED#admin@user:user_id <-- this gets updated in SpiceDB Directory Repo
+            # directory#admin@user:<id> <-- this gets updated in SpiceDB Directory Repo
             user_admin_relation = Relationship(
                 resource=ObjectRef(object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED),
                 relation=NoteRelationEnum.ADMIN,
-                subject=ObjectRef(object_type=ObjectTypeEnum.USER, object_id=request.user_id),
+                subject=SubjectRef(object_type=ObjectTypeEnum.USER, object_id=request.user_id),
             )
 
             directory = await self._directory_repo.create_directory(
@@ -807,7 +808,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         self, request: PostAttachmentRequest, context: ServicerContext
     ) -> GrpcAttachment:
         try:
-            now = datetime.utcnow().isoformat()
+            now = datetime.now()
             attachment = AttachmentEntity(
                 key=UNDEFINED,
                 filename=request.filename,
@@ -818,7 +819,8 @@ class GrpcAttachmentService(AttachmentServiceServicer):
                 updated_at=now,
                 content=request.content,
             )
-            created = await self.attachment_service.post_attachment(attachment)
+            
+            created = await self.attachment_service.post_attachment(attachment, UserContext(request.user_id))
             return to_grpc_attachment(created)
         except ValueError as exc:
             context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
@@ -835,7 +837,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         self, request: GetAttachmentRequest, context: ServicerContext
     ) -> GrpcAttachment:
         try:
-            attachment = await self.attachment_service.get_attachment(request.key)
+            attachment = await self.attachment_service.get_attachment(request.key, UserContext(request.user_id))
             return to_grpc_attachment(attachment)
         except KeyError as exc:
             context.set_code(grpc.StatusCode.NOT_FOUND)
@@ -852,7 +854,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         self, request: GetAttachmentMetadataRequest, context: ServicerContext
     ) -> GrpcAttachmentMetadata:
         try:
-            attachment = await self.attachment_service.get_metadata(request.key)
+            attachment = await self.attachment_service.get_metadata(request.key, UserContext(request.user_id))
             return to_grpc_attachment_metadata(attachment)
         except KeyError as exc:
             context.set_code(grpc.StatusCode.NOT_FOUND)
@@ -869,7 +871,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         self, request: DeleteAttachmentRequest, context: ServicerContext
     ) -> DeleteAttachmentResponse:
         try:
-            await self.attachment_service.delete_attachment(request.key)
+            await self.attachment_service.delete_attachment(request.key, UserContext(request.user_id))
             return DeleteAttachmentResponse(success=True)
         except Exception:
             self.log.error(f"Error deleting attachment: {traceback.format_exc()}")
@@ -883,6 +885,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
             await self.attachment_service.link_attachment_to_note(
                 attachment_key=request.attachment_key,
                 note_id=request.note_id,
+                user_ctx=UserContext(request.user_id),
             )
         except Exception:
             self.log.error(f"Error linking attachment: {traceback.format_exc()}")
@@ -895,6 +898,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
             await self.attachment_service.unlink_attachment_from_note(
                 attachment_key=request.attachment_key,
                 note_id=request.note_id,
+                user_ctx=UserContext(request.user_id),
             )
         except Exception:
             self.log.error(f"Error linking attachment: {traceback.format_exc()}")

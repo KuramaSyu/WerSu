@@ -89,7 +89,7 @@ async def test_attachment_facade_with_postgres_and_garage(db, s3_client, garage_
         log=logging_provider,
     )
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now().isoformat()
     attachment = Attachment(
         key=UNDEFINED,
         filename="integration.txt",

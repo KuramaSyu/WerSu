@@ -4,7 +4,7 @@ from datetime import datetime
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from src.api.undefined import UNDEFINED
+from src.api.undefined import UNDEFINED, UndefinedOr
 from src.db.repos.attachments.attachments import Attachment
 from src.grpc_mod.proto.attachments_pb2 import Attachment as GrpcAttachment
 from src.grpc_mod.proto.attachments_pb2 import AttachmentMetadata
@@ -41,13 +41,13 @@ def to_grpc_attachment(attachment: Attachment | None) -> GrpcAttachment:
     )
 
 
-def _to_timestamp(value: str | None) -> Timestamp:
+def _to_timestamp(value: UndefinedOr[datetime]) -> Timestamp:
     ts = Timestamp()
-    if not value:
+    if not isinstance(value, datetime):
         return ts
     try:
-        dt = datetime.fromisoformat(value)
+        dt = value
     except ValueError:
-        dt = datetime.utcnow()
+        dt = datetime.now()
     ts.FromDatetime(dt)
     return ts

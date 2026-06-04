@@ -4,14 +4,18 @@ import asyncio
 import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
-from typing import List, Optional, Protocol
+from datetime import datetime, timezone
+from typing import List, Optional, Protocol, Callable
 
 from asyncpg import Record
 
+
 from src.api.undefined import UNDEFINED, UndefinedOr
+from src.api import UserContextABC
 from src.db.table import TableABC
-from src.utils import convert_entity_for_db
+from src.utils import convert_entity_for_db, asdict
+
+
 
 @dataclass
 class Attachment:
@@ -31,8 +35,8 @@ class Attachment:
     size: int
     content: bytes
     
-    created_at: UndefinedOr[datetime] = UNDEFINED,  # set by storage repo if not provided
-    updated_at: UndefinedOr[datetime] = UNDEFINED,  # set by storage repo if not provided
+    created_at: UndefinedOr[datetime] = UNDEFINED  # set by storage repo if not provided
+    updated_at: UndefinedOr[datetime] = UNDEFINED  # set by storage repo if not provided
     checksum: UndefinedOr[str] = UNDEFINED
 
     @property
@@ -67,7 +71,7 @@ class AttachmentsRepoABC(ABC):
 
 class AttachmentsMetadataRepoABC(ABC):
     @abstractmethod
-    async def post_metadata(self, attachment: Attachment) -> None:
+    async def post_metadata(self, attachment: Attachment, user_ctx: UserContextABC) -> None:
         """Save attachment metadata to the database."""
         ...
     
@@ -88,13 +92,24 @@ class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepoABC):
     def __init__(self, table: TableABC[List[Record]]):
         self._table = table
 
-    async def post_metadata(self, attachment: Attachment) -> None:
+    async def post_metadata(self, attachment: Attachment, user_ctx: UserContextABC) -> None:
         if attachment.key is UNDEFINED:
             raise ValueError("Attachment key must be set before storing metadata")
         
-        attachment_as_dict = convert_entity_for_db(attachment)
+        normalized = convert_entity_for_db(attachment)
+        where = {
+            "key": normalized.key,
+            "filename": normalized.filename,
+            "filepath": normalized.filepath,
+            "content_type": normalized.content_type,
+            "size": normalized.size,
+            "created_at": normalized.created_at,
+            "updated_at": normalized.updated_at,
+            "created_by": user_ctx.user_id,
+            "sha256": normalized.sha256
+        }
 
-        await self._table.insert(attachment_as_dict, returning="key",
+        await self._table.insert(where, returning="key",
         )
 
     async def get_metadata(self, key: str) -> Attachment:
@@ -112,8 +127,8 @@ class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepoABC):
             filepath=record["filepath"],
             content_type=record["content_type"],
             size=record["size"],
-            created_at=_to_iso_string(record["created_at"]),
-            updated_at=_to_iso_string(record["updated_at"]),
+            created_at=record["created_at"],
+            updated_at=record["updated_at"],
             content=b"",
             checksum=record["sha256"],
         )
@@ -131,10 +146,11 @@ class AttachmentsS3Repo(AttachmentsRepoABC):
     ``asyncio.to_thread`` to keep async callers responsive.
     """
 
-    def __init__(self, client: "S3ClientProtocol", bucket: str, key_prefix: str = "attachments/"):
+    def __init__(self, client: "S3ClientProtocol", bucket: str, key_prefix: str = "attachments/", get_now: Callable[[], datetime] = lambda: datetime.now()):
         self._client = client
         self._bucket = bucket
         self._key_prefix = key_prefix.rstrip("/") + "/" if key_prefix else ""
+        self._get_now = get_now
 
     async def post_attachment(self, attachment: Attachment) -> str:
         key = attachment.key
@@ -166,7 +182,7 @@ class AttachmentsS3Repo(AttachmentsRepoABC):
         content_type = response.get("ContentType") or "application/octet-stream"
         size = response.get("ContentLength") or len(body)
         last_modified = response.get("LastModified")
-        updated_at = _to_iso_string(last_modified) if last_modified else _now_iso()
+        updated_at = last_modified or self._get_now()
 
         return Attachment(
             key=key,
@@ -203,10 +219,6 @@ def _new_key() -> str:
     return f"{uuid4()}"
 
 
-def _now_iso() -> str:
-    return datetime.utcnow().isoformat()
-
-
 def _to_datetime(value: object) -> datetime:
     if isinstance(value, datetime):
         return value
@@ -217,12 +229,3 @@ def _to_datetime(value: object) -> datetime:
             return datetime.utcnow()
     return datetime.utcnow()
 
-
-def _to_iso_string(value: Optional[object]) -> str:
-    if value is None:
-        return _now_iso()
-    if isinstance(value, str):
-        return value
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return str(value)

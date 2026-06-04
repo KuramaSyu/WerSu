@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from typing import *
 from abc import ABC, abstractmethod
 from dataclasses import replace
 from datetime import datetime, timezone
 import time
 
-from src.api import LoggingProvider
+from src.api import LoggingProvider, UserContextABC
 from src.api.undefined import UNDEFINED
 from src.db.repos.attachments.attachments import (
     Attachment,
@@ -19,37 +20,37 @@ class AttachmentFacadeABC(ABC):
     """Application service for attachment lifecycle."""
 
     @abstractmethod
-    async def post_attachment(self, attachment: Attachment) -> Attachment:
+    async def post_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
         """Upload attachment contents and persist metadata."""
         ...
 
     @abstractmethod
-    async def get_attachment(self, key: str) -> Attachment:
+    async def get_attachment(self, key: str, user_ctx: UserContextABC) -> Attachment:
         """Fetch attachment metadata and contents by key."""
         ...
 
     @abstractmethod
-    async def get_metadata(self, key: str) -> Attachment:
+    async def get_metadata(self, key: str, user_ctx: UserContextABC) -> Attachment:
         """Fetch attachment metadata without the content payload."""
         ...
 
     @abstractmethod
-    async def delete_attachment(self, key: str) -> None:
+    async def delete_attachment(self, key: str, user_ctx: UserContextABC) -> None:
         """Delete attachment metadata and contents."""
         ...
 
     @abstractmethod
-    async def link_attachment_to_note(self, attachment_key: str, note_id: str) -> None:
+    async def link_attachment_to_note(self, attachment_key: str, note_id: str, user_ctx: UserContextABC) -> None:
         """Create a link between an attachment and a note. This is a separate step to allow linking an attachment to multiple notes."""
         ...
     
     @abstractmethod
-    async def unlink_attachment_from_note(self, attachment_key: str, note_id: str) -> None:
+    async def unlink_attachment_from_note(self, attachment_key: str, note_id: str, user_ctx: UserContextABC) -> None:
         """Remove a link between an attachment and a note."""
         ...
 
     @abstractmethod
-    async def list_attachments_for_note(self, note_id: str) -> list[Attachment]:
+    async def list_attachments_for_note(self, note_id: str, user_ctx: UserContextABC) -> list[Attachment]:
         """List all attachments linked to a given note."""
         ...
 
@@ -63,17 +64,19 @@ class AttachmentFacade(AttachmentFacadeABC):
         metadata_repo: AttachmentsMetadataRepoABC,
         attachments_note_link_table: TableABC,
         log: LoggingProvider,
+        get_now: Callable[[], datetime] = lambda: datetime.now(),
     ) -> None:
         self._attachment_repo = attachment_repo
         self._metadata_repo = metadata_repo
         self._attachments_note_link_table = attachments_note_link_table
         self.log = log(__name__, self)
-
-    async def post_attachment(self, attachment: Attachment) -> Attachment:
+        self.get_now = get_now
+        
+    async def post_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
         if attachment.content is None:
             raise ValueError("Attachment content cannot be empty")
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = self.get_now()
         if attachment.created_at is UNDEFINED:
             attachment.created_at = now
         if attachment.updated_at is UNDEFINED:
@@ -84,11 +87,11 @@ class AttachmentFacade(AttachmentFacadeABC):
         attachment.key = key  # assign generated key back to attachment
 
         # persist metadata to the database, using key given from object storage
-        await self._metadata_repo.post_metadata(attachment)
+        await self._metadata_repo.post_metadata(attachment, user_ctx)
         self.log.debug(f"Stored attachment metadata for {key=}")
         return attachment
 
-    async def get_attachment(self, key: str) -> Attachment:
+    async def get_attachment(self, key: str, user_ctx: UserContextABC) -> Attachment:
         metadata = await self._metadata_repo.get_metadata(key)
         content_attachment = await self._attachment_repo.get_attachment(key)
 
@@ -105,30 +108,32 @@ class AttachmentFacade(AttachmentFacadeABC):
             checksum=metadata.checksum,
         )
 
-    async def get_metadata(self, key: str) -> Attachment:
+    async def get_metadata(self, key: str, user_ctx: UserContextABC) -> Attachment:
         return await self._metadata_repo.get_metadata(key)
 
-    async def delete_attachment(self, key: str) -> None:
+    async def delete_attachment(self, key: str, user_ctx: UserContextABC) -> None:
         # Remove object payload first, then metadata.
         await self._attachment_repo.delete_attachment(key)
         await self._metadata_repo.delete_metadata(key)
 
 
-    async def link_attachment_to_note(self, attachment_key: str, note_id: str) -> None:
+    async def link_attachment_to_note(self, attachment_key: str, note_id: str, user_ctx: UserContextABC) -> None:
         await self._attachments_note_link_table.insert(
-            {"note_id": note_id, "attachment_key": attachment_key}
+            {"note_id": note_id, "attachment_key": attachment_key, "linked_at": self.get_now()}
         )
 
-    async def unlink_attachment_from_note(self, attachment_key: str, note_id: str) -> None:
+    async def unlink_attachment_from_note(self, attachment_key: str, note_id: str, user_ctx: UserContextABC) -> None:
         await self._attachments_note_link_table.delete(
             {"note_id": note_id, "attachment_key": attachment_key}
         )
 
-    async def list_attachments_for_note(self, note_id: str) -> list[Attachment]:
+    async def list_attachments_for_note(self, note_id: str, user_ctx: UserContextABC) -> list[Attachment]:
         # fetch all attachment links from db and then fetch each attachment from object storage
         links = await self._attachments_note_link_table.select(where={"note_id": note_id})
         attachments = []
+        if not links:
+            return []
         for link in links:
-            attachment = await self.get_attachment(link["attachment_key"])
+            attachment = await self.get_attachment(link["attachment_key"], user_ctx=user_ctx)
             attachments.append(attachment)
         return attachments
