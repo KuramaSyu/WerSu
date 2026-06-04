@@ -27,28 +27,34 @@ message PostAttachmentRequest {
     string filepath = 2;
     string content_type = 3;
     bytes content = 4;
+    string user_id =5;
 }
 
 message PostAttachmentLinkRequest {
     string attachment_key = 1;
     string note_id = 2;
+    string user_id = 3;
 }
 
 message DeleteAttachmentLinkRequest {
     string attachment_key = 1;
     string note_id = 2;
+    string user_id = 3;
 }
 
 message GetAttachmentRequest {
     string key = 1;
+    string user_id = 2;
 }
 
 message GetAttachmentMetadataRequest {
     string key = 1;
+    string user_id = 2;
 }
 
 message DeleteAttachmentRequest {
     string key = 1;
+    string user_id = 2;
 }
 
 message DeleteAttachmentResponse {
