@@ -33,7 +33,7 @@ class Migration(MigrationABC):
                 note_id TEXT NOT NULL,
                 attachment_key TEXT NOT NULL,
 
-                linkted_at TIMESTAMP NOT NULL,
+                linked_at TIMESTAMP NOT NULL,
 
                 PRIMARY KEY (note_id, attachment_key),
                 FOREIGN KEY (note_id) REFERENCES note.content(id) ON DELETE CASCADE ON UPDATE CASCADE,
