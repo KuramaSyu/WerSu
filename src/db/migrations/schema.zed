@@ -36,6 +36,6 @@ definition attachment {
     // each user who can view any note where the attachment is in, can also view this attachment.
     // there are no separate relations here
     permission delete = parent_note->delete
-    permission_write = parent_note->write
+    permission write = parent_note->write
     permission view = parent_note->view
 }
