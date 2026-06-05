@@ -14,7 +14,7 @@ from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
-from src.db.repos.note.permission import NotePermissionRepoSpicedb
+from src.db.repos import NotePermissionRepoSpicedb
 from src.services import PermissionServiceRepo, UserServiceRepo, DirectoryActivityService, AttachmentFacade
 from src.utils import logging_provider
 from src.db import Database, NoteEmbeddingPostgresRepo, NoteVersionPostgresRepo

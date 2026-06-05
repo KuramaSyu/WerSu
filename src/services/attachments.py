@@ -16,7 +16,7 @@ from src.db.repos.attachments.attachments import (
 from src.db import PermissionRepoABC
 from src.api import Relationship, ObjectRef, SubjectRef, ObjectTypeEnum, SubjectType, AttachmentRelationEnum
 from src.db.table import TableABC
-from src.services.permission_chain import *
+from src.domain.permission_chain import HasNoteViewPerm, HasAttachmentViewPerm
 
 
 class AttachmentFacadeABC(ABC):

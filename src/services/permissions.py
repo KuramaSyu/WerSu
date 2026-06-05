@@ -14,7 +14,7 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-from src.services.permission_chain import *
+from src.domain.permission_chain import *
 
 
 class PermissionServiceABC(ABC):

@@ -10,6 +10,7 @@ import inspect
 from asyncpg import Record
 from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest, ImportBulkRelationshipsRequest
 import grpc
+from src.api.permission_repo import PermissionRepoABC
 from src.api.service_unavailable_error import ServiceUnavailableError
 from src.api import PermissionConverterABC, ObjectRef, SubjectRef, RelationEnum, Relationship, UserContextABC, ObjectTypeEnum, RelationName, NoteRelationEnum
 from src.db.table import TableABC

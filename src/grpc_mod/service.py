@@ -92,7 +92,7 @@ from src.grpc_mod.proto.user_pb2 import (
 )
 from src.grpc_mod.proto.user_pb2_grpc import UserServiceServicer
 from src.services.attachments import AttachmentFacadeABC
-from src.services.roles import PermissionServiceABC
+from src.services import PermissionServiceABC
 from src.services.user import UserServiceABC
 from src.services.versioning import DirectoryActivityServiceABC
 from src.db import UserContext

@@ -4,7 +4,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.note import SearchType
-from src.db.repos.note.permission import ObjectTypeEnum
+from src.api.relationship import ObjectTypeEnum
 from src.grpc_mod.proto.note_pb2 import (
     GetSearchNotesRequest,
     MinimalNote,
