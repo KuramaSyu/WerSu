@@ -7,6 +7,7 @@ from grpc.aio import ServicerContext
 import asyncpg
 from pprint import pformat
 from google.protobuf.timestamp_pb2 import Timestamp
+from google.protobuf.empty_pb2 import Empty
 import time
 import functools
 import logging
@@ -837,6 +838,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         self, request: GetAttachmentRequest, context: ServicerContext
     ) -> GrpcAttachment:
         try:
+            self.log.debug(f"Fetching attachment with key={request.key} for user_id={request.user_id}")
             attachment = await self.attachment_service.get_attachment(request.key, UserContext(request.user_id))
             return to_grpc_attachment(attachment)
         except KeyError as exc:
@@ -880,7 +882,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
             return DeleteAttachmentResponse(success=False)
         
     @log_service_call()
-    async def PostAttachmentLink(self, request: PostAttachmentLinkRequest, context: ServicerContext) -> None:
+    async def PostAttachmentLink(self, request: PostAttachmentLinkRequest, context: ServicerContext) -> Empty:
         try:
             await self.attachment_service.link_attachment_to_note(
                 attachment_key=request.attachment_key,
@@ -891,9 +893,10 @@ class GrpcAttachmentService(AttachmentServiceServicer):
             self.log.error(f"Error linking attachment: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while linking attachment")
+        return Empty()
 
     @log_service_call()
-    async def DeleteAttachmentLink(self, request: DeleteAttachmentLinkRequest, context: ServicerContext) -> None:
+    async def DeleteAttachmentLink(self, request: DeleteAttachmentLinkRequest, context: ServicerContext) -> Empty:
         try:
             await self.attachment_service.unlink_attachment_from_note(
                 attachment_key=request.attachment_key,
@@ -903,4 +906,5 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         except Exception:
             self.log.error(f"Error linking attachment: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details("Internal server error while unlinking attachment")        
+            context.set_details("Internal server error while unlinking attachment")      
+        return Empty()  
