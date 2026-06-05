@@ -1,7 +1,8 @@
 from typing import *
 from abc import ABC, abstractmethod
 
-from src.services import Relationship, UserContextABC
+from src.api.relationship import *
+from src.api import Relationship, UserContextABC, PermissionRepoABC
 
 
 class PermissionCheckChain(ABC):
@@ -11,6 +12,11 @@ class PermissionCheckChain(ABC):
     
     """repo which handles permission requests"""
     _repo: Optional[PermissionRepoABC]
+
+    def __init__(self):
+        self._next = None
+        self._prev = None
+        self._permission_repo = None
 
     @abstractmethod
     async def _check(self, user_ctx: UserContextABC) -> bool:
@@ -86,7 +92,9 @@ class HasNoteViewPerm(PermissionCheckChain):
     SUBJECT_TYPE: SubjectType = "user"
 
     def __init__(self, note_id: str):
+        super().__init__()
         self._note_id = note_id
+
 
     async def _check(self, user_ctx: UserContextABC) -> bool:
         relationship = self._get_relation(self._note_id, user_ctx.user_id)
@@ -100,6 +108,7 @@ class HasAttachmentViewPerm(PermissionCheckChain):
     SUBJECT_TYPE: SubjectType = "user"
 
     def __init__(self, attachment_id: str) -> None:
+        super().__init__()
         self._attachment_id = attachment_id
     
     async def _check(self, user_ctx: UserContextABC) -> bool:
