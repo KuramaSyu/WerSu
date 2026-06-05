@@ -5,7 +5,7 @@ from datetime import datetime
 from asyncpg import Record
 
 from src.db.entities.directory.directory import DirectoryEntity
-from src.db.repos.note.permission import PartialRelationship, Relationship
+from src.api import Relationship
 
 
 from .embedding import NoteEmbeddingEntity

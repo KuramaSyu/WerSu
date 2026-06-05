@@ -13,7 +13,10 @@ from src.db.repos.attachments.attachments import (
     AttachmentsMetadataRepoABC,
     AttachmentsRepoABC,
 )
+from src.db import PermissionRepoABC
+from src.api import Relationship, ObjectRef, SubjectRef, ObjectTypeEnum, SubjectType, AttachmentRelationEnum
 from src.db.table import TableABC
+from src.services.permission_chain import *
 
 
 class AttachmentFacadeABC(ABC):
@@ -62,10 +65,13 @@ class AttachmentFacade(AttachmentFacadeABC):
         self,
         attachment_repo: AttachmentsRepoABC,
         metadata_repo: AttachmentsMetadataRepoABC,
+        permission_repo: PermissionRepoABC,
+
         attachments_note_link_table: TableABC,
         log: LoggingProvider,
         get_now: Callable[[], datetime] = lambda: datetime.now(),
     ) -> None:
+        self._permission_repo = permission_repo
         self._attachment_repo = attachment_repo
         self._metadata_repo = metadata_repo
         self._attachments_note_link_table = attachments_note_link_table
@@ -89,6 +95,7 @@ class AttachmentFacade(AttachmentFacadeABC):
         # persist metadata to the database, using key given from object storage
         await self._metadata_repo.post_metadata(attachment, user_ctx)
         self.log.debug(f"Stored attachment metadata for {key=}")
+
         return attachment
 
     async def get_attachment(self, key: str, user_ctx: UserContextABC) -> Attachment:
@@ -118,14 +125,51 @@ class AttachmentFacade(AttachmentFacadeABC):
 
 
     async def link_attachment_to_note(self, attachment_key: str, note_id: str, user_ctx: UserContextABC) -> None:
+        # check poermissions
+        permission_chain = (
+            HasAttachmentViewPerm(attachment_key)
+                .set_permission_repo(self._permission_repo)
+                .set_next(HasNoteViewPerm(note_id))
+        )
+        has_permission = await permission_chain.get_first().check(user_ctx)
+        if not has_permission:
+            raise PermissionError(f"user {user_ctx.user_id} has no permission to view attachment {attachment_key} or note {note_id}")
+        
+        # add to attachment_note_link table
         await self._attachments_note_link_table.insert(
             {"note_id": note_id, "attachment_key": attachment_key, "linked_at": self.get_now()}
         )
 
+        # add attachment#parent_note@note to spicedb
+        await self._permission_repo.insert([Relationship(
+            ObjectRef(ObjectTypeEnum.ATTACHMENT, attachment_key),
+            AttachmentRelationEnum.PARENT_NOTE,
+            SubjectRef(ObjectTypeEnum.NOTE, note_id)
+        )])
+
+        return
+
     async def unlink_attachment_from_note(self, attachment_key: str, note_id: str, user_ctx: UserContextABC) -> None:
+        # check permissions
+        permission_chain = (
+            HasAttachmentViewPerm(attachment_key)
+                .set_permission_repo(self._permission_repo)
+                .set_next(HasNoteViewPerm(note_id))
+        )
+
+        # remove from attachment_note_link table
         await self._attachments_note_link_table.delete(
             {"note_id": note_id, "attachment_key": attachment_key}
         )
+
+        # remove attachment#parent_note@note to spicedb
+        await self._permission_repo.delete(Relationship(
+            ObjectRef(ObjectTypeEnum.ATTACHMENT, attachment_key),
+            AttachmentRelationEnum.PARENT_NOTE,
+            SubjectRef(ObjectTypeEnum.NOTE, note_id)
+        ))
+
+        return
 
     async def list_attachments_for_note(self, note_id: str, user_ctx: UserContextABC) -> list[Attachment]:
         # fetch all attachment links from db and then fetch each attachment from object storage

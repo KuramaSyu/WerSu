@@ -6,7 +6,7 @@ relationship payloads used by ``GrpcPermissionService``.
 
 from typing import cast
 
-from src.db.repos.note.permission import (
+from src.api import (
     ObjectRef,
     ObjectTypeEnum,
     RelationEnum,

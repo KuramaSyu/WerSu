@@ -16,9 +16,9 @@ from src.api.user_context import UserContextABC
 from src.db.database import Database
 from src.db.entities.directory.directory import DirectoryEntity
 from src.utils import convert_entity_for_db
-from src.db.repos.note.permission import (
+from src.db.repos import PermissionRepoABC
+from src.api import (
     DirectoryRelationEnum,
-    NotePermissionRepo,
     NoteRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
@@ -198,7 +198,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
     def __init__(
         self,
         db: Database,
-        permission_repo: NotePermissionRepo,
+        permission_repo: PermissionRepoABC,
         spicedb_client: AsyncClient,
     ) -> None:
         self._db = db

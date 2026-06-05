@@ -21,7 +21,7 @@ from src.db.entities import NoteEntity
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
 from src.db.repos.note.versioning import NoteVersionRepoABC
-from src.db.repos.note.permission import NoteRelationEnum, ObjectRef, ObjectTypeEnum, RelationEnum, Relationship, SubjectRef
+from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, RelationEnum, Relationship, SubjectRef
 from src.db.repos.attachments.attachments import Attachment as AttachmentEntity
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod.converter import (

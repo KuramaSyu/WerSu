@@ -1,5 +1,5 @@
 from src.db.repos.note.note import UserContext
-from src.db.repos.note.permission import (
+from src.api import (
     NotePermissionRepoInMemory,
     ObjectRef,
     Relationship,

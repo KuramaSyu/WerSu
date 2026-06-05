@@ -34,7 +34,7 @@ from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.db.repos.note.note import NoteRepoFacade
 from src.db.repos.note.note import UserContext
-from src.db.repos.note.permission import (
+from src.api import (
     DirectoryRelationEnum,
     NotePermissionRepoSpicedb,
     NoteRelationEnum,

@@ -14,7 +14,8 @@ from src.db.entities.note.embedding import NoteEmbeddingEntity
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.content import NoteContentRepo
 
-from src.db.repos.note.permission import NotePermissionRepo, NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
+from src.db.repos.permissions import PermissionRepoABC
+from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.db.table import TableABC
 from src.api.undefined import UNDEFINED
 from src.db.repos.note.embedding import NoteEmbeddingRepo
@@ -179,7 +180,7 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         db: Database,
         content_repo: NoteContentRepo,
         embedding_repo: NoteEmbeddingRepo,
-        permission_repo: NotePermissionRepo,
+        permission_repo: PermissionRepoABC,
         directory_repo: DirectoryRepo,
         logging_provider: LoggingProvider,
         version_repo: NoteVersionRepoABC | None = None,

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import List
 
 from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
-from src.db.repos.note.permission import Relationship
+from src.api import Relationship
 
 
 @dataclass

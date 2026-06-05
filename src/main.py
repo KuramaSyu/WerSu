@@ -9,21 +9,15 @@ from typing import Optional, Callable
 import boto3
 from authzed.api.v1 import AsyncClient
 import grpc
-from colorama import Fore, Style, init
 
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos.note.permission import NotePermissionRepoSpicedb
-from src.services.roles import PermissionServiceRepo
-from src.services.user import UserServiceRepo
-from src.services.versioning import DirectoryActivityService
-from src.services.attachments import AttachmentFacade
+from src.services import PermissionServiceRepo, UserServiceRepo, DirectoryActivityService, AttachmentFacade
 from src.utils import logging_provider
-from src.db.database import Database
-from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
-from src.db.repos.note.versioning import NoteVersionPostgresRepo
+from src.db import Database, NoteEmbeddingPostgresRepo, NoteVersionPostgresRepo
 from src.db.repos.attachments.attachments import (
     AttachmentsMetadataPostgresRepo,
     AttachmentsMetadataRepoABC,
@@ -181,6 +175,7 @@ async def serve():
 
     user_repo = UserPostgresRepo(db=db)
     permission_repo = NotePermissionRepoSpicedb(client=spicedb_client)
+
     directory_repo = DirectoryRepoSpicedbPostgres(
         db=db,
         permission_repo=permission_repo,
@@ -193,7 +188,7 @@ async def serve():
         max_deltas_per_snapshot=max_note_deltas,
     )
 
-    repo: NoteRepoFacade = NoteRepoFacade(
+    note_repo: NoteRepoFacade = NoteRepoFacade(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
         embedding_repo=NoteEmbeddingPostgresRepo(
@@ -205,8 +200,11 @@ async def serve():
         logging_provider=logging_provider,
         version_repo=version_repo,
     )
+
+
+
     attachments_repo: AttachmentsRepoABC = AttachmentsS3Repo(
-        client=s3_client,
+        client=s3_client,  # type:ignore
         bucket=s3_bucket,
     )
     metadata_repo: AttachmentsMetadataRepoABC = AttachmentsMetadataPostgresRepo(
@@ -215,14 +213,16 @@ async def serve():
     attachment_service = AttachmentFacade(
         attachment_repo=attachments_repo,
         metadata_repo=metadata_repo,
+        permission_repo=permission_repo,
         attachments_note_link_table=attachments_note_link_table,
         log=logging_provider,
     )
 
-    # setup gRPC note service
-    log.info("Setting up gRPC services...")
-    note_service = GrpcNoteService(repo=repo, log=logging_provider)
-    add_NoteServiceServicer_to_server(note_service, server)
+    permission_service = PermissionServiceRepo(
+        permission_repo=permission_repo,
+        note_repo=note_repo,
+        directory_repo=directory_repo,
+    )
 
     directory_activity_service = DirectoryActivityService(
         version_repo=version_repo,
@@ -230,11 +230,18 @@ async def serve():
         log=logging_provider,
     )
     note_version_service = GrpcNoteVersionService(
-        note_repo=repo,
+        note_repo=note_repo,
         version_repo=version_repo,
         directory_activity_service=directory_activity_service,
         log=logging_provider,
     )
+
+    # setup gRPC note service
+    log.info("Setting up gRPC services...")
+    note_service = GrpcNoteService(repo=note_repo, log=logging_provider)
+    add_NoteServiceServicer_to_server(note_service, server)
+
+
     add_NoteVersionServiceServicer_to_server(note_version_service, server)
 
     directory_service = GrpcDirectoryService(
@@ -243,11 +250,7 @@ async def serve():
     )
     add_DirectoryServiceServicer_to_server(directory_service, server)
 
-    permission_service = PermissionServiceRepo(
-        permission_repo=permission_repo,
-        note_repo=repo,
-        directory_repo=directory_repo,
-    )
+
     grpc_permission_service = GrpcPermissionService(
         permission_service=permission_service,
         log=logging_provider,

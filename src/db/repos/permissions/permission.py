@@ -11,7 +11,7 @@ from asyncpg import Record
 from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest, ImportBulkRelationshipsRequest
 import grpc
 from src.api.service_unavailable_error import ServiceUnavailableError
-from src.api.user_context import UserContextABC
+from src.api import PermissionConverterABC, ObjectRef, SubjectRef, RelationEnum, Relationship, UserContextABC, ObjectTypeEnum, RelationName, NoteRelationEnum
 from src.db.table import TableABC
 from src.utils import asdict
 
@@ -35,120 +35,9 @@ from grpcutil import insecure_bearer_token_credentials
 
 from src.api import UNDEFINED, UndefinedNoneOr, UndefinedOr
 
-
-class ObjectTypeEnum(StrEnum):
-    """Represents SpiceDB objects/resources"""
-    NOTE = "note"
-    DIRECTORY = "directory"
-    USER = "user"
-
-
-class NoteRelationEnum(StrEnum):
-    """Represents SpiceDB relations/permissions for note objects"""
-    ADMIN = "admin"
-    WRITER = "writer"
-    READER = "reader"
-    VIEW = "view"
-    WRITE = "write"
-    DELETE = "delete"
-    PARENT_DIRECTORY = "parent_directory"
-    OWNER = "owner"
-
-
-class DirectoryRelationEnum(StrEnum):
-    """Represents SpiceDB relations/permissions for directory objects"""
-    PARENT = "parent"
-    ADMIN = "admin"
-    WRITER = "writer"
-    READER = "reader"
-    VIEW = "view"
-    WRITE = "write"
-    DELETE = "delete"
-
-
-ObjectType: TypeAlias = Literal["note", "directory", "user"]
-SubjectType: TypeAlias = Literal["user", "directory"]
-NoteRelationName: TypeAlias = Literal[
-    "admin",
-    "writer",
-    "reader",
-    "view",
-    "write",
-    "delete",
-    "parent_directory",
-    "owner",
-]
-DirectoryRelationName: TypeAlias = Literal[
-    "parent",
-    "admin",
-    "writer",
-    "reader",
-    "view",
-    "write",
-    "delete",
-]
-RelationName: TypeAlias = NoteRelationName | DirectoryRelationName
-RelationEnum: TypeAlias = NoteRelationEnum | DirectoryRelationEnum
-
-class ObjectRef:
-    def __init__(
-        self,
-        object_type: ObjectType | ObjectTypeEnum,
-        object_id: UndefinedOr[str],
-    ) -> None:
-        self.object_type = object_type
-        self.object_id = object_id
-      
-
-class SubjectRef(ObjectRef):
-    def __init__(
-        self,
-        object_type: SubjectType | ObjectTypeEnum,
-        object_id: UndefinedOr[str],
-    ) -> None:
-        super().__init__(object_type=object_type, object_id=object_id)
-
-class PartialRelationship:
-    def __init__(
-        self,
-        relation: RelationName | RelationEnum,
-        subject: SubjectRef,
-    ) -> None:
-        self.relation = relation
-        self.subject = subject
-
-class Relationship(PartialRelationship):
-    """
-    Representa a relationship which is used to store permissions and relations between notes, users and directories. 
-    The notation is like the following:
-    - general form: <object_type>:<object_id>#<relation>@<subject_type>:<subject_id>
-    - example: note:123#writer@user:alice -> Alice is a writer of note with id 123
-    - example: directory:456#parent@directory:789 -> Directory with id 456 has parent directory with id 789
-    """
-    def __init__(
-        self,
-        resource: ObjectRef,
-        relation: RelationName | RelationEnum,
-        subject: SubjectRef,
-    ) -> None:
-        self.resource = resource
-        super().__init__(relation, subject)
-
-class PermissionConverterABC(ABC):
-
-    @abstractmethod
-    def convert_object_ref(self, object_ref: ObjectRef) -> Any:
-        ...
-
-    @abstractmethod
-    def convert_subject_ref(self, subject_ref: SubjectRef) -> Any:
-        ...
-
-    @abstractmethod
-    def convert_relationship(self, relationship: Relationship) -> Any:
-        ...
-
 class SpicedbPermissionConverter(PermissionConverterABC):
+    """Adapter to convert between domain Relationship and SpiceDB Relationship"""
+
     def convert_object_ref(self, object_ref: ObjectRef) -> ObjectReference:
         assert object_ref.object_id != UNDEFINED, "object_id must be provided for object reference"
         return ObjectReference(
@@ -167,176 +56,6 @@ class SpicedbPermissionConverter(PermissionConverterABC):
             relation=relationship.relation,
             subject=self.convert_subject_ref(relationship.subject)
         )
-
-class NotePermissionRepo(ABC):
-
-    @abstractmethod
-    async def insert(
-        self,
-        relationships: List[Relationship]
-    ) -> List[Relationship]:
-        """inserts permission
-        
-        Args:
-        -----
-        relationships: `List[Relationship]`
-            the relationships to insert. Provide full subject, permission and object.
-
-        Returns:
-        --------
-        `List[Relationship]`:
-            the inserted relationships
-        """
-        ...
-
-    @abstractmethod
-    async def delete(
-        self,
-        relationship: Relationship
-    ) -> Relationship:
-        """delete permission
-        
-        Args:
-        -----
-        relationships: `List[Relationship]`
-            the relationships to delete. Provide full subject and permission, and for object leave the 
-            object_id to `UNDEFINED` and only provide the object_type. This allows to delete all permissions 
-            for a given subject and permission on all objects of a given type.
-
-        Returns:
-        --------
-        `List[Relationship]`:
-            the deleted relationships
-        """
-        ...
-
-    @abstractmethod
-    async def lookup(
-        self,
-        relationship: Relationship
-    ) -> List[ObjectRef]:
-        """select permission
-        
-        Args:
-        -----
-        relationship: `Relationship`
-            the relationship to lookup. Provide full subject and permission, and for object leave the 
-            object_id to `UNDEFINED` and only provide the object_type. This allows to lookup all permissions 
-            for a given subject and permission on all objects of a given type.
-
-        Returns:
-        --------
-        `List[ObjectRef]`:
-            the matching objects
-        """
-        ...
-
-    @abstractmethod
-    async def lookup_relationships(
-        self,
-        relationship: Relationship,
-    ) -> List[Relationship]:
-        """Select stored direct relationships by a relationship-shaped filter.
-
-        Args:
-        -----
-        relationship: `Relationship`
-            filter where `UNDEFINED` values act as wildcards for ids.
-
-        Returns:
-        --------
-        `List[Relationship]`:
-            matching stored direct relationships.
-        """
-        ...
-
-    @abstractmethod
-    async def lookup_notes(
-        self,
-        user: UserContextABC,
-        permission: str
-    ) -> List[ObjectRef]:
-        """Retrieves all notes where the given user has the given permission
-        
-        Args:
-        -----
-        user: `UserContextABC`
-            the user context to lookup permissions for
-        permission: `str`
-            the permission to lookup
-
-        Returns:
-        --------
-        `List[ObjectRef]`:
-            the matching objects
-        """
-        ...
-
-    @abstractmethod
-    async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
-        """List stored relationships for a specific resource.
-
-        Parameters
-        ----------
-        resource : ObjectRef
-            Resource whose direct relationships should be returned.
-            If `object_id` is `UNDEFINED`, all relationships for that
-            resource type are returned.
-
-        Returns
-        -------
-        List[Relationship]
-            Stored relationships for `resource` including relation and subject.
-        """
-        ...
-
-    @abstractmethod
-    async def has_permission(
-        self,
-        user: UserContextABC,
-        permission: str,
-        resource: ObjectRef,
-    ) -> bool:
-        """Check whether a user has a permission on a resource.
-
-        Parameters
-        ----------
-        user : UserContextABC
-            Current user context.
-        permission : str
-            Permission to verify.
-        resource : ObjectRef
-            Resource to check against.
-
-        Returns
-        -------
-        bool
-            True if permission is granted.
-        """
-        ...
-
-    @abstractmethod
-    async def get_permissions(
-        self,
-        user: UserContextABC,
-        resource: ObjectRef,
-    ) -> List[str]:
-        """List effective permissions for a user on a resource.
-
-        Parameters
-        ----------
-        user : UserContextABC
-            Current user context.
-        resource : ObjectRef
-            Resource to evaluate.
-
-        Returns
-        -------
-        List[str]
-            Granted permissions.
-        """
-        ...
-
     
 def handle_error(func):
     """Decorator for instance methods that wraps exceptions using `self._wrap_grpc_error`.
@@ -376,7 +95,7 @@ def handle_error(func):
                             if isinstance(maybe_target, str):
                                 address = maybe_target
 
-                    raise ServiceUnavailableError(name="SpiceDB", address=address)
+                    raise ServiceUnavailableError(name="SpiceDB", address=str(address))
                 raise
 
         return _async_wrapper
@@ -412,13 +131,13 @@ def handle_error(func):
                         if isinstance(maybe_target, str):
                             address = maybe_target
 
-                raise ServiceUnavailableError(name="SpiceDB", address=address)
+                raise ServiceUnavailableError(name="SpiceDB", address=str(address))
             raise
 
     return _sync_wrapper
 
 
-class NotePermissionRepoSpicedb(NotePermissionRepo):
+class NotePermissionRepoSpicedb(PermissionRepoABC):
     converter = SpicedbPermissionConverter()
     _default_permission_candidates_by_object_type = {
         "note": ["view", "write", "delete"],
@@ -443,7 +162,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
         Wraps gRPC errors in a ServiceUnavailableError if they indicate that SpiceDB is unavailable.
         """
         if isinstance(error, grpc.aio.AioRpcError) and error.code() == grpc.StatusCode.UNAVAILABLE:
-            return ServiceUnavailableError(name="SpiceDB", address=self.client._channel.target())
+            return ServiceUnavailableError(name="SpiceDB", address=self.client._channel.target())  # type: ignore
         return error
 
     @handle_error
@@ -521,6 +240,15 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
                 )
             )
         return objects
+
+    async def check(self, relationship: Relationship) -> bool:
+        converted = self.converter.convert_relationship(relationship)
+        response = await self.client.CheckPermission(CheckPermissionRequest(
+            resource=converted.resource,
+            permission=converted.relation,
+            subject=converted.subject,
+        ))
+        return response.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
 
 
     @handle_error
@@ -642,7 +370,7 @@ class NotePermissionRepoSpicedb(NotePermissionRepo):
 
 
 
-class NotePermissionRepoInMemory(NotePermissionRepo):
+class NotePermissionRepoInMemory(PermissionRepoABC):
     """In-memory implementation of NotePermissionRepo for unit testing.
 
     This test double simulates a small, deterministic subset of SpiceDB behavior:

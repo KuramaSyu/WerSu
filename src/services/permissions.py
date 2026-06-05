@@ -5,15 +5,16 @@ from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
-from src.db.repos.note.permission import (
+from src.api import (
     DirectoryRelationEnum,
-    NotePermissionRepo,
+    PermissionRepoABC,
     NoteRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
     Relationship,
     SubjectRef,
 )
+from src.services.permission_chain import *
 
 
 class PermissionServiceABC(ABC):
@@ -161,7 +162,7 @@ class PermissionServiceRepo(PermissionServiceABC):
 
     def __init__(
         self,
-        permission_repo: NotePermissionRepo,
+        permission_repo: PermissionRepoABC,
         note_repo: NoteRepoFacadeABC,
         directory_repo: DirectoryRepo,
     ) -> None:

@@ -9,7 +9,8 @@ from src.api.user_context import UserContextABC
 from src.ai.embedding_generator import EmbeddingGenerator, EmbeddingGeneratorABC, Models
 from src.db.database import Database, DatabaseABC
 from src.db.entities import NoteEntity
-from src.db.repos.note.permission import NotePermissionRepo, NoteRelationEnum, RelationEnum
+from src.db.repos.permissions import PermissionRepoABC
+from src.api import NoteRelationEnum, RelationEnum
 from src.db.table import TableABC
 
 
@@ -23,7 +24,7 @@ class NoteSearchStrategy(ABC):
         offset: int,
         db: DatabaseABC,
         user_context: UserContextABC,
-        note_permissions: NotePermissionRepo,
+        note_permissions: PermissionRepoABC,
     ) -> None:
         self.db = db
         self.query = query
@@ -171,7 +172,7 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         offset: int, 
         user_context: UserContextABC, 
         generator: EmbeddingGeneratorABC,
-        note_permissions: NotePermissionRepo,
+        note_permissions: PermissionRepoABC,
     ) -> None:
         super().__init__(query, limit, offset, db, user_context, note_permissions)
         self.generator = generator

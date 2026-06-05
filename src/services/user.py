@@ -5,7 +5,7 @@ from src.api.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
 from src.db.repos.directory.directory import DirectoryRepo
-from src.db.repos.note.permission import (
+from src.api import (
     DirectoryRelationEnum,
     ObjectRef,
     ObjectTypeEnum,

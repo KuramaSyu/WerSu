@@ -10,7 +10,7 @@ from testcontainers_spicedb import SpiceDBContainer
 
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
 from src.db.repos.note.note import UserContext
-from src.db.repos.note.permission import (
+from src.api import (
     NotePermissionRepoSpicedb,
     ObjectRef,
     Relationship,

@@ -9,7 +9,7 @@ from src.api.user_context import UserContextABC
 from src.db.entities import DirectoryEntity, NoteEntity
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, SearchType, UserContext
-from src.db.repos.note.permission import (
+from src.api import (
     DirectoryRelationEnum,
     NotePermissionRepoInMemory,
     NoteRelationEnum,

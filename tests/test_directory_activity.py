@@ -9,7 +9,7 @@ from src.api.user_context import UserContextABC
 from src.db.entities.note.versioning import NoteVersionEntry
 from src.db.repos.directory.directory import DirectoryRepo, DirectoryRepoSpicedbPostgres
 from src.db.repos.note.note import UserContext
-from src.db.repos.note.permission import (
+from src.api import (
     DirectoryRelationEnum,
     NotePermissionRepoInMemory,
     NoteRelationEnum,

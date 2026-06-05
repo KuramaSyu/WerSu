@@ -9,7 +9,7 @@ from grpcutil import insecure_bearer_token_credentials
 from testcontainers_spicedb import SpiceDBContainer
 
 from src.db.repos.note.note import UserContext
-from src.db.repos.note.permission import (
+from src.api import (
     NotePermissionRepoSpicedb,
     ObjectRef,
     Relationship,
