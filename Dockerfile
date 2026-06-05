@@ -1,8 +1,8 @@
-FROM python:3.13-slim
+FROM python:3.14-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+# ENV PYTHONDONTWRITEBYTECODE=1 \
+#     PYTHONUNBUFFERED=1 \
+#     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
@@ -17,17 +17,11 @@ ENV PATH="/root/.local/bin:${PATH}"
 
 # Copy dependency files first for Docker layer caching
 COPY pyproject.toml uv.lock ./
-
 # Create venv and install dependencies
 RUN uv sync
-
-# COPY src/requirements.txt /tmp/requirements.txt
-# RUN pip install --upgrade pip \
-#     && pip install -r /tmp/requirements.txt
 
 COPY src /app/src
 COPY logging.yaml /app/logging.yaml
 
-# CMD ["python", "-m", "src.main"]
-# uv run -- python -m src.main
+
 CMD ["uv", "run", "--", "python", "-m", "src.main"]
