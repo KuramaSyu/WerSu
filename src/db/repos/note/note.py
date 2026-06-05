@@ -6,6 +6,7 @@ from typing import List, Optional, Type
 
 import asyncpg
 
+from src.api.relationship import AttachmentRelationEnum
 from src.api.types import LoggingProvider, Pagination
 from src.api.user_context import UserContextABC
 from src.db.entities import NoteEntity
@@ -210,11 +211,23 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             Direct relationships on the note (for example `owner` and
             `parent_directory`) as stored in the permission backend.
         """
+        # direct relationships of note with user relations and parent directories
         relations = await self._permission_repo.list_relationships(
             resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
         )
+
+        # since note doesn't store child_attachment, but attachments store parent_note relation, 
+        # we need to lookup attachments separately and then merge them here
+        # lookup attachments:???#parent_note@note:note_id
+        attachment_relations = await self._permission_repo.lookup_relationships(
+            Relationship(
+                resource=ObjectRef(ObjectTypeEnum.ATTACHMENT, UNDEFINED),
+                relation=AttachmentRelationEnum.PARENT_NOTE,
+                subject=SubjectRef(ObjectTypeEnum.NOTE, note_id)
+            )
+        )
         return sorted(
-            relations,
+            relations + attachment_relations,
             key=lambda rel: (
                 str(rel.relation),
                 str(rel.subject.object_type),
@@ -359,14 +372,16 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             return None
         
         # fetch embeddings
-        embeddings = await self._embedding_repo.select(
-            NoteEmbeddingEntity(
-                note_id=note_id,
-                model=UNDEFINED,
-                embedding=UNDEFINED,
-            )
-        )
-        record.embeddings = embeddings
+        # end user don't care about embeddings -> only a backend thing
+
+        # embeddings = await self._embedding_repo.select(
+        #     NoteEmbeddingEntity(
+        #         note_id=note_id,
+        #         model=UNDEFINED,
+        #         embedding=UNDEFINED,
+        #     )
+        # )
+        # record.embeddings = embeddings
 
         record.permissions = await self._fetch_note_permissions(note_id=note_id)
         return record
