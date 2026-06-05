@@ -29,3 +29,13 @@ definition note {
     permission view = reader + write
     permission edit_permissions = owner + admin + parent_directory->edit_permissions
 }
+
+definition attachment {
+    relation parent_note: note
+
+    // each user who can view any note where the attachment is in, can also view this attachment.
+    // there are no separate relations here
+    permission delete = parent_note->delete
+    permission_write = parent_note->write
+    permission view = parent_note->view
+}
