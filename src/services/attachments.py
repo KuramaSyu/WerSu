@@ -16,7 +16,7 @@ from src.db.repos.attachments.attachments import (
 from src.db import PermissionRepoABC
 from src.api import Relationship, ObjectRef, SubjectRef, ObjectTypeEnum, SubjectType, AttachmentRelationEnum
 from src.db.table import TableABC
-from src.domain.permission_chain import HasNoteViewPerm, HasAttachmentViewPerm
+from src.domain.permission_chain import HasNoteViewPerm, HasAttachmentViewPerm, HasNoteWritePerm
 
 
 class AttachmentFacadeABC(ABC):
@@ -99,6 +99,12 @@ class AttachmentFacade(AttachmentFacadeABC):
         return attachment
 
     async def get_attachment(self, key: str, user_ctx: UserContextABC) -> Attachment:
+        # permission check
+        check = HasAttachmentViewPerm(key).set_permission_repo(self._permission_repo)
+        has_permission = await check.check(user_ctx)
+        if not has_permission:
+            return PermissionError(f"user {user_ctx.user_id} has no permission to view attachment {key}")
+        
         metadata = await self._metadata_repo.get_metadata(key)
         content_attachment = await self._attachment_repo.get_attachment(key)
 
@@ -116,9 +122,21 @@ class AttachmentFacade(AttachmentFacadeABC):
         )
 
     async def get_metadata(self, key: str, user_ctx: UserContextABC) -> Attachment:
+        # permission check
+        check = HasNoteViewPerm(key).set_permission_repo(self._permission_repo)
+        has_permission = await check.check(user_ctx)
+        if not has_permission:
+            raise has_permission.error
+    
         return await self._metadata_repo.get_metadata(key)
 
     async def delete_attachment(self, key: str, user_ctx: UserContextABC) -> None:
+        # permission check
+        check = HasNoteWritePerm(key).set_permission_repo(self._permission_repo)
+        has_permission = await check.check(user_ctx)
+        if not has_permission:
+            raise has_permission.error
+
         # Remove object payload first, then metadata.
         await self._attachment_repo.delete_attachment(key)
         await self._metadata_repo.delete_metadata(key)
@@ -133,7 +151,7 @@ class AttachmentFacade(AttachmentFacadeABC):
         )
         has_permission = await permission_chain.get_first().check(user_ctx)
         if not has_permission:
-            raise PermissionError(f"user {user_ctx.user_id} has no permission to view attachment {attachment_key} or note {note_id}")
+            raise has_permission.error
         
         # add to attachment_note_link table
         await self._attachments_note_link_table.insert(
@@ -156,6 +174,9 @@ class AttachmentFacade(AttachmentFacadeABC):
                 .set_permission_repo(self._permission_repo)
                 .set_next(HasNoteViewPerm(note_id))
         )
+        has_permission = await permission_chain.get_first().check(user_ctx)
+        if not has_permission:
+            raise has_permission.error
 
         # remove from attachment_note_link table
         await self._attachments_note_link_table.delete(
