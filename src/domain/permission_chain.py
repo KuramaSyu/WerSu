@@ -5,6 +5,15 @@ from src.api.relationship import *
 from src.api import Relationship, UserContextABC, PermissionRepoABC
 
 
+class CheckResult:
+    """Convenience class which is more or less a bool with a reason for failure when the check fails."""
+    def __init__(self, success: bool, error: Optional[Exception] = None):
+        self.success = success
+        self.error = error
+
+    def __bool__(self):
+        return self.success
+
 class PermissionCheckChain(ABC):
     """Chain of responsibility for checking permissions."""
     _next: Optional[PermissionCheckChain]
@@ -23,16 +32,28 @@ class PermissionCheckChain(ABC):
         """Actual implementation of the check"""
         ...
 
-    async def check(self, user_ctx: UserContextABC) -> bool:
-        """Check if the permission applies or not. If it applies automatically call the next"""
+    async def check(self, user_ctx: UserContextABC) -> CheckResult:
+        """Check if the permission applies or not. If it applies automatically call the next
+        
+        Returns
+        --------
+        CheckResult:
+            `CheckResult.success` is `True` if the check was successful, and `False` if not. 
+            `CheckResult.error` is the error to raise when the check fails, and `None` when it succeeds.
+
+        Note
+        ----
+        CheckResult can be used like a boolean
+        """
+
         if not self._permission_repo:
             raise RuntimeError("`PermissionCheckChain` was called in the wrong order." +
             "First call on the first element `.set_permission_repo()`, then in subsequent calls it will be passed automatically with `.set_next()`")
         success = await self._check(user_ctx)
         if not success:
-            return False
+            return CheckResult(False, self.error)
         if not self._next:
-            return True
+            return CheckResult(True, None)
         return await self._next.check(user_ctx)
 
     def set_permission_repo(self, repo: PermissionRepoABC) -> Self:
@@ -50,6 +71,17 @@ class PermissionCheckChain(ABC):
         if not self._prev:
             return self
         return self._prev.get_first()
+    
+    @abstractmethod
+    def _get_error_message(self) -> str:
+        """Get the error message to raise when permission check fails, which gets inserted into the error generated in .get_error()"""
+        ...
+
+    @property
+    def error(self) -> PermissionError:
+        """Convenience method to get the error when permission check fails"""
+        return PermissionError(self._get_error_message())
+    
 
     def _get_relation(
         self,
@@ -99,6 +131,9 @@ class HasNoteViewPerm(PermissionCheckChain):
     async def _check(self, user_ctx: UserContextABC) -> bool:
         relationship = self._get_relation(self._note_id, user_ctx.user_id)
         return await self._permission_repo.check(relationship)
+    
+    def _get_error_message(self) -> str:
+        return f"user has no permission to view note {self._note_id}"
 
 
 class HasAttachmentViewPerm(PermissionCheckChain):
@@ -117,5 +152,44 @@ class HasAttachmentViewPerm(PermissionCheckChain):
             permission=self.RELATION_TYPE, 
             resource=ObjectRef(self.OBJECT_TYPE, self._attachment_id)
         )
+    
+    def _get_error_message(self) -> str:
+        return f"user has no permission to view attachment {self._attachment_id}"
+
+class HasNoteDeletePerm(PermissionCheckChain):
+    """Permission check for deleting a note."""
+    OBJECT_TYPE: ObjectType = "note"
+    RELATION_TYPE: NoteRelationName = NoteRelationEnum.DELETE
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, note_id: str):
+        super().__init__()
+        self._note_id = note_id
+
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        relationship = self._get_relation(self._note_id, user_ctx.user_id)
+        return await self._permission_repo.check(relationship)
+    
+    def _get_error_message(self) -> str:
+        return f"user has no permission to delete note {self._note_id}"
+
+class HasNoteWritePerm(PermissionCheckChain):
+    """Permission check for writing/editing to a note."""
+    OBJECT_TYPE: ObjectType = "note"
+    RELATION_TYPE: NoteRelationName = NoteRelationEnum.WRITE
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, note_id: str):
+        super().__init__()
+        self._note_id = note_id
+
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        relationship = self._get_relation(self._note_id, user_ctx.user_id)
+        return await self._permission_repo.check(relationship)
+    
+    def _get_error_message(self) -> str:
+        return f"user has no permission to write to note {self._note_id}"
 
 
