@@ -146,6 +146,25 @@ class HasNoteViewPerm(PermissionCheckChain):
     def _get_error_message(self) -> str:
         return f"user has no permission to view note {self._note_id}"
 
+class HasAttachmentWritePerm(PermissionCheckChain):
+    """Checks if a user can write to an attachment, which is required for uploading an attachment or linking it to a note."""
+    OBJECT_TYPE: ObjectType = "attachment"
+    RELATION_TYPE: NoteRelationName = AttachmentRelationEnum.WRITE
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, attachment_id: str) -> None:
+        super().__init__()
+        self._attachment_id = attachment_id
+    
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        return await self._permission_repo.has_permission(
+            user_ctx, 
+            permission=self.RELATION_TYPE, 
+            resource=ObjectRef(self.OBJECT_TYPE, self._attachment_id)
+        )
+    
+    def _get_error_message(self) -> str:
+        return f"user has no permission to write to attachment {self._attachment_id} (e.g. delete it)"
 
 class HasAttachmentViewPerm(PermissionCheckChain):
     """Checks is a user can view an attachment"""
