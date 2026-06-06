@@ -26,6 +26,8 @@ def _to_permission_object_type(object_type: str) -> PermissionObjectType.ValueTy
         return PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY
     if object_type == ObjectTypeEnum.USER.value:
         return PermissionObjectType.PERMISSION_OBJECT_TYPE_USER
+    if object_type == ObjectTypeEnum.ATTACHMENT.value:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_ATTACHMENT
     return PermissionObjectType.PERMISSION_OBJECT_TYPE_UNSPECIFIED
 
 
