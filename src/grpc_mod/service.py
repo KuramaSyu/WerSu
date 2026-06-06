@@ -811,7 +811,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         try:
             now = datetime.now()
             attachment = AttachmentEntity(
-                key=UNDEFINED,
+                key=request.filepath,  # since filepath is currently unused, REST uses it for the S3 path with bucket
                 filename=request.filename,
                 filepath=request.filepath,
                 content_type=request.content_type or "application/octet-stream",

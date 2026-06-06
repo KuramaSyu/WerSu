@@ -89,12 +89,13 @@ class AttachmentFacade(AttachmentFacadeABC):
             attachment.updated_at = now
 
         # send content to object storage
-        key = await self._attachment_repo.post_attachment(attachment)
-        attachment.key = key  # assign generated key back to attachment
+        if attachment.key is UNDEFINED:
+            key = await self._attachment_repo.post_attachment(attachment)
+            attachment.key = key  # assign generated key back to attachment
 
         # persist metadata to the database, using key given from object storage
         await self._metadata_repo.post_metadata(attachment, user_ctx)
-        self.log.debug(f"Stored attachment metadata for {key=}")
+        self.log.debug(f"Stored attachment metadata for {attachment.key=}")
 
         return attachment
 
