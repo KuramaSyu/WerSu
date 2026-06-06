@@ -16,7 +16,7 @@ from src.db.repos.attachments.attachments import (
 from src.db import PermissionRepoABC
 from src.api import Relationship, ObjectRef, SubjectRef, ObjectTypeEnum, SubjectType, AttachmentRelationEnum
 from src.db.table import TableABC
-from src.domain.permission_chain import HasNoteViewPerm, HasAttachmentViewPerm, HasNoteWritePerm
+from src.domain.permission_chain import HasAttachmentWritePerm, HasNoteViewPerm, HasAttachmentViewPerm, HasNoteWritePerm
 
 
 class AttachmentFacadeABC(ABC):
@@ -24,42 +24,48 @@ class AttachmentFacadeABC(ABC):
 
     @abstractmethod
     async def post_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
-        """Upload attachment contents and persist metadata."""
+        """Uploads attachment contents and persists metadata. It does not evaluates permissions, since 
+        the attachment is not linked to any note yet."""
         ...
 
     @abstractmethod
     async def get_attachment(self, key: str, user_ctx: UserContextABC) -> Attachment:
-        """Fetch attachment metadata and contents by key."""
+        """Checks permission and fetches attachment metadata and contents by key."""
         ...
 
     @abstractmethod
     async def get_metadata(self, key: str, user_ctx: UserContextABC) -> Attachment:
-        """Fetch attachment metadata without the content payload."""
+        """Checks permission and fetch attachment metadata without the content payload."""
         ...
 
     @abstractmethod
     async def delete_attachment(self, key: str, user_ctx: UserContextABC) -> None:
-        """Delete attachment metadata and contents."""
+        """Checks permission and deletes attachment metadata and contents."""
         ...
 
     @abstractmethod
     async def link_attachment_to_note(self, attachment_key: str, note_id: str, user_ctx: UserContextABC) -> None:
-        """Create a link between an attachment and a note. This is a separate step to allow linking an attachment to multiple notes."""
+        """Checks permission and creates a link between an attachment and a note. This is a separate step to allow linking an attachment to multiple notes."""
         ...
     
     @abstractmethod
     async def unlink_attachment_from_note(self, attachment_key: str, note_id: str, user_ctx: UserContextABC) -> None:
-        """Remove a link between an attachment and a note."""
+        """Checks permission and removes a link between an attachment and a note."""
         ...
 
     @abstractmethod
     async def list_attachments_for_note(self, note_id: str, user_ctx: UserContextABC) -> list[Attachment]:
-        """List all attachments linked to a given note."""
+        """Checks permission and lists all attachments linked to a given note."""
         ...
 
 
 class AttachmentFacade(AttachmentFacadeABC):
-    """Facade that combines object storage + metadata storage which also creates links between attachments and notes."""
+    """
+    Facade that combines object storage + metadata storage + permission storage.
+    It effectively implements the full lifecycle of attachments, containing 
+        - upload, download, delete, link to note, unlink from note
+    and it evaluates permissions for all operations correctly 
+    """
 
     def __init__(
         self,
@@ -79,6 +85,9 @@ class AttachmentFacade(AttachmentFacadeABC):
         self.get_now = get_now
         
     async def post_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
+        # no permission check done - this only uploads. it does not link to any note yet.
+        # If not used, it should be cleaned in a task which checks links for an attachment
+
         if attachment.content is None:
             raise ValueError("Attachment content cannot be empty")
 
@@ -124,7 +133,7 @@ class AttachmentFacade(AttachmentFacadeABC):
 
     async def get_metadata(self, key: str, user_ctx: UserContextABC) -> Attachment:
         # permission check
-        check = HasNoteViewPerm(key).set_permission_repo(self._permission_repo)
+        check = HasAttachmentViewPerm(key).set_permission_repo(self._permission_repo)
         has_permission = await check.check(user_ctx)
         if not has_permission:
             raise has_permission.error
@@ -133,7 +142,7 @@ class AttachmentFacade(AttachmentFacadeABC):
 
     async def delete_attachment(self, key: str, user_ctx: UserContextABC) -> None:
         # permission check
-        check = HasNoteWritePerm(key).set_permission_repo(self._permission_repo)
+        check = HasAttachmentWritePerm(key).set_permission_repo(self._permission_repo)
         has_permission = await check.check(user_ctx)
         if not has_permission:
             raise has_permission.error
@@ -194,6 +203,12 @@ class AttachmentFacade(AttachmentFacadeABC):
         return
 
     async def list_attachments_for_note(self, note_id: str, user_ctx: UserContextABC) -> list[Attachment]:
+        # permission check
+        check = HasNoteViewPerm(note_id).set_permission_repo(self._permission_repo)
+        has_permission = await check.check(user_ctx)
+        if not has_permission:
+            raise has_permission.error
+        
         # fetch all attachment links from db and then fetch each attachment from object storage
         links = await self._attachments_note_link_table.select(where={"note_id": note_id})
         attachments = []
