@@ -126,6 +126,9 @@ class Relationship(PartialRelationship):
         self.resource = resource
         super().__init__(relation, subject)
 
+    def __repr__(self):
+        return f"Relationship(resource={self.resource.object_type}:{self.resource.object_id}, relation={self.relation}, subject={self.subject.object_type}:{self.subject.object_id})"
+
 class PermissionConverterABC(ABC):
 
     @abstractmethod
