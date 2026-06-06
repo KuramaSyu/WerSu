@@ -1,8 +1,14 @@
 from typing import *
 from abc import ABC, abstractmethod
 
+import urllib
+
+from src import utils
 from src.api.relationship import *
 from src.api import Relationship, UserContextABC, PermissionRepoABC
+
+# i am sorry, I don't want to inject it into each chain element. This is more for debugging
+log = utils.logging_provider(__file__)
 
 
 class CheckResult:
@@ -113,6 +119,7 @@ class PermissionCheckChain(ABC):
             relation=relation_type,
             subject=SubjectRef(subj_type, subj_id)  # type:ignore
         )
+    
 
 
     
@@ -130,7 +137,11 @@ class HasNoteViewPerm(PermissionCheckChain):
 
     async def _check(self, user_ctx: UserContextABC) -> bool:
         relationship = self._get_relation(self._note_id, user_ctx.user_id)
-        return await self._permission_repo.check(relationship)
+        try:
+            return await self._permission_repo.check(relationship)
+        except Exception as e:
+            log.error(f"Error while checking permission for relationship {relationship}: {e}")
+            raise e
     
     def _get_error_message(self) -> str:
         return f"user has no permission to view note {self._note_id}"
