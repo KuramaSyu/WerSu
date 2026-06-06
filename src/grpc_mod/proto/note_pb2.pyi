@@ -13,10 +13,10 @@ import builtins as _builtins
 import sys
 import typing as _typing
 
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias as _TypeAlias
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    from typing_extensions import TypeAlias as _TypeAlias
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -30,6 +30,7 @@ class _PermissionObjectTypeEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_
     PERMISSION_OBJECT_TYPE_NOTE: _PermissionObjectType.ValueType  # 1
     PERMISSION_OBJECT_TYPE_DIRECTORY: _PermissionObjectType.ValueType  # 2
     PERMISSION_OBJECT_TYPE_USER: _PermissionObjectType.ValueType  # 3
+    PERMISSION_OBJECT_TYPE_ATTACHMENT: _PermissionObjectType.ValueType  # 4
 
 class PermissionObjectType(_PermissionObjectType, metaclass=_PermissionObjectTypeEnumTypeWrapper): ...
 
@@ -37,6 +38,7 @@ PERMISSION_OBJECT_TYPE_UNSPECIFIED: PermissionObjectType.ValueType  # 0
 PERMISSION_OBJECT_TYPE_NOTE: PermissionObjectType.ValueType  # 1
 PERMISSION_OBJECT_TYPE_DIRECTORY: PermissionObjectType.ValueType  # 2
 PERMISSION_OBJECT_TYPE_USER: PermissionObjectType.ValueType  # 3
+PERMISSION_OBJECT_TYPE_ATTACHMENT: PermissionObjectType.ValueType  # 4
 Global___PermissionObjectType: _TypeAlias = PermissionObjectType  # noqa: Y015
 
 @_typing.final
@@ -55,8 +57,11 @@ class GetNoteRequest(_message.Message):
         id: _builtins.str = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___GetNoteRequest: _TypeAlias = GetNoteRequest  # noqa: Y015
 
@@ -115,8 +120,11 @@ class GetSearchNotesRequest(_message.Message):
         offset: _builtins.int = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["limit", b"limit", "offset", b"offset", "query", b"query", "search_type", b"search_type", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___GetSearchNotesRequest: _TypeAlias = GetSearchNotesRequest  # noqa: Y015
 
@@ -133,7 +141,7 @@ class MinimalNote(_message.Message):
     STRIPPED_CONTENT_FIELD_NUMBER: _builtins.int
     PERMISSIONS_FIELD_NUMBER: _builtins.int
     id: _builtins.str
-    """Note ID (UUIDv4 string)"""
+    """Note ID (UUIDv7 string)"""
     title: _builtins.str
     author_id: _builtins.str
     stripped_content: _builtins.str
@@ -155,6 +163,7 @@ class MinimalNote(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "id", b"id", "permissions", b"permissions", "stripped_content", b"stripped_content", "title", b"title", "updated_at", b"updated_at"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___MinimalNote: _TypeAlias = MinimalNote  # noqa: Y015
 
@@ -194,6 +203,7 @@ class Note(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "content", b"content", "id", b"id", "permissions", b"permissions", "title", b"title", "updated_at", b"updated_at"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___Note: _TypeAlias = Note  # noqa: Y015
 
@@ -212,8 +222,11 @@ class NoteEmbedding(_message.Message):
         model: _builtins.str = ...,
         embedding: _abc.Iterable[_builtins.float] | None = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["embedding", b"embedding", "model", b"model"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___NoteEmbedding: _TypeAlias = NoteEmbedding  # noqa: Y015
 
@@ -262,8 +275,11 @@ class DeleteNoteRequest(_message.Message):
         id: _builtins.str = ...,
         author_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "id", b"id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DeleteNoteRequest: _TypeAlias = DeleteNoteRequest  # noqa: Y015
 
@@ -360,8 +376,11 @@ class GetDirectoryRequest(_message.Message):
         id: _builtins.str = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___GetDirectoryRequest: _TypeAlias = GetDirectoryRequest  # noqa: Y015
 
@@ -523,8 +542,11 @@ class DeleteDirectoryRequest(_message.Message):
         id: _builtins.str = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DeleteDirectoryRequest: _TypeAlias = DeleteDirectoryRequest  # noqa: Y015
 
@@ -542,8 +564,11 @@ class PermissionSubject(_message.Message):
         object_type: Global___PermissionObjectType.ValueType = ...,
         object_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___PermissionSubject: _TypeAlias = PermissionSubject  # noqa: Y015
 
@@ -561,8 +586,11 @@ class PermissionResource(_message.Message):
         object_type: Global___PermissionObjectType.ValueType = ...,
         object_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___PermissionResource: _TypeAlias = PermissionResource  # noqa: Y015
 
@@ -589,6 +617,7 @@ class PermissionRelationship(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["relation", b"relation", "resource", b"resource", "subject", b"subject"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___PermissionRelationship: _TypeAlias = PermissionRelationship  # noqa: Y015
 
@@ -609,8 +638,11 @@ class GetPermissionsRequest(_message.Message):
         object_id: _builtins.str = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___GetPermissionsRequest: _TypeAlias = GetPermissionsRequest  # noqa: Y015
 
@@ -639,6 +671,7 @@ class CreatePermissionRequest(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationship", b"relationship", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___CreatePermissionRequest: _TypeAlias = CreatePermissionRequest  # noqa: Y015
 
@@ -667,6 +700,7 @@ class DeletePermissionRequest(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationship", b"relationship", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DeletePermissionRequest: _TypeAlias = DeletePermissionRequest  # noqa: Y015
 
@@ -691,8 +725,11 @@ class ReplacePermissionsRequest(_message.Message):
         relationships: _abc.Iterable[Global___PermissionRelationship] | None = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationships", b"relationships", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___ReplacePermissionsRequest: _TypeAlias = ReplacePermissionsRequest  # noqa: Y015
 
@@ -714,8 +751,11 @@ class PermissionsResponse(_message.Message):
         object_id: _builtins.str = ...,
         relationships: _abc.Iterable[Global___PermissionRelationship] | None = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "relationships", b"relationships"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___PermissionsResponse: _TypeAlias = PermissionsResponse  # noqa: Y015
 
@@ -755,6 +795,7 @@ class NoteVersionSummary(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "created_at", b"created_at", "is_snapshot", b"is_snapshot", "note_id", b"note_id", "snapshot_id", b"snapshot_id", "version_id", b"version_id", "version_index", b"version_index"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___NoteVersionSummary: _TypeAlias = NoteVersionSummary  # noqa: Y015
 
@@ -870,6 +911,7 @@ class NoteVersionContent(_message.Message):
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "content", b"content", "created_at", b"created_at", "note_id", b"note_id", "title", b"title", "version_index", b"version_index"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___NoteVersionContent: _TypeAlias = NoteVersionContent  # noqa: Y015
 
@@ -890,8 +932,11 @@ class GetNoteVersionContentRequest(_message.Message):
         version_index: _builtins.int = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["note_id", b"note_id", "user_id", b"user_id", "version_index", b"version_index"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___GetNoteVersionContentRequest: _TypeAlias = GetNoteVersionContentRequest  # noqa: Y015
 
@@ -912,7 +957,10 @@ class RestoreNoteVersionRequest(_message.Message):
         version_index: _builtins.int = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["note_id", b"note_id", "user_id", b"user_id", "version_index", b"version_index"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___RestoreNoteVersionRequest: _TypeAlias = RestoreNoteVersionRequest  # noqa: Y015

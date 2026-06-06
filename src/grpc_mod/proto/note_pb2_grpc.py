@@ -5,7 +5,7 @@ import warnings
 
 from src.grpc_mod.proto import note_pb2 as src_dot_grpc__mod_dot_proto_dot_note__pb2
 
-GRPC_GENERATED_VERSION = '1.78.0'
+GRPC_GENERATED_VERSION = '1.81.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -25,7 +25,7 @@ if _version_not_supported:
     )
 
 
-class NoteServiceStub(object):
+class NoteServiceStub:
     """Note Service
     """
 
@@ -62,7 +62,7 @@ class NoteServiceStub(object):
                 _registered_method=True)
 
 
-class NoteServiceServicer(object):
+class NoteServiceServicer:
     """Note Service
     """
 
@@ -132,7 +132,7 @@ def add_NoteServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class NoteService(object):
+class NoteService:
     """Note Service
     """
 
@@ -272,7 +272,7 @@ class NoteService(object):
             _registered_method=True)
 
 
-class DirectoryServiceStub(object):
+class DirectoryServiceStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -308,7 +308,7 @@ class DirectoryServiceStub(object):
                 _registered_method=True)
 
 
-class DirectoryServiceServicer(object):
+class DirectoryServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
     def GetDirectory(self, request, context):
@@ -377,7 +377,7 @@ def add_DirectoryServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class DirectoryService(object):
+class DirectoryService:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -516,7 +516,7 @@ class DirectoryService(object):
             _registered_method=True)
 
 
-class PermissionServiceStub(object):
+class PermissionServiceStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -547,7 +547,7 @@ class PermissionServiceStub(object):
                 _registered_method=True)
 
 
-class PermissionServiceServicer(object):
+class PermissionServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
     def GetPermissions(self, request, context):
@@ -605,7 +605,7 @@ def add_PermissionServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class PermissionService(object):
+class PermissionService:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -717,7 +717,7 @@ class PermissionService(object):
             _registered_method=True)
 
 
-class NoteVersionServiceStub(object):
+class NoteVersionServiceStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -748,7 +748,7 @@ class NoteVersionServiceStub(object):
                 _registered_method=True)
 
 
-class NoteVersionServiceServicer(object):
+class NoteVersionServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
     def GetNoteVersions(self, request, context):
@@ -806,7 +806,7 @@ def add_NoteVersionServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class NoteVersionService(object):
+class NoteVersionService:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod

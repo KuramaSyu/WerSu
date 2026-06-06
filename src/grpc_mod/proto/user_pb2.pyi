@@ -9,10 +9,10 @@ import builtins as _builtins
 import sys
 import typing as _typing
 
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias as _TypeAlias
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    from typing_extensions import TypeAlias as _TypeAlias
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -44,8 +44,11 @@ class User(_message.Message):
         discriminator: _builtins.str = ...,
         email: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["avatar", b"avatar", "discord_id", b"discord_id", "discriminator", b"discriminator", "email", b"email", "id", b"id", "username", b"username"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___User: _TypeAlias = User  # noqa: Y015
 
@@ -101,8 +104,11 @@ class PostUserRequest(_message.Message):
         discriminator: _builtins.str = ...,
         email: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["avatar", b"avatar", "discord_id", b"discord_id", "discriminator", b"discriminator", "email", b"email", "username", b"username"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___PostUserRequest: _TypeAlias = PostUserRequest  # noqa: Y015
 
@@ -170,8 +176,11 @@ class DeleteUserRequest(_message.Message):
         *,
         id: _builtins.str = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DeleteUserRequest: _TypeAlias = DeleteUserRequest  # noqa: Y015
 
@@ -186,7 +195,10 @@ class DeleteUserResponse(_message.Message):
         *,
         success: _builtins.bool = ...,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
     _ClearFieldArgType: _TypeAlias = _typing.Literal["success", b"success"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DeleteUserResponse: _TypeAlias = DeleteUserResponse  # noqa: Y015
