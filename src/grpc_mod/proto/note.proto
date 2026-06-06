@@ -32,7 +32,7 @@ message GetSearchNotesRequest {
 
 // Response: represents a minimal Note for search results
 message MinimalNote {
-    string id = 1; // Note ID (UUIDv4 string)
+    string id = 1; // Note ID (UUIDv7 string)
     string title = 2;
     string author_id = 3;
     google.protobuf.Timestamp updated_at = 4;
