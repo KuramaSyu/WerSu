@@ -55,6 +55,11 @@ class AttachmentServiceStub:
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.DeleteAttachmentRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.DeleteAttachmentResponse.FromString,
                 _registered_method=True)
+        self.UpdateAttachmentMetadata = channel.unary_unary(
+                '/proto.AttachmentService/UpdateAttachmentMetadata',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.FromString,
+                _registered_method=True)
         self.PostAttachmentLink = channel.unary_unary(
                 '/proto.AttachmentService/PostAttachmentLink',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.PostAttachmentLinkRequest.SerializeToString,
@@ -94,6 +99,13 @@ class AttachmentServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def UpdateAttachmentMetadata(self, request, context):
+        """enforces that key (filepath) is given and updates all other provided fields for that key
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def PostAttachmentLink(self, request, context):
         """either works -> no return or fails completely with an error, so no need for a response message
         """
@@ -129,6 +141,11 @@ def add_AttachmentServiceServicer_to_server(servicer, server):
                     servicer.DeleteAttachment,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.DeleteAttachmentRequest.FromString,
                     response_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.DeleteAttachmentResponse.SerializeToString,
+            ),
+            'UpdateAttachmentMetadata': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateAttachmentMetadata,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.SerializeToString,
             ),
             'PostAttachmentLink': grpc.unary_unary_rpc_method_handler(
                     servicer.PostAttachmentLink,
@@ -249,6 +266,33 @@ class AttachmentService:
             '/proto.AttachmentService/DeleteAttachment',
             src_dot_grpc__mod_dot_proto_dot_attachments__pb2.DeleteAttachmentRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_attachments__pb2.DeleteAttachmentResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateAttachmentMetadata(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.AttachmentService/UpdateAttachmentMetadata',
+            src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.FromString,
             options,
             channel_credentials,
             insecure,
