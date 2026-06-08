@@ -164,6 +164,41 @@ class DeleteAttachmentLinkRequest(_message.Message):
 Global___DeleteAttachmentLinkRequest: _TypeAlias = DeleteAttachmentLinkRequest  # noqa: Y015
 
 @_typing.final
+class UpdateAttachmentMetadataRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    KEY_FIELD_NUMBER: _builtins.int
+    FILENAME_FIELD_NUMBER: _builtins.int
+    CONTENT_TYPE_FIELD_NUMBER: _builtins.int
+    SHA256_FIELD_NUMBER: _builtins.int
+    SIZE_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    key: _builtins.str
+    filename: _builtins.str
+    content_type: _builtins.str
+    sha256: _builtins.str
+    size: _builtins.str
+    user_id: _builtins.str
+    """the requesting user - used for authorization"""
+    def __init__(
+        self,
+        *,
+        key: _builtins.str = ...,
+        filename: _builtins.str = ...,
+        content_type: _builtins.str = ...,
+        sha256: _builtins.str = ...,
+        size: _builtins.str = ...,
+        user_id: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["content_type", b"content_type", "filename", b"filename", "key", b"key", "sha256", b"sha256", "size", b"size", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___UpdateAttachmentMetadataRequest: _TypeAlias = UpdateAttachmentMetadataRequest  # noqa: Y015
+
+@_typing.final
 class GetAttachmentRequest(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 

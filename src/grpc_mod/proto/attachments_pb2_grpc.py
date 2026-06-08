@@ -57,7 +57,7 @@ class AttachmentServiceStub:
                 _registered_method=True)
         self.UpdateAttachmentMetadata = channel.unary_unary(
                 '/proto.AttachmentService/UpdateAttachmentMetadata',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.SerializeToString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.UpdateAttachmentMetadataRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.FromString,
                 _registered_method=True)
         self.PostAttachmentLink = channel.unary_unary(
@@ -144,7 +144,7 @@ def add_AttachmentServiceServicer_to_server(servicer, server):
             ),
             'UpdateAttachmentMetadata': grpc.unary_unary_rpc_method_handler(
                     servicer.UpdateAttachmentMetadata,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.FromString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.UpdateAttachmentMetadataRequest.FromString,
                     response_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.SerializeToString,
             ),
             'PostAttachmentLink': grpc.unary_unary_rpc_method_handler(
@@ -291,7 +291,7 @@ class AttachmentService:
             request,
             target,
             '/proto.AttachmentService/UpdateAttachmentMetadata',
-            src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_attachments__pb2.UpdateAttachmentMetadataRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_attachments__pb2.AttachmentMetadata.FromString,
             options,
             channel_credentials,

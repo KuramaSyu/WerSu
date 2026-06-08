@@ -26,7 +26,7 @@ from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n$src/grpc_mod/proto/attachments.proto\x12\x05proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bgoogle/protobuf/empty.proto\"\xd9\x01\n\x12\x41ttachmentMetadata\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x10\n\x08\x66ilepath\x18\x03 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x04 \x01(\t\x12\x0c\n\x04size\x18\x05 \x01(\x03\x12.\n\ncreated_at\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12.\n\nupdated_at\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0e\n\x06sha256\x18\x08 \x01(\t\"J\n\nAttachment\x12+\n\x08metadata\x18\x01 \x01(\x0b\x32\x19.proto.AttachmentMetadata\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\x0c\"s\n\x15PostAttachmentRequest\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x10\n\x08\x66ilepath\x18\x02 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\x0c\x12\x0f\n\x07user_id\x18\x05 \x01(\t\"U\n\x19PostAttachmentLinkRequest\x12\x16\n\x0e\x61ttachment_key\x18\x01 \x01(\t\x12\x0f\n\x07note_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\"W\n\x1b\x44\x65leteAttachmentLinkRequest\x12\x16\n\x0e\x61ttachment_key\x18\x01 \x01(\t\x12\x0f\n\x07note_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\"4\n\x14GetAttachmentRequest\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\"<\n\x1cGetAttachmentMetadataRequest\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\"7\n\x17\x44\x65leteAttachmentRequest\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\"+\n\x18\x44\x65leteAttachmentResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32\xbb\x04\n\x11\x41ttachmentService\x12\x41\n\x0ePostAttachment\x12\x1c.proto.PostAttachmentRequest\x1a\x11.proto.Attachment\x12?\n\rGetAttachment\x12\x1b.proto.GetAttachmentRequest\x1a\x11.proto.Attachment\x12W\n\x15GetAttachmentMetadata\x12#.proto.GetAttachmentMetadataRequest\x1a\x19.proto.AttachmentMetadata\x12S\n\x10\x44\x65leteAttachment\x12\x1e.proto.DeleteAttachmentRequest\x1a\x1f.proto.DeleteAttachmentResponse\x12P\n\x18UpdateAttachmentMetadata\x12\x19.proto.AttachmentMetadata\x1a\x19.proto.AttachmentMetadata\x12N\n\x12PostAttachmentLink\x12 .proto.PostAttachmentLinkRequest\x1a\x16.google.protobuf.Empty\x12R\n\x14\x44\x65leteAttachmentLink\x12\".proto.DeleteAttachmentLinkRequest\x1a\x16.google.protobuf.EmptyB1Z/github.com/KuramaSyu/WerSu-Rest/src/proto;protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n$src/grpc_mod/proto/attachments.proto\x12\x05proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bgoogle/protobuf/empty.proto\"\xd9\x01\n\x12\x41ttachmentMetadata\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x10\n\x08\x66ilepath\x18\x03 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x04 \x01(\t\x12\x0c\n\x04size\x18\x05 \x01(\x03\x12.\n\ncreated_at\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12.\n\nupdated_at\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x0e\n\x06sha256\x18\x08 \x01(\t\"J\n\nAttachment\x12+\n\x08metadata\x18\x01 \x01(\x0b\x32\x19.proto.AttachmentMetadata\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\x0c\"s\n\x15PostAttachmentRequest\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x10\n\x08\x66ilepath\x18\x02 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\x0c\x12\x0f\n\x07user_id\x18\x05 \x01(\t\"U\n\x19PostAttachmentLinkRequest\x12\x16\n\x0e\x61ttachment_key\x18\x01 \x01(\t\x12\x0f\n\x07note_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\"W\n\x1b\x44\x65leteAttachmentLinkRequest\x12\x16\n\x0e\x61ttachment_key\x18\x01 \x01(\t\x12\x0f\n\x07note_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\"\x85\x01\n\x1fUpdateAttachmentMetadataRequest\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x10\n\x08\x66ilename\x18\x02 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\x03 \x01(\t\x12\x0e\n\x06sha256\x18\x04 \x01(\t\x12\x0c\n\x04size\x18\x05 \x01(\t\x12\x0f\n\x07user_id\x18\x06 \x01(\t\"4\n\x14GetAttachmentRequest\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\"<\n\x1cGetAttachmentMetadataRequest\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\"7\n\x17\x44\x65leteAttachmentRequest\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\"+\n\x18\x44\x65leteAttachmentResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32\xc8\x04\n\x11\x41ttachmentService\x12\x41\n\x0ePostAttachment\x12\x1c.proto.PostAttachmentRequest\x1a\x11.proto.Attachment\x12?\n\rGetAttachment\x12\x1b.proto.GetAttachmentRequest\x1a\x11.proto.Attachment\x12W\n\x15GetAttachmentMetadata\x12#.proto.GetAttachmentMetadataRequest\x1a\x19.proto.AttachmentMetadata\x12S\n\x10\x44\x65leteAttachment\x12\x1e.proto.DeleteAttachmentRequest\x1a\x1f.proto.DeleteAttachmentResponse\x12]\n\x18UpdateAttachmentMetadata\x12&.proto.UpdateAttachmentMetadataRequest\x1a\x19.proto.AttachmentMetadata\x12N\n\x12PostAttachmentLink\x12 .proto.PostAttachmentLinkRequest\x1a\x16.google.protobuf.Empty\x12R\n\x14\x44\x65leteAttachmentLink\x12\".proto.DeleteAttachmentLinkRequest\x1a\x16.google.protobuf.EmptyB1Z/github.com/KuramaSyu/WerSu-Rest/src/proto;protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -44,14 +44,16 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_POSTATTACHMENTLINKREQUEST']._serialized_end=607
   _globals['_DELETEATTACHMENTLINKREQUEST']._serialized_start=609
   _globals['_DELETEATTACHMENTLINKREQUEST']._serialized_end=696
-  _globals['_GETATTACHMENTREQUEST']._serialized_start=698
-  _globals['_GETATTACHMENTREQUEST']._serialized_end=750
-  _globals['_GETATTACHMENTMETADATAREQUEST']._serialized_start=752
-  _globals['_GETATTACHMENTMETADATAREQUEST']._serialized_end=812
-  _globals['_DELETEATTACHMENTREQUEST']._serialized_start=814
-  _globals['_DELETEATTACHMENTREQUEST']._serialized_end=869
-  _globals['_DELETEATTACHMENTRESPONSE']._serialized_start=871
-  _globals['_DELETEATTACHMENTRESPONSE']._serialized_end=914
-  _globals['_ATTACHMENTSERVICE']._serialized_start=917
-  _globals['_ATTACHMENTSERVICE']._serialized_end=1488
+  _globals['_UPDATEATTACHMENTMETADATAREQUEST']._serialized_start=699
+  _globals['_UPDATEATTACHMENTMETADATAREQUEST']._serialized_end=832
+  _globals['_GETATTACHMENTREQUEST']._serialized_start=834
+  _globals['_GETATTACHMENTREQUEST']._serialized_end=886
+  _globals['_GETATTACHMENTMETADATAREQUEST']._serialized_start=888
+  _globals['_GETATTACHMENTMETADATAREQUEST']._serialized_end=948
+  _globals['_DELETEATTACHMENTREQUEST']._serialized_start=950
+  _globals['_DELETEATTACHMENTREQUEST']._serialized_end=1005
+  _globals['_DELETEATTACHMENTRESPONSE']._serialized_start=1007
+  _globals['_DELETEATTACHMENTRESPONSE']._serialized_end=1050
+  _globals['_ATTACHMENTSERVICE']._serialized_start=1053
+  _globals['_ATTACHMENTSERVICE']._serialized_end=1637
 # @@protoc_insertion_point(module_scope)

@@ -42,6 +42,17 @@ message DeleteAttachmentLinkRequest {
     string user_id = 3;
 }
 
+message UpdateAttachmentMetadataRequest {
+    string key = 1;
+    string filename = 2;
+    string content_type = 3;
+    string sha256 = 4;
+    string size = 5;
+    
+    // the requesting user - used for authorization
+    string user_id = 6;
+}
+
 message GetAttachmentRequest {
     string key = 1;
     string user_id = 2;
@@ -68,7 +79,7 @@ service AttachmentService {
     rpc DeleteAttachment(DeleteAttachmentRequest) returns (DeleteAttachmentResponse);
 
     // enforces that key (filepath) is given and updates all other provided fields for that key
-    rpc UpdateAttachmentMetadata(AttachmentMetadata) returns (AttachmentMetadata);
+    rpc UpdateAttachmentMetadata(UpdateAttachmentMetadataRequest) returns (AttachmentMetadata);
     // either works -> no return or fails completely with an error, so no need for a response message
     rpc PostAttachmentLink(PostAttachmentLinkRequest) returns (google.protobuf.Empty);
     rpc DeleteAttachmentLink(DeleteAttachmentLinkRequest) returns (google.protobuf.Empty);
