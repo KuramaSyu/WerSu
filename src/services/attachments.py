@@ -29,6 +29,11 @@ class AttachmentFacadeABC(ABC):
         ...
 
     @abstractmethod
+    async def update_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
+        """Searches attachment by key and updates all other fields which are not UNDEFINED. It evaluates write permissions."""
+        ...
+
+    @abstractmethod
     async def get_attachment(self, key: str, user_ctx: UserContextABC) -> Attachment:
         """Checks permission and fetches attachment metadata and contents by key."""
         ...
@@ -83,6 +88,20 @@ class AttachmentFacade(AttachmentFacadeABC):
         self._attachments_note_link_table = attachments_note_link_table
         self.log = log(__name__, self)
         self.get_now = get_now
+
+    async def update_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
+        if attachment.key is UNDEFINED:
+            raise ValueError("Attachment key must be given perform an update")
+
+        # permission check
+        check = HasAttachmentWritePerm(attachment.key).set_permission_repo(self._permission_repo)
+        has_permission = await check.check(user_ctx)
+        if not has_permission:
+            raise has_permission.error
+        
+        # update metadata
+        updated = await self._metadata_repo.update_metadata(attachment, user_ctx)
+        return updated
         
     async def post_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
         # no permission check done - this only uploads. it does not link to any note yet.

@@ -13,6 +13,8 @@ import functools
 import logging
 import inspect
 
+from torch import log_
+
 from src.api import LoggingProvider
 from src.api.types import Pagination
 from src.api.undefined import UNDEFINED
@@ -894,6 +896,22 @@ class GrpcAttachmentService(AttachmentServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while linking attachment")
         return Empty()
+    
+    @log_service_call()
+    async def UpdateAttachmentMetadata(self, request: GrpcAttachmentMetadata, context: ServicerContext) -> GrpcAttachmentMetadata:
+        try:
+            updated = await self.attachment_service.update_metadata(
+                key=request.key,
+                filename=request.filename if request.HasField("filename") else UNDEFINED,
+                content_type=request.content_type if request.HasField("content_type") else UNDEFINED,
+                user_ctx=UserContext(request.user_id),
+            )
+            return to_grpc_attachment_metadata(updated)
+        except Exception:
+            self.log.error(f"Error updating attachment metadata: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while updating attachment metadata")
+            return GrpcAttachmentMetadata()
 
     @log_service_call()
     async def DeleteAttachmentLink(self, request: DeleteAttachmentLinkRequest, context: ServicerContext) -> Empty:

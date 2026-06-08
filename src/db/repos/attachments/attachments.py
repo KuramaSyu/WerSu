@@ -8,9 +8,10 @@ from datetime import datetime, timezone
 from typing import List, Optional, Protocol, Callable
 
 from asyncpg import Record
+from sympy import Q
 
 
-from src.api.undefined import UNDEFINED, UndefinedOr
+from src.api.undefined import UNDEFINED, UndefinedOr, is_undefined
 from src.api import UserContextABC
 from src.db.table import TableABC
 from src.utils import convert_entity_for_db, asdict
@@ -44,6 +45,12 @@ class Attachment:
         if self.checksum is not UNDEFINED:
             return str(self.checksum)
         return hashlib.sha256(self.content).hexdigest()
+    
+    @property
+    def get_size(self) -> int:
+        if self.size is not UNDEFINED:
+            return self.size
+        return len(self.content)
 
 
 class AttachmentsRepoABC(ABC):
@@ -75,6 +82,10 @@ class AttachmentsMetadataRepoABC(ABC):
         """Save attachment metadata to the database."""
         ...
     
+    @abstractmethod
+    async def update_metadata(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
+        """Searches attachment by key and updates all other fields which are not UNDEFINED"""
+        ...
     @abstractmethod
     async def get_metadata(self, key: str) -> Attachment:
         """Get attachment metadata by key."""
@@ -110,6 +121,36 @@ class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepoABC):
         }
 
         await self._table.insert(where, returning="key",
+        )
+
+    async def update_metadata(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
+        if attachment.key is UNDEFINED:
+            raise ValueError("Attachment key must be set for update")
+        
+        set_values = {}
+        if not is_undefined(attachment.filename): set_values["filename"] = attachment.filename
+        if not is_undefined(attachment.content_type): set_values["content_type"] = attachment.content_type
+        if not is_undefined(attachment.content):
+            set_values["size"] = attachment.get_size()
+            set_values["sha256"] = attachment.sha256
+        set_values["updated_at"] = datetime.now()
+        
+        where = {"key": attachment.key}
+
+        updated_record = await self._table.update(where, set_values, returning="key, filename, filepath, content_type, size, created_at, updated_at, sha256")
+        if not updated_record:
+            raise KeyError(f"Attachment metadata not found for key={attachment.key}")
+        
+        return Attachment(
+            key=updated_record["key"],
+            filename=updated_record["filename"],
+            filepath=updated_record["filepath"],
+            content_type=updated_record["content_type"],
+            size=updated_record["size"],
+            created_at=updated_record["created_at"],
+            updated_at=updated_record["updated_at"],
+            content=UNDEFINED,  # content is not stored in metadata repo
+            checksum=updated_record["sha256"],
         )
 
     async def get_metadata(self, key: str) -> Attachment:
