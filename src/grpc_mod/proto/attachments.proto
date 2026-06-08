@@ -67,6 +67,8 @@ service AttachmentService {
     rpc GetAttachmentMetadata(GetAttachmentMetadataRequest) returns (AttachmentMetadata);
     rpc DeleteAttachment(DeleteAttachmentRequest) returns (DeleteAttachmentResponse);
 
+    // enforces that key (filepath) is given and updates all other provided fields for that key
+    rpc UpdateAttachmentMetadata(AttachmentMetadata) returns (AttachmentMetadata);
     // either works -> no return or fails completely with an error, so no need for a response message
     rpc PostAttachmentLink(PostAttachmentLinkRequest) returns (google.protobuf.Empty);
     rpc DeleteAttachmentLink(DeleteAttachmentLinkRequest) returns (google.protobuf.Empty);
