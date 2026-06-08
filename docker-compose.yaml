@@ -84,6 +84,8 @@ services:
       GARAGE_DEFAULT_SECRET_KEY: ${GARAGE_DEFAULT_SECRET_KEY}
       GARAGE_DEFAULT_BUCKET: ${GARAGE_DEFAULT_BUCKET}
       S3_ENDPOINT: ${S3_ENDPOINT}
+    volumes:
+      - ./data/app/huggingface-models:/models
     ports:
       - "50052:50052"
     depends_on:
