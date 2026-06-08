@@ -29,7 +29,7 @@ class AttachmentFacadeABC(ABC):
         ...
 
     @abstractmethod
-    async def update_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
+    async def update_metadata(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
         """Searches attachment by key and updates all other fields which are not UNDEFINED. It evaluates write permissions."""
         ...
 
@@ -89,7 +89,7 @@ class AttachmentFacade(AttachmentFacadeABC):
         self.log = log(__name__, self)
         self.get_now = get_now
 
-    async def update_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
+    async def update_metadata(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
         if attachment.key is UNDEFINED:
             raise ValueError("Attachment key must be given perform an update")
 

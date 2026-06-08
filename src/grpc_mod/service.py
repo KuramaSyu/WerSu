@@ -47,6 +47,7 @@ from src.grpc_mod.proto.attachments_pb2 import (
     GetAttachmentRequest,
     PostAttachmentLinkRequest,
     PostAttachmentRequest,
+    UpdateAttachmentMetadataRequest,
 )
 from src.grpc_mod.proto.attachments_pb2_grpc import AttachmentServiceServicer
 from src.grpc_mod.converter.note_entity_converter import to_grpc_minimal_note, to_search_type
@@ -898,7 +899,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         return Empty()
     
     @log_service_call()
-    async def UpdateAttachmentMetadata(self, request: GrpcAttachmentMetadata, context: ServicerContext) -> GrpcAttachmentMetadata:
+    async def UpdateAttachmentMetadata(self, request: UpdateAttachmentMetadataRequest, context: ServicerContext) -> GrpcAttachmentMetadata:
         try:
             updated = await self.attachment_service.update_metadata(
                 key=request.key,
