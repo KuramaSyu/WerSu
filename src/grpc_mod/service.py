@@ -900,11 +900,14 @@ class GrpcAttachmentService(AttachmentServiceServicer):
     
     @log_service_call()
     async def UpdateAttachmentMetadata(self, request: UpdateAttachmentMetadataRequest, context: ServicerContext) -> GrpcAttachmentMetadata:
+        attachment = AttachmentEntity(
+            key=request.key or UNDEFINED,
+            filename=request.filename or UNDEFINED,
+            content_type=request.content_type or UNDEFINED,
+        )
         try:
             updated = await self.attachment_service.update_metadata(
-                key=request.key,
-                filename=request.filename if request.HasField("filename") else UNDEFINED,
-                content_type=request.content_type if request.HasField("content_type") else UNDEFINED,
+                attachment,
                 user_ctx=UserContext(request.user_id),
             )
             return to_grpc_attachment_metadata(updated)

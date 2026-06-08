@@ -30,11 +30,11 @@ class Attachment:
     """
 
     key: UndefinedOr[str]  # set it after upload
-    filename: str
-    filepath: str
-    content_type: str
-    size: int
-    content: bytes
+    filename: UndefinedOr[str] = UNDEFINED
+    filepath: UndefinedOr[str] = UNDEFINED
+    content_type: UndefinedOr[str] = UNDEFINED
+    size: UndefinedOr[int] = UNDEFINED
+    content: UndefinedOr[bytes] = UNDEFINED
     
     created_at: UndefinedOr[datetime] = UNDEFINED  # set by storage repo if not provided
     updated_at: UndefinedOr[datetime] = UNDEFINED  # set by storage repo if not provided
@@ -137,7 +137,7 @@ class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepoABC):
         
         where = {"key": attachment.key}
 
-        updated_record = await self._table.update(where, set_values, returning="key, filename, filepath, content_type, size, created_at, updated_at, sha256")
+        updated_record = await self._table.update(set_values, where, returning="key, filename, filepath, content_type, size, created_at, updated_at, sha256")
         if not updated_record:
             raise KeyError(f"Attachment metadata not found for key={attachment.key}")
         
