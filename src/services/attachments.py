@@ -166,9 +166,16 @@ class AttachmentFacade(AttachmentFacadeABC):
         if not has_permission:
             raise has_permission.error
 
-        # Remove object payload first, then metadata.
-        await self._attachment_repo.delete_attachment(key)
-        await self._metadata_repo.delete_metadata(key)
+        # Remove object payload first, then metadata, then permission
+        await self._attachment_repo.delete_attachment(key)  # deletes from S3
+        await self._metadata_repo.delete_metadata(key)  # deletes from postgres
+        
+        # permissions to clean: attachment#parent_note@note and attachment#*@user -> just use attachment#*@*
+        await self._permission_repo.delete(Relationship(  # deletes from spicedb
+            ObjectRef(ObjectTypeEnum.ATTACHMENT, key),
+            relation=UNDEFINED,
+            subject=SubjectRef(UNDEFINED, UNDEFINED)
+        ))
 
 
     async def link_attachment_to_note(self, attachment_key: str, note_id: str, user_ctx: UserContextABC) -> None:
