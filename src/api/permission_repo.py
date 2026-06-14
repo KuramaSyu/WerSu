@@ -29,14 +29,13 @@ class PermissionRepoABC(ABC):
         self,
         relationship: Relationship
     ) -> Relationship:
-        """delete permission
+        """delete permission(s). Relationship can be partially `UNDEFINED` to set these as wildcards.
         
         Args:
         -----
-        relationships: `List[Relationship]`
-            the relationships to delete. Provide full subject and permission, and for object leave the 
-            object_id to `UNDEFINED` and only provide the object_type. This allows to delete all permissions 
-            for a given subject and permission on all objects of a given type.
+        relationship: `Relationship`
+            The relationship to delete. Out of this, a filter will be built, where all `UNDEFINDED` values of the given `relation` will
+            be treated as wildcards. E.g. you could provide attachment#*@user will delete all permissions for all users for this attachment
 
         Returns:
         --------
