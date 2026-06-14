@@ -182,19 +182,17 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         filter = RelationshipFilter()
 
         def get_filter(rel: Relationship) -> RelationshipFilter:
-            assert rel.resource.object_id != UNDEFINED, "object_id must be provided for delete operation"
-            assert rel.subject.object_id != UNDEFINED, "subject_id must be provided for delete operation"
-
-            # Build the fully-qualified tuple filter for the specific relationship.
-            filter = RelationshipFilter(
-                resource_type=rel.resource.object_type,
-                optional_resource_id=str(rel.resource.object_id),
-                optional_relation=rel.relation,
-                optional_subject_filter=SubjectFilter(
-                    subject_type=rel.subject.object_type,
-                    optional_subject_id=str(rel.subject.object_id)
-                )
-            )
+            # build a filter, where nearly everything can be a wildcard, when UNDEFINED is provided
+            filter = RelationshipFilter()
+            filter.resource_type = rel.resource.object_type
+            if rel.resource.object_id != UNDEFINED:
+                filter.optional_resource_id = str(rel.resource.object_id)
+            if rel.relation != UNDEFINED:
+                filter.optional_relation = rel.relation
+            if rel.subject.object_type != UNDEFINED:
+                filter.optional_subject_filter.subject_type = rel.subject.object_type
+            if rel.subject.object_id != UNDEFINED:
+                filter.optional_subject_filter.optional_subject_id = str(rel.subject.object_id)
             return filter
 
 
