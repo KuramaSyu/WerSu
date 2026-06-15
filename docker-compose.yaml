@@ -129,3 +129,11 @@ services:
       AWS_SECRET_ACCESS_KEY: ${GARAGE_DEFAULT_SECRET_KEY}
       IMGPROXY_S3_ENDPOINT: ${S3_ENDPOINT}
 
+  hocuspocus:
+    build:
+      context: ./infrastructure/hocuspocus
+      dockerfile: Dockerfile
+    container_name: hocuspocus-server
+    restart: unless-stopped
+    ports:
+      - "8666:8666"

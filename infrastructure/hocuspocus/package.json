@@ -1,0 +1,18 @@
+{
+  "name": "hocuspocus",
+  "version": "1.0.0",
+  "description": "hocuspocus collab server for tiptap",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "../../.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@hocuspocus/server": "^4.2.0"
+  }
+}

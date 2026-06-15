@@ -1,0 +1,65 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+out/
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Testing
+jest-cache/
+
+# Temporary files
+tmp/
+temp/
+.cache/
+
+# Runtime data
+*.pid
+*.seed
+*.pid.lock
+
+# Hocuspocus/Yjs persistence (if using local files)
+data/
+storage/
+drafts/
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Docker
+.docker/
+
+# Optional package manager caches
+.pnpm-store/
+.yarn/
