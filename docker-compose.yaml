@@ -134,6 +134,12 @@ services:
       context: ./infrastructure/hocuspocus
       dockerfile: Dockerfile
     container_name: hocuspocus-server
+    env_file:
+      - .env
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      SPICEDB_ADDRESS: ${GRPC_SPICEDB_ADDRESS}
+      SPICEDB_CREDENTIALS: ${GRPC_SPICEDB_CREDENTIALS}
     restart: unless-stopped
     ports:
       - "8666:8666"
