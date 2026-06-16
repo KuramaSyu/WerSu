@@ -13,6 +13,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@hocuspocus/server": "^4.2.0"
+    "@authzed/authzed-node": "^1.6.1",
+    "@hocuspocus/server": "^4.2.0",
+    "jsonwebtoken": "^9.0.3"
   }
 }
