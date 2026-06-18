@@ -18,7 +18,7 @@ from src.db.repos.note.content import NoteContentRepo
 from src.db.repos.permissions import PermissionRepoABC
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.db.table import TableABC
-from src.api.undefined import UNDEFINED
+from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined, unwrap_undefined_or
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.db.repos.note.search_strategy import (
@@ -314,10 +314,10 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         if self._version_repo is not None:
             await self._version_repo.record_initial_snapshot(
                 note_id=note_id,
-                title=note.title if note.title is not UNDEFINED else None,
-                content=note.content if note.content is not UNDEFINED else None,
-                author_id=str(note.author_id) if note.author_id not in (UNDEFINED, None) else user.user_id,
-                created_at=note.updated_at if note.updated_at not in (UNDEFINED, None) else datetime.now(),
+                title=unwrap_undefined_or(note.title, default=None),
+                content=unwrap_undefined_or(note.content, default=None),
+                author_id=unwrap_undefined_or(note.author_id, default=user.user_id),
+                created_at=note.updated_at or datetime.now(),
             )
         return note
     
