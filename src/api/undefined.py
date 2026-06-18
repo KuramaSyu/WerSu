@@ -157,4 +157,12 @@ def unwrap_undefined(item: UndefinedOr[T_co]) -> T_co:
     """Return T_co if the provided item is not [`src.api.undefined.UNDEFINED`][]."""
     if item is UNDEFINED:
         raise ValueError("Cannot unwrap UNDEFINED value")
-    return item
+    return item  # type: ignore[return-value]
+
+T_default = typing.TypeVar("T_default")
+def unwrap_undefined_or(item: UndefinedNoneOr[T_co], default: T_default = None) -> T_co | T_default:
+    """Return T_co if the provided item is not [`src.api.undefined.UNDEFINED`][]."""
+    if item is UNDEFINED:
+        return default
+    return item  # type: ignore[return-value]
+
