@@ -12,4 +12,4 @@ class UserEntity:
     username: Optional[str] = None
     discriminator: Optional[str] = None
     email: Optional[str] = None
-    user_kind: UndefinedOr[Literal["human", "temporary", "system"]] = None
+    type: UndefinedOr[Literal["human", "temporary", "system"]] = None

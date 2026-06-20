@@ -37,15 +37,18 @@ class Migration(MigrationABC):
 
             -- add new type for users
             CREATE TYPE user_kind AS ENUM ('human', 'temporary', 'system');
+    
+
             -- Make existing columns nullable for temp user
             ALTER TABLE users
                 ALTER COLUMN email DROP NOT NULL,
                 ALTER COLUMN discord_id DROP NOT NULL,
-                ALTER COLUMN avatar_url DROP NOT NULL;
+                ALTER COLUMN avatar DROP NOT NULL,
                 ADD COLUMN type user_kind NOT NULL DEFAULT 'human';
             
             -- user action types
             CREATE TYPE user_action_type AS ENUM ('disable', 'delete', 'enable');
+     
 
             -- scheduled user actions to disable and delete temp users for shares
             CREATE TABLE IF NOT EXISTS user_action (
@@ -53,7 +56,7 @@ class Migration(MigrationABC):
                 user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
                 action user_action_type NOT NULL,
                 execute_at TIMESTAMP NOT NULL,
-                executed_at TIMESTAMP NULL;
+                executed_at TIMESTAMP NULL
             );
 
             -- system will often lookup unexecuted user actions
@@ -66,16 +69,15 @@ class Migration(MigrationABC):
         # create public user
         user = UserEntity(
             username="public_user",
-            user_kind="system"
+            type="system"
         )
 
         await ctx.db.execute(
             """
-            INSERT INTO users (id, username, user_kind)
-            VALUES (%s, %s, %s)
+            INSERT INTO users (username, type)
+            VALUES ($1, $2)
             ON CONFLICT (id) DO NOTHING;
             """,
-            user.id,
             user.username,
-            user.user_kind
+            user.type
         )
