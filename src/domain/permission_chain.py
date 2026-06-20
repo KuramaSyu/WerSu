@@ -223,3 +223,26 @@ class HasNoteWritePerm(PermissionCheckChain):
         return f"user has no permission to write to note {self._note_id}"
 
 
+class HasNoteEditPermissionsPerm(PermissionCheckChain):
+    """Permission check for managing a note's sharing and permission settings."""
+    OBJECT_TYPE: ObjectType = "note"
+    RELATION_TYPE: NoteRelationName = NoteRelationEnum.EDIT_PERMISSIONS
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, note_id: str):
+        super().__init__()
+        self._note_id = note_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        # `edit_permissions` is a computed permission in SpiceDB, so check the
+        # effective permission instead of expecting a direct relationship tuple.
+        return await self._permission_repo.has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._note_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no permission to edit permissions for note {self._note_id}"
+
+
