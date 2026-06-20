@@ -2,7 +2,7 @@ from typing import *
 from abc import ABC, abstractmethod
 
 from src.api.user_context import UserContextABC
-from src.db.entities.note.sharing import FilterShareNoteEntity, NoteShareEntity
+from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 
 class SharingRepo(ABC):
     """
@@ -73,7 +73,7 @@ class SharingRepo(ABC):
         """
         ...
 
-    async def get_share(self, filter: FilterShareNoteEntity, ctx: UserContextABC) -> NoteShareEntity:
+    async def get_share(self, filter: FilterShareNote, ctx: UserContextABC) -> NoteShareEntity:
         """
         Fetch the first share matching a filter.
 
@@ -87,7 +87,7 @@ class SharingRepo(ABC):
         return shares[0]
 
     @abstractmethod
-    async def get_shares(self, filter: FilterShareNoteEntity, ctx: UserContextABC) -> List[NoteShareEntity]:
+    async def get_shares(self, filter: FilterShareNote, ctx: UserContextABC) -> List[NoteShareEntity]:
         """
         Fetch shares matching the provided filter.
         """
@@ -200,7 +200,7 @@ class SharingService(ABC):
         """
         ...
 
-    async def get_share(self, filter: FilterShareNoteEntity, ctx: UserContextABC) -> NoteShareEntity:
+    async def get_share(self, filter: FilterShareNote, ctx: UserContextABC) -> NoteShareEntity:
         """
         Fetch the first share matching a filter.
 
@@ -214,7 +214,7 @@ class SharingService(ABC):
         return shares[0]
 
     @abstractmethod
-    async def get_shares(self, filter: FilterShareNoteEntity, ctx: UserContextABC) -> List[NoteShareEntity]:
+    async def get_shares(self, filter: FilterShareNote, ctx: UserContextABC) -> List[NoteShareEntity]:
         """
         Fetch editable shares matching the provided filter.
 
