@@ -6,7 +6,7 @@ from asyncpg import Record
 from src.api.sharing import SharingRepo
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
-from src.db.entities.note.sharing import FilterShareNoteEntity, NoteShareEntity
+from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.table import TableABC
 from src.utils import asdict
 
@@ -88,7 +88,7 @@ class SharingPostgresRepo(SharingRepo):
 
         return shares
 
-    async def get_shares(self, filter: FilterShareNoteEntity, ctx: UserContextABC) -> List[NoteShareEntity]:
+    async def get_shares(self, filter: FilterShareNote, ctx: UserContextABC) -> List[NoteShareEntity]:
         conditions = []
         values = []
 
