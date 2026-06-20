@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+package proto;
+option go_package = "github.com/KuramaSyu/WerSu-Rest/src/proto;proto";
+
+// String value wrapper for fields where the API needs to distinguish:
+// - field omitted: leave unchanged / do not filter
+// - null_value=true: explicitly set or search for NULL
+// - value set: use the provided string
+message NullableString {
+    oneof kind {
+        string value = 1;
+        bool null_value = 2;
+    }
+}
+
+// Timestamp value wrapper for fields where the API needs to distinguish:
+// - field omitted: leave unchanged / do not filter
+// - null_value=true: explicitly set or search for NULL
+// - value set: use the provided timestamp
+message NullableTimestamp {
+    oneof kind {
+        google.protobuf.Timestamp value = 1;
+        bool null_value = 2;
+    }
+}
+
+// A persisted share entry for a note.
+message NoteShare {
+    string id = 1;
+    NullableString description = 2;
+    string note_id = 3;
+    google.protobuf.Timestamp created_at = 4;
+    string created_by = 5;
+    NullableTimestamp online_since = 6;
+    NullableTimestamp online_until = 7;
+    string access_as = 8;
+}
+
+// Filter for searching shares.
+//
+// Date values are evaluated inclusively:
+// - online_since.value finds shares with online_since >= value
+// - online_until.value finds shares with online_until <= value
+// - null_value=true searches for rows where the date column is NULL
+message ShareFilter {
+    optional string note_id = 1;
+    optional string created_by = 2;
+    NullableTimestamp online_since = 3;
+    NullableTimestamp online_until = 4;
+    optional string access_as = 5;
+}
+
+// Create one share. The requester user_id is used for permission checks.
+message CreateShareRequest {
+    string user_id = 1;
+    NoteShare share = 2;
+}
+
+// Update one share. Only fields present on share should be updated.
+// The requester user_id is used for permission checks.
+message UpdateShareRequest {
+    string user_id = 1;
+    NoteShare share = 2;
+}
+
+// Fetch shares by their exact share IDs.
+// The requester user_id is used for permission checks.
+message GetSharesByIdRequest {
+    string user_id = 1;
+    repeated string share_ids = 2;
+}
+
+// Fetch shares matching a filter.
+// The requester user_id is used for permission checks.
+message GetSharesRequest {
+    string user_id = 1;
+    ShareFilter filter = 2;
+}
+
+// Delete shares by their exact share IDs.
+// The requester user_id is used for permission checks.
+message DeleteSharesRequest {
+    string user_id = 1;
+    repeated string share_ids = 2;
+}
+
+service SharingService {
+    rpc CreateShare(CreateShareRequest) returns (NoteShare);
+    rpc UpdateShare(UpdateShareRequest) returns (NoteShare);
+    rpc GetSharesById(GetSharesByIdRequest) returns (stream NoteShare);
+    rpc GetShares(GetSharesRequest) returns (stream NoteShare);
+    rpc DeleteShares(DeleteSharesRequest) returns (google.protobuf.Empty);
+}
