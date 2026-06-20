@@ -27,6 +27,7 @@ class NoteRelationEnum(StrEnum):
     VIEW = "view"
     WRITE = "write"
     DELETE = "delete"
+    EDIT_PERMISSIONS = "edit_permissions"
     PARENT_DIRECTORY = "parent_directory"
     OWNER = "owner"
 
@@ -62,6 +63,7 @@ NoteRelationName: TypeAlias = Literal[
     "view",
     "write",
     "delete",
+    "edit_permissions",
     "parent_directory",
     "owner",
 ]
