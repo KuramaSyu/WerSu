@@ -13,7 +13,7 @@ class NoteShareEntity:
     # the id of the share (uuidv7)
     id: UndefinedOr[str] = UNDEFINED
 
-    # a discription which can be None
+    # a description which can be None
     description: UndefinedNoneOr[str] = UNDEFINED
     
     # the id of the note which is shared
@@ -23,7 +23,7 @@ class NoteShareEntity:
     created_at: UndefinedOr[datetime] = UNDEFINED
 
     # who created the share (user id)
-    created_by: UndefinedOr[datetime] = UNDEFINED
+    created_by: UndefinedOr[str] = UNDEFINED
 
     # when the share is online e.g. accessible from outside
     online_since: UndefinedNoneOr[datetime] = UNDEFINED
@@ -34,4 +34,27 @@ class NoteShareEntity:
     # the user under which to access the note linked with note_id. The logged in user,
     # if not granted permission directly, can not access this note. The logged in user
     # will access it under the identity of `access_as` which will have the correct permissions
-    access_as: str
+    access_as: UndefinedOr[str] = UNDEFINED
+
+
+@dataclass
+class FilterShareNote:
+    """Filter criteria for searching note shares.
+
+    `UNDEFINED` means the field is ignored. `None` on nullable datetime
+    fields searches for rows where that value is NULL.
+    """
+    # find shares for exactly this note
+    note_id: UndefinedOr[str] = UNDEFINED
+
+    # find shares created by exactly this user
+    created_by: UndefinedOr[str] = UNDEFINED
+
+    # find shares whose online_since is after or equal this timestamp
+    online_since: UndefinedNoneOr[datetime] = UNDEFINED
+
+    # find shares whose online_until is before or equal this timestamp
+    online_until: UndefinedNoneOr[datetime] = UNDEFINED
+
+    # find shares accessed as exactly this user
+    access_as: UndefinedOr[str] = UNDEFINED
