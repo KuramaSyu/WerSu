@@ -69,4 +69,13 @@ class Migration(MigrationABC):
             user_kind="system"
         )
 
-        await ctx.db.user.create(user)
+        await ctx.db.execute(
+            """
+            INSERT INTO users (id, username, user_kind)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (id) DO NOTHING;
+            """,
+            user.id,
+            user.username,
+            user.user_kind
+        )
