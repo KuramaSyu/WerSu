@@ -37,7 +37,6 @@ message NoteShare {
     string created_by = 5;
     NullableTimestamp online_since = 6;
     NullableTimestamp online_until = 7;
-    string access_as = 8;
 }
 
 // Filter for searching shares.
@@ -51,7 +50,6 @@ message ShareFilter {
     optional string created_by = 2;
     NullableTimestamp online_since = 3;
     NullableTimestamp online_until = 4;
-    optional string access_as = 5;
 }
 
 // Create one share. The requester user_id is used for permission checks.

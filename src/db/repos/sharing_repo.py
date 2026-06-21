@@ -29,8 +29,6 @@ class SharingPostgresRepo(SharingRepo):
     async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
         if share.note_id in (UNDEFINED, None):
             raise ValueError("share.note_id is required")
-        if share.access_as in (UNDEFINED, None):
-            raise ValueError("share.access_as is required")
         if share.created_at in (UNDEFINED, None):
             raise ValueError("share.created_at is required")
         if share.created_by in (UNDEFINED, None):

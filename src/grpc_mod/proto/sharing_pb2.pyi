@@ -93,11 +93,9 @@ class NoteShare(_message.Message):
     CREATED_BY_FIELD_NUMBER: _builtins.int
     ONLINE_SINCE_FIELD_NUMBER: _builtins.int
     ONLINE_UNTIL_FIELD_NUMBER: _builtins.int
-    ACCESS_AS_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     note_id: _builtins.str
     created_by: _builtins.str
-    access_as: _builtins.str
     @_builtins.property
     def description(self) -> Global___NullableString: ...
     @_builtins.property
@@ -116,11 +114,10 @@ class NoteShare(_message.Message):
         created_by: _builtins.str = ...,
         online_since: Global___NullableTimestamp | None = ...,
         online_until: Global___NullableTimestamp | None = ...,
-        access_as: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["created_at", b"created_at", "description", b"description", "online_since", b"online_since", "online_until", b"online_until"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["access_as", b"access_as", "created_at", b"created_at", "created_by", b"created_by", "description", b"description", "id", b"id", "note_id", b"note_id", "online_since", b"online_since", "online_until", b"online_until"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["created_at", b"created_at", "created_by", b"created_by", "description", b"description", "id", b"id", "note_id", b"note_id", "online_since", b"online_since", "online_until", b"online_until"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -142,10 +139,8 @@ class ShareFilter(_message.Message):
     CREATED_BY_FIELD_NUMBER: _builtins.int
     ONLINE_SINCE_FIELD_NUMBER: _builtins.int
     ONLINE_UNTIL_FIELD_NUMBER: _builtins.int
-    ACCESS_AS_FIELD_NUMBER: _builtins.int
     note_id: _builtins.str
     created_by: _builtins.str
-    access_as: _builtins.str
     @_builtins.property
     def online_since(self) -> Global___NullableTimestamp: ...
     @_builtins.property
@@ -157,20 +152,15 @@ class ShareFilter(_message.Message):
         created_by: _builtins.str | None = ...,
         online_since: Global___NullableTimestamp | None = ...,
         online_until: Global___NullableTimestamp | None = ...,
-        access_as: _builtins.str | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["_access_as", b"_access_as", "_created_by", b"_created_by", "_note_id", b"_note_id", "access_as", b"access_as", "created_by", b"created_by", "note_id", b"note_id", "online_since", b"online_since", "online_until", b"online_until"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_created_by", b"_created_by", "_note_id", b"_note_id", "created_by", b"created_by", "note_id", b"note_id", "online_since", b"online_since", "online_until", b"online_until"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_access_as", b"_access_as", "_created_by", b"_created_by", "_note_id", b"_note_id", "access_as", b"access_as", "created_by", b"created_by", "note_id", b"note_id", "online_since", b"online_since", "online_until", b"online_until"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_created_by", b"_created_by", "_note_id", b"_note_id", "created_by", b"created_by", "note_id", b"note_id", "online_since", b"online_since", "online_until", b"online_until"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    _WhichOneofReturnType__access_as: _TypeAlias = _typing.Literal["access_as"]  # noqa: Y015
-    _WhichOneofArgType__access_as: _TypeAlias = _typing.Literal["_access_as", b"_access_as"]  # noqa: Y015
     _WhichOneofReturnType__created_by: _TypeAlias = _typing.Literal["created_by"]  # noqa: Y015
     _WhichOneofArgType__created_by: _TypeAlias = _typing.Literal["_created_by", b"_created_by"]  # noqa: Y015
     _WhichOneofReturnType__note_id: _TypeAlias = _typing.Literal["note_id"]  # noqa: Y015
     _WhichOneofArgType__note_id: _TypeAlias = _typing.Literal["_note_id", b"_note_id"]  # noqa: Y015
-    @_typing.overload
-    def WhichOneof(self, oneof_group: _WhichOneofArgType__access_as) -> _WhichOneofReturnType__access_as | None: ...
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__created_by) -> _WhichOneofReturnType__created_by | None: ...
     @_typing.overload

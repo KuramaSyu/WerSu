@@ -186,7 +186,7 @@ def _to_note_share_entity(share: NoteShare) -> NoteShareEntity:
         created_by=share.created_by or UNDEFINED,
         online_since=_from_nullable_timestamp(share, "online_since"),
         online_until=_from_nullable_timestamp(share, "online_until"),
-        access_as=share.access_as or UNDEFINED,
+        access_as=UNDEFINED,  # this is a backend property only
     )
 
 
@@ -197,7 +197,7 @@ def _to_filter_share_note_entity(filter: ShareFilter) -> FilterShareNote:
         created_by=filter.created_by if filter.HasField("created_by") else UNDEFINED,
         online_since=_from_nullable_timestamp(filter, "online_since"),
         online_until=_from_nullable_timestamp(filter, "online_until"),
-        access_as=filter.access_as if filter.HasField("access_as") else UNDEFINED,
+        access_as=UNDEFINED,  # this is a backend property only
     )
 
 
@@ -214,7 +214,6 @@ def _to_grpc_note_share(share: NoteShareEntity | None) -> NoteShare:
         created_by="" if share.created_by is UNDEFINED else str(share.created_by),
         online_since=_to_nullable_timestamp(share.online_since),
         online_until=_to_nullable_timestamp(share.online_until),
-        access_as="" if share.access_as is UNDEFINED else str(share.access_as),
     )
 
 

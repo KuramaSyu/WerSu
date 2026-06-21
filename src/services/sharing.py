@@ -27,6 +27,9 @@ class DefaultSharingService(SharingService):
 
         await self._assert_can_edit_permissions(str(share.note_id), ctx)
 
+        # TODO!: create temporary user for share access and set share.access_as to that user
+        # TODO!: grant permissions to that temporary user
+
         # Defaults live in the service so the repo stays a thin persistence
         # wrapper without application decisions.
         normalized = replace(
