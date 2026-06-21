@@ -10,12 +10,17 @@ import boto3
 from authzed.api.v1 import AsyncClient
 import grpc
 
+from src.api.sharing import SharingRepo
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos import NotePermissionRepoSpicedb
+from src.db.repos.sharing_repo import SharingPostgresRepo
+from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_server
+from src.grpc_mod.sharing_service import GrpcSharingService
 from src.services import PermissionServiceRepo, UserServiceRepo, DirectoryActivityService, AttachmentFacade
+from src.services.sharing import DefaultSharingService
 from src.utils import logging_provider
 from src.db import Database, NoteEmbeddingPostgresRepo, NoteVersionPostgresRepo
 from src.db.repos.attachments.attachments import (
@@ -149,6 +154,12 @@ async def serve():
         id_fields=["note_id", "attachment_key"],
     )
 
+    shared_table = Table(
+        **common_table_kwargs,
+        table_name="shared",
+        id_fields=["id"],
+    )
+
     # setup S3 connection
     s3_client = boto3.client(
         "s3",
@@ -200,9 +211,6 @@ async def serve():
         logging_provider=logging_provider,
         version_repo=version_repo,
     )
-
-
-
     attachments_repo: AttachmentsRepoABC = AttachmentsS3Repo(
         client=s3_client,  # type:ignore
         bucket=s3_bucket,
@@ -210,6 +218,12 @@ async def serve():
     metadata_repo: AttachmentsMetadataRepoABC = AttachmentsMetadataPostgresRepo(
         table=attachments_table
     )
+    sharing_repo: SharingRepo = SharingPostgresRepo(
+        table=shared_table
+    )
+
+
+
     attachment_service = AttachmentFacade(
         attachment_repo=attachments_repo,
         metadata_repo=metadata_repo,
@@ -235,6 +249,10 @@ async def serve():
         directory_activity_service=directory_activity_service,
         log=logging_provider,
     )
+    sharing_service = DefaultSharingService(
+        sharing_repo=sharing_repo,
+        permission_repo=permission_repo,
+    )
 
     # setup gRPC note service
     log.info("Setting up gRPC services...")
@@ -256,6 +274,12 @@ async def serve():
         log=logging_provider,
     )
     add_PermissionServiceServicer_to_server(grpc_permission_service, server)
+
+    grpc_sharing_service = GrpcSharingService(
+        sharing_service=sharing_service,
+        log=logging_provider,
+    )
+    add_SharingServiceServicer_to_server(grpc_sharing_service, server)
 
     # setup gRPC user service
     app_user_service = UserServiceRepo(user_repo=user_repo, directory_repo=directory_repo)
