@@ -11,7 +11,6 @@ from src.db.repos.directory.directory import DirectoryRepo, DirectoryRepoSpicedb
 from src.db.repos.note.note import UserContext
 from src.api import (
     DirectoryRelationEnum,
-    NotePermissionRepoInMemory,
     NoteRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
@@ -19,6 +18,7 @@ from src.api import (
     SubjectRef,
 )
 from src.db.repos.note.versioning import NoteVersionRepoABC
+from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from src.services.versioning import DirectoryActivityService
 from src.utils import logging_provider
 

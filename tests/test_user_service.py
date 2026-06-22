@@ -8,7 +8,7 @@ from src.db.entities.user.user import UserEntity
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.permission import DirectoryRelationEnum, ObjectTypeEnum
 from src.db.repos.user.user import UserRepoABC
-from src.services.user import UserServiceRepo
+from src.services.user import UserService
 
 
 class _InMemoryUserRepo(UserRepoABC):
@@ -108,7 +108,7 @@ def _make_test_user() -> UserEntity:
 async def test_create_user_creates_default_zettelkasten_directories() -> None:
     user_repo = _InMemoryUserRepo()
     directory_repo = _InMemoryDirectoryRepo()
-    service = UserServiceRepo(user_repo=user_repo, directory_repo=directory_repo)
+    service = UserService(user_repo=user_repo, directory_repo=directory_repo)
 
     created_user = await service.create_user(_make_test_user())
 
@@ -131,7 +131,7 @@ async def test_create_user_creates_default_zettelkasten_directories() -> None:
 async def test_create_user_assigns_admin_relation_to_bootstrap_directories() -> None:
     user_repo = _InMemoryUserRepo()
     directory_repo = _InMemoryDirectoryRepo()
-    service = UserServiceRepo(user_repo=user_repo, directory_repo=directory_repo)
+    service = UserService(user_repo=user_repo, directory_repo=directory_repo)
 
     created_user = await service.create_user(_make_test_user())
 
@@ -147,7 +147,7 @@ async def test_create_user_assigns_admin_relation_to_bootstrap_directories() -> 
 async def test_get_user_resolves_by_id_and_discord_id() -> None:
     user_repo = _InMemoryUserRepo()
     directory_repo = _InMemoryDirectoryRepo()
-    service = UserServiceRepo(user_repo=user_repo, directory_repo=directory_repo)
+    service = UserService(user_repo=user_repo, directory_repo=directory_repo)
 
     created_user = await service.create_user(_make_test_user())
 

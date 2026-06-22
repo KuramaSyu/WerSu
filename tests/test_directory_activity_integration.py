@@ -11,11 +11,11 @@ from testcontainers_spicedb import SpiceDBContainer
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
 from src.db.repos.note.note import UserContext
 from src.api import (
-    NotePermissionRepoSpicedb,
     ObjectRef,
     Relationship,
     SubjectRef,
 )
+from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]

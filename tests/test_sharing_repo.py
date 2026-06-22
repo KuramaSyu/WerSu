@@ -3,7 +3,7 @@ from datetime import datetime
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
-from src.db.repos.sharing_repo import SharingPostgresRepo
+from src.db.repos.sharing.sharing import SharingPostgresRepo
 
 
 class _UserContext(UserContextABC):

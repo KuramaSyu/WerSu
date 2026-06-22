@@ -36,16 +36,16 @@ from src.db.repos.note.note import NoteRepoFacade
 from src.db.repos.note.note import UserContext
 from src.api import (
     DirectoryRelationEnum,
-    NotePermissionRepoSpicedb,
     NoteRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
     Relationship,
     SubjectRef,
 )
+from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.table import Table
-from src.services.user import UserServiceRepo
+from src.services.user import UserService
 from src.utils import logging_provider
 
 
@@ -149,7 +149,7 @@ class _StubEmbeddingRepo(NoteEmbeddingRepo):
 
 @pytest.fixture(scope="function")
 async def user_service_env() -> AsyncIterator[
-    tuple[UserServiceRepo, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
+    tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
 ]:
     """Provision a real `UserServiceRepo` integration environment.
 
@@ -203,7 +203,7 @@ async def user_service_env() -> AsyncIterator[
             logging_provider=logging_provider,
         )
         user_repo = UserPostgresRepo(db=db)
-        user_service = UserServiceRepo(user_repo=user_repo, directory_repo=directory_repo)
+        user_service = UserService(user_repo=user_repo, directory_repo=directory_repo)
 
         yield user_service, directory_repo, note_repo, permission_repo
 
@@ -211,7 +211,7 @@ async def user_service_env() -> AsyncIterator[
 
 
 async def test_create_user_bootstraps_default_directories_with_real_postgres_and_spicedb(
-    user_service_env: tuple[UserServiceRepo, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
+    user_service_env: tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
 ) -> None:
     """Verify user bootstrap behavior with real Postgres and SpiceDB.
 
@@ -276,7 +276,7 @@ async def test_create_user_bootstraps_default_directories_with_real_postgres_and
 
 
 async def test_insert_note_uses_default_fleeting_directory_when_parent_not_specified(
-    user_service_env: tuple[UserServiceRepo, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
+    user_service_env: tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
 ) -> None:
     user_service, directory_repo, note_repo, permission_repo = user_service_env
 
@@ -330,7 +330,7 @@ async def test_insert_note_uses_default_fleeting_directory_when_parent_not_speci
 
 
 async def test_insert_note_uses_specified_parent_directory_when_provided(
-    user_service_env: tuple[UserServiceRepo, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
+    user_service_env: tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
 ) -> None:
     user_service, directory_repo, note_repo, permission_repo = user_service_env
 

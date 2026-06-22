@@ -4,7 +4,6 @@ from datetime import datetime
 from src.db.repos.note.note import UserContext, NoteRepoFacadeABC
 from src.db.entities.note.metadata import NoteEntity
 from src.api import (
-    NotePermissionRepoInMemory,
     ObjectRef,
     Relationship,
     SubjectRef,

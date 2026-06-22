@@ -11,14 +11,14 @@ from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, SearchType, UserContext
 from src.api import (
     DirectoryRelationEnum,
-    NotePermissionRepoInMemory,
     NoteRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
     Relationship,
     SubjectRef,
 )
-from src.services.roles import PermissionServiceRepo
+from src.db.repos.permissions.permission import NotePermissionRepoInMemory
+from src.services.permissions import PermissionServiceRepo
 
 
 class _StubNoteRepo(NoteRepoFacadeABC):
