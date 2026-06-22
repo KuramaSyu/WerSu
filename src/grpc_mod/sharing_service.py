@@ -15,11 +15,14 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
-from src.api.sharing import SharingService as SharingServiceABC
-from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
+from src.api.sharing import ShareAccessServiceABC, SharingServiceABC as SharingServiceABC
+from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined, unwrap_undefined_or
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.repos.note.note import UserContext
+from src.grpc_mod.proto.note_pb2 import Note
 from src.grpc_mod.proto.sharing_pb2 import (
+    AccessShareRequest,
+    AccessShareResponse,
     CreateShareRequest,
     DeleteSharesRequest,
     GetSharesByIdRequest,
@@ -33,13 +36,40 @@ from src.grpc_mod.proto.sharing_pb2 import (
 from src.grpc_mod.proto.sharing_pb2_grpc import SharingServiceServicer
 from src.grpc_mod.service import log_service_call
 
+from src.grpc_mod.converter import (
+    to_grpc_attachment,
+    to_grpc_attachment_metadata,
+    to_grpc_directory,
+    to_grpc_note,
+    to_grpc_user,
+    to_object_ref,
+    to_permission_object_type,
+    to_permission_resource,
+    to_relationship,
+)
+
 
 class GrpcSharingService(SharingServiceServicer):
     """gRPC adapter for the sharing service."""
 
-    def __init__(self, sharing_service: SharingServiceABC, log: LoggingProvider) -> None:
+    def __init__(self, sharing_service: SharingServiceABC, share_access_serivce: ShareAccessServiceABC, log: LoggingProvider) -> None:
         self._sharing_service = sharing_service
+        self._share_access_service = share_access_serivce
         self.log = log(__name__, self)
+
+    @log_service_call()
+    async def AccessShare(self, request: AccessShareRequest, context: ServicerContext) -> AccessShareResponse:
+        """Access a share by its ID and return the associated note."""
+        try:
+            self._require_user_id(request.user_id)
+            note = await self._sharing_service.access_share(
+                request.share.id,
+                share=request_to_note_share_entity(request),
+                )
+            return to_grpc_note(note)
+        except Exception as exc:
+            self._handle_empty_exception(exc, context)
+            return Note()
 
     @log_service_call()
     async def CreateShare(self, request: CreateShareRequest, context: ServicerContext) -> NoteShare:
@@ -50,7 +80,7 @@ class GrpcSharingService(SharingServiceServicer):
                 raise ValueError("share is required")
 
             created = await self._sharing_service.create_share(
-                _to_note_share_entity(request.share),
+                note_share_to_note_share_entity(request.share),
                 UserContext(request.user_id),
             )
             return _to_grpc_note_share(created)
@@ -66,7 +96,7 @@ class GrpcSharingService(SharingServiceServicer):
                 raise ValueError("share is required")
 
             updated = await self._sharing_service.update_share(
-                _to_note_share_entity(request.share),
+                note_share_to_note_share_entity(request.share),
                 UserContext(request.user_id),
             )
             return _to_grpc_note_share(updated)
@@ -76,18 +106,16 @@ class GrpcSharingService(SharingServiceServicer):
     @log_service_call()
     async def GetSharesById(
         self,
-        request: GetSharesByIdRequest,
+        request: AccessShareRequest,
         context: ServicerContext,
     ) -> AsyncIterator[NoteShare]:
         """Stream shares selected by exact IDs."""
         try:
-            self._require_user_id(request.user_id)
-            shares = await self._sharing_service.get_shares_by_id(
-                list(request.share_ids),
-                UserContext(request.user_id),
+            note = await self._sharing_service.access_share(
+                request.share_id,
+                UserContext(request.user_id)
             )
-            for share in shares:
-                yield _to_grpc_note_share(share)
+            return to_grpc_note(note)
         except Exception as exc:
             self._handle_stream_exception(exc, context)
             return
@@ -176,7 +204,17 @@ class GrpcSharingService(SharingServiceServicer):
         context.set_details("Internal server error while handling sharing request")
 
 
-def _to_note_share_entity(share: NoteShare) -> NoteShareEntity:
+def request_to_note_share_entity(request: CreateShareRequest) -> NoteShareEntity:
+    """Convert a CreateShareRequest into a NoteShareEntity for service layer consumption."""
+    return NoteShareEntity(
+        description=_from_nullable_string(request, "description"),
+        note_id=unwrap_undefined(request.note_id),
+        online_since=_from_nullable_timestamp(request, "online_since"),
+        online_until=_from_nullable_timestamp(request, "online_until"),
+        permission=unwrap_undefined(request.permission),
+    )
+
+def note_share_to_note_share_entity(share: NoteShare) -> NoteShareEntity:
     """Convert a protobuf NoteShare into a domain NoteShareEntity."""
     return NoteShareEntity(
         id=share.id or UNDEFINED,
@@ -186,7 +224,7 @@ def _to_note_share_entity(share: NoteShare) -> NoteShareEntity:
         created_by=share.created_by or UNDEFINED,
         online_since=_from_nullable_timestamp(share, "online_since"),
         online_until=_from_nullable_timestamp(share, "online_until"),
-        access_as=UNDEFINED,  # this is a backend property only
+        access_as=unwrap_undefined(share.access_as),  # this is a backend property only
     )
 
 
@@ -197,7 +235,7 @@ def _to_filter_share_note_entity(filter: ShareFilter) -> FilterShareNote:
         created_by=filter.created_by if filter.HasField("created_by") else UNDEFINED,
         online_since=_from_nullable_timestamp(filter, "online_since"),
         online_until=_from_nullable_timestamp(filter, "online_until"),
-        access_as=UNDEFINED,  # this is a backend property only
+        access_as=UNDEFINED,  # currently not used for filtering
     )
 
 
@@ -207,13 +245,14 @@ def _to_grpc_note_share(share: NoteShareEntity | None) -> NoteShare:
         return NoteShare()
 
     return NoteShare(
-        id="" if share.id is UNDEFINED else str(share.id),
+        id=unwrap_undefined(share.id),
         description=_to_nullable_string(share.description),
-        note_id="" if share.note_id is UNDEFINED else str(share.note_id),
+        note_id=unwrap_undefined(share.note_id),
         created_at=_to_timestamp(share.created_at),
-        created_by="" if share.created_by is UNDEFINED else str(share.created_by),
+        created_by=unwrap_undefined(share.created_by),
         online_since=_to_nullable_timestamp(share.online_since),
         online_until=_to_nullable_timestamp(share.online_until),
+        access_as=unwrap_undefined(share.access_as),  # this is a backend property only
     )
 
 
