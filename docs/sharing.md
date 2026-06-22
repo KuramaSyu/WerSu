@@ -59,7 +59,7 @@ sequenceDiagram
     REST-Proxy->>REST-Proxy: 8) Store session cookie
     deactivate REST-Proxy
     REST-Proxy-->>Frontend: 9) forward the gRPC response
-    Frontend->>REST-Proxy: 10) POST /api/access-token
+    Frontend->>REST-Proxy: 10) GET /api/access-token
     REST-Proxy-->>Frontend:
     Frontend->>Live-Websocket: 11) connect to live document with JWT token
     Live-Websocket->>SpiceDB: 12) check permissions
