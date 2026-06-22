@@ -52,10 +52,12 @@ class PermissionServiceABC(ABC):
             If the actor is not allowed to manage permissions.
         """
         ...
+        # impl at: ./src/services/permissions.py:180
 
     @abstractmethod
     async def create_relationship(self, relationship: Relationship, actor: UserContextABC) -> List[Relationship]:
         """Create one relationship and return the updated relationship set.
+        This has to be a resource: note or resource: directory. Handle others directly with the repo.
 
         Parameters
         ----------
