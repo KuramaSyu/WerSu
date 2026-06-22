@@ -1,23 +1,30 @@
 from dataclasses import replace
 from datetime import datetime
 from typing import List
+from uuid import uuid7
 
 from src.api import PermissionRepoABC
-from src.api.sharing import SharingRepo, SharingService
-from src.api.undefined import UNDEFINED
+from src.api.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
+from src.api.sharing import SharingRepoABC, SharingServiceABC
+from src.api.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
+from src.db.entities.user.user import UserEntity
+from src.db.repos.user.user import UserRepoABC
 from src.domain.permission_chain import HasNoteEditPermissionsPerm
 
 
-class DefaultSharingService(SharingService):
+class DefaultSharingService(SharingServiceABC):
     """Service layer for note shares with note permission checks."""
 
     def __init__(
         self,
-        sharing_repo: SharingRepo,
+        sharing_repo: SharingRepoABC,
+        user_repo: UserRepoABC,
         permission_repo: PermissionRepoABC,
+
     ) -> None:
+        self._user_repo = user_repo
         self._sharing_repo = sharing_repo
         self._permission_repo = permission_repo
 
@@ -27,16 +34,33 @@ class DefaultSharingService(SharingService):
 
         await self._assert_can_edit_permissions(str(share.note_id), ctx)
 
-        # TODO!: create temporary user for share access and set share.access_as to that user
-        # TODO!: grant permissions to that temporary user
+        # create a temporary user for that share which will get the permissions to read or write
+        user = UserEntity(
+            id=uuid7().hex,
+            username=f"share-{share.acc}-{share.note_id}",
+            type="temporary",
+        )
+        user = await self._user_repo.insert(user)
 
-        # Defaults live in the service so the repo stays a thin persistence
-        # wrapper without application decisions.
+        # create read or write permission for the temporary user
+        relation = {}
+        permission = unwrap_undefined(share.permission)
+        if permission == "read":
+            relation["relation"] = NoteRelationEnum.READER
+        elif permission == "write":
+            relation["relation"] = NoteRelationEnum.WRITER
+        _relationships = await self._permission_repo.insert([Relationship(
+            resource=ObjectRef("note", unwrap_undefined(share.note_id)),
+            subject=SubjectRef("user", user.id),
+            **relation
+        )])
+
+        # set sane defaults - REPOs should normally not create any defaults. 
         normalized = replace(
             share,
             id=UNDEFINED,
-            created_at=datetime.now() if share.created_at is UNDEFINED else share.created_at,
-            created_by=ctx.user_id if share.created_by is UNDEFINED else share.created_by,
+            created_at=unwrap_undefined_or(share.created_at, datetime.now()),
+            created_by=ctx.user_id,
         )
         return await self._sharing_repo.create_share(normalized, ctx)
 
