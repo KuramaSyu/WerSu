@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 
-class SharingRepo(ABC):
+class SharingRepoABC(ABC):
     """
     Repo for share entities. Basically a bare wrapper to access the DB and insert/manipulate share entities.
     It does not check any permissions. The service layer is responsible for that.
@@ -116,9 +116,25 @@ class SharingRepo(ABC):
 
 
 
+class ShareAccessServiceABC(ABC):
+    """
+    A Service, which handles the access of a share. 
+    """
+    @abstractmethod
+    async def access_share(self, share_id: str, ctx: Optional[UserContextABC]) -> NoteShareEntity:
+        """
+        Access a share entity for a note. For this, the provided share ID is used.
+        It checks if the share exists, then if the share user has access to the shared note,
+        and if thats the case, returns the share entity. 
 
+        Raises
+        --------
+        `ValueError`: If the provided share ID is invalid or if the share does not exist.
+        `PermissionError`: If the user does not have permission to access the share entity.
+        """
+        ...
 
-class SharingService(ABC):
+class SharingServiceABC(ABC):
     @abstractmethod
     async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
         """
