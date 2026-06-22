@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from src.api.undefined import UNDEFINED
+from src.api.undefined import UNDEFINED, is_undefined
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
 from src.db.repos.directory.directory import DirectoryRepo
@@ -18,6 +18,9 @@ from src.db.repos.user.user import UserRepoABC
 class UserServiceABC(ABC):
     @abstractmethod
     async def get_user(self, user_id: Optional[str] = None, discord_id: Optional[int] = None) -> Optional[UserEntity]:
+        """
+        Creates a user and, in case that user is of type "human", also creates the default directories with admin relation for that user.
+        """
         ...
 
     @abstractmethod
@@ -25,7 +28,7 @@ class UserServiceABC(ABC):
         ...
 
 
-class UserServiceRepo(UserServiceABC):
+class UserService(UserServiceABC):
     """Application service for user lifecycle and bootstrap directories."""
 
     def __init__(self, user_repo: UserRepoABC, directory_repo: DirectoryRepo):
@@ -43,6 +46,10 @@ class UserServiceRepo(UserServiceABC):
         created_user = await self._user_repo.insert(user)
         assert created_user.id is not None
 
+        if is_undefined(user.type) or user.type in ["temporary", "system"]:
+            return self.created_user
+    
+        # only human users get a directory with relations
         admin_relation = Relationship(
             resource=ObjectRef(object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED),
             relation=DirectoryRelationEnum.ADMIN,
