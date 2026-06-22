@@ -8,6 +8,8 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import timestamp_pb2 as _timestamp_pb2
 from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from src.grpc_mod.proto import note_pb2 as _note_pb2
 import builtins as _builtins
 import sys
 import typing as _typing
@@ -18,6 +20,24 @@ else:
     from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
 DESCRIPTOR: _descriptor.FileDescriptor
+
+class _SharePermission:
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
+
+class _SharePermissionEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_SharePermission.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
+    SHARE_PERMISSION_UNSPECIFIED: _SharePermission.ValueType  # 0
+    SHARE_PERMISSION_READ: _SharePermission.ValueType  # 1
+    SHARE_PERMISSION_WRITE: _SharePermission.ValueType  # 2
+
+class SharePermission(_SharePermission, metaclass=_SharePermissionEnumTypeWrapper):
+    """the permission a share can have"""
+
+SHARE_PERMISSION_UNSPECIFIED: SharePermission.ValueType  # 0
+SHARE_PERMISSION_READ: SharePermission.ValueType  # 1
+SHARE_PERMISSION_WRITE: SharePermission.ValueType  # 2
+Global___SharePermission: _TypeAlias = SharePermission  # noqa: Y015
 
 @_typing.final
 class NullableString(_message.Message):
@@ -93,9 +113,13 @@ class NoteShare(_message.Message):
     CREATED_BY_FIELD_NUMBER: _builtins.int
     ONLINE_SINCE_FIELD_NUMBER: _builtins.int
     ONLINE_UNTIL_FIELD_NUMBER: _builtins.int
+    PERMISSION_FIELD_NUMBER: _builtins.int
+    ACCESS_AS_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     note_id: _builtins.str
     created_by: _builtins.str
+    permission: Global___SharePermission.ValueType
+    access_as: _builtins.str
     @_builtins.property
     def description(self) -> Global___NullableString: ...
     @_builtins.property
@@ -114,10 +138,12 @@ class NoteShare(_message.Message):
         created_by: _builtins.str = ...,
         online_since: Global___NullableTimestamp | None = ...,
         online_until: Global___NullableTimestamp | None = ...,
+        permission: Global___SharePermission.ValueType = ...,
+        access_as: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["created_at", b"created_at", "description", b"description", "online_since", b"online_since", "online_until", b"online_until"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["created_at", b"created_at", "created_by", b"created_by", "description", b"description", "id", b"id", "note_id", b"note_id", "online_since", b"online_since", "online_until", b"online_until"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["access_as", b"access_as", "created_at", b"created_at", "created_by", b"created_by", "description", b"description", "id", b"id", "note_id", b"note_id", "online_since", b"online_since", "online_until", b"online_until", "permission", b"permission"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -175,23 +201,84 @@ class CreateShareRequest(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
     USER_ID_FIELD_NUMBER: _builtins.int
-    SHARE_FIELD_NUMBER: _builtins.int
+    DESCRIPTION_FIELD_NUMBER: _builtins.int
+    NOTE_ID_FIELD_NUMBER: _builtins.int
+    ONLINE_SINCE_FIELD_NUMBER: _builtins.int
+    ONLINE_UNTIL_FIELD_NUMBER: _builtins.int
+    PERMISSION_FIELD_NUMBER: _builtins.int
     user_id: _builtins.str
+    note_id: _builtins.str
+    permission: Global___SharePermission.ValueType
+    @_builtins.property
+    def description(self) -> Global___NullableString: ...
+    @_builtins.property
+    def online_since(self) -> Global___NullableTimestamp: ...
+    @_builtins.property
+    def online_until(self) -> Global___NullableTimestamp: ...
+    def __init__(
+        self,
+        *,
+        user_id: _builtins.str = ...,
+        description: Global___NullableString | None = ...,
+        note_id: _builtins.str = ...,
+        online_since: Global___NullableTimestamp | None = ...,
+        online_until: Global___NullableTimestamp | None = ...,
+        permission: Global___SharePermission.ValueType = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["description", b"description", "online_since", b"online_since", "online_until", b"online_until"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["description", b"description", "note_id", b"note_id", "online_since", b"online_since", "online_until", b"online_until", "permission", b"permission", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___CreateShareRequest: _TypeAlias = CreateShareRequest  # noqa: Y015
+
+@_typing.final
+class AccessShareRequest(_message.Message):
+    """Access a share by its ID. This ID is part of the share URL /public/n/<share_id>"""
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    SHARE_ID_FIELD_NUMBER: _builtins.int
+    share_id: _builtins.str
+    def __init__(
+        self,
+        *,
+        share_id: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["share_id", b"share_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___AccessShareRequest: _TypeAlias = AccessShareRequest  # noqa: Y015
+
+@_typing.final
+class AccessShareResponse(_message.Message):
+    """Response for an access share request, containing the note associated with the share"""
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    NOTE_FIELD_NUMBER: _builtins.int
+    SHARE_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def note(self) -> _note_pb2.Note: ...
     @_builtins.property
     def share(self) -> Global___NoteShare: ...
     def __init__(
         self,
         *,
-        user_id: _builtins.str = ...,
+        note: _note_pb2.Note | None = ...,
         share: Global___NoteShare | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["share", b"share"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["note", b"note", "share", b"share"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["share", b"share", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["note", b"note", "share", b"share"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___CreateShareRequest: _TypeAlias = CreateShareRequest  # noqa: Y015
+Global___AccessShareResponse: _TypeAlias = AccessShareResponse  # noqa: Y015
 
 @_typing.final
 class UpdateShareRequest(_message.Message):
