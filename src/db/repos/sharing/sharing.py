@@ -3,15 +3,16 @@ from typing import List
 
 from asyncpg import Record
 
-from src.api.sharing import SharingRepo
+from src.api.sharing import SharingRepoABC
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.table import TableABC
 from src.utils import asdict
+from src.utils.dict_helper import drop_undefined
 
 
-class SharingPostgresRepo(SharingRepo):
+class SharingPostgresRepo(SharingRepoABC):
     """Postgres-backed storage for note share rows.
 
     The repo intentionally performs no permission checks. Callers are expected
@@ -34,7 +35,11 @@ class SharingPostgresRepo(SharingRepo):
         if share.created_by in (UNDEFINED, None):
             raise ValueError("share.created_by is required")
 
-        records = await self._table.insert(asdict(share), returning=self._returning)
+        # permissions live in the permission repo e.g. SpiceDB -> remove it
+        share.permission = UNDEFINED
+        normalized_dict = drop_undefined(asdict(share)) 
+
+        records = await self._table.insert(normalized_dict, returning=self._returning)
         if not records:
             raise ValueError("Failed to create share")
         return self._from_record(records[0])
@@ -57,6 +62,7 @@ class SharingPostgresRepo(SharingRepo):
         )
         if not set_values:
             raise ValueError("At least one share field must be set for update")
+        set_values.pop("permission", None)  # permissions live in the permission repo e.g. SpiceDB -> remove it
 
         record = await self._table.update(
             set=set_values,
