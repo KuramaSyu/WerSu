@@ -1,3 +1,4 @@
 {
-    "python.analysis.autoImportCompletions": true
+    "python.analysis.autoImportCompletions": true,
+    "ltex.language": "en-US"
 }
