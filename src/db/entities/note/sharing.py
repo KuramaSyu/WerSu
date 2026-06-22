@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedNoneOr
@@ -36,6 +37,9 @@ class NoteShareEntity:
     # will access it under the identity of `access_as` which will have the correct permissions
     access_as: UndefinedOr[str] = UNDEFINED
 
+    # the permission on this share
+    permission: UndefinedOr[Literal["read", "write"]] = UNDEFINED
+
 
 @dataclass
 class FilterShareNote:
@@ -58,3 +62,6 @@ class FilterShareNote:
 
     # find shares accessed as exactly this user
     access_as: UndefinedOr[str] = UNDEFINED
+
+    # find shares with exactly this permission
+    permission: UndefinedOr[str] = UNDEFINED
