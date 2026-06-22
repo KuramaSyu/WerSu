@@ -4,7 +4,8 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
 package proto;
-option go_package = "github.com/KuramaSyu/WerSu-Rest/src/proto;proto";
+option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
+import "note.proto";
 
 // String value wrapper for fields where the API needs to distinguish:
 // - field omitted: leave unchanged / do not filter
@@ -58,6 +59,12 @@ message CreateShareRequest {
     NoteShare share = 2;
 }
 
+// Access a share by its ID. This ID is part of the share URL /public/n/<share_id>
+message AccessShareRequest {
+    string share_id = 1;
+    string user_id = 2;  // currently not used, but maybe later used
+}
+
 // Update one share. Only fields present on share should be updated.
 // The requester user_id is used for permission checks.
 message UpdateShareRequest {
@@ -92,4 +99,5 @@ service SharingService {
     rpc GetSharesById(GetSharesByIdRequest) returns (stream NoteShare);
     rpc GetShares(GetSharesRequest) returns (stream NoteShare);
     rpc DeleteShares(DeleteSharesRequest) returns (google.protobuf.Empty);
+    rpc AccessShare(AccessShareRequest) returns (Note);
 }
