@@ -13,6 +13,7 @@ import grpc
 from src.api.permission_repo import PermissionRepoABC
 from src.api.service_unavailable_error import ServiceUnavailableError
 from src.api import PermissionConverterABC, ObjectRef, SubjectRef, RelationEnum, Relationship, UserContextABC, ObjectTypeEnum, RelationName, NoteRelationEnum
+from src.api.undefined import unwrap_undefined
 from src.db.table import TableABC
 from src.utils import asdict
 
@@ -252,20 +253,28 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
 
     @handle_error
     async def lookup_relationships(self, relationship: Relationship) -> List[Relationship]:
+        # enforce resource:id#permission@XXX:id
         subject_filter = SubjectFilter(subject_type=relationship.subject.object_type)
+
+        # maybe add resource:id#permission@subject:XXX 
         if relationship.subject.object_id != UNDEFINED:
             subject_filter.optional_subject_id = str(relationship.subject.object_id)
 
-        relation_filter = RelationshipFilter(
+        # enforece XXX:id#permission@subject:id
+        filter = RelationshipFilter(
             resource_type=relationship.resource.object_type,
-            optional_relation=relationship.relation,
             optional_subject_filter=subject_filter,
         )
+        # maybe add resource:id#XXX@subject:id
+        if relationship.relation != UNDEFINED:
+            filter.optional_relation = relationship.relation
+        
+        # maybe add resource:XXX#permission@subject:id
         if relationship.resource.object_id != UNDEFINED:
-            relation_filter.optional_resource_id = str(relationship.resource.object_id)
+            filter.optional_resource_id = str(relationship.resource.object_id)
 
         response_stream = self.client.ExportBulkRelationships(
-            ExportBulkRelationshipsRequest(optional_relationship_filter=relation_filter)
+            ExportBulkRelationshipsRequest(optional_relationship_filter=filter)
         )
 
         relationships: List[Relationship] = []
@@ -357,14 +366,32 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
 
     @handle_error
     async def get_permissions(self, user: UserContextABC, resource: ObjectRef) -> List[str]:
+        """Get all effective permissions for a user on a resource."""
+        # do we really need this? I think filter should be possible too
         assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
 
-        candidates = self._permission_candidates_by_object_type.get(resource.object_type, [])
-        permissions: List[str] = []
-        for permission in candidates:
-            # Evaluate candidate permissions one by one through SpiceDB CheckPermission.
-            if await self.has_permission(user=user, permission=permission, resource=resource):
-                permissions.append(permission)
+        permissions = []
+        relationships = await self.lookup_relationships(
+            Relationship(
+                resource=resource,
+                relation=UNDEFINED,
+                subject=SubjectRef(
+                    object_type="user",
+                    object_id=user.user_id,
+                )
+            )
+        )
+        for rel in relationships:
+            permissions.append(unwrap_undefined(rel.relation))
+        
+        # AI generated:
+        # candidates = self._permission_candidates_by_object_type.get(resource.object_type, [])
+        # permissions: List[str] = []
+        # for permission in candidates:
+        #     # Evaluate candidate permissions one by one through SpiceDB CheckPermission.
+        #     if await self.has_permission(user=user, permission=permission, resource=resource):
+        #         permissions.append(permission)
+
         return permissions
 
 
