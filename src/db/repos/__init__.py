@@ -3,4 +3,4 @@ from .attachments import *
 from .note import *
 from .directory import *
 from .user import *
-from .sharing_repo import *
+from .sharing import *
