@@ -105,7 +105,7 @@ class SubjectRef(ObjectRef):
 class PartialRelationship:
     def __init__(
         self,
-        relation: RelationName | RelationEnum,
+        relation: UndefinedOr[RelationName | RelationEnum],
         subject: SubjectRef,
     ) -> None:
         self.relation = relation
@@ -122,7 +122,7 @@ class Relationship(PartialRelationship):
     def __init__(
         self,
         resource: ObjectRef,
-        relation: RelationName | RelationEnum,
+        relation: UndefinedOr[RelationName | RelationEnum],
         subject: SubjectRef,
     ) -> None:
         self.resource = resource
