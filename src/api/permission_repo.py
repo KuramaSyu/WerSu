@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import *
+from warnings import deprecated
 from src.api.relationship import *
 from src.api.user_context import UserContextABC
 
@@ -44,6 +45,7 @@ class PermissionRepoABC(ABC):
         """
         ...
 
+    @deprecated("lookup() is deprecated, use lookup_relationships() instead")
     @abstractmethod
     async def lookup(
         self,
