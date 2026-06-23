@@ -4,6 +4,7 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
+from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 
 
 async def test_in_memory_has_permission_with_implied_permissions() -> None:
