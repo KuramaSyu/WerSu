@@ -8,3 +8,4 @@ from .permission_relationship_converter import (
 	to_relationship,
 )
 from .user_entity_converter import to_grpc_user
+from .share_converters import *
