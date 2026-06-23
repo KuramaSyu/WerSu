@@ -42,6 +42,14 @@ class UserContext(UserContextABC):
     @property
     def user_id(self) -> str:
         return self._user_id
+    
+class UnimplementedUserContext(UserContextABC):
+    def __init__(self):
+        pass
+
+    @property
+    def user_id(self) -> str:
+        raise NotImplementedError("User ID is not implemented in this context.")
 
 
 class NoteRepoFacadeABC(ABC):
