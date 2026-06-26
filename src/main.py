@@ -252,6 +252,7 @@ async def serve():
     sharing_service = DefaultSharingService(
         sharing_repo=sharing_repo,
         permission_repo=permission_repo,
+        user_repo=user_repo,
     )
     share_access_service: ShareAccessServiceABC = share_access.ShareAccessService(
         sharing_repo=sharing_repo,
