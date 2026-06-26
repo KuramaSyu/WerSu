@@ -30,10 +30,10 @@ Logger names use the most specific match, so `src.db.database` wins over `src`.
 3. compile the `src/grpc_mod/note.proto` and `src/grpc_mod/user.proto`file:
     ```bash
     python -m grpc_tools.protoc \
-        -I src/grpc_mod/proto \
-        --python_out=src/grpc_mod/proto \
-        --grpc_python_out=src/grpc_mod/proto \
-        --mypy_out=src/grpc_mod/proto \
+        -I . \
+        --python_out=. \
+        --grpc_python_out=. \
+        --mypy_out=. \
         src/grpc_mod/proto/*.proto
     ```
 
