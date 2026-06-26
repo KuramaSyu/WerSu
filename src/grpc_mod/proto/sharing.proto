@@ -5,7 +5,7 @@ import "google/protobuf/timestamp.proto";
 
 package proto;
 option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
-import "src/grpc_mod/proto/note.proto";
+
 
 // String value wrapper for fields where the API needs to distinguish:
 // - field omitted: leave unchanged / do not filter
@@ -79,9 +79,20 @@ message AccessShareRequest {
 
 // Response for an access share request, containing the note associated with the share
 message AccessShareResponse {
-    proto.Note note = 1;
-    NoteShare share = 2;
+    NoteShare share = 1;
 }
+
+// request with share id to get the temporary user id that can be used to access the share. 
+message GetShareUserRequest {
+    string share_id = 1;
+}
+
+// Response for a get share user request, containing the temporary user id 
+message GetShareUserResponse {
+    string access_as = 1;
+    NullableTimestamp online_until = 2;
+}
+
 
 // Update one share. Only fields present on share should be updated.
 // The requester user_id is used for permission checks.
@@ -117,5 +128,7 @@ service SharingService {
     rpc GetSharesById(GetSharesByIdRequest) returns (stream NoteShare);
     rpc GetShares(GetSharesRequest) returns (stream NoteShare);
     rpc DeleteShares(DeleteSharesRequest) returns (google.protobuf.Empty);
+
     rpc AccessShare(AccessShareRequest) returns (AccessShareResponse);
+    rpc GetShareUser(GetShareUserRequest) returns (GetShareUserResponse);
 }

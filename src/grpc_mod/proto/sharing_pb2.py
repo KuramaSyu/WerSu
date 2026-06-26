@@ -24,10 +24,9 @@ _sym_db = _symbol_database.Default()
 
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
-from src.grpc_mod.proto import note_pb2 as src_dot_grpc__mod_dot_proto_dot_note__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n src/grpc_mod/proto/sharing.proto\x12\x05proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1dsrc/grpc_mod/proto/note.proto\"?\n\x0eNullableString\x12\x0f\n\x05value\x18\x01 \x01(\tH\x00\x12\x14\n\nnull_value\x18\x02 \x01(\x08H\x00\x42\x06\n\x04kind\"^\n\x11NullableTimestamp\x12+\n\x05value\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.TimestampH\x00\x12\x14\n\nnull_value\x18\x02 \x01(\x08H\x00\x42\x06\n\x04kind\"\xb7\x02\n\tNoteShare\x12\n\n\x02id\x18\x01 \x01(\t\x12*\n\x0b\x64\x65scription\x18\x02 \x01(\x0b\x32\x15.proto.NullableString\x12\x0f\n\x07note_id\x18\x03 \x01(\t\x12.\n\ncreated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x12\n\ncreated_by\x18\x05 \x01(\t\x12.\n\x0conline_since\x18\x06 \x01(\x0b\x32\x18.proto.NullableTimestamp\x12.\n\x0conline_until\x18\x07 \x01(\x0b\x32\x18.proto.NullableTimestamp\x12*\n\npermission\x18\x08 \x01(\x0e\x32\x16.proto.SharePermission\x12\x11\n\taccess_as\x18\t \x01(\t\"\xb7\x01\n\x0bShareFilter\x12\x14\n\x07note_id\x18\x01 \x01(\tH\x00\x88\x01\x01\x12\x17\n\ncreated_by\x18\x02 \x01(\tH\x01\x88\x01\x01\x12.\n\x0conline_since\x18\x03 \x01(\x0b\x32\x18.proto.NullableTimestamp\x12.\n\x0conline_until\x18\x04 \x01(\x0b\x32\x18.proto.NullableTimestampB\n\n\x08_note_idB\r\n\x0b_created_by\"\xee\x01\n\x12\x43reateShareRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12*\n\x0b\x64\x65scription\x18\x02 \x01(\x0b\x32\x15.proto.NullableString\x12\x0f\n\x07note_id\x18\x03 \x01(\t\x12.\n\x0conline_since\x18\x04 \x01(\x0b\x32\x18.proto.NullableTimestamp\x12.\n\x0conline_until\x18\x05 \x01(\x0b\x32\x18.proto.NullableTimestamp\x12*\n\npermission\x18\x06 \x01(\x0e\x32\x16.proto.SharePermission\"&\n\x12\x41\x63\x63\x65ssShareRequest\x12\x10\n\x08share_id\x18\x01 \x01(\t\"Q\n\x13\x41\x63\x63\x65ssShareResponse\x12\x19\n\x04note\x18\x01 \x01(\x0b\x32\x0b.proto.Note\x12\x1f\n\x05share\x18\x02 \x01(\x0b\x32\x10.proto.NoteShare\"F\n\x12UpdateShareRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x1f\n\x05share\x18\x02 \x01(\x0b\x32\x10.proto.NoteShare\":\n\x14GetSharesByIdRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x11\n\tshare_ids\x18\x02 \x03(\t\"G\n\x10GetSharesRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\"\n\x06\x66ilter\x18\x02 \x01(\x0b\x32\x12.proto.ShareFilter\"9\n\x13\x44\x65leteSharesRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x11\n\tshare_ids\x18\x02 \x03(\t*j\n\x0fSharePermission\x12 \n\x1cSHARE_PERMISSION_UNSPECIFIED\x10\x00\x12\x19\n\x15SHARE_PERMISSION_READ\x10\x01\x12\x1a\n\x16SHARE_PERMISSION_WRITE\x10\x02\x32\x8e\x03\n\x0eSharingService\x12:\n\x0b\x43reateShare\x12\x19.proto.CreateShareRequest\x1a\x10.proto.NoteShare\x12:\n\x0bUpdateShare\x12\x19.proto.UpdateShareRequest\x1a\x10.proto.NoteShare\x12@\n\rGetSharesById\x12\x1b.proto.GetSharesByIdRequest\x1a\x10.proto.NoteShare0\x01\x12\x38\n\tGetShares\x12\x17.proto.GetSharesRequest\x1a\x10.proto.NoteShare0\x01\x12\x42\n\x0c\x44\x65leteShares\x12\x1a.proto.DeleteSharesRequest\x1a\x16.google.protobuf.Empty\x12\x44\n\x0b\x41\x63\x63\x65ssShare\x12\x19.proto.AccessShareRequest\x1a\x1a.proto.AccessShareResponseB1Z/github.com/KuramaSyu/Wersu-Rest/src/proto;protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n src/grpc_mod/proto/sharing.proto\x12\x05proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"?\n\x0eNullableString\x12\x0f\n\x05value\x18\x01 \x01(\tH\x00\x12\x14\n\nnull_value\x18\x02 \x01(\x08H\x00\x42\x06\n\x04kind\"^\n\x11NullableTimestamp\x12+\n\x05value\x18\x01 \x01(\x0b\x32\x1a.google.protobuf.TimestampH\x00\x12\x14\n\nnull_value\x18\x02 \x01(\x08H\x00\x42\x06\n\x04kind\"\xb7\x02\n\tNoteShare\x12\n\n\x02id\x18\x01 \x01(\t\x12*\n\x0b\x64\x65scription\x18\x02 \x01(\x0b\x32\x15.proto.NullableString\x12\x0f\n\x07note_id\x18\x03 \x01(\t\x12.\n\ncreated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x12\n\ncreated_by\x18\x05 \x01(\t\x12.\n\x0conline_since\x18\x06 \x01(\x0b\x32\x18.proto.NullableTimestamp\x12.\n\x0conline_until\x18\x07 \x01(\x0b\x32\x18.proto.NullableTimestamp\x12*\n\npermission\x18\x08 \x01(\x0e\x32\x16.proto.SharePermission\x12\x11\n\taccess_as\x18\t \x01(\t\"\xb7\x01\n\x0bShareFilter\x12\x14\n\x07note_id\x18\x01 \x01(\tH\x00\x88\x01\x01\x12\x17\n\ncreated_by\x18\x02 \x01(\tH\x01\x88\x01\x01\x12.\n\x0conline_since\x18\x03 \x01(\x0b\x32\x18.proto.NullableTimestamp\x12.\n\x0conline_until\x18\x04 \x01(\x0b\x32\x18.proto.NullableTimestampB\n\n\x08_note_idB\r\n\x0b_created_by\"\xee\x01\n\x12\x43reateShareRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12*\n\x0b\x64\x65scription\x18\x02 \x01(\x0b\x32\x15.proto.NullableString\x12\x0f\n\x07note_id\x18\x03 \x01(\t\x12.\n\x0conline_since\x18\x04 \x01(\x0b\x32\x18.proto.NullableTimestamp\x12.\n\x0conline_until\x18\x05 \x01(\x0b\x32\x18.proto.NullableTimestamp\x12*\n\npermission\x18\x06 \x01(\x0e\x32\x16.proto.SharePermission\"&\n\x12\x41\x63\x63\x65ssShareRequest\x12\x10\n\x08share_id\x18\x01 \x01(\t\"6\n\x13\x41\x63\x63\x65ssShareResponse\x12\x1f\n\x05share\x18\x01 \x01(\x0b\x32\x10.proto.NoteShare\"\'\n\x13GetShareUserRequest\x12\x10\n\x08share_id\x18\x01 \x01(\t\"Y\n\x14GetShareUserResponse\x12\x11\n\taccess_as\x18\x01 \x01(\t\x12.\n\x0conline_until\x18\x02 \x01(\x0b\x32\x18.proto.NullableTimestamp\"F\n\x12UpdateShareRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x1f\n\x05share\x18\x02 \x01(\x0b\x32\x10.proto.NoteShare\":\n\x14GetSharesByIdRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x11\n\tshare_ids\x18\x02 \x03(\t\"G\n\x10GetSharesRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\"\n\x06\x66ilter\x18\x02 \x01(\x0b\x32\x12.proto.ShareFilter\"9\n\x13\x44\x65leteSharesRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x11\n\tshare_ids\x18\x02 \x03(\t*j\n\x0fSharePermission\x12 \n\x1cSHARE_PERMISSION_UNSPECIFIED\x10\x00\x12\x19\n\x15SHARE_PERMISSION_READ\x10\x01\x12\x1a\n\x16SHARE_PERMISSION_WRITE\x10\x02\x32\xd7\x03\n\x0eSharingService\x12:\n\x0b\x43reateShare\x12\x19.proto.CreateShareRequest\x1a\x10.proto.NoteShare\x12:\n\x0bUpdateShare\x12\x19.proto.UpdateShareRequest\x1a\x10.proto.NoteShare\x12@\n\rGetSharesById\x12\x1b.proto.GetSharesByIdRequest\x1a\x10.proto.NoteShare0\x01\x12\x38\n\tGetShares\x12\x17.proto.GetSharesRequest\x1a\x10.proto.NoteShare0\x01\x12\x42\n\x0c\x44\x65leteShares\x12\x1a.proto.DeleteSharesRequest\x1a\x16.google.protobuf.Empty\x12\x44\n\x0b\x41\x63\x63\x65ssShare\x12\x19.proto.AccessShareRequest\x1a\x1a.proto.AccessShareResponse\x12G\n\x0cGetShareUser\x12\x1a.proto.GetShareUserRequest\x1a\x1b.proto.GetShareUserResponseB1Z/github.com/KuramaSyu/Wersu-Rest/src/proto;protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,30 +34,34 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'src.grpc_mod.proto.sharing_
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z/github.com/KuramaSyu/Wersu-Rest/src/proto;proto'
-  _globals['_SHAREPERMISSION']._serialized_start=1425
-  _globals['_SHAREPERMISSION']._serialized_end=1531
-  _globals['_NULLABLESTRING']._serialized_start=136
-  _globals['_NULLABLESTRING']._serialized_end=199
-  _globals['_NULLABLETIMESTAMP']._serialized_start=201
-  _globals['_NULLABLETIMESTAMP']._serialized_end=295
-  _globals['_NOTESHARE']._serialized_start=298
-  _globals['_NOTESHARE']._serialized_end=609
-  _globals['_SHAREFILTER']._serialized_start=612
-  _globals['_SHAREFILTER']._serialized_end=795
-  _globals['_CREATESHAREREQUEST']._serialized_start=798
-  _globals['_CREATESHAREREQUEST']._serialized_end=1036
-  _globals['_ACCESSSHAREREQUEST']._serialized_start=1038
-  _globals['_ACCESSSHAREREQUEST']._serialized_end=1076
-  _globals['_ACCESSSHARERESPONSE']._serialized_start=1078
-  _globals['_ACCESSSHARERESPONSE']._serialized_end=1159
-  _globals['_UPDATESHAREREQUEST']._serialized_start=1161
-  _globals['_UPDATESHAREREQUEST']._serialized_end=1231
-  _globals['_GETSHARESBYIDREQUEST']._serialized_start=1233
-  _globals['_GETSHARESBYIDREQUEST']._serialized_end=1291
-  _globals['_GETSHARESREQUEST']._serialized_start=1293
-  _globals['_GETSHARESREQUEST']._serialized_end=1364
-  _globals['_DELETESHARESREQUEST']._serialized_start=1366
-  _globals['_DELETESHARESREQUEST']._serialized_end=1423
-  _globals['_SHARINGSERVICE']._serialized_start=1534
-  _globals['_SHARINGSERVICE']._serialized_end=1932
+  _globals['_SHAREPERMISSION']._serialized_start=1499
+  _globals['_SHAREPERMISSION']._serialized_end=1605
+  _globals['_NULLABLESTRING']._serialized_start=105
+  _globals['_NULLABLESTRING']._serialized_end=168
+  _globals['_NULLABLETIMESTAMP']._serialized_start=170
+  _globals['_NULLABLETIMESTAMP']._serialized_end=264
+  _globals['_NOTESHARE']._serialized_start=267
+  _globals['_NOTESHARE']._serialized_end=578
+  _globals['_SHAREFILTER']._serialized_start=581
+  _globals['_SHAREFILTER']._serialized_end=764
+  _globals['_CREATESHAREREQUEST']._serialized_start=767
+  _globals['_CREATESHAREREQUEST']._serialized_end=1005
+  _globals['_ACCESSSHAREREQUEST']._serialized_start=1007
+  _globals['_ACCESSSHAREREQUEST']._serialized_end=1045
+  _globals['_ACCESSSHARERESPONSE']._serialized_start=1047
+  _globals['_ACCESSSHARERESPONSE']._serialized_end=1101
+  _globals['_GETSHAREUSERREQUEST']._serialized_start=1103
+  _globals['_GETSHAREUSERREQUEST']._serialized_end=1142
+  _globals['_GETSHAREUSERRESPONSE']._serialized_start=1144
+  _globals['_GETSHAREUSERRESPONSE']._serialized_end=1233
+  _globals['_UPDATESHAREREQUEST']._serialized_start=1235
+  _globals['_UPDATESHAREREQUEST']._serialized_end=1305
+  _globals['_GETSHARESBYIDREQUEST']._serialized_start=1307
+  _globals['_GETSHARESBYIDREQUEST']._serialized_end=1365
+  _globals['_GETSHARESREQUEST']._serialized_start=1367
+  _globals['_GETSHARESREQUEST']._serialized_end=1438
+  _globals['_DELETESHARESREQUEST']._serialized_start=1440
+  _globals['_DELETESHARESREQUEST']._serialized_end=1497
+  _globals['_SHARINGSERVICE']._serialized_start=1608
+  _globals['_SHARINGSERVICE']._serialized_end=2079
 # @@protoc_insertion_point(module_scope)

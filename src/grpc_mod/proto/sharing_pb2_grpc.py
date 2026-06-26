@@ -65,6 +65,11 @@ class SharingServiceStub:
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_sharing__pb2.AccessShareRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_sharing__pb2.AccessShareResponse.FromString,
                 _registered_method=True)
+        self.GetShareUser = channel.unary_unary(
+                '/proto.SharingService/GetShareUser',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_sharing__pb2.GetShareUserRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_sharing__pb2.GetShareUserResponse.FromString,
+                _registered_method=True)
 
 
 class SharingServiceServicer:
@@ -106,6 +111,12 @@ class SharingServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetShareUser(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SharingServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -138,6 +149,11 @@ def add_SharingServiceServicer_to_server(servicer, server):
                     servicer.AccessShare,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_sharing__pb2.AccessShareRequest.FromString,
                     response_serializer=src_dot_grpc__mod_dot_proto_dot_sharing__pb2.AccessShareResponse.SerializeToString,
+            ),
+            'GetShareUser': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetShareUser,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_sharing__pb2.GetShareUserRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_sharing__pb2.GetShareUserResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -302,6 +318,33 @@ class SharingService:
             '/proto.SharingService/AccessShare',
             src_dot_grpc__mod_dot_proto_dot_sharing__pb2.AccessShareRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_sharing__pb2.AccessShareResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetShareUser(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.SharingService/GetShareUser',
+            src_dot_grpc__mod_dot_proto_dot_sharing__pb2.GetShareUserRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_sharing__pb2.GetShareUserResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -19,6 +19,7 @@ from src.api.sharing import ShareAccessServiceABC, SharingServiceABC as SharingS
 from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined, unwrap_undefined_or
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.repos.note.note import UnimplementedUserContext, UserContext
+from src.grpc_mod.converter.share_converters import note_share_to_note_share_entity, to_filter_share_note_entity, to_grpc_note_share, to_proto_note_share
 from src.grpc_mod.proto.note_pb2 import Note
 from src.grpc_mod.proto.sharing_pb2 import (
     AccessShareRequest,
@@ -52,9 +53,9 @@ from src.grpc_mod.converter import (
 class GrpcSharingService(SharingServiceServicer):
     """gRPC adapter for the sharing service."""
 
-    def __init__(self, sharing_service: SharingServiceABC, share_access_serivce: ShareAccessServiceABC, log: LoggingProvider) -> None:
+    def __init__(self, sharing_service: SharingServiceABC, share_access_service: ShareAccessServiceABC, log: LoggingProvider) -> None:
         self._sharing_service = sharing_service
-        self._share_access_service = share_access_serivce
+        self._share_access_service = share_access_service
         self.log = log(__name__, self)
 
     @log_service_call()
@@ -62,10 +63,10 @@ class GrpcSharingService(SharingServiceServicer):
         """Access a share by its ID and return the associated note."""
         try:
             note_share = await self._share_access_service.access_share(
-                request.share.id,
+                request.share_id,
                 ctx=UnimplementedUserContext()
                 )
-            return to_grpc_note(note_share)
+            return to_proto_note_share(note_share)
         except Exception as exc:
             self._handle_empty_exception(exc, context)
             return Note()
@@ -82,7 +83,7 @@ class GrpcSharingService(SharingServiceServicer):
                 note_share_to_note_share_entity(request.share),
                 UserContext(request.user_id),
             )
-            return _to_grpc_note_share(created)
+            return to_grpc_note_share(created)
         except Exception as exc:
             return self._handle_unary_exception(exc, context)
 
@@ -98,7 +99,7 @@ class GrpcSharingService(SharingServiceServicer):
                 note_share_to_note_share_entity(request.share),
                 UserContext(request.user_id),
             )
-            return _to_grpc_note_share(updated)
+            return to_grpc_note_share(updated)
         except Exception as exc:
             return self._handle_unary_exception(exc, context)
 
@@ -129,7 +130,7 @@ class GrpcSharingService(SharingServiceServicer):
         try:
             self._require_user_id(request.user_id)
             filter_entity = (
-                _to_filter_share_note_entity(request.filter)
+                to_filter_share_note_entity(request.filter)
                 if request.HasField("filter")
                 else FilterShareNote()
             )
@@ -138,7 +139,7 @@ class GrpcSharingService(SharingServiceServicer):
                 UserContext(request.user_id),
             )
             for share in shares:
-                yield _to_grpc_note_share(share)
+                yield to_grpc_note_share(share)
         except Exception as exc:
             self._handle_stream_exception(exc, context)
             return

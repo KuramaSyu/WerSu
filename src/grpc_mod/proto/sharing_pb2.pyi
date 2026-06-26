@@ -9,7 +9,6 @@ from google.protobuf import message as _message
 from google.protobuf import timestamp_pb2 as _timestamp_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
-from src.grpc_mod.proto import note_pb2 as _note_pb2
 import builtins as _builtins
 import sys
 import typing as _typing
@@ -260,25 +259,67 @@ class AccessShareResponse(_message.Message):
 
     DESCRIPTOR: _descriptor.Descriptor
 
-    NOTE_FIELD_NUMBER: _builtins.int
     SHARE_FIELD_NUMBER: _builtins.int
-    @_builtins.property
-    def note(self) -> _note_pb2.Note: ...
     @_builtins.property
     def share(self) -> Global___NoteShare: ...
     def __init__(
         self,
         *,
-        note: _note_pb2.Note | None = ...,
         share: Global___NoteShare | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["note", b"note", "share", b"share"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["share", b"share"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["note", b"note", "share", b"share"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["share", b"share"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___AccessShareResponse: _TypeAlias = AccessShareResponse  # noqa: Y015
+
+@_typing.final
+class GetShareUserRequest(_message.Message):
+    """request with share id to get the temporary user id that can be used to access the share."""
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    SHARE_ID_FIELD_NUMBER: _builtins.int
+    share_id: _builtins.str
+    def __init__(
+        self,
+        *,
+        share_id: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["share_id", b"share_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___GetShareUserRequest: _TypeAlias = GetShareUserRequest  # noqa: Y015
+
+@_typing.final
+class GetShareUserResponse(_message.Message):
+    """Response for a get share user request, containing the temporary user id"""
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    ACCESS_AS_FIELD_NUMBER: _builtins.int
+    ONLINE_UNTIL_FIELD_NUMBER: _builtins.int
+    access_as: _builtins.str
+    @_builtins.property
+    def online_until(self) -> Global___NullableTimestamp: ...
+    def __init__(
+        self,
+        *,
+        access_as: _builtins.str = ...,
+        online_until: Global___NullableTimestamp | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["online_until", b"online_until"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["access_as", b"access_as", "online_until", b"online_until"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___GetShareUserResponse: _TypeAlias = GetShareUserResponse  # noqa: Y015
 
 @_typing.final
 class UpdateShareRequest(_message.Message):

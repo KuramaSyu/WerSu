@@ -125,7 +125,8 @@ class ShareAccessServiceABC(ABC):
         """
         Access a share entity for a note. For this, the provided share ID is used.
         It checks if the share exists, then if the share user has access to the shared note,
-        and if thats the case, returns the share entity. 
+        and if thats the case, returns the share entity. It also fetches the note entity
+        which is associated with the share
 
         Raises
         --------
@@ -133,6 +134,8 @@ class ShareAccessServiceABC(ABC):
         `PermissionError`: If the user does not have permission to access the share entity.
         """
         ...
+
+
 
 class SharingServiceABC(ABC):
     @abstractmethod
