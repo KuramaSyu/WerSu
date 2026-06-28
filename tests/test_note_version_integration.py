@@ -1,98 +1,16 @@
 from dataclasses import replace
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
-from src.api.user_context import UserContextABC
-from src.db.entities.directory.directory import DirectoryEntity
-from src.db.entities.note.embedding import NoteEmbeddingEntity
 from src.db.entities.note.metadata import NoteEntity
-from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.db.repos.note.note import NoteRepoFacade, UserContext
 from src.db.repos.note.permission import NotePermissionRepoInMemory
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.table import Table
 from src.utils import logging_provider
 
-from .fixtures import db, dsn, test_user, user_repo
-
-
-class _TestDirectoryRepo(DirectoryRepo):
-    """Minimal directory repo for versioning integration tests."""
-
-    @property
-    def _default_directory_name(self) -> str:
-        return self.get_default_directory_specs()[0].name
-
-    async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
-        raise NotImplementedError()
-
-    async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
-        return DirectoryEntity(id=id, name=self._default_directory_name)
-
-    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
-        return entity
-
-    async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
-        return [f"{self._default_directory_name}-{user.user_id}"]
-
-    async def fetch_all_directories(self) -> List[DirectoryEntity]:
-        return []
-
-    async def list_note_directory_ids(self, note_id: str) -> List[str]:
-        return []
-
-    async def delete_directory(self, entity: DirectoryEntity) -> bool:
-        raise NotImplementedError()
-
-    async def resolve_files_of_directory(
-        self,
-        directory_id: Optional[str],
-        actor: UserContextABC,
-        max_depth: int = 10,
-    ) -> List[str]:
-        return []
-
-
-class _FakeEmbeddingGenerator:
-    """Lightweight embedding generator to avoid heavy model loads."""
-
-    @property
-    def model_name(self) -> str:
-        return "fake"
-
-    def generate(self, text: str):
-        return [0.0]
-
-    def tensor_to_sequence(self, tensor):
-        return [0.0]
-
-
-class _FakeEmbeddingRepo(NoteEmbeddingRepo):
-    """Stub embedding repo that avoids ML dependencies."""
-
-    def __init__(self) -> None:
-        self._generator = _FakeEmbeddingGenerator()
-
-    @property
-    def embedding_generator(self):
-        return self._generator
-
-    async def insert(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
-        return NoteEmbeddingEntity(note_id=note_id, model="fake", embedding=[0.0])
-
-    async def _update(self, set: NoteEmbeddingEntity, where: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
-        return NoteEmbeddingEntity(note_id=where.note_id, model="fake", embedding=[0.0])
-
-    async def update(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
-        return NoteEmbeddingEntity(note_id=note_id, model="fake", embedding=[0.0])
-
-    async def delete(self, embedding: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
-        return embedding
-
-    async def select(self, embedding: NoteEmbeddingEntity) -> List[NoteEmbeddingEntity]:
-        return [embedding]
+from .fixtures import db, dsn, test_user, user_repo, _FakeEmbeddingRepo, _TestDirectoryRepo
 
 
 async def test_note_versioning_records_snapshots_and_deltas(db, user_repo, test_user) -> None:

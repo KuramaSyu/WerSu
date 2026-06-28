@@ -34,7 +34,7 @@ GARAGE_ENDPOINT = "http://localhost:3900"
 
 
 # dont run this test by default
-pytestmark = [pytest.mark.proof_of_concept]
+pytestmark = [pytest.mark.proof_of_concept, pytest.mark.integration]
 
 def load_garage_config() -> dict[str, str]:
     """

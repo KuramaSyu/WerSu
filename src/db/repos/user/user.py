@@ -45,9 +45,10 @@ class UserPostgresRepo(UserRepoABC):
 
     async def insert(self, user: UserEntity) -> UserEntity:
         """Insert a new user and return the created entity with ID."""
-        query = "INSERT INTO users (discord_id, avatar, username, discriminator, email) VALUES ($1, $2, $3, $4, $5) RETURNING id"
-        user_id = await self.db.fetchrow(query, user.discord_id, user.avatar, user.username, user.discriminator, user.email)
-        user.id = user_id["id"]
+        query = "INSERT INTO users (discord_id, avatar, username, discriminator, email) VALUES ($1, $2, $3, $4, $5) RETURNING *"
+        record = await self.db.fetchrow(query, user.discord_id, user.avatar, user.username, user.discriminator, user.email)
+        user.id = record["id"]
+        user.type = record["type"]
         return user
 
     async def update(self, user: UserEntity) -> UserEntity:
@@ -63,44 +64,31 @@ class UserPostgresRepo(UserRepoABC):
     async def upsert(self, user: UserEntity) -> UserEntity:
         """Insert or update a user based on discord_id."""
         query = """
-            INSERT INTO users (discord_id, avatar, username, discriminator, email) 
-            VALUES ($1, $2, $3, $4, $5) 
-            ON CONFLICT (discord_id) DO UPDATE 
+            INSERT INTO users (discord_id, avatar, username, discriminator, email)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (discord_id) DO UPDATE
             SET avatar = $2, username = $3, discriminator = $4, email = $5
-            RETURNING id
+            RETURNING *
         """
-        user_id = await self.db.fetchrow(query, user.discord_id, user.avatar, user.username, user.discriminator, user.email)
-        user.id = user_id["id"]
+        record = await self.db.fetchrow(query, user.discord_id, user.avatar, user.username, user.discriminator, user.email)
+        user.id = record["id"]
+        user.type = record["type"]
         return user
 
     async def select(self, user_id: str) -> Optional[UserEntity]:
         """Select a user by ID."""
-        query = "SELECT id, discord_id, avatar, username, discriminator, email FROM users WHERE id = $1"
+        query = "SELECT id, discord_id, avatar, username, discriminator, email, type FROM users WHERE id = $1"
         row = await self.db.fetchrow(query, user_id)
         if row:
-            return UserEntity(
-                id=row["id"],
-                discord_id=row["discord_id"],
-                avatar=row["avatar"],
-                username=row["username"],
-                discriminator=row["discriminator"],
-                email=row["email"]
-            )
+            return UserEntity(**dict(row))
         return None
 
     async def select_by_discord_id(self, discord_id: int) -> Optional[UserEntity]:
         """Select a user by discord_id."""
-        query = "SELECT id, discord_id, avatar, username, discriminator, email FROM users WHERE discord_id = $1"
+        query = "SELECT id, discord_id, avatar, username, discriminator, email, type FROM users WHERE discord_id = $1"
         row = await self.db.fetchrow(query, discord_id)
         if row:
-            return UserEntity(
-                id=row["id"],
-                discord_id=row["discord_id"],
-                avatar=row["avatar"],
-                username=row["username"],
-                discriminator=row["discriminator"],
-                email=row["email"]
-            )
+            return UserEntity(**dict(row))
         return None
 
     async def delete(self, user_id: str) -> bool:

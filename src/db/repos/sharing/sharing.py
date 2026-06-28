@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import List
+from typing import List, Optional
 
 from asyncpg import Record
 
@@ -9,7 +9,7 @@ from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.table import TableABC
-from src.utils import asdict
+from src.utils import asdict, logging_provider as default_logging_provider
 from src.utils.dict_helper import drop_undefined
 
 
@@ -25,9 +25,13 @@ class SharingPostgresRepo(SharingRepoABC):
         "online_since, online_until, access_as"
     )
 
-    def __init__(self, table: TableABC[List[Record]], logging_provider: LoggingProvider) -> None:
+    def __init__(
+        self,
+        table: TableABC[List[Record]],
+        logging_provider: Optional[LoggingProvider] = None,
+    ) -> None:
         self._table = table
-        self.log = logging_provider(__name__, self)
+        self.log = (logging_provider or default_logging_provider)(__name__, self)
 
     async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
         if share.note_id in (UNDEFINED, None):

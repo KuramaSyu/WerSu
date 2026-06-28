@@ -103,7 +103,7 @@ async def test_create_and_remove_note(
         (str(rel.relation), str(rel.subject.object_type), str(rel.subject.object_id))
         for rel in (test_note_insert.permissions or [])
     }
-    assert replace(test_note_select, permissions=[]) == replace(test_note_insert, permissions=[])
+    assert replace(test_note_select, permissions=[], embeddings=[]) == replace(test_note_insert, permissions=[], embeddings=[])
     assert selected_permissions == inserted_permissions
 
     test_notes_delete = await note_repo_facade.delete(test_note_insert.note_id, ctx)

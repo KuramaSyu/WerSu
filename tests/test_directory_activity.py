@@ -17,34 +17,11 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from src.services.versioning import DirectoryActivityService
 from src.utils import logging_provider
 
-
-class _FakeVersionRepo(NoteVersionRepoABC):
-    def __init__(self, entries: dict[str, NoteVersionEntry]) -> None:
-        self._entries = entries
-
-    @property
-    def max_deltas_per_snapshot(self) -> int:
-        return 0
-
-    async def record_initial_snapshot(self, *args, **kwargs):  # type: ignore[override]
-        raise NotImplementedError()
-
-    async def append_version(self, *args, **kwargs):  # type: ignore[override]
-        raise NotImplementedError()
-
-    async def list_versions(self, note_id: str, limit: int, offset: int) -> List[NoteVersionEntry]:
-        entry = self._entries.get(note_id)
-        if entry is None:
-            return []
-        return [entry]
-
-    async def get_content_at_version(self, note_id: str, version_index: int):  # type: ignore[override]
-        raise NotImplementedError()
+from .fixtures import _FakeVersionRepo
 
 
 class _FakeDirectoryRepo(DirectoryRepo):

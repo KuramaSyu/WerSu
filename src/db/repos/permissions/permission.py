@@ -247,6 +247,10 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
             resource=converted.resource,
             permission=converted.relation,
             subject=converted.subject,
+            # Use fully-consistent reads so callers see their own writes.
+            # Without this, the default (minimize_latency) semantics can
+            # return stale denials immediately after `insert()`.
+            consistency=Consistency(fully_consistent=True),
         ))
         return response.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
 
@@ -545,6 +549,10 @@ class NotePermissionRepoInMemory(PermissionRepoABC):
     ) -> bool:
         permissions = await self.get_permissions(user=user, resource=resource)
         return permission in permissions
+
+    async def check(self, relationship: Relationship) -> bool:
+        # In-memory check resolves to whether any stored direct relationship matches the filter.
+        return bool(await self.lookup_relationships(relationship))
 
     async def get_permissions(self, user: UserContextABC, resource: ObjectRef) -> List[str]:
         assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"

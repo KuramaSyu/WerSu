@@ -1,16 +1,19 @@
 import asyncio
-from typing import Iterator, List, Optional
+from datetime import datetime
+from typing import Any, Iterator, List, Optional
 import asyncpg
 import pytest
 from testcontainers.postgres import PostgresContainer
 from src.api.user_context import UserContextABC
 from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.db.entities.directory.directory import DirectoryEntity
+from src.db.entities.note.embedding import NoteEmbeddingEntity
+from src.db.entities.note.versioning import NoteVersionEntry
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
+from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo, NoteEmbeddingRepo
 from src.db.repos.note.note import NoteRepoFacade, NoteRepoFacadeABC
-from src.db.repos.note.versioning import NoteVersionPostgresRepo
+from src.db.repos.note.versioning import NoteVersionPostgresRepo, NoteVersionRepoABC
 from src.db.repos.note.permission import NotePermissionRepoInMemory
 from src.db.table import Table
 from src.db.entities.user.user import UserEntity
@@ -19,6 +22,72 @@ from src.db.migrations.runner import MigrationRunner
 from src.db.repos.user.user import UserRepoABC
 from src.db.repos import UserPostgresRepo, Database
 from src.utils import logging_provider
+
+
+class _FakeEmbeddingGenerator:
+    """Lightweight embedding generator to avoid heavy ML model loads."""
+
+    @property
+    def model_name(self) -> str:
+        return "fake"
+
+    def generate(self, text: str) -> Any:
+        return [0.0]
+
+    def tensor_to_sequence(self, tensor: Any) -> List[float]:
+        return [0.0]
+
+
+class _FakeEmbeddingRepo(NoteEmbeddingRepo):
+    """Stub embedding repo used by tests that don't need real ML embeddings."""
+
+    def __init__(self) -> None:
+        self._generator = _FakeEmbeddingGenerator()
+
+    @property
+    def embedding_generator(self) -> _FakeEmbeddingGenerator:
+        return self._generator
+
+    async def insert(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
+        return NoteEmbeddingEntity(note_id=note_id, model="fake", embedding=[0.0])
+
+    async def _update(self, set: NoteEmbeddingEntity, where: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
+        return NoteEmbeddingEntity(note_id=where.note_id, model="fake", embedding=[0.0])
+
+    async def update(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
+        return NoteEmbeddingEntity(note_id=note_id, model="fake", embedding=[0.0])
+
+    async def delete(self, embedding: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
+        return embedding
+
+    async def select(self, embedding: NoteEmbeddingEntity) -> List[NoteEmbeddingEntity]:
+        return [embedding]
+
+
+class _FakeVersionRepo(NoteVersionRepoABC):
+    """Stub version repo that returns predefined entries per note."""
+
+    def __init__(self, entries: Optional[dict[str, NoteVersionEntry]] = None) -> None:
+        self._entries = entries or {}
+
+    @property
+    def max_deltas_per_snapshot(self) -> int:
+        return 0
+
+    async def record_initial_snapshot(self, *args, **kwargs):  # type: ignore[override]
+        raise NotImplementedError()
+
+    async def append_version(self, *args, **kwargs):  # type: ignore[override]
+        raise NotImplementedError()
+
+    async def list_versions(self, note_id: str, limit: int, offset: int) -> List[NoteVersionEntry]:
+        entry = self._entries.get(note_id)
+        if entry is None:
+            return []
+        return [entry]
+
+    async def get_content_at_version(self, note_id: str, version_index: int):  # type: ignore[override]
+        raise NotImplementedError()
 
 
 class _TestDirectoryRepo(DirectoryRepo):
