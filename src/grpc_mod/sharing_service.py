@@ -19,7 +19,7 @@ from src.api.sharing import ShareAccessServiceABC, SharingServiceABC as SharingS
 from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined, unwrap_undefined_or
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.repos.note.note import UnimplementedUserContext, UserContext
-from src.grpc_mod.converter.share_converters import note_share_to_note_share_entity, to_filter_share_note_entity, to_grpc_note_share, to_proto_note_share
+from src.grpc_mod.converter.share_converters import grpc_request_to_note_share_entity, grpc_note_share_to_domain, to_filter_share_note_entity, to_grpc_note_share, to_proto_note_share
 from src.grpc_mod.proto.note_pb2 import Note
 from src.grpc_mod.proto.sharing_pb2 import (
     AccessShareRequest,
@@ -76,11 +76,9 @@ class GrpcSharingService(SharingServiceServicer):
         """Create one share using the requester user_id for permission checks."""
         try:
             self._require_user_id(request.user_id)
-            if not request.HasField("share"):
-                raise ValueError("share is required")
 
             created = await self._sharing_service.create_share(
-                note_share_to_note_share_entity(request.share),
+                grpc_request_to_note_share_entity(request),
                 UserContext(request.user_id),
             )
             return to_grpc_note_share(created)
@@ -96,7 +94,7 @@ class GrpcSharingService(SharingServiceServicer):
                 raise ValueError("share is required")
 
             updated = await self._sharing_service.update_share(
-                note_share_to_note_share_entity(request.share),
+                grpc_note_share_to_domain(request.share),
                 UserContext(request.user_id),
             )
             return to_grpc_note_share(updated)
