@@ -10,3 +10,5 @@ loggers:
   httpcore.http11: ERROR
   httpx: ERROR
   httpcore: ERROR
+  src.services.sharing: DEBUG
+  src.db.repos.sharing.sharing: DEBUG
