@@ -1,9 +1,10 @@
 from datetime import datetime
 from sqlite3.dbapi2 import Timestamp
+from typing import Literal, cast
 
 from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
-from src.grpc_mod.proto.sharing_pb2 import AccessShareResponse, CreateShareRequest, NoteShare, NullableString, NullableTimestamp, ShareFilter
+from src.grpc_mod.proto.sharing_pb2 import SHARE_PERMISSION_READ, SHARE_PERMISSION_UNSPECIFIED, SHARE_PERMISSION_WRITE, AccessShareResponse, CreateShareRequest, NoteShare, NullableString, NullableTimestamp, ShareFilter, SharePermission
 
 def to_proto_note_share(share: NoteShareEntity) -> AccessShareResponse:
     """Convert a domain NoteShareEntity into a protobuf AccessShareResponse."""
@@ -11,17 +12,42 @@ def to_proto_note_share(share: NoteShareEntity) -> AccessShareResponse:
         share=to_grpc_note_share(share)
     )
 
-def request_to_note_share_entity(request: CreateShareRequest) -> NoteShareEntity:
+def domain_permission_to_grpc(permission: UndefinedOr[str]) -> SharePermission:
+    if permission is UNDEFINED or permission is None:
+        return SHARE_PERMISSION_UNSPECIFIED
+    if permission == "read":
+        return SHARE_PERMISSION_READ
+    if permission == "write":
+        return SHARE_PERMISSION_WRITE
+    raise ValueError(f"Invalid permission for a share: {permission}")
+
+def grpc_permission_to_domain(permission: SharePermission) -> UndefinedOr[Literal["read", "write"]]:
+    """Convert a gRPC permission into the domain representation.
+
+    Returns :data:`UNDEFINED` for ``SHARE_PERMISSION_UNSPECIFIED`` so that
+    update requests can omit the field to leave the existing permission
+    unchanged. Any other unknown enum value is rejected.
+    """
+    if permission == SHARE_PERMISSION_UNSPECIFIED:
+        return UNDEFINED
+    if permission == SHARE_PERMISSION_READ:
+        return "read"
+    if permission == SHARE_PERMISSION_WRITE:
+        return "write"
+    raise ValueError(f"Invalid permission for a share: {permission}")
+
+def grpc_request_to_note_share_entity(request: CreateShareRequest) -> NoteShareEntity:
     """Convert a CreateShareRequest into a NoteShareEntity for service layer consumption."""
     return NoteShareEntity(
         description=from_nullable_string(request, "description"),
         note_id=unwrap_undefined(request.note_id),
         online_since=from_nullable_timestamp(request, "online_since"),
         online_until=from_nullable_timestamp(request, "online_until"),
-        permission=unwrap_undefined(request.permission),
+        permission=grpc_permission_to_domain(request.permission),
+        created_by=unwrap_undefined(request.user_id),
     )
 
-def note_share_to_note_share_entity(share: NoteShare) -> NoteShareEntity:
+def grpc_note_share_to_domain(share: NoteShare) -> NoteShareEntity:
     """Convert a protobuf NoteShare into a domain NoteShareEntity."""
     return NoteShareEntity(
         id=share.id or UNDEFINED,
@@ -32,6 +58,7 @@ def note_share_to_note_share_entity(share: NoteShare) -> NoteShareEntity:
         online_since=from_nullable_timestamp(share, "online_since"),
         online_until=from_nullable_timestamp(share, "online_until"),
         access_as=unwrap_undefined(share.access_as),  # this is a backend property only
+        permission=grpc_permission_to_domain(share.permission)
     )
 
 
@@ -60,6 +87,7 @@ def to_grpc_note_share(share: NoteShareEntity | None) -> NoteShare:
         online_since=to_proto_nullable_timestamp(share.online_since),
         online_until=to_proto_nullable_timestamp(share.online_until),
         access_as=unwrap_undefined(share.access_as),  # this is a backend property only
+        permission=domain_permission_to_grpc(share.permission)
     )
 
 
@@ -117,10 +145,8 @@ def to_proto_nullable_timestamp(value: UndefinedNoneOr[datetime]) -> NullableTim
 
 
 def to_proto_timestamp(value: UndefinedOr[datetime]) -> Timestamp | None:
-    """Convert a domain datetime into protobuf Timestamp."""
+    """Convert a domain datetime into protobuf Timestamp. Since the protobuf Timestamp is
+    just a type wrapper for a datetime, we just cast it"""
     if value is UNDEFINED or not isinstance(value, datetime):
         return None
-
-    timestamp = Timestamp()
-    timestamp.FromDatetime(value)
-    return timestamp
+    return cast(Timestamp, value)
