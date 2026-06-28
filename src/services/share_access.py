@@ -33,7 +33,7 @@ class ShareAccessService(ShareAccessServiceABC):
         )
         self._log.debug(f"Share access check for share {share_id} on note {note_id} with permissions {permissions}")
         
-        if "viewer" in permissions:
+        if "reader" in permissions:
             share.permission = "read"
         elif "writer" in permissions:
             share.permission = "write"
