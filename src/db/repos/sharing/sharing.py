@@ -4,6 +4,7 @@ from typing import List
 from asyncpg import Record
 
 from src.api.sharing import SharingRepoABC
+from src.api.types import LoggingProvider
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
@@ -24,8 +25,9 @@ class SharingPostgresRepo(SharingRepoABC):
         "online_since, online_until, access_as"
     )
 
-    def __init__(self, table: TableABC[List[Record]]):
+    def __init__(self, table: TableABC[List[Record]], logging_provider: LoggingProvider) -> None:
         self._table = table
+        self.log = logging_provider(__name__, self)
 
     async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
         if share.note_id in (UNDEFINED, None):
@@ -34,6 +36,8 @@ class SharingPostgresRepo(SharingRepoABC):
             raise ValueError("share.created_at is required")
         if share.created_by in (UNDEFINED, None):
             raise ValueError("share.created_by is required")
+        if share.access_as in (UNDEFINED, None):
+            raise ValueError("share.access_as is required")
 
         # permissions live in the permission repo e.g. SpiceDB -> remove it
         share.permission = UNDEFINED
@@ -63,7 +67,7 @@ class SharingPostgresRepo(SharingRepoABC):
         if not set_values:
             raise ValueError("At least one share field must be set for update")
         set_values.pop("permission", None)  # permissions live in the permission repo e.g. SpiceDB -> remove it
-
+        self.log.debug(f"Updating share {share.id} with values: {set_values}")
         record = await self._table.update(
             set=set_values,
             where={"id": share.id},
