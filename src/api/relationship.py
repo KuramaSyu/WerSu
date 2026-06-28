@@ -92,6 +92,14 @@ class ObjectRef:
     ) -> None:
         self.object_type = object_type
         self.object_id = object_id
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ObjectRef):
+            return NotImplemented
+        return str(self.object_type) == str(other.object_type) and self.object_id == other.object_id
+
+    def __hash__(self) -> int:
+        return hash((str(self.object_type), self.object_id))
       
 
 class SubjectRef(ObjectRef):
@@ -111,6 +119,15 @@ class PartialRelationship:
         self.relation = relation
         self.subject = subject
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, PartialRelationship):
+            return NotImplemented
+        return str(self.relation) == str(other.relation) and self.subject == other.subject
+
+    def __hash__(self) -> int:
+        return hash((str(self.relation), self.subject))
+
+
 class Relationship(PartialRelationship):
     """
     Representa a relationship which is used to store permissions and relations between notes, users and directories. 
@@ -127,6 +144,14 @@ class Relationship(PartialRelationship):
     ) -> None:
         self.resource = resource
         super().__init__(relation, subject)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Relationship):
+            return NotImplemented
+        return self.resource == other.resource and super().__eq__(other)
+
+    def __hash__(self) -> int:
+        return hash((self.resource, str(self.relation), self.subject))
 
     def __repr__(self):
         return f"Relationship(resource={self.resource.object_type}:{self.resource.object_id}, relation={self.relation}, subject={self.subject.object_type}:{self.subject.object_id})"
