@@ -35,6 +35,14 @@ jobs:
     - name: Test fast suite
       run: |
         pytest tests/
-    - name: Test SpiceDB integration suite
+    - name: Verify Docker is available
       run: |
-        pytest -m "integration and spicedb" tests/
+        docker info >/dev/null
+    - name: Pre-pull testcontainer images
+      run: |
+        docker pull pgvector/pgvector:0.8.1-pg18-trixie
+        docker pull authzed/spicedb:v1.47.1
+        docker pull dxflrs/garage:v2.3.0
+    - name: Test integration suite (Postgres + SpiceDB + Garage via testcontainers)
+      run: |
+        pytest -m "integration" tests/
