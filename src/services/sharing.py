@@ -1,17 +1,20 @@
 from dataclasses import replace
 from datetime import datetime
-from typing import List
+from typing import List, Literal
 from uuid import uuid7
 
 from src.api import PermissionRepoABC
 from src.api.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
 from src.api.sharing import SharingRepoABC, SharingServiceABC
+from src.api.types import LoggingProvider
 from src.api.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.user import UserEntity
+from src.db.repos.note.note import UserContext
 from src.db.repos.user.user import UserRepoABC
 from src.domain.permission_chain import HasNoteEditPermissionsPerm
+from src.services.permissions import PermissionServiceABC
 
 
 class DefaultSharingService(SharingServiceABC):
@@ -22,11 +25,16 @@ class DefaultSharingService(SharingServiceABC):
         sharing_repo: SharingRepoABC,
         user_repo: UserRepoABC,
         permission_repo: PermissionRepoABC,
+        permission_service: PermissionServiceABC,
+        logging_provider: LoggingProvider,
+
 
     ) -> None:
         self._user_repo = user_repo
         self._sharing_repo = sharing_repo
         self._permission_repo = permission_repo
+        self._permission_service = permission_service
+        self.log = logging_provider(__name__, self)
 
     async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
         if share.note_id in (UNDEFINED, None):
@@ -34,28 +42,31 @@ class DefaultSharingService(SharingServiceABC):
 
         await self._assert_can_edit_permissions(str(share.note_id), ctx)
 
-        # create a temporary user for that share which will get the permissions to read or write
-        user = UserEntity(
+        # create a temporary user that will hold the share's permission
+        access_user = UserEntity(
             id=uuid7().hex,
-            username=f"share-{share.acc}-{share.note_id}",
+            username=f"share-{share.created_by}--{share.note_id}",
             type="temporary",
         )
-        user = await self._user_repo.insert(user)
+        access_user = await self._user_repo.insert(access_user)
 
-        # create read or write permission for the temporary user
-        relation = {}
         permission = unwrap_undefined(share.permission)
         if permission == "read":
-            relation["relation"] = NoteRelationEnum.READER
+            relation = NoteRelationEnum.READER
         elif permission == "write":
-            relation["relation"] = NoteRelationEnum.WRITER
-        _relationships = await self._permission_repo.insert([Relationship(
+            relation = NoteRelationEnum.WRITER
+        else:
+            raise ValueError(f"Invalid permission for a share: {permission}")
+        await self._permission_repo.insert([Relationship(
             resource=ObjectRef("note", unwrap_undefined(share.note_id)),
-            subject=SubjectRef("user", user.id),
-            **relation
+            relation=relation,
+            subject=SubjectRef("user", access_user.id),
         )])
 
-        # set sane defaults - REPOs should normally not create any defaults. 
+        # the repo needs the access user on the entity before persisting
+        share.access_as = access_user.id
+
+        # apply sane defaults; repos should not invent values
         normalized = replace(
             share,
             id=UNDEFINED,
@@ -73,6 +84,11 @@ class DefaultSharingService(SharingServiceABC):
             raise ValueError(f"Share has no note_id: {share.id}")
 
         await self._assert_can_edit_permissions(str(current.note_id), ctx)
+
+        # swap the access user's reader/writer relation when the permission changes
+        if share.permission is not UNDEFINED and share.permission is not None:
+            await self._replace_share_permission(current, share.permission, ctx)
+
         return await self._sharing_repo.update_share(share, ctx)
 
     async def get_shares_by_id(self, share_ids: List[str], ctx: UserContextABC) -> List[NoteShareEntity]:
@@ -81,7 +97,12 @@ class DefaultSharingService(SharingServiceABC):
 
     async def get_shares(self, filter: FilterShareNote, ctx: UserContextABC) -> List[NoteShareEntity]:
         shares = await self._sharing_repo.get_shares(filter, ctx)
-        return await self._filter_editable_shares(shares, ctx)
+        shares = await self._filter_editable_shares(shares, ctx)
+        # permissions live in SpiceDB, not on the share row, so resolve them per-share
+        for share in shares:
+            await self._resolve_share_permission(share)
+
+        return shares
 
     async def delete_shares(self, share_ids: List[str], ctx: UserContextABC) -> None:
         if not share_ids:
@@ -143,3 +164,82 @@ class DefaultSharingService(SharingServiceABC):
             filtered.append(share)
 
         return filtered
+
+    async def _resolve_share_permission(self, share: NoteShareEntity) -> NoteShareEntity:
+        """Populate ``share.permission`` from the access user's SpiceDB relation."""
+        note_id = share.note_id
+        access_as = share.access_as
+        if note_id in (UNDEFINED, None) or access_as in (UNDEFINED, None):
+            return share
+
+        share.permission = await self._get_share_permission(str(note_id), str(access_as))
+        return share
+
+    async def _get_share_permission(
+        self,
+        note_id: str,
+        access_as: str,
+    ) -> UndefinedOr[Literal["read", "write"]]:
+        """Map the access user's effective permission to ``"read"``/``"write"``.
+
+        ``writer`` implies both read and write via the schema, so check it first.
+        """
+        permissions = await self._permission_repo.get_permissions(
+            user=UserContext(user_id=access_as),
+            resource=ObjectRef("note", note_id),
+        )
+        self.log.debug(
+            f"Resolving share permission (note {note_id}, access_as {access_as}): permissions={permissions}"
+        )
+        if "writer" in permissions:
+            return "write"
+        if "reader" in permissions:
+            return "read"
+        return UNDEFINED
+
+    async def _replace_share_permission(
+        self,
+        current: NoteShareEntity,
+        new_permission: Literal["read", "write"],
+        ctx: UserContextABC,
+    ) -> None:
+        """Swap the access user's reader/writer relation on the shared note.
+
+        Delegates to :meth:`PermissionServiceABC.replace_relationships` so all
+        other relations on the note are preserved.
+        """
+        if current.note_id in (UNDEFINED, None):
+            raise ValueError(f"Share has no note_id: {current.id}")
+        access_as = current.access_as
+        if access_as in (UNDEFINED, None):
+            raise ValueError(f"Share has no access_as: {current.id}")
+
+        note_id = str(current.note_id)
+        access_as_id = str(access_as)
+        new_relation = (
+            NoteRelationEnum.READER
+            if new_permission == "read"
+            else NoteRelationEnum.WRITER
+        )
+
+        resource = ObjectRef("note", note_id)
+        subject = SubjectRef("user", access_as_id)
+        new_relationship = Relationship(resource=resource, relation=new_relation, subject=subject)
+
+        # keep every existing relation except the access user's reader/writer entry
+        keep: list[Relationship] = []
+        for rel in await self._permission_repo.list_relationships(resource):
+            is_access_user_share = (
+                str(rel.subject.object_type) == "user"
+                and str(rel.subject.object_id) == access_as_id
+                and str(rel.relation) in {str(NoteRelationEnum.READER), str(NoteRelationEnum.WRITER)}
+            )
+            if not is_access_user_share:
+                keep.append(rel)
+        keep.append(new_relationship)
+
+        await self._permission_service.replace_relationships(
+            resource=resource,
+            relationships=keep,
+            actor=ctx,
+        )

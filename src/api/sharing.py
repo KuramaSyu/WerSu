@@ -171,6 +171,9 @@ class SharingServiceABC(ABC):
         - description
         - online_since
         - online_until
+        - permission: when provided, the underlying SpiceDB relationship for the
+          share's ``access_as`` user is replaced so the effective access matches
+          the new value (``"read"`` or ``"write"``)
 
         Raises
         --------
