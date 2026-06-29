@@ -185,7 +185,7 @@ async def _integration_env_ctx() -> AsyncIterator[IntegrationEnv]:
         )
         await migration_runner.run_pending_migrations()
 
-        permission_repo = NotePermissionRepoSpicedb(client=spicedb_client)
+        permission_repo = NotePermissionRepoSpicedb(client=spicedb_client, consistent=True)
         directory_repo = DirectoryRepoSpicedbPostgres(
             db=db,
             permission_repo=permission_repo,

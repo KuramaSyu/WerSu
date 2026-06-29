@@ -142,7 +142,7 @@ async def permission_repo() -> NotePermissionRepoSpicedb:
         )
         schema = SPICEDB_SCHEMA_PATH.read_text(encoding="utf-8")
         await _wait_until_spicedb_ready(client, schema)
-        repo = NotePermissionRepoSpicedb(client=client)
+        repo = NotePermissionRepoSpicedb(client=client, consistent=True)
 
         # Wrap `insert` so duplicate writes are silently ignored. The test
         # pre-writes some relationships (e.g. `attachment#parent_note@note`)

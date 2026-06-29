@@ -53,7 +53,7 @@ async def permission_repo() -> AsyncIterator[NotePermissionRepoSpicedb]:
     with SpiceDBContainer(image=SPICEDB_IMAGE) as spicedb:
         client = create_client(spicedb.get_endpoint(), spicedb.get_secret_key())
         await wait_until_spicedb_ready(client, load_spicedb_schema())
-        yield NotePermissionRepoSpicedb(client=client)
+        yield NotePermissionRepoSpicedb(client=client, consistent=True)
 
 
 async def test_resolve_files_of_directory_spicedb(permission_repo: NotePermissionRepoSpicedb) -> None:

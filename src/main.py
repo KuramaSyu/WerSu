@@ -186,7 +186,7 @@ async def serve():
 
     ### Setup Repos ###
     user_repo = UserPostgresRepo(db=db)
-    permission_repo = NotePermissionRepoSpicedb(client=spicedb_client)
+    permission_repo = NotePermissionRepoSpicedb(client=spicedb_client, consistent=True)
 
     directory_repo = DirectoryRepoSpicedbPostgres(
         db=db,
