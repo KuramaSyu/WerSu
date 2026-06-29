@@ -26,6 +26,7 @@ from src.db.repos.note.note import NoteRepoFacade
 from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.db.repos.user.user import UserPostgresRepo
+from src.db.repos.user.user_action import UserActionPostgresRepo
 from src.db.table import Table
 from src.services.permissions import PermissionServiceRepo
 from src.services.sharing import DefaultSharingService
@@ -144,12 +145,22 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             ),
             logging_provider=logging_provider,
         )
+        user_action_repo = UserActionPostgresRepo(
+            table=Table(
+                db=db,
+                table_name="user_action",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            logging_provider=logging_provider,
+        )
         sharing_service = DefaultSharingService(
             sharing_repo=sharing_repo,
             user_repo=user_repo,
             permission_repo=permission_repo,
             permission_service=permission_service,
             logging_provider=logging_provider,
+            user_action_repo=user_action_repo,
         )
 
         try:
