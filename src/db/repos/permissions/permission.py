@@ -13,7 +13,7 @@ import grpc
 from src.api.permission_repo import PermissionRepoABC
 from src.api.service_unavailable_error import ServiceUnavailableError
 from src.api import PermissionConverterABC, ObjectRef, SubjectRef, RelationEnum, Relationship, UserContextABC, ObjectTypeEnum, RelationName, NoteRelationEnum
-from src.api.undefined import unwrap_undefined
+from src.api.undefined import is_undefined, unwrap_undefined
 from src.db.table import TableABC
 from src.utils import asdict
 
@@ -179,28 +179,42 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
     @handle_error
     async def delete(self, relationship: Relationship) -> Relationship:
         # spicedb does not support bulk delete, so we need to delete one by one
-        deleted_relationships = []
-        filter = RelationshipFilter()
 
         def get_filter(rel: Relationship) -> RelationshipFilter:
-            # build a filter, where nearly everything can be a wildcard, when UNDEFINED is provided
-            filter = RelationshipFilter()
-            filter.resource_type = rel.resource.object_type
-            if rel.resource.object_id != UNDEFINED:
-                filter.optional_resource_id = str(rel.resource.object_id)
-            if rel.relation != UNDEFINED:
-                filter.optional_relation = rel.relation
-            if rel.subject.object_type != UNDEFINED:
-                filter.optional_subject_filter.subject_type = rel.subject.object_type
-            if rel.subject.object_id != UNDEFINED:
-                filter.optional_subject_filter.optional_subject_id = str(rel.subject.object_id)
-            return filter
+            # Build a wildcard-aware filter: every field except
+            # `resource_type` is optional, and `UNDEFINED` placeholders
+            # match every value for that field.  Always read attributes
+            # through `is_undefined()` first so callers can pass real
+            # ``ObjectRef``/``SubjectRef`` objects whose ID slots are
+            # still ``UNDEFINED``.
+            relation_filter = RelationshipFilter()
+
+            # resource_type is the only required field on the filter
+            if is_undefined(rel.resource) or is_undefined(rel.resource.object_type):
+                raise ValueError(
+                    "delete() requires a concrete resource.object_type; "
+                    "got UNDEFINED"
+                )
+            relation_filter.resource_type = rel.resource.object_type
+            if not is_undefined(rel.resource.object_id):
+                relation_filter.optional_resource_id = str(rel.resource.object_id)
+            if not is_undefined(rel.relation):
+                relation_filter.optional_relation = rel.relation
+            if not is_undefined(rel.subject.object_type):
+                relation_filter.optional_subject_filter.subject_type = (
+                    rel.subject.object_type
+                )
+            if not is_undefined(rel.subject.object_id):
+                relation_filter.optional_subject_filter.optional_subject_id = (
+                    str(rel.subject.object_id)
+                )
+            return relation_filter
 
 
         result = await self.client.DeleteRelationships(
             DeleteRelationshipsRequest(
                 relationship_filter=get_filter(relationship)
-            )
+            ),
         )
 
         assert result.DELETION_PROGRESS_COMPLETE
