@@ -68,9 +68,21 @@ class SharingPostgresRepo(SharingRepoABC):
                 access_as=UNDEFINED,
             )
         )
+        # permissions live in the permission repo e.g. SpiceDB -> remove it
+        # also prevent an empty SET clause
+        set_values.pop("permission", None)
         if not set_values:
-            raise ValueError("At least one share field must be set for update")
-        set_values.pop("permission", None)  # permissions live in the permission repo e.g. SpiceDB -> remove it
+            self.log.debug(
+                f"update_share({share.id!r}) has no SQL-persisted field changes; "
+                f"returning the current row"
+            )
+            current = await self._table.select_row(
+                where={"id": share.id},
+                select=self._returning,
+            )
+            if not current:
+                raise ValueError(f"Share not found: {share.id}")
+            return self._from_record(current)
         self.log.debug(f"Updating share {share.id} with values: {set_values}")
         record = await self._table.update(
             set=set_values,
