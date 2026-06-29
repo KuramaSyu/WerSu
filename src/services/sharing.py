@@ -7,7 +7,7 @@ from src.api import PermissionRepoABC
 from src.api.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
 from src.api.sharing import SharingRepoABC, SharingServiceABC
 from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
+from src.api.undefined import UNDEFINED, UndefinedOr, unwrap_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.user import UserEntity
@@ -108,12 +108,36 @@ class DefaultSharingService(SharingServiceABC):
         if not share_ids:
             raise ValueError("At least one share_id is required")
 
+        # test permissions for all shares before deleting any
         shares = await self._sharing_repo.get_shares_by_id(share_ids, ctx)
         note_ids = self._collect_note_ids(shares)
         for note_id in note_ids:
             await self._assert_can_edit_permissions(note_id, ctx)
 
+        # delete shares from DB
         await self._sharing_repo.delete_shares(share_ids, ctx)
+
+        for share in shares:
+            if share.note_id in (UNDEFINED, None):
+                raise ValueError(f"Share has no note_id: {share.id}")
+            if share.access_as in (UNDEFINED, None):
+                raise ValueError(f"Share has no access_as: {share.id}")
+            
+            # delete the permissions of the access user
+            await self._permission_repo.delete(
+                Relationship(
+                    resource=UNDEFINED,
+                    relation=UNDEFINED,
+                    subject=SubjectRef("user", str(share.access_as)),
+            ))
+
+            # delete the share
+            await self._sharing_repo.delete_shares([str(share.id)], ctx)
+
+            # delete the temporary access user
+            await self._user_repo.delete(str(share.access_as))
+
+
 
     def _collect_note_ids(self, shares: List[NoteShareEntity]) -> set[str]:
         """Return note IDs for permission checks and reject broken share rows."""
