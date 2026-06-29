@@ -32,7 +32,7 @@ jobs:
     #     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test fast suite
       run: |
-        uv run pytest tests/ -m "not poc"
+        uv run pytest tests/
     - name: Verify Docker is available
       run: |
         docker info >/dev/null
