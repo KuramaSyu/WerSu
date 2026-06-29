@@ -26,6 +26,8 @@ from src.grpc_mod.proto.sharing_pb2 import (
     AccessShareResponse,
     CreateShareRequest,
     DeleteSharesRequest,
+    GetShareUserRequest,
+    GetShareUserResponse,
     GetSharesByIdRequest,
     GetSharesRequest,
     NoteShare,
@@ -46,6 +48,7 @@ from src.grpc_mod.converter import (
     to_object_ref,
     to_permission_object_type,
     to_permission_resource,
+    to_proto_share_user,
     to_relationship,
 )
 
@@ -70,6 +73,26 @@ class GrpcSharingService(SharingServiceServicer):
         except Exception as exc:
             self._handle_empty_exception(exc, context)
             return Note()
+
+    @log_service_call()
+    async def GetShareUser(
+        self,
+        request: GetShareUserRequest,
+        context: ServicerContext,
+    ) -> GetShareUserResponse:
+        """Return the temporary user id (and online-until) behind a share.
+
+        Used by public clients that need the access user id before they
+        can fetch the shared note.  The share id is the only input; no
+        ``user_id`` is required because the caller is anonymous.
+        """
+        try:
+            access_as, online_until = await self._share_access_service.get_share_user(
+                request.share_id
+            )
+            return to_proto_share_user(access_as, online_until)
+        except Exception as exc:
+            return self._handle_share_user_exception(exc, context)
 
     @log_service_call()
     async def CreateShare(self, request: CreateShareRequest, context: ServicerContext) -> NoteShare:
@@ -166,6 +189,15 @@ class GrpcSharingService(SharingServiceServicer):
         """Map service exceptions to gRPC status codes for NoteShare responses."""
         self._set_context_error(exc, context)
         return NoteShare()
+
+    def _handle_share_user_exception(
+        self,
+        exc: Exception,
+        context: ServicerContext,
+    ) -> GetShareUserResponse:
+        """Map service exceptions to gRPC status codes for GetShareUserResponse."""
+        self._set_context_error(exc, context)
+        return GetShareUserResponse()
 
     def _handle_empty_exception(self, exc: Exception, context: ServicerContext) -> None:
         """Map service exceptions to gRPC status codes for Empty responses."""
