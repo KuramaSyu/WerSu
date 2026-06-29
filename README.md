@@ -50,17 +50,17 @@ docker compose down; rm -r data; docker compose up --build -d; env PYTHONTRACEMA
 
 - Run the default test suite (integration tests are excluded by default):
     ```bash
-    pytest tests/
+    uv run pytest tests/
     ```
 
 - Run SpiceDB integration tests (requires Docker running, started automatically via testcontainers):
     ```bash
-    pytest -m "integration and spicedb" tests/
+    uv run pytest -m "integration" tests/
     ```
 
 - Optional: run everything (including integration):
     ```bash
-    pytest -o addopts='' tests/
+    uv run pytest -o addopts='' tests/
     ```
 
 - Optional: run proof of concepts (e.g. Garage test):
