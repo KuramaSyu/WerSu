@@ -1,6 +1,8 @@
+from datetime import datetime
 from typing import *
 from abc import ABC, abstractmethod
 
+from src.api.undefined import UndefinedNoneOr
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 
@@ -118,7 +120,7 @@ class SharingRepoABC(ABC):
 
 class ShareAccessServiceABC(ABC):
     """
-    A Service, which handles the access of a share. 
+    A Service, which handles the access of a share.
     """
     @abstractmethod
     async def access_share(self, share_id: str, ctx: Optional[UserContextABC]) -> NoteShareEntity:
@@ -132,6 +134,39 @@ class ShareAccessServiceABC(ABC):
         --------
         `ValueError`: If the provided share ID is invalid or if the share does not exist.
         `PermissionError`: If the user does not have permission to access the share entity.
+        """
+        ...
+
+    @abstractmethod
+    async def get_share_user(
+        self,
+        share_id: str,
+    ) -> Tuple[str, UndefinedNoneOr[datetime]]:
+        """Return the temporary user id that backs a share.
+
+        Looks up the share by id, extracts its ``access_as`` user and
+        the share's ``online_until`` value.  The access user is fetched
+        from the user store to ensure it still exists.
+
+        Parameters
+        ----------
+        share_id : str
+            The share id (typically the value from the public share URL).
+
+        Returns
+        -------
+        tuple
+            ``(access_as, online_until)`` where ``access_as`` is the
+            temporary user id and ``online_until`` mirrors the
+            ``shared.online_until`` column (``UNDEFINED`` if not set
+            on the share, ``None`` if explicitly NULL meaning "never
+            expires").
+
+        Raises
+        ------
+        ValueError
+            If the share id is empty, the share does not exist, or
+            the linked access user has been removed.
         """
         ...
 

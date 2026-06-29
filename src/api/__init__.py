@@ -4,3 +4,4 @@ from .service_unavailable_error import ServiceUnavailableError
 from .user_context import UserContextABC
 from .permission_repo import *
 from .relationship import *
+from .user_action import UserActionRepoABC
