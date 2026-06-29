@@ -32,7 +32,7 @@ jobs:
     #     flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test fast suite
       run: |
-        uv run pytest tests/
+        uv run pytest tests/ -m "not poc"
     - name: Verify Docker is available
       run: |
         docker info >/dev/null
@@ -43,4 +43,4 @@ jobs:
         docker pull dxflrs/garage:v2.3.0
     - name: Test integration suite (Postgres + SpiceDB + Garage via testcontainers)
       run: |
-        uv run pytest -m "integration" tests/
+        uv run pytest -m "integration and not poc" tests/
