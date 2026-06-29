@@ -1,16 +1,21 @@
 from dataclasses import replace
 from datetime import datetime
-from typing import List, Literal
+from typing import List, Literal, cast
 from uuid import uuid7
 
-from src.api import PermissionRepoABC
+from src.api import PermissionRepoABC, UserActionRepoABC
 from src.api.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
 from src.api.sharing import SharingRepoABC, SharingServiceABC
 from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED, UndefinedOr, unwrap_undefined, unwrap_undefined_or
+from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.user import UserEntity
+from src.db.entities.user.user_action import (
+    FilterUserAction,
+    UserActionEntity,
+    UserActionKind,
+)
 from src.db.repos.note.note import UserContext
 from src.db.repos.user.user import UserRepoABC
 from src.domain.permission_chain import HasNoteEditPermissionsPerm
@@ -27,13 +32,16 @@ class DefaultSharingService(SharingServiceABC):
         permission_repo: PermissionRepoABC,
         permission_service: PermissionServiceABC,
         logging_provider: LoggingProvider,
-
-
+        user_action_repo: UserActionRepoABC,
     ) -> None:
         self._user_repo = user_repo
         self._sharing_repo = sharing_repo
         self._permission_repo = permission_repo
         self._permission_service = permission_service
+        # The action repo is required: every share CRUD path touches it so
+        # the schedule is consistent with the share's expiry.  Tests that
+        # don't care about scheduling still inject a fake.
+        self._user_action_repo = user_action_repo
         self.log = logging_provider(__name__, self)
 
     async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
@@ -73,7 +81,15 @@ class DefaultSharingService(SharingServiceABC):
             created_at=unwrap_undefined_or(share.created_at, datetime.now()),
             created_by=ctx.user_id,
         )
-        return await self._sharing_repo.create_share(normalized, ctx)
+        created = await self._sharing_repo.create_share(normalized, ctx)
+
+        # schedule the "disable" action if the share has an explicit expiry.
+        await self._reconcile_share_actions(
+            access_as=access_user.id,
+            online_until=normalized.online_until,
+        )
+
+        return created
 
     async def update_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
         if share.id in (UNDEFINED, None):
@@ -89,7 +105,18 @@ class DefaultSharingService(SharingServiceABC):
         if share.permission is not UNDEFINED and share.permission is not None:
             await self._replace_share_permission(current, share.permission, ctx)
 
-        return await self._sharing_repo.update_share(share, ctx)
+        updated = await self._sharing_repo.update_share(share, ctx)
+
+        # re-evaluate scheduling only when the caller touched online_until.
+        # ``current.access_as`` is the canonical id (the share row owns it),
+        # since the caller's input share may not carry it.
+        if share.online_until is not UNDEFINED:
+            await self._reconcile_share_actions(
+                access_as=unwrap_undefined(current.access_as),
+                online_until=updated.online_until,
+            )
+
+        return updated
 
     async def get_shares_by_id(self, share_ids: List[str], ctx: UserContextABC) -> List[NoteShareEntity]:
         shares = await self._sharing_repo.get_shares_by_id(share_ids, ctx)
@@ -135,6 +162,10 @@ class DefaultSharingService(SharingServiceABC):
 
             # delete the share row
             await self._sharing_repo.delete_shares([str(share.id)], ctx)
+
+            # tear down any user_action rows targeting the temporary access user
+            # before removing the user itself.
+            await self._purge_actions_for_user(access_as)
 
             # delete the temporary access user
             await self._user_repo.delete(access_as)
@@ -269,3 +300,68 @@ class DefaultSharingService(SharingServiceABC):
             relationships=keep,
             actor=ctx,
         )
+
+    # ------------------------------------------------------------------
+    # user_action reconciliation
+    # ------------------------------------------------------------------
+
+    async def _reconcile_share_actions(
+        self,
+        *,
+        access_as: str,
+        online_until: UndefinedNoneOr[datetime],
+    ) -> None:
+        """Bring pending share actions in line with the share's expiry.
+
+        Rules:
+
+        * ``online_until is UNDEFINED`` -> the caller did not touch the
+          field; do nothing.
+        * ``online_until is None`` -> the share explicitly never expires;
+          any pending ``disable`` action is dropped, but already-executed
+          rows are left alone.
+        * concrete ``datetime`` -> ensure exactly one pending ``disable``
+          action exists at that timestamp; create it or reschedule it,
+          dropping any other pending ``disable`` rows for the user.
+        """
+        if online_until is UNDEFINED:
+            return
+
+        await self._drop_pending_disable(access_as)
+
+        if online_until is None:
+            return
+
+        await self._user_action_repo.add_action(
+            UserActionEntity(
+                user_id=access_as,
+                action="disable",
+                execute_at=online_until,
+            )
+        )
+
+    async def _drop_pending_disable(self, access_as: str) -> None:
+        """Remove every pending ``disable`` action for ``access_as``."""
+        pending = await self._user_action_repo.get_actions(
+            FilterUserAction(
+                user_id=access_as,
+                action=cast(UserActionKind, "disable"),
+                executed_at=None,
+            )
+        )
+        for action in pending:
+            if action.id in (UNDEFINED, None):
+                continue
+            await self._user_action_repo.remove_action(str(action.id))
+
+    async def _purge_actions_for_user(self, access_as: str) -> None:
+        """Remove every (pending or executed) action targeting ``access_as``.
+
+        Called when a share is deleted so the scheduler never fires
+        against an access user that no longer exists.
+        """
+        actions = await self._user_action_repo.get_actions_by_user(access_as)
+        for action in actions:
+            if action.id in (UNDEFINED, None):
+                continue
+            await self._user_action_repo.remove_action(str(action.id))
