@@ -114,28 +114,30 @@ class DefaultSharingService(SharingServiceABC):
         for note_id in note_ids:
             await self._assert_can_edit_permissions(note_id, ctx)
 
-        # delete shares from DB
-        await self._sharing_repo.delete_shares(share_ids, ctx)
-
+        # delete all shares separately to prevent partial deletes caused by failures 
+        # as good as possible. 
         for share in shares:
             if share.note_id in (UNDEFINED, None):
                 raise ValueError(f"Share has no note_id: {share.id}")
             if share.access_as in (UNDEFINED, None):
                 raise ValueError(f"Share has no access_as: {share.id}")
-            
-            # delete the permissions of the access user
+
+            access_as = str(share.access_as)
+
+            # UNDEFINED on the relation matches every relation the access user holds here.
             await self._permission_repo.delete(
                 Relationship(
-                    resource=UNDEFINED,
+                    resource=ObjectRef("note", str(share.note_id)),
                     relation=UNDEFINED,
-                    subject=SubjectRef("user", str(share.access_as)),
-            ))
+                    subject=SubjectRef("user", access_as),
+                )
+            )
 
-            # delete the share
+            # delete the share row
             await self._sharing_repo.delete_shares([str(share.id)], ctx)
 
             # delete the temporary access user
-            await self._user_repo.delete(str(share.access_as))
+            await self._user_repo.delete(access_as)
 
 
 
