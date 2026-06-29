@@ -1,16 +1,20 @@
 """
 POC for a local Garage S3 deployment.
 
+This is a proof-of-concept smoke test that lives under ``pocs/`` and is
+excluded from the default test runs (see ``pytest.ini`` -> ``-m poc``).
+
+Run it explicitly with:
+
+    uv run pytest pocs/test_garage_poc.py -m poc
+
 Expected environment file:
-    ../infrastructure/.garage.env
+    infrastructure/.garage.env
 
 Required variables:
     GARAGE_DEFAULT_ACCESS_KEY
     GARAGE_DEFAULT_SECRET_KEY
     GARAGE_DEFAULT_BUCKET
-
-Example:
-    pytest tests/test_garage_poc.py -v
 
 These tests validate the most basic S3 workflow:
     1. Upload an object.
@@ -34,7 +38,7 @@ GARAGE_ENDPOINT = "http://localhost:3900"
 
 
 # dont run this test by default
-pytestmark = [pytest.mark.proof_of_concept, pytest.mark.integration]
+pytestmark = [pytest.mark.poc, pytest.mark.integration]
 
 def load_garage_config() -> dict[str, str]:
     """
