@@ -1,172 +1,55 @@
-from datetime import datetime
-import logging
+"""Unit tests for :class:`DefaultSharingService`.
+
+The fakes used here (``_FakeSharingRepo``, ``_FakePermissionRepo``,
+``_FakePermissionService``, ``_FakeUserRepo``, ``_FakeUserActionRepo``)
+live in :mod:`tests.stubs.sharing`.  They are intentionally thin but
+rich enough to verify the action-reconciliation logic that the service
+runs after every share mutation.
+"""
+
+from datetime import datetime, timedelta
 
 import pytest
 
 from src.api.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
 from src.api.undefined import UNDEFINED
-from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
-from src.db.entities.user.user import UserEntity
-from src.services.permissions import PermissionServiceABC
+from src.db.entities.user.user_action import FilterUserAction, UserActionEntity
 from src.services.sharing import DefaultSharingService
+from tests.stubs.logging import silent_logger
+from tests.stubs.permission_repo import _FakePermissionRepo
+from tests.stubs.permission_service import _FakePermissionService
+from tests.stubs.sharing_repo import _FakeSharingRepo
+from tests.stubs.user_action_repo import _FakeUserActionRepo
+from tests.stubs.user_context import _UserContext
+from tests.stubs.user_repo import _FakeUserRepo
 
 
-class _UserContext(UserContextABC):
-    """Small user context for service tests."""
-
-    def __init__(self, user_id: str = "actor") -> None:
-        self._user_id = user_id
-
-    @property
-    def user_id(self) -> str:
-        return self._user_id
-
-
-class _FakeSharingRepo:
-    """In-memory sharing repo that records calls made by the service."""
-
-    def __init__(self, shares: list[NoteShareEntity] | None = None) -> None:
-        self.shares = shares or []
-        self.created_share = None
-        self.updated_share = None
-        self.deleted_ids = None
-        self.last_filter = None
-        self.get_shares_by_id_calls: list[list[str]] = []
-        self.get_shares_calls: list[FilterShareNote] = []
-
-    async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
-        self.created_share = share
-        return share
-
-    async def update_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
-        self.updated_share = share
-        return share
-
-    async def get_share_by_id(self, share_id: str, ctx: UserContextABC) -> NoteShareEntity:
-        shares = await self.get_shares_by_id([share_id], ctx)
-        if not shares:
-            raise ValueError(f"Share not found: {share_id}")
-        return shares[0]
-
-    async def get_shares_by_id(
-        self,
-        share_ids: list[str],
-        ctx: UserContextABC,
-    ) -> list[NoteShareEntity]:
-        self.get_shares_by_id_calls.append(share_ids)
-        return [share for share in self.shares if share.id in share_ids]
-
-    async def get_shares(
-        self,
-        filter: FilterShareNote,
-        ctx: UserContextABC,
-    ) -> list[NoteShareEntity]:
-        self.last_filter = filter
-        self.get_shares_calls.append(filter)
-        return self.shares
-
-    async def delete_shares(self, share_ids: list[str], ctx: UserContextABC) -> None:
-        self.deleted_ids = share_ids
-
-
-class _FakePermissionRepo:
-    """Permission fake that grants edit access for selected note IDs."""
-
-    def __init__(
-        self,
-        editable_note_ids: set[str],
-        permissions_by_access_user: dict[tuple[str, str], list[str]] | None = None,
-        stored_relationships: list[Relationship] | None = None,
-    ) -> None:
-        self.editable_note_ids = editable_note_ids
-        self.checked_note_ids: list[str] = []
-        self._relationships: list[Relationship] = list(stored_relationships or [])
-        # (note_id, access_as) -> effective permission strings
-        self._permissions_by_access_user: dict[tuple[str, str], list[str]] = (
-            permissions_by_access_user or {}
-        )
-
-    async def has_permission(self, user, permission: str, resource) -> bool:
-        self.checked_note_ids.append(str(resource.object_id))
-        return permission == "edit_permissions" and resource.object_id in self.editable_note_ids
-
-    async def insert(self, relationships: list[Relationship]) -> list[Relationship]:
-        for rel in relationships:
-            self._relationships.append(rel)
-        return list(relationships)
-
-    async def delete(self, relationship: Relationship) -> Relationship:
-        self._relationships = [
-            rel for rel in self._relationships
-            if not (
-                str(rel.resource.object_type) == str(relationship.resource.object_type)
-                and str(rel.resource.object_id) == str(relationship.resource.object_id)
-                and str(rel.relation) == str(relationship.relation)
-                and str(rel.subject.object_type) == str(relationship.subject.object_type)
-                and str(rel.subject.object_id) == str(relationship.subject.object_id)
-            )
-        ]
-        return relationship
-
-    async def list_relationships(self, resource: ObjectRef) -> list[Relationship]:
-        return [
-            rel for rel in self._relationships
-            if str(rel.resource.object_type) == str(resource.object_type)
-            and str(rel.resource.object_id) == str(resource.object_id)
-        ]
-
-    async def get_permissions(self, user, resource) -> list[str]:
-        return list(
-            self._permissions_by_access_user.get(
-                (str(resource.object_id), str(user.user_id)),
-                [],
-            )
-        )
-
-
-class _FakePermissionService(PermissionServiceABC):
-    """Permission service fake that records replace_relationships calls."""
-
-    def __init__(self) -> None:
-        self.replace_calls: list[tuple[ObjectRef, list[Relationship], UserContextABC]] = []
-
-    async def list_relationships(self, resource, actor):
-        raise NotImplementedError()
-
-    async def create_relationship(self, relationship, actor):
-        raise NotImplementedError()
-
-    async def delete_relationship(self, relationship, actor):
-        raise NotImplementedError()
-
-    async def replace_relationships(self, resource, relationships, actor):
-        self.replace_calls.append((resource, list(relationships), actor))
-        return list(relationships)
-
-
-class _FakeUserRepo:
-    """Minimal user repo stub for create_share tests."""
-
-    async def insert(self, user: UserEntity) -> UserEntity:
-        return user
-
-
-def _silent_logger(name: str, owner=None) -> logging.Logger:
-    return logging.getLogger(name)
+# ---------------------------------------------------------------------------
+# Builders
+# ---------------------------------------------------------------------------
 
 
 def _build_service(
     repo: _FakeSharingRepo,
     permissions: _FakePermissionRepo,
     permission_service: _FakePermissionService | None = None,
+    user_repo: _FakeUserRepo | None = None,
+    user_action_repo: Optional[_FakeUserActionRepo] = None,
 ) -> DefaultSharingService:
+    """Build a :class:`DefaultSharingService` with sensible test defaults.
+
+    ``user_action_repo`` defaults to a fresh empty fake so the action
+    tests are explicit about the dependency and other tests don't have
+    to think about it.
+    """
     return DefaultSharingService(
         sharing_repo=repo,
-        user_repo=_FakeUserRepo(),
+        user_repo=user_repo or _FakeUserRepo(),
         permission_repo=permissions,
         permission_service=permission_service or _FakePermissionService(),
-        logging_provider=_silent_logger,
+        logging_provider=silent_logger,
+        user_action_repo=user_action_repo or _FakeUserActionRepo(),
     )
 
 
@@ -175,7 +58,6 @@ def _share(
     note_id: str = "note-1",
     access_as: str = "access-user",
 ) -> NoteShareEntity:
-    """Create a complete share entity for service tests."""
     return NoteShareEntity(
         id=id,
         note_id=note_id,
@@ -185,8 +67,12 @@ def _share(
     )
 
 
+# ---------------------------------------------------------------------------
+# Existing CRUD behaviour (kept from the pre-refactor suite)
+# ---------------------------------------------------------------------------
+
+
 async def test_create_share_sets_defaults_in_service() -> None:
-    """Service owns application defaults before delegating persistence."""
     repo = _FakeSharingRepo()
     permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
     service = _build_service(repo, permissions)
@@ -203,7 +89,6 @@ async def test_create_share_sets_defaults_in_service() -> None:
 
 
 async def test_create_share_keeps_explicit_audit_values() -> None:
-    """Explicit audit values should not be overwritten by defaults."""
     repo = _FakeSharingRepo()
     permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
     service = _build_service(repo, permissions)
@@ -226,7 +111,6 @@ async def test_create_share_keeps_explicit_audit_values() -> None:
 
 
 async def test_get_shares_filters_unauthorized_entries() -> None:
-    """Read searches return only shares for notes the actor can manage."""
     repo = _FakeSharingRepo(
         [
             _share(id="allowed", note_id="note-allowed"),
@@ -243,7 +127,6 @@ async def test_get_shares_filters_unauthorized_entries() -> None:
 
 
 async def test_get_share_template_uses_get_shares() -> None:
-    """Single filtered fetches should flow through the plural fetch path."""
     repo = _FakeSharingRepo([_share(id="share-1", note_id="note-1")])
     permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
     service = _build_service(repo, permissions)
@@ -256,7 +139,6 @@ async def test_get_share_template_uses_get_shares() -> None:
 
 
 async def test_get_share_by_id_template_uses_get_shares_by_id() -> None:
-    """Single ID fetches should flow through the plural ID fetch path."""
     repo = _FakeSharingRepo([_share(id="share-1", note_id="note-1")])
     permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
     service = _build_service(repo, permissions)
@@ -268,7 +150,6 @@ async def test_get_share_by_id_template_uses_get_shares_by_id() -> None:
 
 
 async def test_update_share_denies_without_edit_permission() -> None:
-    """Mutations stay strict and raise when the actor cannot edit the note."""
     repo = _FakeSharingRepo([_share(id="share-1", note_id="note-denied")])
     permissions = _FakePermissionRepo(editable_note_ids=set())
     permission_service = _FakePermissionService()
@@ -281,7 +162,6 @@ async def test_update_share_denies_without_edit_permission() -> None:
 
 
 async def test_delete_shares_denies_without_edit_permission() -> None:
-    """Deleting any share requires edit permission on its note."""
     repo = _FakeSharingRepo([_share(id="share-1", note_id="note-denied")])
     permissions = _FakePermissionRepo(editable_note_ids=set())
     service = _build_service(repo, permissions)
@@ -293,7 +173,6 @@ async def test_delete_shares_denies_without_edit_permission() -> None:
 
 
 async def test_update_share_replaces_permission_via_permission_service() -> None:
-    """Changing the permission flows through permission_service.replace_relationships."""
     existing = Relationship(
         resource=ObjectRef("note", "note-1"),
         relation=NoteRelationEnum.READER,
@@ -327,7 +206,6 @@ async def test_update_share_replaces_permission_via_permission_service() -> None
 
 
 async def test_update_share_without_permission_does_not_touch_permission_service() -> None:
-    """Updates that don't change the permission leave the permission store alone."""
     existing = Relationship(
         resource=ObjectRef("note", "note-1"),
         relation=NoteRelationEnum.READER,
@@ -351,7 +229,6 @@ async def test_update_share_without_permission_does_not_touch_permission_service
 
 
 async def test_update_share_preserves_unrelated_relationships() -> None:
-    """Other note relations (e.g. owner) must be preserved when the share permission changes."""
     owner_rel = Relationship(
         resource=ObjectRef("note", "note-1"),
         relation=NoteRelationEnum.OWNER,
@@ -378,10 +255,290 @@ async def test_update_share_preserves_unrelated_relationships() -> None:
     resource, rels, _ = permission_service.replace_calls[0]
     assert resource == ObjectRef("note", "note-1")
     assert owner_rel in rels
-    # the old reader entry is gone, replaced by a writer entry
     assert existing_reader not in rels
     assert Relationship(
         resource=ObjectRef("note", "note-1"),
         relation=NoteRelationEnum.WRITER,
         subject=SubjectRef("user", "access-user"),
     ) in rels
+
+
+# ---------------------------------------------------------------------------
+# user_action reconciliation
+# ---------------------------------------------------------------------------
+
+
+async def test_create_share_schedules_disable_action_when_online_until_set() -> None:
+    """A share with a concrete ``online_until`` schedules a `disable` action."""
+    expires_at = datetime(2026, 7, 1, 12, 0, 0)
+    user_repo = _FakeUserRepo()
+    action_repo = _FakeUserActionRepo()
+    repo = _FakeSharingRepo()
+    permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
+    service = _build_service(
+        repo,
+        permissions,
+        user_repo=user_repo,
+        user_action_repo=action_repo,
+    )
+
+    created = await service.create_share(
+        NoteShareEntity(
+            note_id="note-1",
+            online_until=expires_at,
+            permission="read",
+        ),
+        _UserContext(),
+    )
+
+    assert len(user_repo.inserted) == 1
+    access_as = user_repo.inserted[0].id
+    assert created.access_as == access_as
+
+    assert len(action_repo.add_action_calls) == 1
+    action = action_repo.add_action_calls[0]
+    assert action.user_id == access_as
+    assert action.action == "disable"
+    assert action.execute_at == expires_at
+
+    # one disable row now stored, target user matches the access user
+    stored = action_repo.for_user(access_as)
+    assert len(stored) == 1
+    assert stored[0].execute_at == expires_at
+
+
+async def test_create_share_skips_action_when_online_until_none() -> None:
+    """``online_until = None`` means the share never expires; no scheduling."""
+    user_repo = _FakeUserRepo()
+    action_repo = _FakeUserActionRepo()
+    repo = _FakeSharingRepo()
+    permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
+    service = _build_service(
+        repo,
+        permissions,
+        user_repo=user_repo,
+        user_action_repo=action_repo,
+    )
+
+    await service.create_share(
+        NoteShareEntity(note_id="note-1", online_until=None, permission="read"),
+        _UserContext(),
+    )
+
+    assert action_repo.add_action_calls == []
+    assert action_repo.all() == []
+
+
+async def test_create_share_skips_action_when_online_until_undefined() -> None:
+    """``UNDEFINED`` for ``online_until`` is treated as "indefinite"."""
+    action_repo = _FakeUserActionRepo()
+    service = _build_service(
+        _FakeSharingRepo(),
+        _FakePermissionRepo(editable_note_ids={"note-1"}),
+        user_action_repo=action_repo,
+    )
+
+    await service.create_share(
+        NoteShareEntity(note_id="note-1", permission="read"),
+        _UserContext(),
+    )
+
+    assert action_repo.add_action_calls == []
+
+
+async def test_create_share_requires_user_action_repo() -> None:
+    """``user_action_repo`` is a required dependency; passing ``None`` raises."""
+    service = DefaultSharingService(
+        sharing_repo=_FakeSharingRepo(),
+        user_repo=_FakeUserRepo(),
+        permission_repo=_FakePermissionRepo(editable_note_ids={"note-1"}),
+        permission_service=_FakePermissionService(),
+        logging_provider=silent_logger,
+        user_action_repo=None,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises((TypeError, AttributeError)):
+        await service.create_share(
+            NoteShareEntity(
+                note_id="note-1",
+                online_until=datetime(2026, 7, 1),
+                permission="read",
+            ),
+            _UserContext(),
+        )
+
+
+async def test_update_share_replaces_pending_disable_when_online_until_changes() -> None:
+    """Setting a new ``online_until`` drops the old pending action and adds a fresh one."""
+    expires_at = datetime(2026, 7, 1, 12, 0, 0)
+    # pre-seed a pending disable that should be replaced
+    pre_seeded = UserActionEntity(
+        id="old-action",
+        user_id="access-user",
+        action="disable",
+        execute_at=expires_at - timedelta(days=1),
+    )
+    action_repo = _FakeUserActionRepo(initial=[pre_seeded])
+    repo = _FakeSharingRepo([_share(id="share-1", note_id="note-1", access_as="access-user")])
+    permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
+    service = _build_service(repo, permissions, user_action_repo=action_repo)
+
+    await service.update_share(
+        NoteShareEntity(id="share-1", online_until=expires_at),
+        _UserContext(),
+    )
+
+    # old action removed
+    assert "old-action" in action_repo.remove_action_calls
+    # new action added for the same user at the new timestamp
+    assert len(action_repo.add_action_calls) == 1
+    new_action = action_repo.add_action_calls[0]
+    assert new_action.user_id == "access-user"
+    assert new_action.action == "disable"
+    assert new_action.execute_at == expires_at
+    # the store now holds only the new action
+    assert action_repo.for_user("access-user") == [new_action]
+
+
+async def test_update_share_clears_pending_disable_when_online_until_set_to_none() -> None:
+    """Setting ``online_until = None`` removes any pending disable rows."""
+    pre_seeded = UserActionEntity(
+        id="pending-disable",
+        user_id="access-user",
+        action="disable",
+        execute_at=datetime(2026, 7, 1),
+    )
+    action_repo = _FakeUserActionRepo(initial=[pre_seeded])
+    repo = _FakeSharingRepo([_share(id="share-1", note_id="note-1", access_as="access-user")])
+    permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
+    service = _build_service(repo, permissions, user_action_repo=action_repo)
+
+    await service.update_share(
+        NoteShareEntity(id="share-1", online_until=None),
+        _UserContext(),
+    )
+
+    assert action_repo.remove_action_calls == ["pending-disable"]
+    assert action_repo.add_action_calls == []
+    assert action_repo.for_user("access-user") == []
+
+
+async def test_update_share_does_not_touch_actions_when_online_until_undefined() -> None:
+    """Updates that don't touch ``online_until`` must not touch scheduling."""
+    pre_seeded = UserActionEntity(
+        id="do-not-touch",
+        user_id="access-user",
+        action="disable",
+        execute_at=datetime(2026, 7, 1),
+    )
+    action_repo = _FakeUserActionRepo(initial=[pre_seeded])
+    repo = _FakeSharingRepo([_share(id="share-1", note_id="note-1", access_as="access-user")])
+    permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
+    service = _build_service(repo, permissions, user_action_repo=action_repo)
+
+    await service.update_share(
+        NoteShareEntity(id="share-1", description="new description"),
+        _UserContext(),
+    )
+
+    assert action_repo.remove_action_calls == []
+    assert action_repo.add_action_calls == []
+    assert action_repo.get_actions_calls == []
+    # original action untouched
+    assert action_repo.for_user("access-user")[0].id == "do-not-touch"
+
+
+async def test_delete_share_purges_pending_actions_for_access_user() -> None:
+    """Deleting a share removes every user_action row targeting its access user."""
+    pending = UserActionEntity(
+        id="pending-1",
+        user_id="access-user",
+        action="disable",
+        execute_at=datetime(2026, 7, 1),
+    )
+    already_done = UserActionEntity(
+        id="done-1",
+        user_id="access-user",
+        action="delete",
+        execute_at=datetime(2026, 6, 1),
+        executed_at=datetime(2026, 6, 1),
+    )
+    # unrelated action for a different user must stay put
+    other_user = UserActionEntity(
+        id="other-user-1",
+        user_id="somebody-else",
+        action="disable",
+        execute_at=datetime(2026, 7, 1),
+    )
+    action_repo = _FakeUserActionRepo(initial=[pending, already_done, other_user])
+    user_repo = _FakeUserRepo()
+    repo = _FakeSharingRepo([_share(id="share-1", note_id="note-1", access_as="access-user")])
+    permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
+    service = _build_service(
+        repo,
+        permissions,
+        user_repo=user_repo,
+        user_action_repo=action_repo,
+    )
+
+    await service.delete_shares(["share-1"], _UserContext())
+
+    # both rows for the access user are gone
+    assert sorted(action_repo.remove_action_calls) == ["done-1", "pending-1"]
+    # the unrelated user_action survives
+    assert action_repo.for_user("somebody-else") == [other_user]
+    # the get_actions_by_user lookup is exercised
+    assert "access-user" in action_repo.get_actions_by_user_calls
+    # the access user itself is deleted as before
+    assert user_repo.deleted == ["access-user"]
+    # and the share row is deleted
+    assert repo.deleted_ids == ["share-1"]
+
+
+async def test_delete_share_purges_actions_even_when_already_executed() -> None:
+    """Even already-executed actions are removed when the access user is deleted.
+
+    This avoids dangling references in the user_action table when the
+    scheduler drops rows whose target user has been removed.
+    """
+    executed = UserActionEntity(
+        id="executed-only",
+        user_id="access-user",
+        action="disable",
+        execute_at=datetime(2026, 6, 1),
+        executed_at=datetime(2026, 6, 1),
+    )
+    action_repo = _FakeUserActionRepo(initial=[executed])
+    repo = _FakeSharingRepo([_share(id="share-1", note_id="note-1", access_as="access-user")])
+    permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
+    service = _build_service(
+        repo,
+        permissions,
+        user_action_repo=action_repo,
+    )
+
+    await service.delete_shares(["share-1"], _UserContext())
+
+    assert action_repo.remove_action_calls == ["executed-only"]
+    assert action_repo.for_user("access-user") == []
+
+
+async def test_update_share_uses_get_actions_filter_to_find_pending_disable() -> None:
+    """The reconciler must query the repo with both ``user_id`` and ``action='disable'``."""
+    expires_at = datetime(2026, 7, 1)
+    action_repo = _FakeUserActionRepo()
+    repo = _FakeSharingRepo([_share(id="share-1", note_id="note-1", access_as="access-user")])
+    permissions = _FakePermissionRepo(editable_note_ids={"note-1"})
+    service = _build_service(repo, permissions, user_action_repo=action_repo)
+
+    await service.update_share(
+        NoteShareEntity(id="share-1", online_until=expires_at),
+        _UserContext(),
+    )
+
+    assert len(action_repo.get_actions_calls) == 1
+    filter_used: FilterUserAction = action_repo.get_actions_calls[0]
+    assert filter_used.user_id == "access-user"
+    assert filter_used.action == "disable"
+    # pending rows only (None => IS NULL)
+    assert filter_used.executed_at is None
