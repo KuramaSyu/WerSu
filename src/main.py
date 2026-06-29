@@ -30,6 +30,7 @@ from src.db.repos.attachments.attachments import (
     AttachmentsS3Repo,
 )
 from src.db.repos.user.user import UserPostgresRepo
+from src.db.repos.user.user_action import UserActionPostgresRepo
 from src.db.table import Table, setup_table_logging
 from src.grpc_mod.proto.attachments_pb2_grpc import add_AttachmentServiceServicer_to_server
 from src.grpc_mod.proto.note_pb2_grpc import (
@@ -159,6 +160,11 @@ async def serve():
         table_name="shared",
         id_fields=["id"],
     )
+    user_action_table = Table(
+        **common_table_kwargs,
+        table_name="user_action",
+        id_fields=["id"],
+    )
 
     # setup S3 connection
     s3_client = boto3.client(
@@ -223,6 +229,10 @@ async def serve():
         table=shared_table,
         logging_provider=logging_provider,
     )
+    user_action_repo = UserActionPostgresRepo(
+        table=user_action_table,
+        logging_provider=logging_provider,
+    )
 
     ### Setup services and inject repos ###
     attachment_service = AttachmentFacade(
@@ -255,11 +265,14 @@ async def serve():
         permission_repo=permission_repo,
         permission_service=permission_service,
         user_repo=user_repo,
+        user_action_repo=user_action_repo,
         logging_provider=logging_provider,
     )
     share_access_service: ShareAccessServiceABC = share_access.ShareAccessService(
         sharing_repo=sharing_repo,
         permission_repo=permission_repo,
+        user_repo=user_repo,
+        user_action_repo=user_action_repo,
         logger=logging_provider,
     )
 
