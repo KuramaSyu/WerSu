@@ -1,304 +1,160 @@
-"""Integration test coverage for `UserServiceRepo` with real infrastructure.
+"""Integration test coverage for ``UserService`` with real infrastructure.
 
-This module intentionally uses real Postgres and SpiceDB containers to validate
-the full runtime path for user creation bootstrap behavior:
+These tests exercise the full user-bootstrap path against real Postgres
+and SpiceDB containers to validate that:
 
-1. user is persisted in Postgres,
+1. the user is persisted in Postgres,
 2. default zettelkasten directories are created in Postgres,
-3. directory permission relationships are written/read via SpiceDB.
+3. directory permission relationships are written/read via SpiceDB,
+4. notes inherit the default directory when no parent is specified,
+5. notes respect an explicit parent directory when one is provided.
 
-These tests are marked as `integration` and `spicedb` and are excluded from the
-default test run configured in `pytest.ini`.
+The tests are marked ``integration`` and ``spicedb`` and are excluded
+from the default test run configured in ``pytest.ini``.
 """
 
-import asyncio
 from datetime import datetime
-from pathlib import Path
-from typing import AsyncIterator
+from typing import Awaitable, Callable, Iterable, Tuple, TypeVar
 
 import pytest
-from authzed.api.v1 import AsyncClient, WriteSchemaRequest
-from grpcutil import insecure_bearer_token_credentials
-from testcontainers.postgres import PostgresContainer
-from testcontainers_spicedb import SpiceDBContainer
 
-from src.api.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
-from src.db.entities.user.user import UserEntity
 from src.db.entities.note.metadata import NoteEntity
-from src.db.migrations.context import MigrationContext
-from src.db.migrations.runner import MigrationRunner
-from src.db.repos import Database
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
-from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.embedding import NoteEmbeddingRepo
-from src.db.repos.note.note import NoteRepoFacade
-from src.db.repos.note.note import UserContext
-from src.api import (
-    DirectoryRelationEnum,
+from src.db.repos.note.note import NoteRepoFacade, UserContext
+from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
+from src.services.user import UserService
+from tests.integration_helpers import (
     NoteRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
-    Relationship,
-    SubjectRef,
+    assert_user_has_admin_on_directory,
+    make_custom_directory,
+    make_user_entity,
+    user_service_env,
+    wait_until,
 )
-from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
-from src.db.repos.user.user import UserPostgresRepo
-from src.db.table import Table
-from src.services.user import UserService
-from src.utils import logging_provider
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
 
-SPICEDB_IMAGE = "authzed/spicedb:v1.47.1"
-POSTGRES_IMAGE = "pgvector/pgvector:0.8.1-pg18-trixie"
+
+EnvT = Tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
 
 
-def _create_postgres_dsn(postgres_container: PostgresContainer) -> str:
-    """Build a PostgreSQL DSN for a running Postgres test container."""
-    return (
-        f"postgresql://"
-        f"{postgres_container.username}:"
-        f"{postgres_container.password}@"
-        f"{postgres_container.get_container_host_ip()}:"
-        f"{postgres_container.get_exposed_port(5432)}/"
-        f"{postgres_container.dbname}"
-    )
-
-
-def _load_spicedb_schema() -> str:
-    """Load the canonical SpiceDB schema from the migrations directory."""
-    schema_path = Path(__file__).resolve().parents[1] / "src" / "db" / "migrations" / "schema.zed"
-    return schema_path.read_text(encoding="utf-8")
-
-
-async def _wait_until_spicedb_ready(client: AsyncClient, schema: str) -> None:
-    """Block until SpiceDB accepts schema writes.
-
-    Parameters
-    ----------
-    client : AsyncClient
-        SpiceDB API client.
-    schema : str
-        Zed schema text to submit as a readiness probe.
-
-    Raises
-    ------
-    RuntimeError
-        If SpiceDB does not become ready within the retry budget.
-    """
-    attempts = 30
-    retry_delay_s = 0.5
-    last_error: Exception | None = None
-
-    for _ in range(attempts):
-        try:
-            await client.WriteSchema(WriteSchemaRequest(schema=schema))
-            return
-        except Exception as exc:  # pragma: no cover - startup race only
-            last_error = exc
-            await asyncio.sleep(retry_delay_s)
-
-    raise RuntimeError("SpiceDB container did not become ready in time") from last_error
-
-
-async def _wait_until(
-    condition,
-    *,
-    timeout_s: float = 5.0,
-    interval_s: float = 0.1,
+async def test_create_user_bootstraps_default_directories(
+    user_service_env: EnvT,
 ) -> None:
-    """Wait until an async condition returns True."""
-    attempts = max(1, int(timeout_s / interval_s))
-    for _ in range(attempts):
-        if await condition():
-            return
-        await asyncio.sleep(interval_s)
-    raise AssertionError("Condition was not met within timeout")
+    """New users get the three default zettelkasten directories and admin rights.
 
-
-class _StubEmbeddingRepo(NoteEmbeddingRepo):
-    async def insert(self, note_id: str, title: str, content: str):
-        raise RuntimeError("_StubEmbeddingRepo.insert should not be called in this integration test")
-
-    async def update(self, set, where):
-        raise NotImplementedError
-
-    async def delete(self, embedding):
-        raise NotImplementedError
-
-    async def select(self, embedding):
-        return []
-    
-    async def _update(self, set, where):
-        raise NotImplementedError
-
-    @property
-    def embedding_generator(self):
-        class _Generator:
-            @property
-            def model_name(self) -> str:
-                return "stub"
-
-            def generate(self, text: str):
-                return []
-
-        return _Generator()
-
-
-@pytest.fixture(scope="function")
-async def user_service_env() -> AsyncIterator[
-    tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
-]:
-    """Provision a real `UserServiceRepo` integration environment.
-
-    The fixture starts both testcontainers, runs DB and SpiceDB migrations,
-    then yields fully wired concrete repositories and service instances.
-
-    Yields
-    ------
-    tuple[UserServiceRepo, DirectoryRepoSpicedbPostgres]
-        Service under test and directory repo used for post-assertions.
-    """
-    with PostgresContainer(
-        image=POSTGRES_IMAGE,
-        username="postgres",
-        password="postgres",
-        dbname="testdb",
-    ) as postgres, SpiceDBContainer(image=SPICEDB_IMAGE) as spicedb:
-        db = Database(_create_postgres_dsn(postgres), logging_provider, init_file="src/init.sql")
-        await db.init_db()
-
-        spicedb_client = AsyncClient(
-            spicedb.get_endpoint(),
-            insecure_bearer_token_credentials(spicedb.get_secret_key()),
-        )
-        await _wait_until_spicedb_ready(spicedb_client, _load_spicedb_schema())
-
-        migration_runner = MigrationRunner(
-            ctx=MigrationContext(db=db, spicedb_client=spicedb_client),
-            log_provider=logging_provider,
-        )
-        await migration_runner.run_pending_migrations()
-
-        permission_repo = NotePermissionRepoSpicedb(client=spicedb_client)
-        directory_repo = DirectoryRepoSpicedbPostgres(
-            db=db,
-            permission_repo=permission_repo,
-            spicedb_client=spicedb_client,
-        )
-        content_table = Table(
-            db=db,
-            table_name="note.content",
-            id_fields=["id"],
-            logging_provider=logging_provider,
-        )
-        note_repo = NoteRepoFacade(
-            db=db,
-            content_repo=NoteContentPostgresRepo(content_table),
-            embedding_repo=_StubEmbeddingRepo(),
-            permission_repo=permission_repo,
-            directory_repo=directory_repo,
-            logging_provider=logging_provider,
-        )
-        user_repo = UserPostgresRepo(db=db)
-        user_service = UserService(user_repo=user_repo, directory_repo=directory_repo)
-
-        yield user_service, directory_repo, note_repo, permission_repo
-
-        await db.close()
-
-
-async def test_create_user_bootstraps_default_directories_with_real_postgres_and_spicedb(
-    user_service_env: tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
-) -> None:
-    """Verify user bootstrap behavior with real Postgres and SpiceDB.
-
-    Assertions validate that:
-    - user creation succeeds,
-    - exactly the default directories are created,
-    - each directory metadata matches the configured default spec,
-    - admin permissions are attached for the creating user.
+    Each default directory must match its configured spec and the
+    creating user must end up with admin, write, and view permissions
+    on it (and a different user must not).
     """
     user_service, directory_repo, _, permission_repo = user_service_env
 
     created_user = await user_service.create_user(
-        UserEntity(
+        make_user_entity(
             discord_id=1357913579,
-            avatar="https://cdn.example/avatar.png",
             username="integration-user",
             discriminator="4321",
             email="integration@example.com",
         )
     )
+    if created_user.id is None:
+        pytest.fail(f"create_user() returned a user without an ID: {created_user!r}")
 
-    assert created_user.id is not None
-
+    # Round-trip read through the same service that wrote the user.
     fetched_user = await user_service.get_user(user_id=created_user.id)
-    assert fetched_user is not None
-    assert fetched_user.id == created_user.id
+    if fetched_user is None:
+        pytest.fail(
+            f"get_user(user_id={created_user.id!r}) returned None for the "
+            f"just-created user"
+        )
+    assert fetched_user.id == created_user.id, (
+        f"round-tripped user has a different ID: created={created_user.id!r} "
+        f"vs fetched={fetched_user.id!r}"
+    )
 
+    # All three default directories are created.
     directory_ids = await directory_repo.list_user_directory_ids(UserContext(created_user.id))
-    assert len(directory_ids) == 3
-
-    directories = [await directory_repo.fetch_directory(directory_id) for directory_id in directory_ids]
-    directories = [directory for directory in directories if directory is not None]
-    assert len(directories) == 3
-
-    default_specs = directory_repo.get_default_directory_specs()
-    by_name = {directory.name: directory for directory in directories}
-
-    for spec in default_specs:
-        assert spec.name in by_name
-        directory = by_name[spec.name]
-        assert directory.id is not None
-        assert directory.display_name == spec.display_name
-        assert directory.description == spec.description
-        assert isinstance(directory.relations, list)
-        assert any(
-            str(rel.relation) == DirectoryRelationEnum.ADMIN.value
-            and str(rel.subject.object_type) == ObjectTypeEnum.USER.value
-            and str(rel.subject.object_id) == str(created_user.id)
-            for rel in directory.relations
+    if len(directory_ids) != 3:
+        pytest.fail(
+            f"expected 3 default directories for user {created_user.id!r}, "
+            f"got {len(directory_ids)}: {directory_ids!r}"
         )
 
-        # check computed permissions via SpiceDB schema are working for admin relation
-        resource = ObjectRef(object_type=ObjectTypeEnum.DIRECTORY, object_id=str(directory.id))
-        async def _can_view() -> bool:
-            return await permission_repo.has_permission(UserContext(created_user.id), "view", resource)
+    directories = [
+        d
+        for d in await _gather(directory_repo.fetch_directory, directory_ids)
+        if d is not None
+    ]
+    if len(directories) != 3:
+        pytest.fail(
+            f"fetch_directory returned None for {len(directory_ids) - len(directories)} "
+            f"of the {len(directory_ids)} directory IDs: {directory_ids!r}"
+        )
 
-        await _wait_until(_can_view)
-        assert await permission_repo.has_permission(UserContext(created_user.id), "view", resource)
-        assert await permission_repo.has_permission(UserContext(created_user.id), "write", resource)
-        assert await permission_repo.has_permission(UserContext(created_user.id), "delete", resource)
-        assert not await permission_repo.has_permission(UserContext("another-user"), "view", resource)
+    by_name = {d.name: d for d in directories}
+    for spec in directory_repo.get_default_directory_specs():
+        if spec.name not in by_name:
+            pytest.fail(
+                f"missing default directory {spec.name!r}; "
+                f"available names: {sorted(by_name)!r}"
+            )
+        directory = by_name[spec.name]
+        if directory.id is None:
+            pytest.fail(
+                f"fetched directory {spec.name!r} has no ID: {directory!r}"
+            )
+        assert directory.display_name == spec.display_name, (
+            f"display_name mismatch for {spec.name!r}: "
+            f"expected {spec.display_name!r}, got {directory.display_name!r}"
+        )
+        assert directory.description == spec.description, (
+            f"description mismatch for {spec.name!r}: "
+            f"expected {spec.description!r}, got {directory.description!r}"
+        )
+
+        # Permissions become visible eventually; wait, then assert all of them.
+        await assert_user_has_admin_on_directory(
+            permission_repo, str(created_user.id), str(directory.id)
+        )
+        if await permission_repo.has_permission(
+            UserContext("another-user"),
+            "view",
+            ObjectRef(ObjectTypeEnum.DIRECTORY, str(directory.id)),
+        ):
+            pytest.fail(
+                f"unexpected 'view' permission for 'another-user' on directory "
+                f"{directory.id!r} ({spec.name!r})"
+            )
 
 
 async def test_insert_note_uses_default_fleeting_directory_when_parent_not_specified(
-    user_service_env: tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
+    user_service_env: EnvT,
 ) -> None:
+    """Notes without a parent attach to the default ``fleeting_notes`` directory."""
     user_service, directory_repo, note_repo, permission_repo = user_service_env
 
     created_user = await user_service.create_user(
-        UserEntity(
+        make_user_entity(
             discord_id=2468024680,
-            avatar="https://cdn.example/avatar-2.png",
             username="integration-user-2",
             discriminator="2222",
             email="integration2@example.com",
+            avatar="https://cdn.example/avatar-2.png",
         )
     )
-    assert created_user.id is not None
+    if created_user.id is None:
+        pytest.fail(f"create_user() returned a user without an ID: {created_user!r}")
 
-    directory_ids = await directory_repo.list_user_directory_ids(UserContext(created_user.id))
-    directories = [await directory_repo.fetch_directory(directory_id) for directory_id in directory_ids]
-    directories = [directory for directory in directories if directory is not None]
-    default_name = directory_repo.get_default_directory_specs()[0].name
-    default_dirs = [directory for directory in directories if directory.name == default_name]
-    assert len(default_dirs) == 1
-    default_directory = default_dirs[0]
-    assert default_directory.id is not None
+    default_directory = await _get_default_directory(directory_repo, created_user.id)
+    if default_directory.id is None:
+        pytest.fail(
+            f"default directory {default_directory.name!r} was created without an ID: "
+            f"{default_directory!r}"
+        )
 
     note = await note_repo.insert(
         NoteEntity(
@@ -309,57 +165,44 @@ async def test_insert_note_uses_default_fleeting_directory_when_parent_not_speci
         ),
         UserContext(created_user.id),
     )
-    assert note.note_id is not None
+    if note.note_id is None:
+        pytest.fail(f"insert() returned a note without an ID: {note!r}")
 
-    relationships = await permission_repo.list_relationships(
-        ObjectRef(object_type=ObjectTypeEnum.NOTE, object_id=str(note.note_id))
+    await wait_until(
+        lambda: _note_has_parent_directory(
+            permission_repo,
+            str(note.note_id),
+            str(default_directory.id),
+        ),
+        description=f"note {note.note_id!r} parent_directory == {default_directory.id!r}",
     )
-
-    async def _has_default_parent_relation() -> bool:
-        rels = await permission_repo.list_relationships(
-            ObjectRef(object_type=ObjectTypeEnum.NOTE, object_id=str(note.note_id))
-        )
-        return any(
-            str(rel.relation) == NoteRelationEnum.PARENT_DIRECTORY.value
-            and str(rel.subject.object_id) == str(default_directory.id)
-            for rel in rels
-        )
-
-    await _wait_until(_has_default_parent_relation)
-    assert await _has_default_parent_relation()
 
 
 async def test_insert_note_uses_specified_parent_directory_when_provided(
-    user_service_env: tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
+    user_service_env: EnvT,
 ) -> None:
+    """Notes with an explicit parent attach to that parent directory."""
     user_service, directory_repo, note_repo, permission_repo = user_service_env
 
     created_user = await user_service.create_user(
-        UserEntity(
+        make_user_entity(
             discord_id=1122334455,
-            avatar="https://cdn.example/avatar-3.png",
             username="integration-user-3",
             discriminator="3333",
             email="integration3@example.com",
+            avatar="https://cdn.example/avatar-3.png",
         )
     )
-    assert created_user.id is not None
+    if created_user.id is None:
+        pytest.fail(f"create_user() returned a user without an ID: {created_user!r}")
 
     custom_directory = await directory_repo.create_directory(
-        DirectoryEntity(
-            name="project_notes",
-            display_name="Project Notes",
-            description="Custom parent directory for explicit note placement.",
-            relations=[
-                Relationship(
-                    resource=ObjectRef(object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED),
-                    relation=DirectoryRelationEnum.ADMIN,
-                    subject=SubjectRef(object_type=ObjectTypeEnum.USER, object_id=str(created_user.id)),
-                )
-            ],
-        )
+        make_custom_directory(owner_user_id=str(created_user.id))
     )
-    assert custom_directory.id is not None
+    if custom_directory.id is None:
+        pytest.fail(
+            f"create_directory() returned a directory without an ID: {custom_directory!r}"
+        )
 
     note = await note_repo.insert(
         NoteEntity(
@@ -371,21 +214,59 @@ async def test_insert_note_uses_specified_parent_directory_when_provided(
         ),
         UserContext(created_user.id),
     )
-    assert note.note_id is not None
+    if note.note_id is None:
+        pytest.fail(f"insert() returned a note without an ID: {note!r}")
 
-    relationships = await permission_repo.list_relationships(
-        ObjectRef(object_type=ObjectTypeEnum.NOTE, object_id=str(note.note_id))
+    await wait_until(
+        lambda: _note_has_parent_directory(
+            permission_repo,
+            str(note.note_id),
+            str(custom_directory.id),
+        ),
+        description=f"note {note.note_id!r} parent_directory == {custom_directory.id!r}",
     )
 
-    async def _has_custom_parent_relation() -> bool:
-        rels = await permission_repo.list_relationships(
-            ObjectRef(object_type=ObjectTypeEnum.NOTE, object_id=str(note.note_id))
-        )
-        return any(
-            str(rel.relation) == NoteRelationEnum.PARENT_DIRECTORY.value
-            and str(rel.subject.object_id) == str(custom_directory.id)
-            for rel in rels
-        )
 
-    await _wait_until(_has_custom_parent_relation)
-    assert await _has_custom_parent_relation()
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+_T = TypeVar("_T")
+
+
+async def _gather(
+    coro_factory: Callable[[str], Awaitable[_T]], ids: Iterable[str]
+) -> list[_T]:
+    """Await a coroutine for each id in parallel."""
+    import asyncio
+    return await asyncio.gather(*(coro_factory(i) for i in ids))
+
+
+async def _get_default_directory(
+    directory_repo: DirectoryRepoSpicedbPostgres, user_id: str
+) -> DirectoryEntity:
+    """Return the user's first default directory (e.g. ``fleeting_notes``)."""
+    default_name = directory_repo.get_default_directory_specs()[0].name
+    ids = await directory_repo.list_user_directory_ids(UserContext(user_id))
+    for d in await _gather(directory_repo.fetch_directory, ids):
+        if d is not None and d.name == default_name:
+            return d
+    pytest.fail(
+        f"default directory {default_name!r} was not created for user {user_id!r}"
+    )
+
+
+async def _note_has_parent_directory(
+    permission_repo: NotePermissionRepoSpicedb,
+    note_id: str,
+    parent_directory_id: str,
+) -> bool:
+    """True when the note has a ``parent_directory`` relation to the given id."""
+    relationships = await permission_repo.list_relationships(
+        ObjectRef(ObjectTypeEnum.NOTE, note_id)
+    )
+    return any(
+        str(rel.relation) == NoteRelationEnum.PARENT_DIRECTORY.value
+        and str(rel.subject.object_id) == parent_directory_id
+        for rel in relationships
+    )
