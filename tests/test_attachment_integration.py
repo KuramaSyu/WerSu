@@ -1,20 +1,19 @@
-"""Integration tests for the attachment facade with real Postgres + SpiceDB + Garage."""
+"""Integration tests for the attachment facade with real Postgres + SpiceDB + Garage.
+
+Boilerplate (Garage container, SpiceDB container, idempotent
+``permission_repo`` insert wrapper) now lives in:
+
+* :mod:`tests.fixtures.garage` -> ``garage_config``, ``s3_client``
+* :mod:`tests.fixtures.spicedb` -> ``idempotent_permission_repo``
+
+The test body focuses on round-tripping a single attachment through
+``AttachmentFacade`` and verifying state is gone after the delete
+flow.
+"""
 
 from datetime import datetime
-from pathlib import Path
-import asyncio
-import socket
-import time
 
-import boto3
-import grpc
 import pytest
-from authzed.api.v1 import AsyncClient, WriteSchemaRequest
-from botocore.config import Config as BotoConfig
-from grpcutil import insecure_bearer_token_credentials
-from testcontainers.core.container import DockerContainer
-from testcontainers.core.waiting_utils import wait_container_is_ready
-from testcontainers_spicedb import SpiceDBContainer
 
 from src.api import (
     NoteRelationEnum,
@@ -30,137 +29,21 @@ from src.db.repos.attachments.attachments import (
     AttachmentsS3Repo,
 )
 from src.db.repos.note.note import UserContext
-from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
 from src.db.table import Table
 from src.services.attachments import AttachmentFacade
 from src.utils import logging_provider
 
 
-GARAGE_IMAGE = "dxflrs/garage:v2.3.0"
-GARAGE_S3_PORT = 3900
-GARAGE_CONFIG_PATH = "/etc/garage.toml"
-GARAGE_HOST_CONFIG = Path(__file__).resolve().parents[1] / "infrastructure" / "garage.toml"
-
-SPICEDB_IMAGE = "authzed/spicedb:v1.47.1"
-SPICEDB_SCHEMA_PATH = (
-    Path(__file__).resolve().parents[1] / "src" / "db" / "migrations" / "schema.zed"
-)
-
-TEST_BUCKET = "attachments"
-TEST_KEY_ID = "GK1a2b3c4d5e6f7g8h9"
-# Deterministic secret. `garage server --default-bucket` provisions a key
-# with these values automatically when GARAGE_DEFAULT_ACCESS_KEY /
-# GARAGE_DEFAULT_SECRET_KEY are set, and it grants that key read/write/owner
-# permissions on the bucket, so we don't need any RPC or HTTP admin calls.
-TEST_KEY_SECRET = "b21cd517badda12cde455f125d32babd253c2ebefebc48eb91064791fe9e2a9c"
-# The host-side infra/garage.toml ships with this rpc_secret. We forward it
-# so any future RPC commands inside the container authenticate.
-GARAGE_RPC_SECRET = "181daae763dbfaf1aa5d9f2780f959c890d8ceb21b271e3498028758547e5fa0"
-
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
 
 
-def _wait_for_garage(container: DockerContainer) -> None:
-    """Block until Garage's S3 port accepts TCP connections."""
-
-    @wait_container_is_ready(AssertionError)
-    def _poll() -> None:
-        host = container.get_container_host_ip()
-        port = container.get_exposed_port(GARAGE_S3_PORT)
-        with socket.create_connection((host, port), timeout=2):
-            return
-
-    _poll()
-
-
-async def _wait_until_spicedb_ready(client: AsyncClient, schema: str) -> None:
-    """Poll SpiceDB's WriteSchema until it accepts the schema (container up)."""
-    attempts = 30
-    retry_delay_s = 0.5
-    last_error: Exception | None = None
-    for _ in range(attempts):
-        try:
-            await client.WriteSchema(WriteSchemaRequest(schema=schema))
-            return
-        except Exception as exc:  # pragma: no cover - startup race only
-            last_error = exc
-            await asyncio.sleep(retry_delay_s)
-    raise RuntimeError("SpiceDB container did not become ready in time") from last_error
-
-
-@pytest.fixture(scope="session")
-def garage_config() -> dict[str, str]:
-    """Boot a Garage container and return its endpoint + credentials."""
-    container = DockerContainer(GARAGE_IMAGE)
-    # The image has no config baked in, so we bind-mount the dev config and
-    # let --default-bucket auto-create the access key + bucket via env vars.
-    container.with_volume_mapping(
-        host=str(GARAGE_HOST_CONFIG),
-        container=GARAGE_CONFIG_PATH,
-        mode="ro",
-    )
-    container.with_env("GARAGE_RPC_SECRET", GARAGE_RPC_SECRET)
-    container.with_env("GARAGE_DEFAULT_BUCKET", TEST_BUCKET)
-    container.with_env("GARAGE_DEFAULT_ACCESS_KEY", TEST_KEY_ID)
-    container.with_env("GARAGE_DEFAULT_SECRET_KEY", TEST_KEY_SECRET)
-    container.with_command(["/garage", "server", "--single-node", "--default-bucket"])
-    container.with_exposed_ports(GARAGE_S3_PORT)
-    container.start()
-    try:
-        _wait_for_garage(container)
-    except Exception:
-        container.stop()
-        raise
-
-    return {
-        "endpoint": f"http://{container.get_container_host_ip()}:{container.get_exposed_port(GARAGE_S3_PORT)}",
-        "access_key": TEST_KEY_ID,
-        "secret_key": TEST_KEY_SECRET,
-        "bucket": TEST_BUCKET,
-    }
-
-
-@pytest.fixture(scope="session")
-def s3_client(garage_config: dict[str, str]):
-    return boto3.client(
-        "s3",
-        endpoint_url=garage_config["endpoint"],
-        aws_access_key_id=garage_config["access_key"],
-        aws_secret_access_key=garage_config["secret_key"],
-        region_name="garage",
-        config=BotoConfig(retries={"max_attempts": 5, "mode": "standard"}),
-    )
-
-
+# Local alias kept for compatibility with the test signature below.
 @pytest.fixture(scope="function")
-async def permission_repo() -> NotePermissionRepoSpicedb:
-    """Boot a SpiceDB container, load the schema, yield a ready client."""
-    with SpiceDBContainer(image=SPICEDB_IMAGE) as spicedb:
-        client = AsyncClient(
-            spicedb.get_endpoint(),
-            insecure_bearer_token_credentials(spicedb.get_secret_key()),
-        )
-        schema = SPICEDB_SCHEMA_PATH.read_text(encoding="utf-8")
-        await _wait_until_spicedb_ready(client, schema)
-        repo = NotePermissionRepoSpicedb(client=client, consistent=True)
-
-        # Wrap `insert` so duplicate writes are silently ignored. The test
-        # pre-writes some relationships (e.g. `attachment#parent_note@note`)
-        # so that subsequent permission checks succeed; the production
-        # facade then re-inserts the same relationship and would otherwise
-        # raise `ALREADY_EXISTS`.
-        orig_insert = repo.insert
-
-        async def _insert_idempotent(relationships):
-            try:
-                return await orig_insert(relationships)
-            except grpc.aio.AioRpcError as exc:
-                if exc.code() == grpc.StatusCode.ALREADY_EXISTS:
-                    return relationships
-                raise
-
-        repo.insert = _insert_idempotent  # type: ignore[assignment]
-        yield repo
+async def permission_repo(
+    idempotent_permission_repo,
+):
+    """Alias around the canonical ``idempotent_permission_repo`` fixture."""
+    return idempotent_permission_repo
 
 
 @pytest.mark.asyncio
@@ -271,6 +154,3 @@ async def test_attachment_facade_with_postgres_and_garage(
     with pytest.raises(KeyError):
         await metadata_repo.get_metadata(str(stored.key))
         await facade.get_attachment(str(stored.key), user_ctx)  # should raise KeyError since both metadata and content are deleted
-
-
-# Temporary debug helper: invoke the test manually with prints

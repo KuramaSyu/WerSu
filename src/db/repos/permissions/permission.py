@@ -199,18 +199,17 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
     @handle_error
     async def insert(self, relationships: List[Relationship]) -> List[Relationship]:
         # SpiceDB bulk import API consumes a request stream; we send a single batched request.
-        # With `fully_consistent=True`, the call only resolves after SpiceDB has
-        # durably committed the tuples AND made them visible to subsequent reads
-        # (read-your-writes guarantee). `wait_for_ready=True` keeps transient
-        # `UNAVAILABLE` from immediately failing the RPC.
+        #
+        # Writes are *always* fully consistent on the server side; SpiceDB
+        # does not accept a `consistency` field on ``ImportBulkRelationshipsRequest``.
+        # ``ImportBulkRelationships`` is a stream-unary RPC so we cannot pass
+        # ``wait_for_ready`` either: that flag is only legal on unary
+        # gRPC methods.  The caller therefore relies on SpiceDB having
+        # committed the tuples by the time the RPC future resolves.
         requests = [ImportBulkRelationshipsRequest(
             relationships=[self.converter.convert_relationship(rel) for rel in relationships]
         )]
-        await self.client.ImportBulkRelationships(
-            (req for req in requests),
-            consistency=self._consistency(),
-            wait_for_ready=True,
-        )
+        await self.client.ImportBulkRelationships((req for req in requests))
         return relationships
 
     @handle_error
@@ -248,15 +247,14 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
             return relation_filter
 
 
-        # Apply the same read-your-writes semantics used for reads so a delete
-        # that finishes here is durable and observable to subsequent reads.
-        # `wait_for_ready=True` avoids fail-fast on transient SpiceDB outages
-        # (the decorator turns the resulting UNAVAILABLE into a typed error).
+        # Like ``insert``, writes are always fully consistent on the server
+        # side; ``DeleteRelationshipsRequest`` has no `consistency` field.
+        # ``wait_for_ready=True`` keeps a transient SpiceDB outage from
+        # immediately failing the call with UNAVAILABLE.
         result = await self.client.DeleteRelationships(
             DeleteRelationshipsRequest(
                 relationship_filter=get_filter(relationship)
             ),
-            consistency=self._consistency(),
             wait_for_ready=True,
         )
 
@@ -338,17 +336,18 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         if relationship.resource.object_id != UNDEFINED:
             filter.optional_resource_id = str(relationship.resource.object_id)
 
-        consistency = self._consistency()
-        # The ExportBulkRelationships API does not accept a Consistency
-        # message directly; it always reads at HEAD. Skip when consistent
-        # semantics are not requested.
-        kwargs: dict[str, Any] = {}
-        if consistency is not None:
-            kwargs["wait_for_ready"] = True
+        # ``ExportBulkRelationships`` is a server-streaming RPC. The
+        # gRPC ``wait_for_ready`` flag is illegal on streaming calls,
+        # so consistency (and therefore read-your-writes) must travel
+        # *inside* the request body via the ``Consistency`` field.
+        request_kwargs: dict[str, Any] = {
+            "optional_relationship_filter": filter,
+        }
+        if self._consistent:
+            request_kwargs["consistency"] = Consistency(fully_consistent=True)
 
         response_stream = self.client.ExportBulkRelationships(
-            ExportBulkRelationshipsRequest(optional_relationship_filter=filter),
-            **kwargs,
+            ExportBulkRelationshipsRequest(**request_kwargs)
         )
 
         relationships: List[Relationship] = []
@@ -392,15 +391,16 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
             relation_filter.optional_resource_id = str(resource.object_id)
 
         # Export direct tuples for a resource type/id and map them back to domain entities.
-        # Same note as `lookup_relationships`: ExportBulkRelationships reads at HEAD;
-        # we only have wait_for_ready to influence here, and only when consistency is on.
-        kwargs: dict[str, Any] = {}
+        # Same note as ``lookup_relationships``: streaming RPC, so
+        # consistency must travel inside the request body.
+        request_kwargs: dict[str, Any] = {
+            "optional_relationship_filter": relation_filter,
+        }
         if self._consistent:
-            kwargs["wait_for_ready"] = True
+            request_kwargs["consistency"] = Consistency(fully_consistent=True)
 
         response_stream = self.client.ExportBulkRelationships(
-            ExportBulkRelationshipsRequest(optional_relationship_filter=relation_filter),
-            **kwargs,
+            ExportBulkRelationshipsRequest(**request_kwargs)
         )
 
         relationships: List[Relationship] = []
