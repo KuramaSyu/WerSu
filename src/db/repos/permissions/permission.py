@@ -150,15 +150,44 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         self,
         client: AsyncClient,
         permission_candidates_by_object_type: dict[str, list[str]] | None = None,
+        consistent: bool = True,
     ) -> None:
+        """Create a SpiceDB-backed permission repo.
+
+        Parameters
+        ----------
+        client : AsyncClient
+            Authzed async client.
+        permission_candidates_by_object_type : dict[str, list[str]] | None
+            Per-object-type list of candidate permission names. Defaults are
+            provided for ``note`` and ``directory`` if not supplied.
+        consistent : bool, default True
+            When True, every RPC uses ``Consistency(fully_consistent=True)``
+            and ``wait_for_ready=True``. This guarantees the caller that
+            ``insert()`` (and any subsequent read) only returns after SpiceDB
+            has durably committed and made the write visible. It increases
+            latency, especially across regions. Set to False to fall back to
+            SpiceDB's default ``minimize_latency`` semantics for higher
+            throughput at the cost of read-your-writes races.
+        """
         self.client = client
         self._permission_candidates_by_object_type = (
             permission_candidates_by_object_type
             if permission_candidates_by_object_type is not None
             else self._default_permission_candidates_by_object_type
         )
+        self._consistent = consistent
 
-    
+    def _consistency(self) -> Optional[Consistency]:
+        """Build the Consistency message honoring the ``consistent`` flag.
+
+        Returns None when the flag is False so callers can omit the field and
+        let SpiceDB apply its default (``minimize_latency``).
+        """
+        if not self._consistent:
+            return None
+        return Consistency(fully_consistent=True)
+
     def _wrap_grpc_error(self, error: Exception) -> Exception:
         """
         Wraps gRPC errors in a ServiceUnavailableError if they indicate that SpiceDB is unavailable.
@@ -170,10 +199,18 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
     @handle_error
     async def insert(self, relationships: List[Relationship]) -> List[Relationship]:
         # SpiceDB bulk import API consumes a request stream; we send a single batched request.
+        # With `fully_consistent=True`, the call only resolves after SpiceDB has
+        # durably committed the tuples AND made them visible to subsequent reads
+        # (read-your-writes guarantee). `wait_for_ready=True` keeps transient
+        # `UNAVAILABLE` from immediately failing the RPC.
         requests = [ImportBulkRelationshipsRequest(
             relationships=[self.converter.convert_relationship(rel) for rel in relationships]
         )]
-        await self.client.ImportBulkRelationships((req for req in requests))
+        await self.client.ImportBulkRelationships(
+            (req for req in requests),
+            consistency=self._consistency(),
+            wait_for_ready=True,
+        )
         return relationships
 
     @handle_error
@@ -211,10 +248,16 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
             return relation_filter
 
 
+        # Apply the same read-your-writes semantics used for reads so a delete
+        # that finishes here is durable and observable to subsequent reads.
+        # `wait_for_ready=True` avoids fail-fast on transient SpiceDB outages
+        # (the decorator turns the resulting UNAVAILABLE into a typed error).
         result = await self.client.DeleteRelationships(
             DeleteRelationshipsRequest(
                 relationship_filter=get_filter(relationship)
             ),
+            consistency=self._consistency(),
+            wait_for_ready=True,
         )
 
         assert result.DELETION_PROGRESS_COMPLETE
@@ -237,12 +280,15 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
             filter.optional_subject_filter
         
         # LookupResources resolves effective permission, not only direct tuples.
+        # Caller-supplied consistency takes precedence; falls back to
+        # minimize_latency when the `consistent` flag is False.
+        consistency = self._consistency() or Consistency(fully_consistent=True)
         result = self.client.LookupResources(
             LookupResourcesRequest(
                 resource_object_type=relationship.resource.object_type,
                 permission=relationship.relation,
                 subject=self.converter.convert_subject_ref(relationship.subject),
-                consistency=Consistency(fully_consistent=True)
+                consistency=consistency,
             )   
         )
         objects: List[ObjectRef] = []
@@ -261,10 +307,11 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
             resource=converted.resource,
             permission=converted.relation,
             subject=converted.subject,
-            # Use fully-consistent reads so callers see their own writes.
+            # Fully-consistent reads so callers see their own writes.
             # Without this, the default (minimize_latency) semantics can
             # return stale denials immediately after `insert()`.
-            consistency=Consistency(fully_consistent=True),
+            # Controlled by the repo's `consistent` flag.
+            consistency=self._consistency() or Consistency(fully_consistent=True),
         ))
         return response.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
 
@@ -291,8 +338,17 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         if relationship.resource.object_id != UNDEFINED:
             filter.optional_resource_id = str(relationship.resource.object_id)
 
+        consistency = self._consistency()
+        # The ExportBulkRelationships API does not accept a Consistency
+        # message directly; it always reads at HEAD. Skip when consistent
+        # semantics are not requested.
+        kwargs: dict[str, Any] = {}
+        if consistency is not None:
+            kwargs["wait_for_ready"] = True
+
         response_stream = self.client.ExportBulkRelationships(
-            ExportBulkRelationshipsRequest(optional_relationship_filter=filter)
+            ExportBulkRelationshipsRequest(optional_relationship_filter=filter),
+            **kwargs,
         )
 
         relationships: List[Relationship] = []
@@ -336,8 +392,15 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
             relation_filter.optional_resource_id = str(resource.object_id)
 
         # Export direct tuples for a resource type/id and map them back to domain entities.
+        # Same note as `lookup_relationships`: ExportBulkRelationships reads at HEAD;
+        # we only have wait_for_ready to influence here, and only when consistency is on.
+        kwargs: dict[str, Any] = {}
+        if self._consistent:
+            kwargs["wait_for_ready"] = True
+
         response_stream = self.client.ExportBulkRelationships(
-            ExportBulkRelationshipsRequest(optional_relationship_filter=relation_filter)
+            ExportBulkRelationshipsRequest(optional_relationship_filter=relation_filter),
+            **kwargs,
         )
 
         relationships: List[Relationship] = []
@@ -377,7 +440,7 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
                         object_id=user.user_id,
                     )
                 ),
-                consistency=Consistency(fully_consistent=True),
+                consistency=self._consistency() or Consistency(fully_consistent=True),
             )
         )
         return response.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
