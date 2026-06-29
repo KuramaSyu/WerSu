@@ -1,15 +1,44 @@
 from datetime import datetime
 from sqlite3.dbapi2 import Timestamp
-from typing import Literal, cast
+from typing import Literal, Tuple, cast
 
 from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
-from src.grpc_mod.proto.sharing_pb2 import SHARE_PERMISSION_READ, SHARE_PERMISSION_UNSPECIFIED, SHARE_PERMISSION_WRITE, AccessShareResponse, CreateShareRequest, NoteShare, NullableString, NullableTimestamp, ShareFilter, SharePermission
+from src.grpc_mod.proto.sharing_pb2 import (
+    SHARE_PERMISSION_READ,
+    SHARE_PERMISSION_UNSPECIFIED,
+    SHARE_PERMISSION_WRITE,
+    AccessShareResponse,
+    CreateShareRequest,
+    GetShareUserResponse,
+    NoteShare,
+    NullableString,
+    NullableTimestamp,
+    ShareFilter,
+    SharePermission,
+)
 
 def to_proto_note_share(share: NoteShareEntity) -> AccessShareResponse:
     """Convert a domain NoteShareEntity into a protobuf AccessShareResponse."""
     return AccessShareResponse(
         share=to_grpc_note_share(share)
+    )
+
+
+def to_proto_share_user(
+    access_as: str,
+    online_until: UndefinedNoneOr[datetime],
+) -> GetShareUserResponse:
+    """Convert ``(access_as, online_until)`` into a ``GetShareUserResponse``.
+
+    The ``online_until`` field follows the domain semantics already
+    established for shares: ``UNDEFINED`` means the share does not
+    advertise an expiry, ``None`` explicitly means "never expires",
+    and a concrete timestamp is forwarded as a ``NullableTimestamp``.
+    """
+    return GetShareUserResponse(
+        access_as=access_as,
+        online_until=to_proto_nullable_timestamp(online_until),
     )
 
 def domain_permission_to_grpc(permission: UndefinedOr[str]) -> SharePermission:
