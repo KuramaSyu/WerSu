@@ -187,7 +187,7 @@ def logging_provider(
 
     logger_name = f"{file}"
     if cls_instance:
-        logger_name += f".{cls_instance.__class__.__qualname__}"
+        logger_name += f".{cls_instance.__class__.__name__}"
     if prefix:
         logger_name = f"[{prefix}] {logger_name}"
 
