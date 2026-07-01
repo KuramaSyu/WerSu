@@ -261,6 +261,11 @@ async def serve():
         directory_repo=directory_repo,
         log=logging_provider,
     )
+
+    ### Register gRPC services by injecting the service layer ###
+    log.info("Setting up gRPC services...")
+    grpc_visitor = ConvertToGrpcVisitor()
+
     note_version_service = GrpcNoteVersionService(
         note_repo=note_repo,
         version_repo=version_repo,
@@ -287,9 +292,6 @@ async def serve():
         logger=logging_provider,
     )
 
-    ### Register gRPC services by injecting the service layer ###
-    log.info("Setting up gRPC services...")
-    grpc_visitor = ConvertToGrpcVisitor()
     note_service = GrpcNoteService(repo=note_repo, log=logging_provider, to_grpc=grpc_visitor)
     add_NoteServiceServicer_to_server(note_service, server)
 
