@@ -30,6 +30,7 @@ from src.db.repos.user.user_action import UserActionPostgresRepo
 from src.db.table import Table
 from src.services.permissions import PermissionServiceRepo
 from src.services.sharing import DefaultSharingService
+from src.facades.share_action_facade import ShareActionFacade
 from src.services.user import UserService
 from src.utils import logging_provider
 from tests._fixtures_pkg.fakes import _FakeEmbeddingRepo
@@ -155,12 +156,15 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             logging_provider=logging_provider,
         )
         sharing_service = DefaultSharingService(
-            sharing_repo=sharing_repo,
-            user_repo=user_repo,
+            share_facade=ShareActionFacade(
+                sharing_repo=sharing_repo,
+                user_repo=user_repo,
+                user_action_repo=user_action_repo,
+                logging_provider=logging_provider,
+            ),
             permission_repo=permission_repo,
             permission_service=permission_service,
             logging_provider=logging_provider,
-            user_action_repo=user_action_repo,
         )
 
         try:

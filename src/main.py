@@ -21,6 +21,7 @@ from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_se
 from src.grpc_mod.sharing_service import GrpcSharingService
 from src.services import PermissionServiceRepo, UserService, DirectoryActivityService, AttachmentFacade, share_access
 from src.services.sharing import DefaultSharingService
+from src.facades.share_action_facade import ShareActionFacade
 from src.utils import logging_provider
 from src.db import Database, NoteEmbeddingPostgresRepo, NoteVersionPostgresRepo
 from src.db.repos.attachments.attachments import (
@@ -70,6 +71,11 @@ def get_os_env_variable(name: str, log: logging.Logger, default: UndefinedOr[str
 
 
 async def serve():
+    """
+    Construction Root which instantiates all dependencies, wires them 
+    together via constructor injection, and starts the gRPC server with 
+    the most upper layer service implementations.  This is the entrypoint for the application.
+    """
     # setup logging
     log = logging_provider(__name__)
     setup_table_logging(logging_provider)
@@ -261,11 +267,14 @@ async def serve():
         log=logging_provider,
     )
     sharing_service = DefaultSharingService(
-        sharing_repo=sharing_repo,
+        share_facade=ShareActionFacade(
+            sharing_repo=sharing_repo,
+            user_repo=user_repo,
+            user_action_repo=user_action_repo,
+            logging_provider=logging_provider,
+        ),
         permission_repo=permission_repo,
         permission_service=permission_service,
-        user_repo=user_repo,
-        user_action_repo=user_action_repo,
         logging_provider=logging_provider,
     )
     share_access_service: ShareAccessServiceABC = share_access.ShareAccessService(
