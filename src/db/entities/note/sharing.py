@@ -4,11 +4,12 @@ from typing import Literal
 
 
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedNoneOr
+from src.db.entities.visitor import AcceptsVisitor, EntityVisitor
 
 
 @dataclass
-class NoteShareEntity:
-    """Represents a share for a note. 
+class NoteShareEntity(AcceptsVisitor):
+    """Represents a share for a note.
     Use UNDEFINED in case a field is not yet set. Use None, to explicitly set the field to None/Null
     """
     # the id of the share (uuidv7)
@@ -39,6 +40,10 @@ class NoteShareEntity:
 
     # the permission on this share
     permission: UndefinedOr[Literal["read", "write"]] = UNDEFINED
+
+    def visit(self, visitor: EntityVisitor):
+        """Dispatch this share to ``visitor.visit_note_share``."""
+        return visitor.visit_note_share(self)
 
 
 @dataclass

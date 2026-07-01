@@ -13,6 +13,7 @@ from sympy import Q
 
 from src.api.undefined import UNDEFINED, UndefinedOr, is_undefined
 from src.api import UserContextABC
+from src.db.entities.visitor import AcceptsVisitor, EntityVisitor
 from src.db.table import TableABC
 from src.utils import convert_entity_for_db, asdict
 
@@ -51,6 +52,10 @@ class Attachment:
         if self.size is not UNDEFINED:
             return self.size
         return len(self.content)
+
+    def visit(self, visitor: EntityVisitor):
+        """Dispatch this attachment to ``visitor.visit_attachment``."""
+        return visitor.visit_attachment(self)
 
 
 class AttachmentsRepoABC(ABC):

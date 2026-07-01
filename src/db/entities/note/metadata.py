@@ -5,6 +5,7 @@ from datetime import datetime
 from asyncpg import Record
 
 from src.db.entities.directory.directory import DirectoryEntity
+from src.db.entities.visitor import AcceptsVisitor, EntityVisitor
 from src.api import Relationship
 
 
@@ -14,7 +15,7 @@ from src.api.undefined import *
 
 
 @dataclass
-class NoteEntity:
+class NoteEntity(AcceptsVisitor):
     """Represents one record of note.metadata"""
     note_id: UndefinedOr[str] = UNDEFINED
     title: UndefinedNoneOr[str] = UNDEFINED
@@ -24,6 +25,10 @@ class NoteEntity:
     embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED
     permissions: UndefinedOr[List[Relationship]] = UNDEFINED
     parent_dir_id: UndefinedOr[str] = UNDEFINED
+
+    def visit(self, visitor: EntityVisitor):
+        """Dispatch this note to ``visitor.visit_note``."""
+        return visitor.visit_note(self)
 
     @staticmethod
     def from_record(record: Record | Dict[str, Any]) -> "NoteEntity":

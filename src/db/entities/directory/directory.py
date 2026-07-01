@@ -3,10 +3,11 @@ from typing import List
 
 from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.api import Relationship
+from src.db.entities.visitor import AcceptsVisitor, EntityVisitor
 
 
 @dataclass
-class DirectoryEntity:
+class DirectoryEntity(AcceptsVisitor):
     """Represents one directory with metadata and SpiceDB relations.
 
     Parameters
@@ -34,3 +35,7 @@ class DirectoryEntity:
     image_url: UndefinedNoneOr[str] = UNDEFINED
     parent_id: UndefinedNoneOr[str] = UNDEFINED
     relations: UndefinedOr[List[Relationship]] = UNDEFINED
+
+    def visit(self, visitor: EntityVisitor):
+        """Dispatch this directory to ``visitor.visit_directory``."""
+        return visitor.visit_directory(self)
