@@ -124,7 +124,30 @@ class ObjectRef:
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, ObjectRef):
             return NotImplemented
-        return str(self.object_type) == str(other.object_type) and self.object_id == other.object_id
+        return (
+            str(self.object_type) == str(other.object_type)
+            and self.object_id == other.object_id
+        )
+
+    def __contains__(self, other: object) -> bool:
+        """``value in self``: ``self`` is the pattern, ``other`` is the value.
+
+        :obj:`~src.api.undefined.UNDEFINED` on ``self`` acts as a
+        wildcard for that field.  Type fields (``object_type``) are not
+        wildcards: a pattern with ``object_type="user"`` only matches
+        values whose ``object_type`` is also ``"user"``.
+
+        Example:
+            ``ObjectRef("note", "1") in ObjectRef("note", UNDEFINED)``
+            is True -- the UNDEFINED id on the pattern side is a wildcard.
+        """
+        if not isinstance(other, ObjectRef):
+            return NotImplemented
+        # ``object_type`` is structural -- never a wildcard.
+        if str(self.object_type) != str(other.object_type):
+            return False
+        # ``self`` is the pattern, ``other`` is the value.
+        return _pattern_matches(self.object_id, other.object_id)
 
     def __hash__(self) -> int:
         return hash((str(self.object_type), self.object_id))
@@ -157,6 +180,14 @@ class PartialRelationship:
             return NotImplemented
         return str(self.relation) == str(other.relation) and self.subject == other.subject
 
+    def __contains__(self, other: object) -> bool:
+        """``value in self``: ``self`` is the pattern, ``other`` is the value."""
+        if not isinstance(other, PartialRelationship):
+            return NotImplemented
+        if not _pattern_matches(self.relation, other.relation):
+            return False
+        return self.subject in other.subject
+
     def __hash__(self) -> int:
         return hash((str(self.relation), self.subject))
 
@@ -170,8 +201,24 @@ class Relationship(PartialRelationship):
     * ``note:123#writer@user:alice`` -> Alice is a writer of note ``123``.
     * ``directory:456#parent@directory:789`` -> Directory ``456`` has parent directory ``789``.
 
-    Any field may be :obj:`~src.api.undefined.UNDEFINED` to act as a wildcard
-    when the relationship is used as a filter (e.g. for deletes or lookups).
+    Equality is strict: two :class:`Relationship` instances are equal
+    iff their resource, relation and subject all match.  To express
+    "match any value on some field", use the ``in`` operator -- a
+    :class:`Relationship` with :obj:`~src.api.undefined.UNDEFINED` on
+    one or more fields acts as a *pattern* and ``value in pattern``
+    returns True when the value's concrete fields line up with the
+    pattern's non-UNDEFINED fields.  Type fields (``object_type``) are
+    never wildcards.
+
+    Example:
+        >>> value = Relationship(
+        ...     resource=ObjectRef("note", "1"),
+        ...     relation=NoteRelationEnum.READER,
+        ...     subject=SubjectRef("user", "alice"),
+        ... )
+        >>> pattern = replace(value, relation=UNDEFINED)
+        >>> value in pattern
+        True
     """
 
     def __init__(
@@ -188,11 +235,41 @@ class Relationship(PartialRelationship):
             return NotImplemented
         return self.resource == other.resource and super().__eq__(other)
 
+    def __contains__(self, other: object) -> bool:
+        """``value in self``: ``self`` is the pattern, ``other`` is the value.
+
+        The resource type and subject type are not wildcarded; only
+        ``object_id`` and ``relation`` accept :obj:`UNDEFINED`.  The
+        semantics propagate from :class:`ObjectRef` and
+        :class:`PartialRelationship`.
+        """
+        if not isinstance(other, Relationship):
+            return NotImplemented
+        return (
+            other.resource in self.resource
+            and other.subject in self.subject
+            and _pattern_matches(self.relation, other.relation)
+        )
+
     def __hash__(self) -> int:
         return hash((self.resource, str(self.relation), self.subject))
 
     def __repr__(self):
         return f"Relationship(resource={self.resource.object_type}:{self.resource.object_id}, relation={self.relation}, subject={self.subject.object_type}:{self.subject.object_id})"
+
+
+def _pattern_matches(pattern: object, value: object) -> bool:
+    """``pattern in value`` semantics for a single field.
+
+    The pattern's value is treated as a wildcard if it is
+    :obj:`~src.api.undefined.UNDEFINED`; otherwise the field must
+    match exactly.  Used by the ``__contains__`` methods of
+    :class:`ObjectRef` and :class:`PartialRelationship` to keep the
+    semantics in one place.
+    """
+    if pattern is UNDEFINED:
+        return True
+    return pattern == value
 
 
 class PermissionConverterABC(ABC):

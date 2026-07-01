@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import List, Optional, Tuple
 
 from src.api.relationship import ObjectRef, Relationship
-from src.api.user_context import UserContextABC
 
 
 class _FakePermissionRepo:
@@ -40,15 +39,13 @@ class _FakePermissionRepo:
         return list(relationships)
 
     async def delete(self, relationship: Relationship) -> Relationship:
+        # The pattern semantics live on ``Relationship.__contains__``:
+        # ``value in pattern`` is True when the value matches every
+        # non-UNDEFINED field on the pattern, and any UNDEFINED field
+        # acts as a wildcard.  The service passes ``relationship`` as
+        # the pattern; the stored entries are the values.
         self._relationships = [
-            rel for rel in self._relationships
-            if not (
-                str(rel.resource.object_type) == str(relationship.resource.object_type)
-                and str(rel.resource.object_id) == str(relationship.resource.object_id)
-                and str(rel.relation) == str(relationship.relation)
-                and str(rel.subject.object_type) == str(relationship.subject.object_type)
-                and str(rel.subject.object_id) == str(relationship.subject.object_id)
-            )
+            rel for rel in self._relationships if rel not in relationship
         ]
         return relationship
 
