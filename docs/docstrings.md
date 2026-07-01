@@ -19,6 +19,9 @@ class Config(ABC):
 
         Args:
             other: an object of the same type as `` `self` ``
+
+        Note: 
+            Use `` `other` `` to refer to the `other` Parameter
         """
 class Json(Config):
     """does something"""
