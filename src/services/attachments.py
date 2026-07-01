@@ -66,10 +66,12 @@ class AttachmentFacadeABC(ABC):
 
 class AttachmentFacade(AttachmentFacadeABC):
     """
-    Facade that combines object storage + metadata storage + permission storage.
+    Facade that combines object storage (:class:`AttachmentsRepoABC`) + metadata storage 
+    (:class:`AttachmentsMetadataRepoABC`) + permission storage (:class:`PermissionRepoABC`).
     It effectively implements the full lifecycle of attachments, containing 
         - upload, download, delete, link to note, unlink from note
     and it evaluates permissions for all operations correctly 
+
     """
 
     def __init__(
