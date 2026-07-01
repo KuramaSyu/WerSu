@@ -39,11 +39,10 @@ class _FakePermissionRepo:
         return list(relationships)
 
     async def delete(self, relationship: Relationship) -> Relationship:
-        # The pattern semantics live on ``Relationship.__contains__``:
-        # ``value in pattern`` is True when the value matches every
-        # non-UNDEFINED field on the pattern, and any UNDEFINED field
-        # acts as a wildcard.  The service passes ``relationship`` as
-        # the pattern; the stored entries are the values.
+        # the in operator checks, if a relationship contains a full other relationship.
+        # this is the case, when one defines a sub/obj ID as UNDEFINED and the other has a normal ID. 
+        # In this case, the rel with UNDEFINED always consumes the other rel and hence contains it. 
+        # it checks both directions. 
         self._relationships = [
             rel for rel in self._relationships if rel not in relationship
         ]

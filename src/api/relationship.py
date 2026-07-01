@@ -202,7 +202,7 @@ class Relationship(PartialRelationship):
     * ``directory:456#parent@directory:789`` -> Directory ``456`` has parent directory ``789``.
 
     Equality is strict: two :class:`Relationship` instances are equal
-    iff their resource, relation and subject all match.  To express
+    if their resource, relation and subject all match.  To express
     "match any value on some field", use the ``in`` operator -- a
     :class:`Relationship` with :obj:`~src.api.undefined.UNDEFINED` on
     one or more fields acts as a *pattern* and ``value in pattern``
@@ -259,13 +259,8 @@ class Relationship(PartialRelationship):
 
 
 def _pattern_matches(pattern: object, value: object) -> bool:
-    """``pattern in value`` semantics for a single field.
-
-    The pattern's value is treated as a wildcard if it is
-    :obj:`~src.api.undefined.UNDEFINED`; otherwise the field must
-    match exactly.  Used by the ``__contains__`` methods of
-    :class:`ObjectRef` and :class:`PartialRelationship` to keep the
-    semantics in one place.
+    """The `UNDEFINED` pattern always contains value -> e.g. True. 
+    Otherwise it checks equality. 
     """
     if pattern is UNDEFINED:
         return True
