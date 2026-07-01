@@ -1,47 +1,62 @@
+"""Storage contract for the permission/relationship backend.
+
+The :class:`PermissionRepoABC` is the only thing the service layer is
+allowed to depend on for permission lookups, so any backend (SpiceDB,
+an in-memory store for tests, ...) can be swapped in by providing a
+new implementation of this ABC.
+"""
+
 from abc import ABC, abstractmethod
-from typing import *
+from typing import List
 from warnings import deprecated
-from src.api.relationship import *
+
+from src.api.relationship import ObjectRef, Relationship
 from src.api.user_context import UserContextABC
 
+
 class PermissionRepoABC(ABC):
+    """Persistence contract for permissions and direct relationships.
+
+    Implementations:
+    * :class:`src.db.repos.permissions.permission.NotePermissionRepoSpicedb`
+    * :class:`src.db.repos.permissions.permission.NotePermissionRepoInMemory`
+    """
 
     @abstractmethod
     async def insert(
         self,
-        relationships: List[Relationship]
+        relationships: List[Relationship],
     ) -> List[Relationship]:
-        """inserts permission
-        
+        """Insert ``relationships`` and return the persisted rows.
+
         Args:
-        -----
-        relationships: `List[Relationship]`
-            the relationships to insert. Provide full subject, permission and object.
+            relationships: relationships to insert.  ``resource``,
+                ``relation`` and ``subject`` must all be fully set;
+                no field may be :obj:`~src.api.undefined.UNDEFINED`.
 
         Returns:
-        --------
-        `List[Relationship]`:
-            the inserted relationships
+            List[Relationship]: the inserted relationships, with any
+            server-side fields populated.
         """
         ...
 
     @abstractmethod
     async def delete(
         self,
-        relationship: Relationship
+        relationship: Relationship,
     ) -> Relationship:
-        """delete permission(s). Relationship can be partially `UNDEFINED` to set these as wildcards.
-        
+        """Delete relationships matching ``relationship`` as a filter.
+
+        Any :obj:`~src.api.undefined.UNDEFINED` field acts as a wildcard
+        for that part of the filter.  For example, a relationship shaped
+        ``attachment#*@user`` (with ``object_id`` set) deletes every
+        permission on that attachment for every user.
+
         Args:
-        -----
-        relationship: `Relationship`
-            The relationship to delete. Out of this, a filter will be built, where all `UNDEFINDED` values of the given `relation` will
-            be treated as wildcards. E.g. you could provide attachment#*@user will delete all permissions for all users for this attachment
+            relationship: filter describing the relationships to delete.
 
         Returns:
-        --------
-        `List[Relationship]`:
-            the deleted relationships
+            Relationship: the (single) deleted relationship.
         """
         ...
 
@@ -49,21 +64,21 @@ class PermissionRepoABC(ABC):
     @abstractmethod
     async def lookup(
         self,
-        relationship: Relationship
+        relationship: Relationship,
     ) -> List[ObjectRef]:
-        """select permission
-        
+        """Resolve the objects matching ``relationship``.
+
+        .. deprecated::
+            Use :meth:`lookup_relationships` instead.
+
         Args:
-        -----
-        relationship: `Relationship`
-            the relationship to lookup. Provide full subject and permission, and for object leave the 
-            object_id to `UNDEFINED` and only provide the object_type. This allows to lookup all permissions 
-            for a given subject and permission on all objects of a given type.
+            relationship: filter where ``subject`` and ``relation`` are
+                fully set, ``resource.object_type`` is set, and
+                ``resource.object_id`` is :obj:`~src.api.undefined.UNDEFINED`
+                to match all objects of that type.
 
         Returns:
-        --------
-        `List[ObjectRef]`:
-            the matching objects
+            List[ObjectRef]: the matching objects.
         """
         ...
 
@@ -72,17 +87,15 @@ class PermissionRepoABC(ABC):
         self,
         relationship: Relationship,
     ) -> List[Relationship]:
-        """Select stored direct relationships by a relationship-shaped filter.
+        """Return stored direct relationships matching ``relationship``.
 
         Args:
-        -----
-        relationship: `Relationship`
-            filter where `UNDEFINED` values act as wildcards for ids.
+            relationship: filter where any :obj:`~src.api.undefined.UNDEFINED`
+                id acts as a wildcard.  ``relation`` may also be
+                :obj:`~src.api.undefined.UNDEFINED` to match across relations.
 
         Returns:
-        --------
-        `List[Relationship]`:
-            matching stored direct relationships.
+            List[Relationship]: the matching stored relationships.
         """
         ...
 
@@ -90,39 +103,31 @@ class PermissionRepoABC(ABC):
     async def lookup_notes(
         self,
         user: UserContextABC,
-        permission: str
+        permission: str,
     ) -> List[ObjectRef]:
-        """Retrieves all notes where the given user has the given permission
-        
+        """Return every note where ``user`` has ``permission``.
+
         Args:
-        -----
-        user: `UserContextABC`
-            the user context to lookup permissions for
-        permission: `str`
-            the permission to lookup
+            user: caller whose permissions should be evaluated.
+            permission: permission name to look up (e.g. ``"view"``).
 
         Returns:
-        --------
-        `List[ObjectRef]`:
-            the matching objects
+            List[ObjectRef]: the matching notes.
         """
         ...
 
     @abstractmethod
     async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
-        """List stored relationships for a specific resource.
+        """Return every stored relationship whose resource matches ``resource``.
 
-        Parameters
-        ----------
-        resource : ObjectRef
-            Resource whose direct relationships should be returned.
-            If `object_id` is `UNDEFINED`, all relationships for that
-            resource type are returned.
+        Args:
+            resource: resource to filter on.  If ``object_id`` is
+                :obj:`~src.api.undefined.UNDEFINED`, every relationship
+                of that resource type is returned.
 
-        Returns
-        -------
-        List[Relationship]
-            Stored relationships for `resource` including relation and subject.
+        Returns:
+            List[Relationship]: stored relationships for ``resource``,
+            including their relation and subject.
         """
         ...
 
@@ -133,40 +138,30 @@ class PermissionRepoABC(ABC):
         permission: str,
         resource: ObjectRef,
     ) -> bool:
-        """Check whether a user has a permission on a resource.
+        """Return whether ``user`` has ``permission`` on ``resource``.
 
-        Parameters
-        ----------
-        user : UserContextABC
-            Current user context.
-        permission : str
-            Permission to verify.
-        resource : ObjectRef
-            Resource to check against.
+        Args:
+            user: caller whose permissions should be evaluated.
+            permission: permission name to verify.
+            resource: resource to check against.
 
-        Returns
-        -------
-        bool
-            True if permission is granted.
+        Returns:
+            bool: ``True`` if the permission is granted.
         """
         ...
 
     @abstractmethod
     async def check(
-        self, 
-        relationship: Relationship
+        self,
+        relationship: Relationship,
     ) -> bool:
-        """classical check for permissions
+        """Evaluate a single ``resource#relation@subject`` triple.
 
-        Parameters:
-        -----------
-        relationship: Relationship
-            the obj#relation@subj relationship
-        
+        Args:
+            relationship: the ``obj#relation@subj`` triple to evaluate.
+
         Returns:
-        --------
-        bool:
-            whether this relationship evaluates to True or not
+            bool: whether the relationship evaluates to ``True``.
         """
         ...
 
@@ -176,18 +171,13 @@ class PermissionRepoABC(ABC):
         user: UserContextABC,
         resource: ObjectRef,
     ) -> List[str]:
-        """List effective permissions for a user on a resource.
+        """Return every effective permission ``user`` holds on ``resource``.
 
-        Parameters
-        ----------
-        user : UserContextABC
-            Current user context.
-        resource : ObjectRef
-            Resource to evaluate.
+        Args:
+            user: caller whose permissions should be evaluated.
+            resource: resource to evaluate.
 
-        Returns
-        -------
-        List[str]
-            Granted permissions.
+        Returns:
+            List[str]: the granted permission names.
         """
         ...

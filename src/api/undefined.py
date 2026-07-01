@@ -45,7 +45,7 @@ if typing.TYPE_CHECKING:
 
 
 class UndefinedType:
-    """The type of the [`hikari.undefined.UNDEFINED`][] singleton sentinel value."""
+    """Type of the :obj:`~src.api.undefined.UNDEFINED` singleton sentinel value."""
 
     __slots__: typing.Sequence[str] = ()
 
@@ -63,7 +63,7 @@ class UndefinedType:
         return self
 
     def __getstate__(self) -> bool:
-        # Returning False tells pickle to not call [`__setstate__`][] on unpickling.
+        # Returning False tells pickle to not call __setstate__ on unpickling.
         return False
 
     def __repr__(self) -> str:
@@ -79,7 +79,7 @@ class UndefinedType:
 
 
 UNDEFINED = UndefinedType()
-"""A sentinel singleton that denotes a missing or omitted value."""
+"""Sentinel singleton that denotes a missing or omitted value."""
 
 
 def _forbidden_new(cls: UndefinedType) -> typing.NoReturn:  # noqa: ARG001 - Unused arguments
@@ -92,77 +92,77 @@ del _forbidden_new
 
 T_co = typing.TypeVar("T_co", covariant=True)
 UndefinedOr = typing.Union[T_co, UndefinedType]
-"""Type hint to mark a type as being semantically optional.
+"""Type hint to mark a type as semantically optional.
 
-!!! warning "**THIS IS NOT THE SAME AS [`typing.Optional`][] BY DEFINITION!**"
-    If you see a type with this marker, it may be [`src.api.undefined.UNDEFINED`][] or
-    the value it wraps. For example, `UndefinedOr[float]` would mean the value could
-    be a [`float`][], or the literal [`src.api.undefined.UNDEFINED`][] value.
+!!! warning "NOT THE SAME AS :class:`typing.Optional` BY DEFINITION!"
+    A value typed :data:`UndefinedOr` may be :obj:`~src.api.undefined.UNDEFINED`
+    or the wrapped type.  For example, ``UndefinedOr[float]`` means the value
+    could be a :class:`float` or the literal :obj:`~src.api.undefined.UNDEFINED`
+    sentinel.  ``Optional[float]`` on the other hand means :class:`float` or
+    :obj:`None`.
 
-    On the other hand, `typing.Optional[float]` would mean the value could be
-    a [`float`][], or the literal [`None`][] value.
+    The distinction matters when receiving data from a client and converting
+    it to a database entity.  :obj:`~src.api.undefined.UNDEFINED` means the
+    field is missing (use the default); :obj:`None` means the field was
+    explicitly sent as ``NULL``.  Without this split, ``None`` cannot be
+    persisted as a real value.
 
-    The reason for using this is in some places, there is a semantic difference
-    between specifying something as being [`None`][], i.e. "no value", and
-    having a default to specify that the value has just not been mentioned. 
-    The main reason used, is then receiving data from a client, which is 
-    converted to an entity for database. While processing such an entity, `UNDEFINED`
-    means, that this field is currently missing where as `None` means, that the field is 
-    explicitly set to, in terms of postgres, `NULL`. Hence it's the only way to 
-    differentiate if a field has been set, but explicitly set to `None`, or if the 
-    field ist just missing.
-
-    Consider `UndefinedOr[T]` semantically equivalent to `undefined` versus
-    `null` in JavaScript, or `Optional<T>` versus `null` in Java and C#.
-
+    Think of :data:`UndefinedOr` as the JS ``undefined`` vs ``null``
+    distinction, or Java/C# ``Optional<T>`` vs ``null``.
 
 !!! note
-    If in doubt, remember:
-
-    - [`src.api.undefined.UNDEFINED`][] means there is no value present, or that it has
-        been left to the default value, whatever that would be.
-    - [`None`][] means the value is present and explicitly empty/null/void,
-        where this has a deterministic documented behaviour and no differentiation
-        is made between a [`None`][] value, and one that has been omitted.
+    * :obj:`~src.api.undefined.UNDEFINED` -> no value present, use the default.
+    * :obj:`None` -> value present and explicitly empty / null / void, with
+      a deterministic, documented behaviour that does not depend on whether
+      the field was omitted.
 """
 
 UndefinedNoneOr = typing.Union[UndefinedOr[T_co], None]
-"""Type hint for a value that may be [src.api.undefined.UNDEFINED], or [`None`][].
+"""Type hint for a value that may be :obj:`~src.api.undefined.UNDEFINED`, :obj:`None`, or ``T``.
 
-`UndefinedNoneOr[T]` is simply an alias for
-`UndefinedOr[typing.Optional[T]]`, which would expand to
-`typing.Union[UndefinedType, T, None]`.
+Shortcut for ``UndefinedOr[typing.Optional[T]]``, i.e.
+``typing.Union[UndefinedType, T, None]``.
 """
 
 
 def all_undefined(*items: object) -> bool:
-    """Get if all of the provided items are [`src.api.undefined.UNDEFINED`][]."""
+    """Return whether every provided item is :obj:`~src.api.undefined.UNDEFINED`."""
     return all(item is UNDEFINED for item in items)
 
 
 def any_undefined(*items: object) -> bool:
-    """Get if any of the provided items are [`src.api.undefined.UNDEFINED`][]."""
+    """Return whether any provided item is :obj:`~src.api.undefined.UNDEFINED`."""
     return any(item is UNDEFINED for item in items)
 
 
 def count_undefined(*items: object) -> int:
-    """Count the number of items that are provided that are [`src.api.undefined.UNDEFINED`][]."""
+    """Count how many of the provided items are :obj:`~src.api.undefined.UNDEFINED`."""
     return sum(item is UNDEFINED for item in items)
 
 def is_undefined(item: UndefinedOr[T_co] | UndefinedNoneOr[T_co]) -> bool:
-    """Check if the provided item is [`src.api.undefined.UNDEFINED`][]."""
+    """Return whether ``item`` is :obj:`~src.api.undefined.UNDEFINED`."""
     return item is UNDEFINED
 
 def unwrap_undefined(item: UndefinedOr[T_co]) -> T_co:
-    """Return T_co if the provided item is not [`src.api.undefined.UNDEFINED`][]."""
+    """Return ``item`` if it is not :obj:`~src.api.undefined.UNDEFINED`.
+
+    Raises:
+        ValueError: if ``item`` is :obj:`~src.api.undefined.UNDEFINED`.
+    """
     if item is UNDEFINED:
         raise ValueError("Cannot unwrap UNDEFINED value")
     return item  # type: ignore[return-value]
 
 T_default = typing.TypeVar("T_default")
 def unwrap_undefined_or(item: UndefinedNoneOr[T_co], default: T_default = None) -> T_co | T_default:
-    """Return T_co if the provided item is not [`src.api.undefined.UNDEFINED`][]."""
+    """Return ``item`` if it is not :obj:`~src.api.undefined.UNDEFINED`, otherwise ``default``.
+
+    Args:
+        item: value to unwrap; may be :obj:`~src.api.undefined.UNDEFINED`, :obj:`None`, or ``T``.
+        default: fallback returned when ``item`` is :obj:`~src.api.undefined.UNDEFINED`.
+            ``None`` by default.  Note that ``None`` here is treated as the
+            fallback value, not as a sentinel for "value not provided".
+    """
     if item is UNDEFINED:
         return default
     return item  # type: ignore[return-value]
-

@@ -1,3 +1,10 @@
+"""Public api-layer contracts.
+
+Re-exports the abstract base classes, sentinels and small value
+types that the service and grpc layers depend on.  Concrete
+implementations live under :mod:`src.db` and :mod:`src.services`.
+"""
+
 from .types import LoggingProvider
 from .undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from .service_unavailable_error import ServiceUnavailableError
