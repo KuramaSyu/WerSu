@@ -165,13 +165,31 @@ def _get_effective_level(logger_name: str) -> int:
     return config.get("level", logging.INFO)
 
 
-def logging_provider(file: str, cls_instance: Optional[object] = None) -> logging.Logger:
-    """provides a logger for the given file and class name"""
+def logging_provider(
+    file: str,
+    cls_instance: Optional[object] = None,
+    *,
+    prefix: Optional[str] = None,
+) -> logging.Logger:
+    """provides a logger for the given file and class name
+
+    Args:
+        file: typically the module ``__name__``; becomes the leading
+            segment of the logger name.
+        cls_instance: when given, the class qualname is appended to the
+            logger name (e.g. ``"SharingService"``).
+        prefix: optional short tag wrapped in ``[ ]`` and prepended
+            to the logger name.  Useful for tagging logs from a
+            sub-component -- e.g. ``prefix="sharing facade"`` yields
+            ``"[sharing facade] src.services.sharing.SharingService"``.
+    """
     _configure_handlers()
 
     logger_name = f"{file}"
     if cls_instance:
         logger_name += f".{cls_instance.__class__.__qualname__}"
+    if prefix:
+        logger_name = f"[{prefix}] {logger_name}"
 
     log = getLogger(logger_name)
     log.setLevel(_get_effective_level(logger_name))
