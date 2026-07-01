@@ -1,39 +1,153 @@
 """Concrete :class:`EntityVisitor` that converts each supported entity to its gRPC message.
 
-The visitor delegates to the existing ``to_grpc_*`` converter functions
-in this package so the conversion logic stays in one place per entity.
-Each ``visit_*`` method forwards to the matching free function and
-returns its result.
+The visitor holds the per-entity conversion logic (previously split across
+`note_entity_converter`, `directory_entity_converter`, `user_entity_converter`,
+`attachment_converter` and `share_converters`). Callers go through
+`entity.visit(visitor)` rather than reaching for a free function.
+
+Each `visit_*` method is intentionally a complete conversion -- it does
+not delegate out of this module.  Keeping the logic here is what lets the
+`src/grpc_mod/converter/` directory host just one file: this one.
 """
 
 from __future__ import annotations
 
+import datetime as _dt
+from typing import Any
+
+from google.protobuf.timestamp_pb2 import Timestamp
+
+from src.api import Relationship
+from src.api.relationship import ObjectTypeEnum
+from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
-from src.db.entities.visitor import EntityVisitor
+from src.api.visitor import EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
-from src.grpc_mod.converter.attachment_converter import to_grpc_attachment
-from src.grpc_mod.converter.directory_entity_converter import to_grpc_directory
-from src.grpc_mod.converter.note_entity_converter import to_grpc_note
-from src.grpc_mod.converter.share_converters import to_grpc_note_share
-from src.grpc_mod.converter.user_entity_converter import to_grpc_user
 from src.grpc_mod.proto.attachments_pb2 import Attachment as GrpcAttachment
-from src.grpc_mod.proto.note_pb2 import Directory, Note
-from src.grpc_mod.proto.sharing_pb2 import NoteShare
+from src.grpc_mod.proto.attachments_pb2 import AttachmentMetadata
+from src.grpc_mod.proto.note_pb2 import (
+    Directory,
+    MinimalNote,
+    Note,
+    PermissionObjectType,
+    PermissionRelationship,
+    PermissionResource,
+    PermissionSubject,
+)
+from src.grpc_mod.proto.sharing_pb2 import (
+    SHARE_PERMISSION_READ,
+    SHARE_PERMISSION_UNSPECIFIED,
+    SHARE_PERMISSION_WRITE,
+    GetShareUserResponse,
+    NoteShare,
+    NullableString,
+    NullableTimestamp,
+    SharePermission,
+)
 from src.grpc_mod.proto.user_pb2 import User
+from src.utils import asdict
+from src.utils.dict_helper import drop_except_keys, drop_undefined
+
+
+def _to_permission_object_type(object_type: str) -> PermissionObjectType.ValueType:
+    if object_type == ObjectTypeEnum.NOTE.value:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_NOTE
+    if object_type == ObjectTypeEnum.DIRECTORY.value:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY
+    if object_type == ObjectTypeEnum.USER.value:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_USER
+    if object_type == ObjectTypeEnum.ATTACHMENT.value:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_ATTACHMENT
+    return PermissionObjectType.PERMISSION_OBJECT_TYPE_UNSPECIFIED
+
+
+def _convert_permissions(permissions: Any) -> list[PermissionRelationship]:
+    """Translate each domain :class:`Relationship` into its proto equivalent."""
+    converted: list[PermissionRelationship] = []
+    for perm in permissions:
+        converted.append(
+            PermissionRelationship(
+                relation=str(perm.relation),
+                subject=PermissionSubject(
+                    object_type=_to_permission_object_type(str(perm.subject.object_type)),
+                    object_id=str(perm.subject.object_id),
+                ),
+                resource=PermissionResource(
+                    object_type=_to_permission_object_type(str(perm.resource.object_type)),
+                    object_id=str(perm.resource.object_id),
+                ),
+            )
+        )
+    return converted
+
+
+def _to_proto_nullable_string(value: Any) -> NullableString | None:
+    """Convert a domain nullable string into its protobuf wrapper."""
+    if is_undefined(value):
+        return None
+    if value is None:
+        return NullableString(null_value=True)
+    return NullableString(value=str(value))
+
+
+def _to_proto_nullable_timestamp(value: Any) -> NullableTimestamp | None:
+    """Convert a domain nullable datetime into its protobuf wrapper."""
+    if is_undefined(value):
+        return None
+    if value is None:
+        return NullableTimestamp(null_value=True)
+    return NullableTimestamp(value=_to_proto_timestamp(value))
+
+
+def _to_proto_timestamp(value: Any) -> Timestamp | None:
+    """Convert a domain datetime into a protobuf Timestamp."""
+    if isinstance(value, Timestamp):
+        return value
+    if not isinstance(value, _dt.datetime):
+        return None
+    ts = Timestamp()
+    ts.FromDatetime(value)
+    return ts
+
+
+def _attachment_timestamp(value: Any) -> Timestamp:
+    """Build a proto ``Timestamp`` from an ``UndefinedOr[datetime]`` value."""
+    ts = Timestamp()
+    if not isinstance(value, _dt.datetime):
+        return ts
+    try:
+        ts.FromDatetime(value)
+    except ValueError:
+        ts.FromDatetime(_dt.datetime.now())
+    return ts
+
+
+def _domain_permission_to_grpc(permission: Any) -> SharePermission:
+    """Map a domain ``UndefinedOr[Literal["read", "write"]]`` onto the proto enum."""
+    if is_undefined(permission) or permission is None:
+        return SHARE_PERMISSION_UNSPECIFIED
+    if permission == "read":
+        return SHARE_PERMISSION_READ
+    if permission == "write":
+        return SHARE_PERMISSION_WRITE
+    raise ValueError(f"Invalid permission for a share: {permission}")
 
 
 class ConvertToGrpcVisitor(EntityVisitor):
     """Convert each supported entity to its gRPC protobuf message.
 
     The visitor is stateless; instantiate it per dispatch or reuse a
-    single instance across many ``visit`` calls.
+    single instance across many ``visit`` calls.  Inject it into gRPC
+    services rather than holding a global instance.
 
     Implementations:
         * :class:`ConvertToGrpcVisitor` -- this class.
     """
+
+    # ---- notes ---------------------------------------------------------
 
     def visit_note(self, entity: NoteEntity) -> Note:
         """Convert a :class:`~src.db.entities.note.metadata.NoteEntity` to a ``Note`` message.
@@ -44,7 +158,59 @@ class ConvertToGrpcVisitor(EntityVisitor):
         Returns:
             The equivalent gRPC ``Note`` message.
         """
-        return to_grpc_note(entity)
+        assert entity.note_id is not None
+        assert entity.title is not None
+        assert entity.content is not None
+        assert entity.author_id is not None
+
+        updated_at_ts = Timestamp()
+        if entity.updated_at:
+            updated_at_ts.FromDatetime(entity.updated_at)
+
+        basic_args = drop_undefined(
+            drop_except_keys(
+                asdict(entity),
+                {"note_id", "title", "content", "author_id", "permissions"},
+            )
+        )
+        basic_args["id"] = basic_args.pop("note_id")
+        assert isinstance(entity.permissions, list)
+        basic_args["permissions"] = _convert_permissions(entity.permissions)
+
+        return Note(
+            **basic_args,
+            updated_at=updated_at_ts,
+        )
+
+    def visit_note_minimal(self, entity: NoteEntity) -> MinimalNote:
+        """Convert a :class:`~src.db.entities.note.metadata.NoteEntity` to a ``MinimalNote`` message.
+
+        Args:
+            entity: The note entity to convert.
+
+        Returns:
+            The equivalent gRPC ``MinimalNote`` message (used in search).
+        """
+        assert entity.note_id is not None
+        assert entity.title is not None
+        assert entity.content is not None
+        assert entity.author_id is not None
+
+        basic_args = drop_undefined(
+            drop_except_keys(
+                asdict(entity),
+                {"note_id", "title", "content", "author_id", "updated_at", "permissions"},
+            )
+        )
+
+        perms = basic_args.pop("permissions", [])
+        basic_args["permissions"] = _convert_permissions(perms)
+        basic_args["id"] = basic_args.pop("note_id")
+        basic_args["stripped_content"] = basic_args.pop("content")
+
+        return MinimalNote(**basic_args)
+
+    # ---- directory -----------------------------------------------------
 
     def visit_directory(self, entity: DirectoryEntity) -> Directory:
         """Convert a :class:`~src.db.entities.directory.directory.DirectoryEntity` to a ``Directory`` message.
@@ -55,7 +221,25 @@ class ConvertToGrpcVisitor(EntityVisitor):
         Returns:
             The equivalent gRPC ``Directory`` message.
         """
-        return to_grpc_directory(entity)
+        relationships: list[PermissionRelationship] = []
+        if isinstance(entity.relations, list):
+            relationships = _convert_permissions(entity.relations)
+
+        kwargs: dict[str, Any] = {
+            "id": "" if entity.id in (UNDEFINED, None) else str(entity.id),
+            "name": "" if entity.name in (UNDEFINED, None) else str(entity.name),
+            "display_name": "" if entity.display_name in (UNDEFINED, None) else str(entity.display_name),
+            "description": "" if entity.description in (UNDEFINED, None) else str(entity.description),
+            "image_url": "" if entity.image_url in (UNDEFINED, None) else str(entity.image_url),
+            "relationships": relationships,
+        }
+
+        if entity.parent_id not in (UNDEFINED, None):
+            kwargs["parent_id"] = str(entity.parent_id)
+
+        return Directory(**kwargs)
+
+    # ---- user ----------------------------------------------------------
 
     def visit_user(self, entity: UserEntity) -> User:
         """Convert a :class:`~src.db.entities.user.user.UserEntity` to a ``User`` message.
@@ -66,7 +250,22 @@ class ConvertToGrpcVisitor(EntityVisitor):
         Returns:
             The equivalent gRPC ``User`` message.
         """
-        return to_grpc_user(entity)
+        assert entity.id is not None
+        assert entity.discord_id is not None
+        assert entity.avatar is not None
+        assert entity.username is not None
+        assert entity.email is not None
+
+        return User(
+            id=entity.id,
+            discord_id=entity.discord_id,
+            avatar=entity.avatar,
+            username=entity.username,
+            discriminator=entity.discriminator or "",
+            email=entity.email,
+        )
+
+    # ---- note share ----------------------------------------------------
 
     def visit_note_share(self, entity: NoteShareEntity) -> NoteShare:
         """Convert a :class:`~src.db.entities.note.sharing.NoteShareEntity` to a ``NoteShare`` message.
@@ -77,7 +276,19 @@ class ConvertToGrpcVisitor(EntityVisitor):
         Returns:
             The equivalent gRPC ``NoteShare`` message.
         """
-        return to_grpc_note_share(entity)
+        return NoteShare(
+            id=unwrap_undefined(entity.id),
+            description=_to_proto_nullable_string(entity.description),
+            note_id=unwrap_undefined(entity.note_id),
+            created_at=_to_proto_timestamp(entity.created_at),
+            created_by=unwrap_undefined(entity.created_by),
+            online_since=_to_proto_nullable_timestamp(entity.online_since),
+            online_until=_to_proto_nullable_timestamp(entity.online_until),
+            access_as=unwrap_undefined(entity.access_as),
+            permission=_domain_permission_to_grpc(entity.permission),
+        )
+
+    # ---- attachment ----------------------------------------------------
 
     def visit_attachment(self, entity: Attachment) -> GrpcAttachment:
         """Convert an :class:`~src.db.repos.attachments.attachments.Attachment` to an ``Attachment`` message.
@@ -88,4 +299,53 @@ class ConvertToGrpcVisitor(EntityVisitor):
         Returns:
             The equivalent gRPC ``Attachment`` message (metadata + content).
         """
-        return to_grpc_attachment(entity)
+        return GrpcAttachment(
+            metadata=self._attachment_metadata(entity),
+            content=entity.content,
+        )
+
+    def visit_attachment_metadata(self, entity: Attachment) -> AttachmentMetadata:
+        """Convert an :class:`~src.db.repos.attachments.attachments.Attachment` to an ``AttachmentMetadata`` message.
+
+        Args:
+            entity: The attachment entity to convert.
+
+        Returns:
+            The equivalent gRPC ``AttachmentMetadata`` message.
+        """
+        if entity.key is UNDEFINED:
+            return AttachmentMetadata()
+
+        return AttachmentMetadata(
+            key=str(entity.key),
+            filename=entity.filename,
+            filepath=entity.filepath,
+            content_type=entity.content_type,
+            size=entity.size,
+            created_at=_attachment_timestamp(entity.created_at),
+            updated_at=_attachment_timestamp(entity.updated_at),
+            sha256=entity.sha256,
+        )
+
+    def _attachment_metadata(self, entity: Attachment) -> AttachmentMetadata:
+        return self.visit_attachment_metadata(entity)
+
+    # ---- share-user tuple ----------------------------------------------
+
+    def visit_share_user(
+        self,
+        access_as: str,
+        online_until: Any,
+    ) -> "GetShareUserResponse":
+        """Build a ``GetShareUserResponse`` from its raw share-user fields.
+
+        The ``online_until`` field follows the share semantics already
+        established for shares: :obj:`~src.api.undefined.UNDEFINED` means the
+        share does not advertise an expiry, :data:`None` explicitly means
+        "never expires", and a concrete timestamp is forwarded as a
+        ``NullableTimestamp``.
+        """
+        return GetShareUserResponse(
+            access_as=access_as,
+            online_until=_to_proto_nullable_timestamp(online_until),
+        )

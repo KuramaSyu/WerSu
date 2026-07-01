@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Literal, Optional
 
 from src.api.undefined import UndefinedOr
-from src.db.entities.visitor import AcceptsVisitor, EntityVisitor
+from src.api.visitor import AcceptsVisitor, EntityVisitor
 
 
 @dataclass

@@ -5,12 +5,12 @@ What this file covers:
 * :class:`AcceptsVisitor` and :class:`EntityVisitor` enforce the
   abstract contract (cannot be instantiated; subclasses must implement
   the dispatch methods).
-* Each supported entity dispatches itself to the matching ``visit_*``
+* Each supported entity dispatches itself to the matching `visit_*`
   handler via :meth:`AcceptsVisitor.visit`.
 * :class:`ConvertToGrpcVisitor` produces the same proto message the
-  matching ``to_grpc_*`` free function would, for every entity type.
+  matching `to_grpc_*` free function would, for every entity type.
 
-Wire shape asserted: every entity's ``visit`` call returns the exact
+Wire shape asserted: every entity's `visit` call returns the exact
 proto type the gRPC servicer consumes.
 """
 
@@ -20,20 +20,18 @@ from datetime import datetime
 
 import pytest
 
-from src.api import Relationship
-from src.api.relationship import ObjectRef, SubjectRef
-from src.api.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
-from src.db.entities.visitor import AcceptsVisitor, EntityVisitor
+from src.api.visitor import AcceptsVisitor, EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.proto.attachments_pb2 import Attachment as GrpcAttachment
 from src.grpc_mod.proto.note_pb2 import Directory, Note
 from src.grpc_mod.proto.sharing_pb2 import NoteShare
 from src.grpc_mod.proto.user_pb2 import User
+from tests.stubs.visitor import StubVisitor, make_relationship
 
 
 # ---------------------------------------------------------------------------
@@ -41,17 +39,15 @@ from src.grpc_mod.proto.user_pb2 import User
 # ---------------------------------------------------------------------------
 
 
-def _relationship(resource_id: str, subject_id: str) -> Relationship:
-    """Build a minimal :class:`Relationship` used in converter tests."""
-    return Relationship(
-        resource=ObjectRef(object_type="note", object_id=resource_id),
-        relation="writer",
-        subject=SubjectRef(object_type="user", object_id=subject_id),
-    )
+_relationship = make_relationship
 
 
 def _visitor() -> ConvertToGrpcVisitor:
     return ConvertToGrpcVisitor()
+
+
+def _stub() -> StubVisitor:
+    return StubVisitor()
 
 
 # ---------------------------------------------------------------------------
@@ -60,23 +56,29 @@ def _visitor() -> ConvertToGrpcVisitor:
 
 
 def test_accepts_visitor_cannot_be_instantiated_directly() -> None:
-    """``AcceptsVisitor`` is abstract; calling ``visit`` raises before dispatch."""
+    """`AcceptsVisitor` is abstract; calling `visit` raises before dispatch."""
     with pytest.raises(TypeError):
         AcceptsVisitor()  # type: ignore[abstract]
 
 
 def test_entity_visitor_cannot_be_instantiated_directly() -> None:
-    """``EntityVisitor`` is abstract; subclasses must implement the ``visit_*`` methods."""
+    """`EntityVisitor` is abstract; subclasses must implement the `visit_*` methods."""
     with pytest.raises(TypeError):
         EntityVisitor()  # type: ignore[abstract]
 
 
 def test_partial_visitor_must_implement_all_visit_methods() -> None:
-    """A subclass that forgets one ``visit_*`` method stays abstract."""
+    """A subclass that forgets one `visit_*` method stays abstract."""
 
     class _HalfVisitor(EntityVisitor):
         def visit_note(self, entity):  # type: ignore[override]
             return None
+        def visit_note_minimal(self, entity): ...  # type: ignore[override]
+        def visit_directory(self, entity): ...  # type: ignore[override]
+        def visit_user(self, entity): ...  # type: ignore[override]
+        def visit_note_share(self, entity): ...  # type: ignore[override]
+        def visit_attachment(self, entity): ...  # type: ignore[override]
+        # visit_attachment_metadata is intentionally omitted
 
     with pytest.raises(TypeError):
         _HalfVisitor()  # type: ignore[abstract]
@@ -88,107 +90,71 @@ def test_partial_visitor_must_implement_all_visit_methods() -> None:
 
 
 def test_note_entity_dispatches_to_visit_note() -> None:
-    """``NoteEntity.visit`` routes to ``visitor.visit_note`` with itself."""
-    seen: list[NoteEntity] = []
-
-    class _Recorder(EntityVisitor):
-        def visit_note(self, entity: NoteEntity) -> NoteEntity:
-            seen.append(entity)
-            return entity
-
-        def visit_directory(self, entity): ...
-        def visit_user(self, entity): ...
-        def visit_note_share(self, entity): ...
-        def visit_attachment(self, entity): ...
-
+    """`NoteEntity.visit` routes to `visitor.visit_note` with itself."""
+    stub = _stub()
     entity = NoteEntity(note_id="n1", title="t", content="c", author_id="a1")
-    result = entity.visit(_Recorder())
 
-    assert seen == [entity]
+    result = entity.convert(stub)
+
+    assert stub.notes == [entity]
     assert result is entity
 
 
 def test_directory_entity_dispatches_to_visit_directory() -> None:
-    """``DirectoryEntity.visit`` routes to ``visitor.visit_directory`` with itself."""
-    seen: list[DirectoryEntity] = []
-
-    class _Recorder(EntityVisitor):
-        def visit_note(self, entity): ...
-        def visit_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
-            seen.append(entity)
-            return entity
-
-        def visit_user(self, entity): ...
-        def visit_note_share(self, entity): ...
-        def visit_attachment(self, entity): ...
-
+    """`DirectoryEntity.visit` routes to `visitor.visit_directory` with itself."""
+    stub = _stub()
     entity = DirectoryEntity(id="d1", name="docs")
-    result = entity.visit(_Recorder())
 
-    assert seen == [entity]
+    result = entity.convert(stub)
+
+    assert stub.directories == [entity]
     assert result is entity
 
 
 def test_user_entity_dispatches_to_visit_user() -> None:
-    """``UserEntity.visit`` routes to ``visitor.visit_user`` with itself."""
-    seen: list[UserEntity] = []
-
-    class _Recorder(EntityVisitor):
-        def visit_note(self, entity): ...
-        def visit_directory(self, entity): ...
-        def visit_user(self, entity: UserEntity) -> UserEntity:
-            seen.append(entity)
-            return entity
-
-        def visit_note_share(self, entity): ...
-        def visit_attachment(self, entity): ...
-
+    """`UserEntity.visit` routes to `visitor.visit_user` with itself."""
+    stub = _stub()
     entity = UserEntity(id="u1", discord_id=1, username="alice", email="a@b.c")
-    result = entity.visit(_Recorder())
 
-    assert seen == [entity]
+    result = entity.convert(stub)
+
+    assert stub.users == [entity]
     assert result is entity
 
 
 def test_note_share_entity_dispatches_to_visit_note_share() -> None:
-    """``NoteShareEntity.visit`` routes to ``visitor.visit_note_share`` with itself."""
-    seen: list[NoteShareEntity] = []
-
-    class _Recorder(EntityVisitor):
-        def visit_note(self, entity): ...
-        def visit_directory(self, entity): ...
-        def visit_user(self, entity): ...
-        def visit_note_share(self, entity: NoteShareEntity) -> NoteShareEntity:
-            seen.append(entity)
-            return entity
-
-        def visit_attachment(self, entity): ...
-
+    """`NoteShareEntity.visit` routes to `visitor.visit_note_share` with itself."""
+    stub = _stub()
     entity = NoteShareEntity(id="s1", note_id="n1", access_as="u1")
-    result = entity.visit(_Recorder())
 
-    assert seen == [entity]
+    result = entity.convert(stub)
+
+    assert stub.note_shares == [entity]
     assert result is entity
 
 
 def test_attachment_dispatches_to_visit_attachment() -> None:
-    """``Attachment.visit`` routes to ``visitor.visit_attachment`` with itself."""
-    seen: list[Attachment] = []
-
-    class _Recorder(EntityVisitor):
-        def visit_note(self, entity): ...
-        def visit_directory(self, entity): ...
-        def visit_user(self, entity): ...
-        def visit_note_share(self, entity): ...
-        def visit_attachment(self, entity: Attachment) -> Attachment:
-            seen.append(entity)
-            return entity
-
+    """`Attachment.visit` routes to `visitor.visit_attachment` with itself."""
+    stub = _stub()
     entity = Attachment(key="k1", filename="hello.txt", content=b"hi")
-    result = entity.visit(_Recorder())
 
-    assert seen == [entity]
+    result = entity.convert(stub)
+
+    assert stub.attachments == [entity]
     assert result is entity
+
+
+def test_convert_is_an_alias_for_visit() -> None:
+    """`AcceptsVisitor.convert` is an alias for `AcceptsVisitor.visit`."""
+    entity = NoteEntity(
+        note_id="n1",
+        title="t",
+        content="c",
+        author_id="a1",
+        permissions=[],
+    )
+
+    assert entity.convert(_visitor()) == entity.visit(_visitor())
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +163,7 @@ def test_attachment_dispatches_to_visit_attachment() -> None:
 
 
 def test_visit_note_returns_note_with_basic_fields() -> None:
-    """``visit_note`` maps the entity scalar fields onto the proto."""
+    """`visit_note` maps the entity scalar fields onto the proto."""
     updated_at = datetime(2026, 7, 1, 12, 0, 0)
     entity = NoteEntity(
         note_id="n1",
@@ -208,7 +174,7 @@ def test_visit_note_returns_note_with_basic_fields() -> None:
         permissions=[],
     )
 
-    proto: Note = entity.visit(_visitor())
+    proto: Note = entity.convert(_visitor())
 
     assert isinstance(proto, Note)
     assert proto.id == "n1"
@@ -219,7 +185,7 @@ def test_visit_note_returns_note_with_basic_fields() -> None:
 
 
 def test_visit_note_converts_permissions_to_permission_relationships() -> None:
-    """``visit_note`` translates each ``Relationship`` into a proto permission."""
+    """`visit_note` translates each `Relationship` into a proto permission."""
     entity = NoteEntity(
         note_id="n1",
         title="t",
@@ -228,7 +194,7 @@ def test_visit_note_converts_permissions_to_permission_relationships() -> None:
         permissions=[_relationship("n1", "alice")],
     )
 
-    proto: Note = entity.visit(_visitor())
+    proto: Note = entity.convert(_visitor())
 
     assert len(proto.permissions) == 1
     perm = proto.permissions[0]
@@ -238,7 +204,7 @@ def test_visit_note_converts_permissions_to_permission_relationships() -> None:
 
 
 def test_visit_directory_returns_directory_with_all_fields() -> None:
-    """``visit_directory`` maps every entity field onto the proto."""
+    """`visit_directory` maps every entity field onto the proto."""
     entity = DirectoryEntity(
         id="d1",
         name="docs",
@@ -249,7 +215,7 @@ def test_visit_directory_returns_directory_with_all_fields() -> None:
         relations=[_relationship("d1", "alice")],
     )
 
-    proto: Directory = entity.visit(_visitor())
+    proto: Directory = entity.convert(_visitor())
 
     assert isinstance(proto, Directory)
     assert proto.id == "d1"
@@ -263,10 +229,10 @@ def test_visit_directory_returns_directory_with_all_fields() -> None:
 
 
 def test_visit_directory_omits_parent_id_when_undefined() -> None:
-    """``visit_directory`` skips ``parent_id`` when the entity leaves it ``UNDEFINED``."""
+    """`visit_directory` skips `parent_id` when the entity leaves it `UNDEFINED`."""
     entity = DirectoryEntity(id="d1", name="docs")
 
-    proto: Directory = entity.visit(_visitor())
+    proto: Directory = entity.convert(_visitor())
 
     assert proto.id == "d1"
     assert proto.name == "docs"
@@ -274,7 +240,7 @@ def test_visit_directory_omits_parent_id_when_undefined() -> None:
 
 
 def test_visit_user_returns_user_with_basic_fields() -> None:
-    """``visit_user`` maps the entity scalar fields onto the proto."""
+    """`visit_user` maps the entity scalar fields onto the proto."""
     entity = UserEntity(
         id="u1",
         discord_id=42,
@@ -284,7 +250,7 @@ def test_visit_user_returns_user_with_basic_fields() -> None:
         email="alice@example.com",
     )
 
-    proto: User = entity.visit(_visitor())
+    proto: User = entity.convert(_visitor())
 
     assert isinstance(proto, User)
     assert proto.id == "u1"
@@ -296,7 +262,7 @@ def test_visit_user_returns_user_with_basic_fields() -> None:
 
 
 def test_visit_user_treats_none_discriminator_as_empty_string() -> None:
-    """``visit_user`` falls back to ``""`` when ``discriminator`` is ``None``."""
+    """`visit_user` falls back to `""` when `discriminator` is `None`."""
     entity = UserEntity(
         id="u1",
         discord_id=1,
@@ -306,13 +272,13 @@ def test_visit_user_treats_none_discriminator_as_empty_string() -> None:
         email="a@b.c",
     )
 
-    proto: User = entity.visit(_visitor())
+    proto: User = entity.convert(_visitor())
 
     assert proto.discriminator == ""
 
 
 def test_visit_note_share_returns_note_share_with_basic_fields() -> None:
-    """``visit_note_share`` maps the entity scalar fields onto the proto."""
+    """`visit_note_share` maps the entity scalar fields onto the proto."""
     created_at = datetime(2026, 7, 1, 12, 0, 0)
     entity = NoteShareEntity(
         id="s1",
@@ -323,7 +289,7 @@ def test_visit_note_share_returns_note_share_with_basic_fields() -> None:
         permission="read",
     )
 
-    proto: NoteShare = entity.visit(_visitor())
+    proto: NoteShare = entity.convert(_visitor())
 
     assert isinstance(proto, NoteShare)
     assert proto.id == "s1"
@@ -335,7 +301,7 @@ def test_visit_note_share_returns_note_share_with_basic_fields() -> None:
 
 
 def test_visit_note_share_translates_permission_literal() -> None:
-    """``visit_note_share`` maps ``"write"`` onto ``SHARE_PERMISSION_WRITE`` (2)."""
+    """`visit_note_share` maps `"write"` onto `SHARE_PERMISSION_WRITE` (2)."""
     entity = NoteShareEntity(
         id="s1",
         note_id="n1",
@@ -344,13 +310,13 @@ def test_visit_note_share_translates_permission_literal() -> None:
         permission="write",
     )
 
-    proto: NoteShare = entity.visit(_visitor())
+    proto: NoteShare = entity.convert(_visitor())
 
     assert proto.permission == 2  # SHARE_PERMISSION_WRITE
 
 
 def test_visit_attachment_returns_attachment_with_metadata_and_content() -> None:
-    """``visit_attachment`` wraps the metadata and forwards the raw content bytes."""
+    """`visit_attachment` wraps the metadata and forwards the raw content bytes."""
     entity = Attachment(
         key="k1",
         filename="hello.txt",
@@ -361,7 +327,7 @@ def test_visit_attachment_returns_attachment_with_metadata_and_content() -> None
         checksum="2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
     )
 
-    proto: GrpcAttachment = entity.visit(_visitor())
+    proto: GrpcAttachment = entity.convert(_visitor())
 
     assert isinstance(proto, GrpcAttachment)
     assert proto.content == b"hello"
@@ -389,8 +355,8 @@ def test_visit_attachment_returns_attachment_with_metadata_and_content() -> None
     ids=["note", "directory", "user", "note_share", "attachment"],
 )
 def test_entity_visit_returns_expected_proto_type(entity, expected_type) -> None:
-    """Each entity's ``visit`` call lands on the matching proto type."""
-    result = entity.visit(_visitor())
+    """Each entity's `visit` call lands on the matching proto type."""
+    result = entity.convert(_visitor())
     assert isinstance(result, expected_type)
 
 
@@ -409,8 +375,8 @@ def test_visitor_is_reusable_across_entities(entity, expected_type) -> None:
     """A single :class:`ConvertToGrpcVisitor` instance handles many entities in sequence."""
     visitor = _visitor()
 
-    first = entity.visit(visitor)
-    second = entity.visit(visitor)
+    first = entity.convert(visitor)
+    second = entity.convert(visitor)
 
     assert isinstance(first, expected_type)
     assert isinstance(second, expected_type)

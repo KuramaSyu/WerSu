@@ -3,7 +3,7 @@ from typing import List
 
 from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.api import Relationship
-from src.db.entities.visitor import AcceptsVisitor, EntityVisitor
+from src.api.visitor import AcceptsVisitor, EntityVisitor
 
 
 @dataclass

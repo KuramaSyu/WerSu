@@ -4,8 +4,9 @@ This module wires up a small double-dispatch layer so that an entity
 (:class:`AcceptsVisitor`) can route itself to the right handler on an
 :class:`EntityVisitor` without the call site having to know the concrete
 type.  It exists primarily to let the gRPC layer collapse the if/elif
-chain of ``to_grpc_*`` converters into one :class:`ConvertToGrpcVisitor`
-that dispatches per entity type.
+chain of `to_grpc_*` converters into one
+:class:`~src.grpc_mod.converter.grpc_visitor.ConvertToGrpcVisitor` that
+dispatches per entity type.
 """
 
 from __future__ import annotations
@@ -24,35 +25,47 @@ if TYPE_CHECKING:
 class AcceptsVisitor(ABC):
     """Abstract base for entities that can be visited.
 
-    Concrete entities implement :meth:`visit` to dispatch themselves
-    to the matching ``visit_*`` method on the supplied visitor.  Using
-    ``self.visit(visitor)`` (rather than the canonical
-    ``self.accept(visitor)``) keeps the call site short and reads as
-    "this entity visits the visitor".
+    Concrete entities implement :meth:`visit` (aliased as :meth:`convert`)
+    to dispatch themselves to the matching `visit_*` method on the
+    supplied visitor.  Using `self.visit(visitor)` (rather than the
+    canonical `self.accept(visitor)`) keeps the call site short and
+    reads as "this entity visits the visitor".
     """
 
     @abstractmethod
     def visit(self, visitor: EntityVisitor) -> Any:
-        """Dispatch ``self`` to the matching handler on ``visitor``.
+        """Dispatch `self` to the matching handler on `visitor`.
 
         Args:
             visitor: An :class:`EntityVisitor` that will receive this
-                entity via its ``visit_*`` method.
+                entity via its `visit_*` method.
 
         Returns:
-            Whatever the visitor's ``visit_*`` method returns.  Each
+            Whatever the visitor's `visit_*` method returns.  Each
             concrete visitor decides the return type.
         """
         raise NotImplementedError
+
+    def convert(self, visitor: EntityVisitor) -> Any:
+        """Alias for :meth:`visit`.
+
+        Reads more naturally at gRPC-adapter call sites:
+        `note_entity.convert(self._to_grpc)`.
+        """
+        return self.visit(visitor)
 
 
 class EntityVisitor(ABC):
     """Abstract visitor over the domain entities.
 
-    Every concrete visitor implements one ``visit_*`` method per
-    :class:`AcceptsVisitor` subclass it supports.  The default
+    Every concrete visitor implements one `visit_*` method per
+    :class:`AcceptsVisitor` subclass it supports. The default
     implementations raise :exc:`NotImplementedError` so subclasses
     must opt in to the entities they care about.
+
+    Implementations:
+        * :class:`src.grpc_mod.converter.grpc_visitor.ConvertToGrpcVisitor`
+        * :class:`tests.stubs.visitor.StubVisitor`
     """
 
     @abstractmethod
@@ -61,6 +74,19 @@ class EntityVisitor(ABC):
 
         Raises:
             NotImplementedError: If the visitor does not support notes.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_note_minimal(self, entity: NoteEntity) -> Any:
+        """Handle a :class:`~src.db.entities.note.metadata.NoteEntity` projected to a minimal view.
+
+        Used for search results where the full note payload is not
+        needed. Implementations may project the entity differently
+        than :meth:`visit_note`.
+
+        Raises:
+            NotImplementedError: If the visitor does not support this view.
         """
         raise NotImplementedError
 
@@ -97,5 +123,14 @@ class EntityVisitor(ABC):
 
         Raises:
             NotImplementedError: If the visitor does not support attachments.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_attachment_metadata(self, entity: Attachment) -> Any:
+        """Handle an :class:`~src.db.repos.attachments.attachments.Attachment` projected to metadata only.
+
+        Raises:
+            NotImplementedError: If the visitor does not support this view.
         """
         raise NotImplementedError

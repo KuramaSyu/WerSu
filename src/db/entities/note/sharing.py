@@ -4,7 +4,7 @@ from typing import Literal
 
 
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedNoneOr
-from src.db.entities.visitor import AcceptsVisitor, EntityVisitor
+from src.api.visitor import AcceptsVisitor, EntityVisitor
 
 
 @dataclass

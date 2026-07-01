@@ -19,6 +19,7 @@ from src.db.repos import NotePermissionRepoSpicedb
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_server
 from src.grpc_mod.sharing_service import GrpcSharingService
+from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.services import PermissionServiceRepo, UserService, DirectoryActivityService, AttachmentFacade, share_access
 from src.services.sharing import DefaultSharingService
 from src.facades.share_action_facade import ShareActionFacade
@@ -265,6 +266,7 @@ async def serve():
         version_repo=version_repo,
         directory_activity_service=directory_activity_service,
         log=logging_provider,
+        to_grpc=grpc_visitor,
     )
     sharing_service = DefaultSharingService(
         share_facade=ShareActionFacade(
@@ -287,7 +289,8 @@ async def serve():
 
     ### Register gRPC services by injecting the service layer ###
     log.info("Setting up gRPC services...")
-    note_service = GrpcNoteService(repo=note_repo, log=logging_provider)
+    grpc_visitor = ConvertToGrpcVisitor()
+    note_service = GrpcNoteService(repo=note_repo, log=logging_provider, to_grpc=grpc_visitor)
     add_NoteServiceServicer_to_server(note_service, server)
 
 
@@ -296,6 +299,7 @@ async def serve():
     directory_service = GrpcDirectoryService(
         directory_repo=directory_repo,
         log=logging_provider,
+        to_grpc=grpc_visitor,
     )
     add_DirectoryServiceServicer_to_server(directory_service, server)
 
@@ -303,6 +307,7 @@ async def serve():
     grpc_permission_service = GrpcPermissionService(
         permission_service=permission_service,
         log=logging_provider,
+        to_grpc=grpc_visitor,
     )
     add_PermissionServiceServicer_to_server(grpc_permission_service, server)
 
@@ -310,18 +315,20 @@ async def serve():
         sharing_service=sharing_service,
         share_access_service=share_access_service,
         log=logging_provider,
+        to_grpc=grpc_visitor,
     )
     add_SharingServiceServicer_to_server(grpc_sharing_service, server)
 
     # setup gRPC user service
     app_user_service = UserService(user_repo=user_repo, directory_repo=directory_repo)
-    grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider)
+    grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider, to_grpc=grpc_visitor)
     add_UserServiceServicer_to_server(grpc_user_service, server)
 
     # setup gRPC attachment service
     grpc_attachment_service = GrpcAttachmentService(
         attachment_service=attachment_service,
         log=logging_provider,
+        to_grpc=grpc_visitor,
     )
     add_AttachmentServiceServicer_to_server(grpc_attachment_service, server)
 

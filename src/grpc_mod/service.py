@@ -26,12 +26,9 @@ from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, RelationEnum, Relationship, SubjectRef
 from src.db.repos.attachments.attachments import Attachment as AttachmentEntity
 from src.db.entities.user.user import UserEntity
-from src.grpc_mod.converter import (
-    to_grpc_attachment,
-    to_grpc_attachment_metadata,
-    to_grpc_directory,
-    to_grpc_note,
-    to_grpc_user,
+from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
+from src.grpc_mod.converter.from_proto import to_search_type
+from src.grpc_mod.converter.permission_relationship_converter import (
     to_object_ref,
     to_permission_object_type,
     to_permission_resource,
@@ -50,7 +47,6 @@ from src.grpc_mod.proto.attachments_pb2 import (
     UpdateAttachmentMetadataRequest,
 )
 from src.grpc_mod.proto.attachments_pb2_grpc import AttachmentServiceServicer
-from src.grpc_mod.converter.note_entity_converter import to_grpc_minimal_note, to_search_type
 from src.grpc_mod.proto.note_pb2 import (
     AlterNoteRequest,
     AlterDirectoryRequest,
@@ -189,16 +185,26 @@ class GrpcNoteService(NoteServiceServicer):
     Implements the gRPC service defined in grpc/proto/note.proto
     """
 
-    def __init__(self, repo: NoteRepoFacadeABC, log: LoggingProvider):
+    def __init__(
+        self,
+        repo: NoteRepoFacadeABC,
+        log: LoggingProvider,
+        to_grpc: ConvertToGrpcVisitor,
+    ):
         self.repo = repo
         self.log = log(__name__, self)
         self._svc_logger = logging.getLogger("src.services")
+
+        # visitor pattern -> note entiy calls .visit(visitor) 
+        # -> visitor calls the correct visit_note() method. you 
+        # can inject whatever visitor you want
+        self._to_grpc = to_grpc
  
     @log_service_call()
     async def GetNote(self, request: GetNoteRequest, context: ServicerContext) -> Note:
         try:
             note_entity = await self.repo.select_by_id(request.id, UserContext(user_id=request.user_id))
-            return to_grpc_note(note_entity)
+            return note_entity.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error fetching note: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -221,7 +227,7 @@ class GrpcNoteService(NoteServiceServicer):
                 ),
                 user=user_context,
             )
-            return to_grpc_note(note_entity)
+            return note_entity.convert(self._to_grpc)
         except asyncpg.UniqueViolationError as e:
             context.set_code(grpc.StatusCode.ALREADY_EXISTS)
             context.set_details(f"Insertion error: {e}")
@@ -248,7 +254,7 @@ class GrpcNoteService(NoteServiceServicer):
                 UserContext(user_id=request.author_id)
             )
             self.log.debug(f"Updated note entity: {note_entity}")
-            return to_grpc_note(note_entity)
+            return note_entity.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error updating note: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -268,7 +274,7 @@ class GrpcNoteService(NoteServiceServicer):
                 context.set_details(f"Note not found where user with id {request.author_id} has permissions")
                 return Note()
             assert len(deleted_note_entities) <= 1
-            return to_grpc_note(deleted_note_entities[0])
+            return deleted_note_entities[0].convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error deleting note: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -286,7 +292,7 @@ class GrpcNoteService(NoteServiceServicer):
             ctx=UserContext(user_id=request.user_id),
         )
         for note in notes:
-            grpc_note = to_grpc_minimal_note(note)
+            grpc_note = self._to_grpc.visit_note_minimal(note)
             self.log.debug(f"[SearchNotes] yielding note: {pformat(grpc_note)}")
             yield grpc_note
 
@@ -294,9 +300,15 @@ class GrpcNoteService(NoteServiceServicer):
 class GrpcDirectoryService(DirectoryServiceServicer):
     """gRPC adapter for directory read/write operations."""
 
-    def __init__(self, directory_repo: DirectoryRepo, log: LoggingProvider):
+    def __init__(
+        self,
+        directory_repo: DirectoryRepo,
+        log: LoggingProvider,
+        to_grpc: ConvertToGrpcVisitor,
+    ):
         self._directory_repo = directory_repo
         self.log = log(__name__, self)
+        self._to_grpc = to_grpc
 
     @log_service_call()
     async def GetDirectory(self, request: GetDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -312,7 +324,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 context.set_details("Directory not found")
                 return Directory()
 
-            return to_grpc_directory(directory)
+            return directory.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error fetching directory: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -362,7 +374,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 directories = directories[offset:]
 
             for directory in directories:
-                yield to_grpc_directory(directory)
+                yield directory.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error fetching directories: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -394,7 +406,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                     relations=[user_admin_relation],
                 )
             )
-            return to_grpc_directory(directory)
+            return directory.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error creating directory: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -425,7 +437,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 context.set_details("Directory not found")
                 return Directory()
 
-            return to_grpc_directory(updated)
+            return updated.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error patching directory: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -463,11 +475,13 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
         version_repo: NoteVersionRepoABC,
         directory_activity_service: DirectoryActivityServiceABC,
         log: LoggingProvider,
+        to_grpc: ConvertToGrpcVisitor,
     ) -> None:
         self._note_repo = note_repo
         self._version_repo = version_repo
         self._directory_activity_service = directory_activity_service
         self.log = log(__name__, self)
+        self._to_grpc = to_grpc
 
     @log_service_call()
     async def GetNoteVersions(  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -557,7 +571,7 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
                 ),
                 UserContext(user_id=request.user_id),
             )
-            return to_grpc_note(updated)
+            return updated.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error restoring note version: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -622,9 +636,15 @@ class GrpcPermissionService(PermissionServiceServicer):
     messages.
     """
 
-    def __init__(self, permission_service: PermissionServiceABC, log: LoggingProvider):
+    def __init__(
+        self,
+        permission_service: PermissionServiceABC,
+        log: LoggingProvider,
+        to_grpc: ConvertToGrpcVisitor,
+    ):
         self._permission_service = permission_service
         self.log = log(__name__, self)
+        self._to_grpc = to_grpc
 
     @log_service_call()
     async def GetPermissions(self, request: GetPermissionsRequest, context: ServicerContext) -> PermissionsResponse:
@@ -731,9 +751,15 @@ class GrpcUserService(UserServiceServicer):
     Implements the gRPC service defined in grpc/proto/user.proto
     """
 
-    def __init__(self, user_service: UserServiceABC, log: LoggingProvider):
+    def __init__(
+        self,
+        user_service: UserServiceABC,
+        log: LoggingProvider,
+        to_grpc: ConvertToGrpcVisitor,
+    ):
         self.user_service = user_service
         self.log = log(__name__, self)
+        self._to_grpc = to_grpc
 
     @log_service_call()
     async def GetUser(self, request: GetUserRequest, context: ServicerContext) -> User:
@@ -764,7 +790,7 @@ class GrpcUserService(UserServiceServicer):
             return User()
         
         # user found and converted to gRPC User Message
-        return to_grpc_user(user_entity)
+        return user_entity.convert(self._to_grpc)
 
     @log_service_call()
     async def AlterUser(self, request: AlterUserRequest, context: ServicerContext) -> User:
@@ -788,7 +814,7 @@ class GrpcUserService(UserServiceServicer):
                 )
             )
             self.log.debug(f"Created user entity: {user_entity}")
-            return to_grpc_user(user_entity)
+            return user_entity.convert(self._to_grpc)
         except asyncpg.UniqueViolationError:
             context.set_code(grpc.StatusCode.ALREADY_EXISTS)
             context.set_details("User with the given discord_id already exists")
@@ -803,9 +829,15 @@ class GrpcUserService(UserServiceServicer):
 class GrpcAttachmentService(AttachmentServiceServicer):
     """Implements the gRPC service defined in grpc/proto/attachments.proto."""
 
-    def __init__(self, attachment_service: AttachmentFacadeABC, log: LoggingProvider):
+    def __init__(
+        self,
+        attachment_service: AttachmentFacadeABC,
+        log: LoggingProvider,
+        to_grpc: ConvertToGrpcVisitor,
+    ):
         self.attachment_service = attachment_service
         self.log = log(__name__, self)
+        self._to_grpc = to_grpc
 
     @log_service_call()
     async def PostAttachment(
@@ -825,7 +857,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
             )
             
             created = await self.attachment_service.post_attachment(attachment, UserContext(request.user_id))
-            return to_grpc_attachment(created)
+            return created.convert(self._to_grpc)
         except ValueError as exc:
             context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
             context.set_details(str(exc))
@@ -843,7 +875,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         try:
             self.log.debug(f"Fetching attachment with key={request.key} for user_id={request.user_id}")
             attachment = await self.attachment_service.get_attachment(request.key, UserContext(request.user_id))
-            return to_grpc_attachment(attachment)
+            return attachment.convert(self._to_grpc)
         except KeyError as exc:
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details(str(exc))
@@ -860,7 +892,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
     ) -> GrpcAttachmentMetadata:
         try:
             attachment = await self.attachment_service.get_metadata(request.key, UserContext(request.user_id))
-            return to_grpc_attachment_metadata(attachment)
+            return self._to_grpc.visit_attachment_metadata(attachment)
         except KeyError as exc:
             context.set_code(grpc.StatusCode.NOT_FOUND)
             context.set_details(str(exc))
@@ -910,7 +942,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
                 attachment,
                 user_ctx=UserContext(request.user_id),
             )
-            return to_grpc_attachment_metadata(updated)
+            return self._to_grpc.visit_attachment_metadata(updated)
         except Exception:
             self.log.error(f"Error updating attachment metadata: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)

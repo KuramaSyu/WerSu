@@ -2,25 +2,29 @@
 
 This module is intentionally thin: it converts protobuf payloads into the
 sharing service entities, delegates all permission/business logic to the
-service layer, and converts the result back to protobuf messages.
+service layer, and converts the result back to protobuf messages via the
+injected :class:`ConvertToGrpcVisitor`.
 """
 
-from datetime import datetime
-from typing import AsyncIterator
+from __future__ import annotations
+
 import traceback
+from typing import AsyncIterator
 
 import grpc
 from google.protobuf.empty_pb2 import Empty
-from google.protobuf.timestamp_pb2 import Timestamp
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
 from src.api.sharing import ShareAccessServiceABC, SharingServiceABC as SharingServiceABC
-from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined, unwrap_undefined_or
-from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
+from src.db.entities.note.sharing import FilterShareNote
 from src.db.repos.note.note import UnimplementedUserContext, UserContext
-from src.grpc_mod.converter.share_converters import grpc_request_to_note_share_entity, grpc_note_share_to_domain, to_filter_share_note_entity, to_grpc_note_share, to_proto_note_share
-from src.grpc_mod.proto.note_pb2 import Note
+from src.grpc_mod.converter.from_proto import (
+    grpc_note_share_to_domain,
+    grpc_request_to_note_share_entity,
+    to_filter_share_note_entity,
+)
+from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.proto.sharing_pb2 import (
     AccessShareRequest,
     AccessShareResponse,
@@ -31,35 +35,26 @@ from src.grpc_mod.proto.sharing_pb2 import (
     GetSharesByIdRequest,
     GetSharesRequest,
     NoteShare,
-    NullableString,
-    NullableTimestamp,
-    ShareFilter,
     UpdateShareRequest,
 )
 from src.grpc_mod.proto.sharing_pb2_grpc import SharingServiceServicer
 from src.grpc_mod.service import log_service_call
 
-from src.grpc_mod.converter import (
-    to_grpc_attachment,
-    to_grpc_attachment_metadata,
-    to_grpc_directory,
-    to_grpc_note,
-    to_grpc_user,
-    to_object_ref,
-    to_permission_object_type,
-    to_permission_resource,
-    to_proto_share_user,
-    to_relationship,
-)
-
 
 class GrpcSharingService(SharingServiceServicer):
     """gRPC adapter for the sharing service."""
 
-    def __init__(self, sharing_service: SharingServiceABC, share_access_service: ShareAccessServiceABC, log: LoggingProvider) -> None:
+    def __init__(
+        self,
+        sharing_service: SharingServiceABC,
+        share_access_service: ShareAccessServiceABC,
+        log: LoggingProvider,
+        to_grpc: ConvertToGrpcVisitor,
+    ) -> None:
         self._sharing_service = sharing_service
         self._share_access_service = share_access_service
         self.log = log(__name__, self)
+        self._to_grpc = to_grpc
 
     @log_service_call()
     async def AccessShare(self, request: AccessShareRequest, context: ServicerContext) -> AccessShareResponse:
@@ -69,10 +64,10 @@ class GrpcSharingService(SharingServiceServicer):
                 request.share_id,
                 ctx=UnimplementedUserContext()
                 )
-            return to_proto_note_share(note_share)
+            return AccessShareResponse(share=note_share.convert(self._to_grpc))
         except Exception as exc:
             self._handle_empty_exception(exc, context)
-            return Note()
+            return AccessShareResponse()
 
     @log_service_call()
     async def GetShareUser(
@@ -80,17 +75,12 @@ class GrpcSharingService(SharingServiceServicer):
         request: GetShareUserRequest,
         context: ServicerContext,
     ) -> GetShareUserResponse:
-        """Return the temporary user id (and online-until) behind a share.
-
-        Used by public clients that need the access user id before they
-        can fetch the shared note.  The share id is the only input; no
-        ``user_id`` is required because the caller is anonymous.
-        """
+        """Return the temporary user id (and online-until) behind a share."""
         try:
             access_as, online_until = await self._share_access_service.get_share_user(
                 request.share_id
             )
-            return to_proto_share_user(access_as, online_until)
+            return self._to_grpc.visit_share_user(access_as, online_until)
         except Exception as exc:
             return self._handle_share_user_exception(exc, context)
 
@@ -104,7 +94,7 @@ class GrpcSharingService(SharingServiceServicer):
                 grpc_request_to_note_share_entity(request),
                 UserContext(request.user_id),
             )
-            return to_grpc_note_share(created)
+            return created.convert(self._to_grpc)
         except Exception as exc:
             return self._handle_unary_exception(exc, context)
 
@@ -120,7 +110,7 @@ class GrpcSharingService(SharingServiceServicer):
                 grpc_note_share_to_domain(request.share),
                 UserContext(request.user_id),
             )
-            return to_grpc_note_share(updated)
+            return updated.convert(self._to_grpc)
         except Exception as exc:
             return self._handle_unary_exception(exc, context)
 
@@ -129,17 +119,17 @@ class GrpcSharingService(SharingServiceServicer):
         self,
         request: AccessShareRequest,
         context: ServicerContext,
-    ) -> AsyncIterator[NoteShare]:
-        """Stream shares selected by exact IDs."""
+    ) -> NoteShare:
+        """Return the note behind a share for the given share id."""
         try:
             note = await self._sharing_service.access_share(
                 request.share_id,
                 UserContext(request.user_id)
             )
-            return to_grpc_note(note)
+            return note.convert(self._to_grpc)
         except Exception as exc:
-            self._handle_stream_exception(exc, context)
-            return
+            self._handle_unary_exception(exc, context)
+            return NoteShare()
 
     @log_service_call()
     async def GetShares(
@@ -160,7 +150,7 @@ class GrpcSharingService(SharingServiceServicer):
                 UserContext(request.user_id),
             )
             for share in shares:
-                yield to_grpc_note_share(share)
+                yield share.convert(self._to_grpc)
         except Exception as exc:
             self._handle_stream_exception(exc, context)
             return
@@ -232,6 +222,3 @@ class GrpcSharingService(SharingServiceServicer):
         self.log.error(f"Error handling sharing request: {traceback.format_exc()}")
         context.set_code(grpc.StatusCode.INTERNAL)
         context.set_details("Internal server error while handling sharing request")
-
-
-

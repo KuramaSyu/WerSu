@@ -5,7 +5,7 @@ from datetime import datetime
 from asyncpg import Record
 
 from src.db.entities.directory.directory import DirectoryEntity
-from src.db.entities.visitor import AcceptsVisitor, EntityVisitor
+from src.api.visitor import AcceptsVisitor, EntityVisitor
 from src.api import Relationship
 
 

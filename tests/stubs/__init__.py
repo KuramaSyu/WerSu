@@ -8,6 +8,7 @@ Each stub lives in its own file:
 * :mod:`tests.stubs.permission_repo` -> in-memory permission repo
 * :mod:`tests.stubs.permission_service` -> in-memory permission service
 * :mod:`tests.stubs.user_repo`      -> in-memory user repo
+* :mod:`tests.stubs.visitor`        -> catch-all :class:`EntityVisitor` for visitor tests
 * :mod:`tests.stubs.user_action_repo` -> in-memory user-action repo
 * :mod:`tests.stubs.logging`        -> standard-library logger provider
 
