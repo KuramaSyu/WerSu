@@ -19,10 +19,15 @@ class _FakeSharingRepo:
         self.shares: List[NoteShareEntity] = list(shares or [])
         self.created_share: Optional[NoteShareEntity] = None
         self.updated_share: Optional[NoteShareEntity] = None
-        self.deleted_ids: Optional[List[str]] = None
+        # accumulate rather than overwrite so ``delete_shares`` called
+        # once per id (the typical facade fan-out) still reflects the
+        # full set of removed ids
+        self.deleted_ids: List[str] = []
+        self.deleted_batches: List[List[str]] = []
         self.last_filter: Optional[FilterShareNote] = None
         self.get_shares_by_id_calls: List[List[str]] = []
         self.get_shares_calls: List[FilterShareNote] = []
+        self.get_share_calls: List[FilterShareNote] = []
 
     async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
         self.created_share = share
@@ -46,6 +51,17 @@ class _FakeSharingRepo:
         self.get_shares_by_id_calls.append(share_ids)
         return [share for share in self.shares if share.id in share_ids]
 
+    async def get_share(
+        self,
+        filter: FilterShareNote,
+        ctx: UserContextABC,
+    ) -> NoteShareEntity:
+        self.get_share_calls.append(filter)
+        shares = await self.get_shares(filter, ctx)
+        if not shares:
+            raise ValueError("Share not found")
+        return shares[0]
+
     async def get_shares(
         self,
         filter: FilterShareNote,
@@ -56,7 +72,8 @@ class _FakeSharingRepo:
         return self.shares
 
     async def delete_shares(self, share_ids: List[str], ctx: UserContextABC) -> None:
-        self.deleted_ids = share_ids
+        self.deleted_batches.append(share_ids)
+        self.deleted_ids.extend(share_ids)
 
 
 __all__ = ["_FakeSharingRepo"]

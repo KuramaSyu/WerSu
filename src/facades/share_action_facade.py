@@ -40,7 +40,6 @@ from src.api.types import LoggingProvider
 from src.api.undefined import (
     UNDEFINED,
     UndefinedNoneOr,
-    UndefinedOr,
     unwrap_undefined,
 )
 from src.api.user_action import UserActionRepoABC
