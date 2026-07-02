@@ -10,6 +10,7 @@ import boto3
 from authzed.api.v1 import AsyncClient
 import grpc
 
+from src.api.jwt_provider import PyJwtProvider
 from src.api.sharing import ShareAccessServiceABC, SharingRepoABC
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
@@ -97,7 +98,7 @@ async def serve():
     s3_access_key = get_os_env_variable("GARAGE_DEFAULT_ACCESS_KEY", log, UNDEFINED)
     s3_secret_key = get_os_env_variable("GARAGE_DEFAULT_SECRET_KEY",log, UNDEFINED)
     s3_bucket = get_os_env_variable("GARAGE_DEFAULT_BUCKET", log, UNDEFINED)
-    
+    jwt_secret = get_os_env_variable("JWT_SECRET", log, UNDEFINED)
 
     # create server 
     server = grpc.aio.server()
@@ -186,6 +187,11 @@ async def serve():
     # setup note repo via DI
     log.info("Importing repo and service modules...")
     repo_import_started = time.perf_counter()
+
+    # JWT provider for share-link auth tokens.  Same secret as the
+    # Go REST API so tokens minted there are accepted here and vice versa.
+    log.info("Initialising JWT provider...")
+    jwt_provider = PyJwtProvider(secret=jwt_secret)
 
     log.info(f"Repo/service imports completed in {time.perf_counter() - repo_import_started:.2f}s")
 
