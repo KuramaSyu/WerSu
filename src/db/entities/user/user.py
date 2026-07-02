@@ -1,7 +1,8 @@
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Optional
 
 from src.api.undefined import UndefinedOr
+from src.api.user_context import UserTypeT
 from src.api.visitor import AcceptsVisitor, EntityVisitor
 
 
@@ -13,7 +14,7 @@ class UserEntity(AcceptsVisitor):
     username: Optional[str] = None
     discriminator: Optional[str] = None
     email: Optional[str] = None
-    type: UndefinedOr[Literal["human", "temporary", "system"]] = None
+    type: UndefinedOr[UserTypeT] = None
 
     def visit(self, visitor: EntityVisitor):
         """Dispatch this user to ``visitor.visit_user``."""
