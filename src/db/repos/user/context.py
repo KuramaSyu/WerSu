@@ -1,7 +1,7 @@
 """Repository-backed :class:`~src.api.user_context.UserContextABC` implementation.
 
 A :class:`~src.db.repos.user.context.RepoUserContext` is created from a
-user id by a :class:`~src.db.repos.user.context.RepoContextFactory`.
+`user_id` by a :class:`~src.db.repos.user.context.RepoContextFactory`.
 The context holds the id, lazily fetches the
 :class:`~src.db.entities.user.user.UserEntity` on demand, and caches the
 entity's :class:`~src.api.user_context.UserTypeT` so that
@@ -28,8 +28,8 @@ class RepoUserContext(UserContextABC):
     reuse the cached entity.
 
     Args:
-        `user_repo`: repo used to look up the underlying user.
-        `user_id`: id of the user making the current request.
+        user_repo: repo used to look up the underlying user.
+        user_id: id of the user making the current request.
     """
 
     def __init__(self, user_repo: UserRepoABC, user_id: str) -> None:
@@ -49,7 +49,7 @@ class RepoUserContext(UserContextABC):
         """Lazily fetch and cache the :class:`~src.db.entities.user.user.UserEntity`.
 
         Returns the cached entity on subsequent calls.  Returns ``None``
-        if the repo has no row for ``user_id``; in that case the cached
+        if the repo has no row for `user_id`; in that case the cached
         :attr:`type` stays :obj:`~src.api.undefined.UNDEFINED`.
         """
         if self._user is None:
@@ -67,14 +67,14 @@ class RepoContextFactory(ContextFactory[UserContextABC]):
     """Factory that produces :class:`~src.db.repos.user.context.RepoUserContext` instances.
 
     Args:
-        `user_repo`: repo injected into every context the factory builds.
+        user_repo: repo injected into every context the factory builds.
     """
 
     def __init__(self, user_repo: UserRepoABC) -> None:
         self._user_repo = user_repo
 
     async def create(self, user_id: str) -> UserContextABC:
-        """Build a fresh :class:`~src.db.repos.user.context.RepoUserContext` for ``user_id``."""
+        """Build a fresh :class:`~src.db.repos.user.context.RepoUserContext` for `user_id`."""
         return RepoUserContext(self._user_repo, user_id)
 
 
@@ -103,7 +103,7 @@ class CachedRepoUserContextFactory(RepoContextFactory):
     """Factory that memoizes the :class:`RepoUserContext` it hands out.
 
     Each call to :meth:`create` returns the same context instance per
-    ``user_id`` for ``ttl_seconds`` (default 15 minutes).
+    `user_id` for `ttl_seconds` (default 15 minutes).
 
     Caching is delegated to :func:`src.utils.async_ttl.async_ttl`
     """
@@ -123,14 +123,14 @@ class CachedRepoUserContextFactory(RepoContextFactory):
         self._cached_create = _cached_create
 
     async def create(self, user_id: str) -> UserContextABC:
-        """Return the cached :class:`RepoUserContext` for ``user_id``.
+        """Return the cached :class:`RepoUserContext` for `user_id`.
 
         On cache miss the parent factory builds a fresh context, which
-        is then memoized for ``ttl_seconds`` so subsequent calls return
+        is then memoized for `ttl_seconds` so subsequent calls return
         the exact same instance.
 
         Args:
-            `user_id`: id of the user making the current request.
+            user_id: id of the user making the current request.
         """
         return await self._cached_create(user_id)
 
