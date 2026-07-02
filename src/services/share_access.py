@@ -7,9 +7,9 @@ from src.api.sharing import ShareAccessServiceABC, SharingRepoABC
 from src.api.types import LoggingProvider
 from src.api.undefined import UNDEFINED, UndefinedNoneOr, unwrap_undefined
 from src.api.user_action import UserActionRepoABC
-from src.api.user_context import UserContextABC
+from src.api.user_context import ContextFactory, UserContextABC
 from src.db.entities.note.sharing import NoteShareEntity
-from src.db.repos.note.note import UnimplementedUserContext, UserContext
+from src.db.repos.user import UnimplementedUserContext
 from src.db.repos.user.user import UserRepoABC
 
 
@@ -21,11 +21,13 @@ class ShareAccessService(ShareAccessServiceABC):
         user_repo: UserRepoABC,
         user_action_repo: UserActionRepoABC,
         logger: LoggingProvider,
+        context_factory: ContextFactory[UserContextABC],
     ) -> None:
         self._sharing_repo = sharing_repo
         self._permission_repo = permission_repo
         self._user_repo = user_repo
         self._user_action_repo = user_action_repo
+        self._context_factory = context_factory
         self._log = logger(__name__, self)
 
     async def access_share(self, share_id: str, ctx: Optional[UserContextABC]) -> NoteShareEntity:
@@ -44,7 +46,7 @@ class ShareAccessService(ShareAccessServiceABC):
                 f"Share user {access_as!r} is disabled"
             )
         permissions = await self._permission_repo.get_permissions(
-            user=UserContext(user_id=access_as),
+            user=await self._context_factory.create(access_as),
             resource=ObjectRef("note", note_id),
         )
         self._log.debug(f"Share access check for share {share_id} on note {note_id} with permissions {permissions}")

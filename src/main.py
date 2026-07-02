@@ -32,6 +32,7 @@ from src.db.repos.attachments.attachments import (
     AttachmentsS3Repo,
 )
 from src.db.repos.user.user import UserPostgresRepo
+from src.db.repos.user import RepoContextFactory
 from src.db.repos.user.user_action import UserActionPostgresRepo
 from src.db.table import Table, setup_table_logging
 from src.grpc_mod.proto.attachments_pb2_grpc import add_AttachmentServiceServicer_to_server
@@ -199,6 +200,10 @@ async def serve():
 
     ### Setup Repos ###
     user_repo = UserPostgresRepo(db=db)
+
+    # Factory used by every gRPC service to create user instances
+    user_context_factory = RepoContextFactory(user_repo=user_repo)
+
     permission_repo = NotePermissionRepoSpicedb(client=spicedb_client, consistent=True)
 
     directory_repo = DirectoryRepoSpicedbPostgres(
@@ -272,6 +277,7 @@ async def serve():
         directory_activity_service=directory_activity_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
     )
     sharing_service = DefaultSharingService(
         share_facade=ShareActionFacade(
@@ -283,6 +289,7 @@ async def serve():
         permission_repo=permission_repo,
         permission_service=permission_service,
         logging_provider=logging_provider,
+        user_repo=user_repo,
     )
     share_access_service: ShareAccessServiceABC = share_access.ShareAccessService(
         sharing_repo=sharing_repo,
@@ -290,9 +297,15 @@ async def serve():
         user_repo=user_repo,
         user_action_repo=user_action_repo,
         logger=logging_provider,
+        context_factory=user_context_factory,
     )
 
-    note_service = GrpcNoteService(repo=note_repo, log=logging_provider, to_grpc=grpc_visitor)
+    note_service = GrpcNoteService(
+        repo=note_repo,
+        log=logging_provider,
+        to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
+    )
     add_NoteServiceServicer_to_server(note_service, server)
 
 
@@ -302,6 +315,7 @@ async def serve():
         directory_repo=directory_repo,
         log=logging_provider,
         to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
     )
     add_DirectoryServiceServicer_to_server(directory_service, server)
 
@@ -310,6 +324,7 @@ async def serve():
         permission_service=permission_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
     )
     add_PermissionServiceServicer_to_server(grpc_permission_service, server)
 
@@ -318,6 +333,7 @@ async def serve():
         share_access_service=share_access_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
     )
     add_SharingServiceServicer_to_server(grpc_sharing_service, server)
 
@@ -331,6 +347,7 @@ async def serve():
         attachment_service=attachment_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
     )
     add_AttachmentServiceServicer_to_server(grpc_attachment_service, server)
 

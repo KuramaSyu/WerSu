@@ -4,7 +4,7 @@ from typing import List, Sequence
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.repos.directory.directory import DirectoryRepo
-from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
+from src.db.repos.note.note import NoteRepoFacadeABC
 from src.api import (
     DirectoryRelationEnum,
     PermissionRepoABC,
@@ -255,7 +255,7 @@ class PermissionServiceRepo(PermissionServiceABC):
         """
         object_id = str(resource.object_id)
         if resource.object_type == ObjectTypeEnum.NOTE:
-            note = await self._note_repo.select_by_id(object_id, UserContext(actor.user_id))
+            note = await self._note_repo.select_by_id(object_id, actor)
             if note is None:
                 raise LookupError(f"Note not found: {object_id}")
             return

@@ -8,7 +8,7 @@ import pytest
 from src.api.user_context import UserContextABC
 from src.db.entities.note.versioning import NoteVersionEntry
 from src.db.repos.directory.directory import DirectoryRepo, DirectoryRepoSpicedbPostgres
-from src.db.repos.note.note import UserContext
+from tests.stubs import _UserContext
 from src.api import (
     DirectoryRelationEnum,
     NoteRelationEnum,
@@ -58,7 +58,7 @@ class _FakeDirectoryRepo(DirectoryRepo):
 async def test_resolve_files_of_directory_depth_and_cycle() -> None:
     permission_repo = NotePermissionRepoInMemory()
     user_id = "alice"
-    ctx = UserContext(user_id)
+    ctx = _UserContext(user_id)
 
     await permission_repo.insert(
         [
@@ -153,7 +153,7 @@ async def test_directory_activity_orders_latest_changes() -> None:
 
     results = await service.list_directory_activity(
         directory_id="root",
-        actor=UserContext("user-a"),
+        actor=_UserContext("user-a"),
         max_depth=3,
         limit=10,
         offset=0,

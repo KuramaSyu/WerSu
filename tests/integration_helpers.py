@@ -40,8 +40,9 @@ from src.api import (
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
-from src.db.repos.note.note import NoteRepoFacade, UserContext
+from src.db.repos.note.note import NoteRepoFacade
 from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
+from src.db.repos.user import RepoUserContext
 from src.services.user import UserService
 
 # Sub-module exports (re-exported for legacy callers).
@@ -127,10 +128,11 @@ async def assert_user_has_admin_on_directory(
     permission_repo: NotePermissionRepoSpicedb,
     user_id: str,
     directory_id: str,
+    context_factory,
 ) -> None:
     """Poll SpiceDB until the user is admin on the directory, then assert."""
     resource = ObjectRef(ObjectTypeEnum.DIRECTORY, str(directory_id))
-    actor = UserContext(str(user_id))
+    actor = await context_factory.create(str(user_id))
 
     async def _can_admin() -> bool:
         return await permission_repo.has_permission(actor, "delete", resource)

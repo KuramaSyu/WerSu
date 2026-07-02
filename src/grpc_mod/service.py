@@ -21,7 +21,7 @@ from src.api.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities import NoteEntity
 from src.db.repos.directory.directory import DirectoryRepo
-from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
+from src.db.repos.note.note import NoteRepoFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, RelationEnum, Relationship, SubjectRef
 from src.db.repos.attachments.attachments import Attachment as AttachmentEntity
@@ -34,6 +34,7 @@ from src.grpc_mod.converter.permission_relationship_converter import (
     to_permission_resource,
     to_relationship,
 )
+from src.api.user_context import ContextFactory, UserContextABC
 from src.grpc_mod.proto.attachments_pb2 import (
     Attachment as GrpcAttachment,
     AttachmentMetadata as GrpcAttachmentMetadata,
@@ -94,7 +95,6 @@ from src.services.attachments import AttachmentFacadeABC
 from src.services import PermissionServiceABC
 from src.services.user import UserServiceABC
 from src.services.versioning import DirectoryActivityServiceABC
-from src.db import UserContext
 
 
 # Decorator factory must be defined before use on service methods
@@ -190,20 +190,23 @@ class GrpcNoteService(NoteServiceServicer):
         repo: NoteRepoFacadeABC,
         log: LoggingProvider,
         to_grpc: ConvertToGrpcVisitor,
+        context_factory: ContextFactory[UserContextABC],
     ):
         self.repo = repo
         self.log = log(__name__, self)
         self._svc_logger = logging.getLogger("src.services")
 
-        # visitor pattern -> note entiy calls .visit(visitor) 
-        # -> visitor calls the correct visit_note() method. you 
+        # visitor pattern -> note entiy calls .visit(visitor)
+        # -> visitor calls the correct visit_note() method. you
         # can inject whatever visitor you want
         self._to_grpc = to_grpc
- 
+        self._context = context_factory
+
     @log_service_call()
     async def GetNote(self, request: GetNoteRequest, context: ServicerContext) -> Note:
         try:
-            note_entity = await self.repo.select_by_id(request.id, UserContext(user_id=request.user_id))
+            user_ctx = await self._context.create(request.user_id)
+            note_entity = await self.repo.select_by_id(request.id, user_ctx)
             return note_entity.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error fetching note: {traceback.format_exc()}")
@@ -214,7 +217,7 @@ class GrpcNoteService(NoteServiceServicer):
     @log_service_call()
     async def PostNote(self, request: PostNoteRequest, context: ServicerContext) -> Note:
         try:
-            user_context = UserContext(request.author_id)
+            user_context = await self._context.create(request.author_id)
             note_entity = await self.repo.insert(
                 NoteEntity(
                     note_id=UNDEFINED,
@@ -241,6 +244,7 @@ class GrpcNoteService(NoteServiceServicer):
     @log_service_call()
     async def PatchNote(self, request: AlterNoteRequest, context: ServicerContext) -> Note:
         try:
+            user_ctx = await self._context.create(request.author_id)
             note_entity = await self.repo.update(
                 NoteEntity(
                     note_id=request.id,
@@ -251,7 +255,7 @@ class GrpcNoteService(NoteServiceServicer):
                     title=request.title,
                     updated_at=datetime.now(),
                 ),
-                UserContext(user_id=request.author_id)
+                user_ctx,
             )
             self.log.debug(f"Updated note entity: {note_entity}")
             return note_entity.convert(self._to_grpc)
@@ -264,9 +268,10 @@ class GrpcNoteService(NoteServiceServicer):
     @log_service_call()
     async def DeleteNote(self, request: DeleteNoteRequest, context: ServicerContext) -> Note:
         try:
+            user_ctx = await self._context.create(request.author_id)
             deleted_note_entities = await self.repo.delete(
                 request.id,
-                UserContext(user_id=request.author_id)
+                user_ctx,
             )
             
             if deleted_note_entities is None:
@@ -285,11 +290,12 @@ class GrpcNoteService(NoteServiceServicer):
     async def SearchNotes(
         self, request: GetSearchNotesRequest, context: ServicerContext
     ) -> AsyncIterator[MinimalNote]:
+        user_ctx = await self._context.create(request.user_id)
         notes = await self.repo.search_notes(
             to_search_type(request.search_type),
             request.query,
             pagination=Pagination(limit=request.limit, offset=request.offset),
-            ctx=UserContext(user_id=request.user_id),
+            ctx=user_ctx,
         )
         for note in notes:
             grpc_note = self._to_grpc.visit_note_minimal(note)
@@ -305,10 +311,12 @@ class GrpcDirectoryService(DirectoryServiceServicer):
         directory_repo: DirectoryRepo,
         log: LoggingProvider,
         to_grpc: ConvertToGrpcVisitor,
+        context_factory: ContextFactory[UserContextABC],
     ):
         self._directory_repo = directory_repo
         self.log = log(__name__, self)
         self._to_grpc = to_grpc
+        self._context = context_factory
 
     @log_service_call()
     async def GetDirectory(self, request: GetDirectoryRequest, context: ServicerContext) -> Directory:  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -351,7 +359,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 return
 
             directory_ids = await self._directory_repo.list_user_directory_ids(
-                UserContext(user_id=request.user_id)
+                await self._context.create(request.user_id)
             )
             directories = []
             for directory_id in directory_ids:
@@ -476,12 +484,14 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
         directory_activity_service: DirectoryActivityServiceABC,
         log: LoggingProvider,
         to_grpc: ConvertToGrpcVisitor,
+        context_factory: ContextFactory[UserContextABC],
     ) -> None:
         self._note_repo = note_repo
         self._version_repo = version_repo
         self._directory_activity_service = directory_activity_service
         self.log = log(__name__, self)
         self._to_grpc = to_grpc
+        self._context = context_factory
 
     @log_service_call()
     async def GetNoteVersions(  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -559,6 +569,7 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
                 version_index=request.version_index,
             )
             # Apply the reconstructed content via the existing note update pipeline.
+            user_ctx = await self._context.create(request.user_id)
             updated = await self._note_repo.update(
                 NoteEntity(
                     note_id=request.note_id,
@@ -569,7 +580,7 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
                     embeddings=UNDEFINED,
                     permissions=UNDEFINED,
                 ),
-                UserContext(user_id=request.user_id),
+                user_ctx,
             )
             return updated.convert(self._to_grpc)
         except Exception:
@@ -597,9 +608,10 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
             limit = request.limit if request.HasField("limit") else 25
             offset = request.offset if request.HasField("offset") else 0
 
+            actor = await self._context.create(request.user_id)
             entries = await self._directory_activity_service.list_directory_activity(
                 directory_id=directory_id,
-                actor=UserContext(user_id=request.user_id),
+                actor=actor,
                 max_depth=max_depth,
                 limit=limit,
                 offset=offset,
@@ -641,18 +653,21 @@ class GrpcPermissionService(PermissionServiceServicer):
         permission_service: PermissionServiceABC,
         log: LoggingProvider,
         to_grpc: ConvertToGrpcVisitor,
+        context_factory: ContextFactory[UserContextABC],
     ):
         self._permission_service = permission_service
         self.log = log(__name__, self)
         self._to_grpc = to_grpc
+        self._context = context_factory
 
     @log_service_call()
     async def GetPermissions(self, request: GetPermissionsRequest, context: ServicerContext) -> PermissionsResponse:
         try:
             resource = to_object_ref(request.object_type, request.object_id)
+            actor = await self._context.create(request.user_id)
             relationships = await self._permission_service.list_relationships(
                 resource=resource,
-                actor=UserContext(request.user_id),
+                actor=actor,
             )
             return self._to_permissions_response(resource, relationships)
         except Exception as exc:
@@ -663,9 +678,10 @@ class GrpcPermissionService(PermissionServiceServicer):
         try:
             resource = to_object_ref(request.object_type, request.object_id)
             relationship = to_relationship(resource, request.relationship)
+            actor = await self._context.create(request.user_id)
             relationships = await self._permission_service.create_relationship(
                 relationship=relationship,
-                actor=UserContext(request.user_id),
+                actor=actor,
             )
             return self._to_permissions_response(resource, relationships)
         except Exception as exc:
@@ -676,9 +692,10 @@ class GrpcPermissionService(PermissionServiceServicer):
         try:
             resource = to_object_ref(request.object_type, request.object_id)
             relationship = to_relationship(resource, request.relationship)
+            actor = await self._context.create(request.user_id)
             relationships = await self._permission_service.delete_relationship(
                 relationship=relationship,
-                actor=UserContext(request.user_id),
+                actor=actor,
             )
             return self._to_permissions_response(resource, relationships)
         except Exception as exc:
@@ -692,10 +709,11 @@ class GrpcPermissionService(PermissionServiceServicer):
                 to_relationship(resource, rel)
                 for rel in request.relationships
             ]
+            actor = await self._context.create(request.user_id)
             updated = await self._permission_service.replace_relationships(
                 resource=resource,
                 relationships=relationships,
-                actor=UserContext(request.user_id),
+                actor=actor,
             )
             return self._to_permissions_response(resource, updated)
         except Exception as exc:
@@ -834,10 +852,12 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         attachment_service: AttachmentFacadeABC,
         log: LoggingProvider,
         to_grpc: ConvertToGrpcVisitor,
+        context_factory: ContextFactory[UserContextABC],
     ):
         self.attachment_service = attachment_service
         self.log = log(__name__, self)
         self._to_grpc = to_grpc
+        self._context = context_factory
 
     @log_service_call()
     async def PostAttachment(
@@ -856,7 +876,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
                 content=request.content,
             )
             
-            created = await self.attachment_service.post_attachment(attachment, UserContext(request.user_id))
+            created = await self.attachment_service.post_attachment(attachment, await self._context.create(request.user_id))
             return created.convert(self._to_grpc)
         except ValueError as exc:
             context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
@@ -874,7 +894,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
     ) -> GrpcAttachment:
         try:
             self.log.debug(f"Fetching attachment with key={request.key} for user_id={request.user_id}")
-            attachment = await self.attachment_service.get_attachment(request.key, UserContext(request.user_id))
+            attachment = await self.attachment_service.get_attachment(request.key, await self._context.create(request.user_id))
             return attachment.convert(self._to_grpc)
         except KeyError as exc:
             context.set_code(grpc.StatusCode.NOT_FOUND)
@@ -891,7 +911,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         self, request: GetAttachmentMetadataRequest, context: ServicerContext
     ) -> GrpcAttachmentMetadata:
         try:
-            attachment = await self.attachment_service.get_metadata(request.key, UserContext(request.user_id))
+            attachment = await self.attachment_service.get_metadata(request.key, await self._context.create(request.user_id))
             return self._to_grpc.visit_attachment_metadata(attachment)
         except KeyError as exc:
             context.set_code(grpc.StatusCode.NOT_FOUND)
@@ -908,7 +928,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         self, request: DeleteAttachmentRequest, context: ServicerContext
     ) -> DeleteAttachmentResponse:
         try:
-            await self.attachment_service.delete_attachment(request.key, UserContext(request.user_id))
+            await self.attachment_service.delete_attachment(request.key, await self._context.create(request.user_id))
             return DeleteAttachmentResponse(success=True)
         except Exception:
             self.log.error(f"Error deleting attachment: {traceback.format_exc()}")
@@ -922,7 +942,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
             await self.attachment_service.link_attachment_to_note(
                 attachment_key=request.attachment_key,
                 note_id=request.note_id,
-                user_ctx=UserContext(request.user_id),
+                user_ctx=await self._context.create(request.user_id),
             )
         except Exception:
             self.log.error(f"Error linking attachment: {traceback.format_exc()}")
@@ -940,7 +960,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
         try:
             updated = await self.attachment_service.update_metadata(
                 attachment,
-                user_ctx=UserContext(request.user_id),
+                user_ctx=await self._context.create(request.user_id),
             )
             return self._to_grpc.visit_attachment_metadata(updated)
         except Exception:
@@ -955,7 +975,7 @@ class GrpcAttachmentService(AttachmentServiceServicer):
             await self.attachment_service.unlink_attachment_from_note(
                 attachment_key=request.attachment_key,
                 note_id=request.note_id,
-                user_ctx=UserContext(request.user_id),
+                user_ctx=await self._context.create(request.user_id),
             )
         except Exception:
             self.log.error(f"Error linking attachment: {traceback.format_exc()}")

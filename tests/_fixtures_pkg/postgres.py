@@ -26,6 +26,7 @@ from src.db.repos.note.note import NoteRepoFacade
 from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.db.repos.user.user import UserPostgresRepo
+from src.db.repos.user import RepoContextFactory
 from src.db.repos.user.user_action import UserActionPostgresRepo
 from src.db.table import Table
 from src.services.permissions import PermissionServiceRepo
@@ -72,6 +73,7 @@ class IntegrationEnv:
     directory_repo: DirectoryRepoSpicedbPostgres
     note_repo: NoteRepoFacade
     user_repo: UserPostgresRepo
+    user_context_factory: RepoContextFactory
     user_service: UserService
     permission_service: PermissionServiceRepo
     sharing_repo: SharingPostgresRepo
@@ -131,6 +133,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             logging_provider=logging_provider,
         )
         user_repo = UserPostgresRepo(db=db)
+        user_context_factory = RepoContextFactory(user_repo=user_repo)
         user_service = UserService(user_repo=user_repo, directory_repo=directory_repo)
         permission_service = PermissionServiceRepo(
             permission_repo=permission_repo,
@@ -165,6 +168,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             permission_repo=permission_repo,
             permission_service=permission_service,
             logging_provider=logging_provider,
+            user_repo=user_repo,
         )
 
         try:
@@ -175,6 +179,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
                 directory_repo=directory_repo,
                 note_repo=note_repo,
                 user_repo=user_repo,
+                user_context_factory=user_context_factory,
                 user_service=user_service,
                 permission_service=permission_service,
                 sharing_repo=sharing_repo,

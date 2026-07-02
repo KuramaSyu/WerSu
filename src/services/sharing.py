@@ -9,7 +9,8 @@ from src.api.types import LoggingProvider
 from src.api.undefined import UNDEFINED, UndefinedOr, unwrap_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
-from src.db.repos.note.note import UserContext
+from src.db.repos.user import RepoUserContext
+from src.db.repos.user.user import UserRepoABC
 from src.domain.permission_chain import HasNoteEditPermissionsPerm
 from src.services.permissions import PermissionServiceABC
 from src.facades.share_action_facade import ShareActionFacade
@@ -24,10 +25,12 @@ class DefaultSharingService(SharingServiceABC):
         permission_repo: PermissionRepoABC,
         permission_service: PermissionServiceABC,
         logging_provider: LoggingProvider,
+        user_repo: UserRepoABC,
     ) -> None:
         self._share_facade = share_facade
         self._permission_repo = permission_repo
         self._permission_service = permission_service
+        self._user_repo = user_repo
         self.log = logging_provider(__name__, self)
 
     async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
@@ -200,7 +203,7 @@ class DefaultSharingService(SharingServiceABC):
         ``writer`` implies both read and write via the schema, so check it first.
         """
         permissions = await self._permission_repo.get_permissions(
-            user=UserContext(user_id=access_as),
+            user=RepoUserContext(self._user_repo, access_as),
             resource=ObjectRef("note", note_id),
         )
         self.log.debug(

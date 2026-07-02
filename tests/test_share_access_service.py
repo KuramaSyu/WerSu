@@ -25,7 +25,7 @@ from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_action import UserActionEntity
 from src.services.share_access import ShareAccessService
-from src.db.repos.note.note import UnimplementedUserContext
+from src.db.repos.user import RepoContextFactory, UnimplementedUserContext
 from tests.stubs.logging import silent_logger
 from tests.stubs.permission_repo import _FakePermissionRepo
 from tests.stubs.sharing_repo import _FakeSharingRepo
@@ -72,6 +72,7 @@ def _build_service(
         user_repo=user_repo,
         user_action_repo=user_action_repo,
         logger=silent_logger,
+        context_factory=RepoContextFactory(user_repo),
     )
 
 

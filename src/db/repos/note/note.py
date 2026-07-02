@@ -35,23 +35,6 @@ class SearchType(Enum):
     CONTEXT = 4
 
 
-class UserContext(UserContextABC):
-    def __init__(self, user_id: str):
-        self._user_id = user_id
-
-    @property
-    def user_id(self) -> str:
-        return self._user_id
-    
-class UnimplementedUserContext(UserContextABC):
-    def __init__(self):
-        pass
-
-    @property
-    def user_id(self) -> str:
-        raise NotImplementedError("User ID is not implemented in this context.")
-
-
 class NoteRepoFacadeABC(ABC):
     """Represents the ABC for note-operations which operate over multiple relations"""
     @property
@@ -97,7 +80,7 @@ class NoteRepoFacadeABC(ABC):
     async def update(
         self,
         note: NoteEntity,
-        ctx: UserContext,
+        ctx: UserContextABC,
     ) -> NoteEntity:
         """updates note (content only)
         
@@ -117,7 +100,7 @@ class NoteRepoFacadeABC(ABC):
     async def delete(
         self,
         note_id: str,
-        ctx: UserContext,
+        ctx: UserContextABC,
     ) -> Optional[List[NoteEntity]]:
         """delete note
         
@@ -138,7 +121,7 @@ class NoteRepoFacadeABC(ABC):
     async def select_by_id(
         self,
         note_id: str,
-        ctx: UserContext,
+        ctx: UserContextABC,
     ) -> Optional[NoteEntity]:
         """select a whole note by its ID
         
@@ -158,10 +141,10 @@ class NoteRepoFacadeABC(ABC):
 
     @abstractmethod
     async def search_notes(
-        self, 
+        self,
         search_type: SearchType,
-        query: str, 
-        ctx: UserContext,
+        query: str,
+        ctx: UserContextABC,
         pagination: Pagination
     ) -> List[NoteEntity]:
         """search notes according to the search type
@@ -329,7 +312,7 @@ class NoteRepoFacade(NoteRepoFacadeABC):
             )
         return note
     
-    async def update(self, note: NoteEntity, ctx: UserContext) -> NoteEntity:
+    async def update(self, note: NoteEntity, ctx: UserContextABC) -> NoteEntity:
         # fetch current state for versioning before applying updates
         current = await self._content_repo.select_by_id(str(note.note_id))
 
@@ -371,10 +354,10 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         
         return note
 
-    async def delete(self, note_id: str, ctx: UserContext) -> Optional[List[NoteEntity]]:
+    async def delete(self, note_id: str, ctx: UserContextABC) -> Optional[List[NoteEntity]]:
         return await self._content_repo.delete(NoteEntity(note_id=note_id, author_id=ctx.user_id))
     
-    async def select_by_id(self, note_id: str, ctx: UserContext) -> Optional[NoteEntity]:
+    async def select_by_id(self, note_id: str, ctx: UserContextABC) -> Optional[NoteEntity]:
         record = await self._content_repo.select_by_id(note_id)
         if not record:
             return None
@@ -395,10 +378,10 @@ class NoteRepoFacade(NoteRepoFacadeABC):
         return record
 
     async def search_notes(
-        self, 
+        self,
         search_type: SearchType,
-        query: str, 
-        ctx: UserContext,
+        query: str,
+        ctx: UserContextABC,
         pagination: Pagination
     ) -> List[NoteEntity]:
         # these parameters are common to all strategies __init__ fn

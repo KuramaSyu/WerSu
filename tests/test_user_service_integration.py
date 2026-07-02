@@ -21,7 +21,7 @@ import pytest
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
-from src.db.repos.note.note import NoteRepoFacade, UserContext
+from src.db.repos.note.note import NoteRepoFacade
 from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
 from src.services.user import UserService
 from tests.integration_helpers import (
@@ -31,7 +31,7 @@ from tests.integration_helpers import (
     assert_user_has_admin_on_directory,
     make_custom_directory,
     make_user_entity,
-    user_service_env,
+    spicedb_postgres_env,
     wait_until,
 )
 
@@ -39,11 +39,11 @@ from tests.integration_helpers import (
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
 
 
-EnvT = Tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]
+EnvT = Tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]  # noqa: F841 -- kept for backward compat imports
 
 
 async def test_create_user_bootstraps_default_directories(
-    user_service_env: EnvT,
+    spicedb_postgres_env,
 ) -> None:
     """New users get the three default zettelkasten directories and admin rights.
 
@@ -51,7 +51,7 @@ async def test_create_user_bootstraps_default_directories(
     creating user must end up with admin, write, and view permissions
     on it (and a different user must not).
     """
-    user_service, directory_repo, _, permission_repo = user_service_env
+    user_service, directory_repo, permission_repo, context_factory = spicedb_postgres_env.user_service, spicedb_postgres_env.directory_repo, spicedb_postgres_env.permission_repo, spicedb_postgres_env.user_context_factory
 
     created_user = await user_service.create_user(
         make_user_entity(
@@ -77,7 +77,9 @@ async def test_create_user_bootstraps_default_directories(
     )
 
     # All three default directories are created.
-    directory_ids = await directory_repo.list_user_directory_ids(UserContext(created_user.id))
+    directory_ids = await directory_repo.list_user_directory_ids(
+        await context_factory.create(str(created_user.id))
+    )
     if len(directory_ids) != 3:
         pytest.fail(
             f"expected 3 default directories for user {created_user.id!r}, "
@@ -118,10 +120,10 @@ async def test_create_user_bootstraps_default_directories(
 
         # Permissions become visible eventually; wait, then assert all of them.
         await assert_user_has_admin_on_directory(
-            permission_repo, str(created_user.id), str(directory.id)
+            permission_repo, str(created_user.id), str(directory.id), context_factory
         )
         if await permission_repo.has_permission(
-            UserContext("another-user"),
+            await context_factory.create("another-user"),
             "view",
             ObjectRef(ObjectTypeEnum.DIRECTORY, str(directory.id)),
         ):
@@ -132,10 +134,10 @@ async def test_create_user_bootstraps_default_directories(
 
 
 async def test_insert_note_uses_default_fleeting_directory_when_parent_not_specified(
-    user_service_env: EnvT,
+    spicedb_postgres_env,
 ) -> None:
     """Notes without a parent attach to the default ``fleeting_notes`` directory."""
-    user_service, directory_repo, note_repo, permission_repo = user_service_env
+    user_service, directory_repo, note_repo, permission_repo, context_factory = spicedb_postgres_env.user_service, spicedb_postgres_env.directory_repo, spicedb_postgres_env.note_repo, spicedb_postgres_env.permission_repo, spicedb_postgres_env.user_context_factory
 
     created_user = await user_service.create_user(
         make_user_entity(
@@ -149,7 +151,7 @@ async def test_insert_note_uses_default_fleeting_directory_when_parent_not_speci
     if created_user.id is None:
         pytest.fail(f"create_user() returned a user without an ID: {created_user!r}")
 
-    default_directory = await _get_default_directory(directory_repo, created_user.id)
+    default_directory = await _get_default_directory(directory_repo, created_user.id, context_factory)
     if default_directory.id is None:
         pytest.fail(
             f"default directory {default_directory.name!r} was created without an ID: "
@@ -163,7 +165,7 @@ async def test_insert_note_uses_default_fleeting_directory_when_parent_not_speci
             updated_at=datetime.now(),
             author_id=created_user.id,
         ),
-        UserContext(created_user.id),
+        await context_factory.create(str(created_user.id)),
     )
     if note.note_id is None:
         pytest.fail(f"insert() returned a note without an ID: {note!r}")
@@ -179,10 +181,10 @@ async def test_insert_note_uses_default_fleeting_directory_when_parent_not_speci
 
 
 async def test_insert_note_uses_specified_parent_directory_when_provided(
-    user_service_env: EnvT,
+    spicedb_postgres_env,
 ) -> None:
     """Notes with an explicit parent attach to that parent directory."""
-    user_service, directory_repo, note_repo, permission_repo = user_service_env
+    user_service, directory_repo, note_repo, permission_repo, context_factory = spicedb_postgres_env.user_service, spicedb_postgres_env.directory_repo, spicedb_postgres_env.note_repo, spicedb_postgres_env.permission_repo, spicedb_postgres_env.user_context_factory
 
     created_user = await user_service.create_user(
         make_user_entity(
@@ -212,7 +214,7 @@ async def test_insert_note_uses_specified_parent_directory_when_provided(
             author_id=created_user.id,
             parent_dir_id=str(custom_directory.id),
         ),
-        UserContext(created_user.id),
+        await context_factory.create(str(created_user.id)),
     )
     if note.note_id is None:
         pytest.fail(f"insert() returned a note without an ID: {note!r}")
@@ -243,11 +245,15 @@ async def _gather(
 
 
 async def _get_default_directory(
-    directory_repo: DirectoryRepoSpicedbPostgres, user_id: str
+    directory_repo: DirectoryRepoSpicedbPostgres,
+    user_id: str,
+    context_factory,
 ) -> DirectoryEntity:
     """Return the user's first default directory (e.g. ``fleeting_notes``)."""
     default_name = directory_repo.get_default_directory_specs()[0].name
-    ids = await directory_repo.list_user_directory_ids(UserContext(user_id))
+    ids = await directory_repo.list_user_directory_ids(
+        await context_factory.create(user_id)
+    )
     for d in await _gather(directory_repo.fetch_directory, ids):
         if d is not None and d.name == default_name:
             return d

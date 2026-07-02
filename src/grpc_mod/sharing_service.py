@@ -17,8 +17,9 @@ from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
 from src.api.sharing import ShareAccessServiceABC, SharingServiceABC as SharingServiceABC
+from src.api.user_context import ContextFactory, UserContextABC
 from src.db.entities.note.sharing import FilterShareNote
-from src.db.repos.note.note import UnimplementedUserContext, UserContext
+from src.db.repos.user import UnimplementedUserContext
 from src.grpc_mod.converter.from_proto import (
     grpc_note_share_to_domain,
     grpc_request_to_note_share_entity,
@@ -50,11 +51,13 @@ class GrpcSharingService(SharingServiceServicer):
         share_access_service: ShareAccessServiceABC,
         log: LoggingProvider,
         to_grpc: ConvertToGrpcVisitor,
+        context_factory: ContextFactory[UserContextABC],
     ) -> None:
         self._sharing_service = sharing_service
         self._share_access_service = share_access_service
         self.log = log(__name__, self)
         self._to_grpc = to_grpc
+        self._context = context_factory
 
     @log_service_call()
     async def AccessShare(self, request: AccessShareRequest, context: ServicerContext) -> AccessShareResponse:
@@ -92,7 +95,7 @@ class GrpcSharingService(SharingServiceServicer):
 
             created = await self._sharing_service.create_share(
                 grpc_request_to_note_share_entity(request),
-                UserContext(request.user_id),
+                await self._context.create(request.user_id),
             )
             return created.convert(self._to_grpc)
         except Exception as exc:
@@ -108,7 +111,7 @@ class GrpcSharingService(SharingServiceServicer):
 
             updated = await self._sharing_service.update_share(
                 grpc_note_share_to_domain(request.share),
-                UserContext(request.user_id),
+                await self._context.create(request.user_id),
             )
             return updated.convert(self._to_grpc)
         except Exception as exc:
@@ -124,7 +127,7 @@ class GrpcSharingService(SharingServiceServicer):
         try:
             note = await self._sharing_service.access_share(
                 request.share_id,
-                UserContext(request.user_id)
+                await self._context.create(request.user_id)
             )
             return note.convert(self._to_grpc)
         except Exception as exc:
@@ -147,7 +150,7 @@ class GrpcSharingService(SharingServiceServicer):
             )
             shares = await self._sharing_service.get_shares(
                 filter_entity,
-                UserContext(request.user_id),
+                await self._context.create(request.user_id),
             )
             for share in shares:
                 yield share.convert(self._to_grpc)
@@ -162,7 +165,7 @@ class GrpcSharingService(SharingServiceServicer):
             self._require_user_id(request.user_id)
             await self._sharing_service.delete_shares(
                 list(request.share_ids),
-                UserContext(request.user_id),
+                await self._context.create(request.user_id),
             )
             return Empty()
         except Exception as exc:
