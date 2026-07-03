@@ -208,6 +208,50 @@ class Note(_message.Message):
 Global___Note: _TypeAlias = Note  # noqa: Y015
 
 @_typing.final
+class NoteResponse(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    @_typing.final
+    class IdTokenMapEntry(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: _builtins.int
+        VALUE_FIELD_NUMBER: _builtins.int
+        key: _builtins.str
+        value: _builtins.str
+        def __init__(
+            self,
+            *,
+            key: _builtins.str = ...,
+            value: _builtins.str = ...,
+        ) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "value", b"value"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+    NOTE_FIELD_NUMBER: _builtins.int
+    ID_TOKEN_MAP_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def note(self) -> Global___Note: ...
+    @_builtins.property
+    def id_token_map(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]: ...
+    def __init__(
+        self,
+        *,
+        note: Global___Note | None = ...,
+        id_token_map: _abc.Mapping[_builtins.str, _builtins.str] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["note", b"note"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["id_token_map", b"id_token_map", "note", b"note"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___NoteResponse: _TypeAlias = NoteResponse  # noqa: Y015
+
+@_typing.final
 class NoteEmbedding(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 

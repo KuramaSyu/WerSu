@@ -38,7 +38,7 @@ class NoteServiceStub:
         self.GetNote = channel.unary_unary(
                 '/proto.NoteService/GetNote',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteResponse.FromString,
                 _registered_method=True)
         self.PostNote = channel.unary_unary(
                 '/proto.NoteService/PostNote',
@@ -67,7 +67,10 @@ class NoteServiceServicer:
     """
 
     def GetNote(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """GetNote returns a Note from DB. If the user is a public/temp user,
+        then an additional id_token_map will be returned, containing a
+        JWT for each attachment in the file. 
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -102,7 +105,7 @@ def add_NoteServiceServicer_to_server(servicer, server):
             'GetNote': grpc.unary_unary_rpc_method_handler(
                     servicer.GetNote,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteResponse.SerializeToString,
             ),
             'PostNote': grpc.unary_unary_rpc_method_handler(
                     servicer.PostNote,
@@ -152,7 +155,7 @@ class NoteService:
             target,
             '/proto.NoteService/GetNote',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteResponse.FromString,
             options,
             channel_credentials,
             insecure,
