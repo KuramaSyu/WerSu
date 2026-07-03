@@ -5,7 +5,7 @@ required-environments = [
 [project]
 name = "WerSu"
 version = "0.1.0"
-description = "Add your description here"
+description = "Backed for WerSu - a documentation site"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
