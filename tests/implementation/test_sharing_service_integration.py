@@ -11,8 +11,9 @@ and SpiceDB containers, validating that:
 3. deleting a share removes the row, deletes the temporary user, and
    clears the access user's SpiceDB relations on the note.
 
-The tests are marked ``integration`` and ``spicedb`` and are excluded
-from the default test run configured in ``pytest.ini``.
+The tests are marked ``implementation`` and ``spicedb`` and live under
+``tests/implementation/``; they are excluded from the default test
+run configured in ``pytest.ini``.
 """
 
 from datetime import datetime
@@ -20,22 +21,23 @@ from typing import Tuple
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.api import ObjectRef, ObjectTypeEnum
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
-from src.db.repos.note.note import UserContext
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.services.sharing import DefaultSharingService
 from tests.integration_helpers import (
     NoteRelationEnum,
+    UserContext,
     make_user_entity,
     sharing_service_env,
     wait_until,
 )
 
 
-pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
+pytestmark = [pytest.mark.implementation, pytest.mark.spicedb]
 
 
 EnvT = Tuple[DefaultSharingService, SharingPostgresRepo]

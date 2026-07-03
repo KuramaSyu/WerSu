@@ -9,8 +9,9 @@ and SpiceDB containers to validate that:
 4. notes inherit the default directory when no parent is specified,
 5. notes respect an explicit parent directory when one is provided.
 
-The tests are marked ``integration`` and ``spicedb`` and are excluded
-from the default test run configured in ``pytest.ini``.
+The tests are marked ``implementation`` and ``spicedb`` and live under
+``tests/implementation/``; they are excluded from the default test
+run configured in ``pytest.ini``.
 """
 
 from datetime import datetime
@@ -18,10 +19,11 @@ from typing import Awaitable, Callable, Iterable, Tuple, TypeVar
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
-from src.db.repos.note.note import NoteRepoFacade
+from src.db.repos.note.note import NoteFacade
 from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
 from src.services.user import UserService
 from tests.integration_helpers import (
@@ -36,10 +38,10 @@ from tests.integration_helpers import (
 )
 
 
-pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
+pytestmark = [pytest.mark.implementation, pytest.mark.spicedb]
 
 
-EnvT = Tuple[UserService, DirectoryRepoSpicedbPostgres, NoteRepoFacade, NotePermissionRepoSpicedb]  # noqa: F841 -- kept for backward compat imports
+EnvT = Tuple[UserService, DirectoryRepoSpicedbPostgres, NoteFacade, NotePermissionRepoSpicedb]  # noqa: F841 -- kept for backward compat imports
 
 
 async def test_create_user_bootstraps_default_directories(

@@ -1,7 +1,10 @@
 import pytest
+
+pytestmark = pytest.mark.implementation
 from datetime import datetime
 
-from src.db.repos.note.note import UserContext, NoteRepoFacadeABC
+from tests.stubs.user_context import _UserContext as UserContext
+from src.db.repos.note.note import NoteRepoFacadeABC
 from src.db.entities.note.metadata import NoteEntity
 from src.api import (
     ObjectRef,

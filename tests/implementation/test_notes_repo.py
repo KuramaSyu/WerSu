@@ -5,19 +5,22 @@ from uuid import UUID
 import pytest
 from testcontainers.postgres import PostgresContainer
 from torch import embedding
+from tests.stubs.user_context import _UserContext as UserContext
 from src.api.types import Pagination
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.permission import NoteRelationEnum, ObjectTypeEnum
 from src.db.repos.note.content import NoteContentPostgresRepo, NoteContentRepo
-from src.db.repos.note.note import NoteRepoFacade, NoteRepoFacadeABC, SearchType, UserContext
+from src.db.repos.note.note import NoteFacade, NoteRepoFacadeABC, SearchType
 from src.db.table import Table
 from src.db.entities.user.user import UserEntity
 from src.db.repos.user.user import UserRepoABC
 import src.api
 from src.db.repos import UserPostgresRepo, Database, note
 from src.utils import logging_provider
-from .fixtures import db, note_repo_facade, user_repo, dsn, test_user
+from tests.fixtures import db, note_repo_facade, user_repo, dsn, test_user
+
+pytestmark = pytest.mark.implementation
 
 # each test recreates user and note to keep readability per test
 

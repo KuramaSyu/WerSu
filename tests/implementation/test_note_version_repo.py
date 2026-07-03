@@ -2,13 +2,16 @@ from datetime import datetime
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.table import Table
 from src.utils import logging_provider
 
-from .fixtures import db, dsn, user_repo, test_user
+from tests.fixtures import db, dsn, user_repo, test_user
+
+pytestmark = pytest.mark.implementation
 
 
 async def test_versioning_snapshot_delta_rotation(db, user_repo, test_user):

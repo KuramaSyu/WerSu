@@ -10,13 +10,13 @@ import uuid
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.api import ObjectRef, Relationship, SubjectRef
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
-from src.db.repos.note.note import UserContext
 from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
 
 
-pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
+pytestmark = [pytest.mark.implementation, pytest.mark.spicedb]
 
 
 # Backwards-compatible alias: prior versions of this file declared

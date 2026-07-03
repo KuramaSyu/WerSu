@@ -4,16 +4,19 @@ from typing import AsyncGenerator, Optional
 from uuid import UUID
 import pytest
 from testcontainers.postgres import PostgresContainer
+from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.user.user import UserEntity
-from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
+from src.db.repos.note.note import NoteRepoFacadeABC
 from src.db.repos.user.user import UserRepoABC
 import src.api
 from src.db.repos import UserPostgresRepo, Database
 from src.utils import logging_provider
 
 # import fixtures, otherise pytest will not detect them
-from .fixtures import db, note_repo_facade, user_repo, note_repo_facade, dsn, test_user
+from tests.fixtures import db, note_repo_facade, user_repo, note_repo_facade, dsn, test_user
+
+pytestmark = pytest.mark.implementation
 
 
 

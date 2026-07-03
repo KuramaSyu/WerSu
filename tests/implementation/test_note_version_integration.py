@@ -2,15 +2,20 @@ from dataclasses import replace
 from datetime import datetime
 from typing import List
 
+import pytest
+
+from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.note import NoteRepoFacade, UserContext
+from src.db.repos.note.note import NoteFacade
 from src.db.repos.note.permission import NotePermissionRepoInMemory
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.table import Table
 from src.utils import logging_provider
 
-from .fixtures import db, dsn, test_user, user_repo, _FakeEmbeddingRepo, _TestDirectoryRepo
+from tests.fixtures import db, dsn, test_user, user_repo, _FakeEmbeddingRepo, _TestDirectoryRepo
+
+pytestmark = pytest.mark.implementation
 
 
 async def test_note_versioning_records_snapshots_and_deltas(db, user_repo, test_user) -> None:
@@ -44,7 +49,7 @@ async def test_note_versioning_records_snapshots_and_deltas(db, user_repo, test_
         max_deltas_per_snapshot=1,
     )
 
-    note_repo = NoteRepoFacade(
+    note_repo = NoteFacade(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
         embedding_repo=_FakeEmbeddingRepo(),
