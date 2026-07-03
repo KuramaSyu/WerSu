@@ -66,6 +66,7 @@ from src.grpc_mod.proto.note_pb2 import (
     GetSearchNotesRequest,
     MinimalNote,
     Note,
+    NoteResponse,
     NoteVersionContent,
     NoteVersionSummary,
     PermissionRelationship,
@@ -202,20 +203,21 @@ class GrpcNoteService(NoteServiceServicer):
         self._context = context_factory
 
     @log_service_call()
-    async def GetNote(self, request: GetNoteRequest, context: ServicerContext) -> Note:
+    async def GetNote(self, request: GetNoteRequest, context: ServicerContext) -> NoteResponse:
         try:
             user_ctx = await self._context.create(request.user_id)
             response = await self._note_service.get_note(request.id, user_ctx)
+            self.log.debug(f"Fetched note response: {response}")
             if response.note is None:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
                 context.set_details(f"Note not found where user with id {request.user_id} has permissions")
-                return Note()
-            return response.note.convert(self._to_grpc)
+                return NoteResponse()
+            return response.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error fetching note: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while fetching note")
-            return Note()
+            return NoteResponse()
 
     @log_service_call()
     async def PostNote(self, request: PostNoteRequest, context: ServicerContext) -> Note:
