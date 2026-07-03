@@ -45,7 +45,7 @@ from src.grpc_mod.proto.note_pb2_grpc import (
 )
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.note import NoteRepoFacade
+from src.db.repos.note.note import NoteFacade
 from src.grpc_mod.service import (
     GrpcAttachmentService,
     GrpcDirectoryService,
@@ -224,7 +224,7 @@ async def serve():
         max_deltas_per_snapshot=max_note_deltas,
     )
 
-    note_repo: NoteRepoFacade = NoteRepoFacade(
+    note_repo: NoteFacade = NoteFacade(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
         embedding_repo=NoteEmbeddingPostgresRepo(

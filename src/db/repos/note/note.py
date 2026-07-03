@@ -166,7 +166,7 @@ class NoteRepoFacadeABC(ABC):
         ...
 
 
-class NoteRepoFacade(NoteRepoFacadeABC):
+class NoteFacade(NoteRepoFacadeABC):
     def __init__(
         self, 
         db: Database,

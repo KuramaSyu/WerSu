@@ -22,7 +22,7 @@ from src.db.migrations.runner import MigrationRunner
 from src.db.repos import Database
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.note import NoteRepoFacade
+from src.db.repos.note.note import NoteFacade
 from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.db.repos.user.user import UserPostgresRepo
@@ -71,7 +71,7 @@ class IntegrationEnv:
     spicedb_client: AsyncClient
     permission_repo: NotePermissionRepoSpicedb
     directory_repo: DirectoryRepoSpicedbPostgres
-    note_repo: NoteRepoFacade
+    note_repo: NoteFacade
     user_repo: UserPostgresRepo
     user_context_factory: RepoContextFactory
     user_service: UserService
@@ -117,7 +117,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             permission_repo=permission_repo,
             spicedb_client=spicedb_client,
         )
-        note_repo = NoteRepoFacade(
+        note_repo = NoteFacade(
             db=db,
             content_repo=NoteContentPostgresRepo(
                 Table(
