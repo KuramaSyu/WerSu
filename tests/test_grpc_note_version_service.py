@@ -5,10 +5,11 @@ from typing import List, Optional, cast
 import grpc
 from grpc.aio import ServicerContext
 
+from tests.stubs.user_context import _UserContext as UserContext, _UserContextFactory
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.versioning import NoteVersionContent, NoteVersionEntry
-from src.db.repos.note.note import NoteRepoFacadeABC, UserContext
+from src.db.repos.note.note import NoteRepoFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.grpc_mod.proto.note_pb2 import (
     GetNoteVersionContentRequest,
@@ -119,6 +120,7 @@ async def test_get_note_versions_returns_entries() -> None:
         log=_log_provider,
         directory_activity_service=_FakeDirectoryActivityService(),
         to_grpc=_to_grpc(),
+        context_factory=_UserContextFactory(),
     )
     context = _FakeContext()
 
@@ -138,6 +140,7 @@ async def test_get_note_version_content_returns_payload() -> None:
         log=_log_provider,
         directory_activity_service=_FakeDirectoryActivityService(),
         to_grpc=_to_grpc(),
+        context_factory=_UserContextFactory(),
     )
     context = _FakeContext()
 
@@ -158,6 +161,7 @@ async def test_restore_note_version_updates_note() -> None:
         log=_log_provider,
         directory_activity_service=_FakeDirectoryActivityService(),
         to_grpc=_to_grpc(),
+        context_factory=_UserContextFactory(),
     )
     context = _FakeContext()
 

@@ -7,6 +7,7 @@ from typing import Callable
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.utils.async_ttl import AsyncTtlCacheInfo, async_ttl
 
 

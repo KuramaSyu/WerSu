@@ -2,6 +2,7 @@ from datetime import datetime
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.api.undefined import UNDEFINED
 from src.db.repos.attachments.attachments import Attachment
 from src.services.attachments import AttachmentFacade

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.api.undefined import UNDEFINED, UndefinedOr
-from src.api.user_context import UserContextABC, UserTypeT
+from src.api.user_context import ContextFactory, UserContextABC, UserTypeT
 
 
 class _UserContext(UserContextABC):
@@ -30,4 +30,11 @@ class _UserContext(UserContextABC):
         return False
 
 
-__all__ = ["_UserContext"]
+class _UserContextFactory(ContextFactory[UserContextABC]):
+    """Builds :class:`_UserContext` instances."""
+
+    async def create(self, user_id: str) -> UserContextABC:
+        return _UserContext(user_id=user_id)
+
+
+__all__ = ["_UserContext", "_UserContextFactory"]

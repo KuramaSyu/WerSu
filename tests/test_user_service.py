@@ -1,6 +1,7 @@
 from dataclasses import replace
 from typing import Dict, List, Optional
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity

@@ -20,6 +20,7 @@ from datetime import datetime
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity

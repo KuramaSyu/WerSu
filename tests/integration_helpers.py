@@ -40,9 +40,10 @@ from src.api import (
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
 from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
-from src.db.repos.note.note import NoteRepoFacade
+from src.db.repos.note.note import NoteFacade
 from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
 from src.db.repos.user import RepoUserContext
+from tests.stubs.user_context import _UserContext as UserContext
 from src.services.user import UserService
 
 # Sub-module exports (re-exported for legacy callers).
@@ -98,7 +99,7 @@ async def user_service_env(
 ) -> Tuple[
     UserService,
     DirectoryRepoSpicedbPostgres,
-    NoteRepoFacade,
+    NoteFacade,
     NotePermissionRepoSpicedb,
 ]:
     """Provision a real Postgres + SpiceDB environment for user service tests.

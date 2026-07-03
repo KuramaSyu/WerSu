@@ -20,6 +20,7 @@ from typing import Optional
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.api.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
@@ -58,6 +59,7 @@ def _build_service(
         permission_repo=permissions or _FakePermissionRepo(editable_note_ids=set()),
         permission_service=permission_service or _FakePermissionService(),
         logging_provider=silent_logger,
+        user_repo=user_repo or _FakeUserRepo(),
     )
 
 

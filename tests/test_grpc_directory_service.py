@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, cast
 import grpc
 from grpc.aio import ServicerContext
 
+from tests.stubs.user_context import _UserContext as UserContext, _UserContextFactory
 from src.api.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.repos.directory.directory import DirectoryRepo
@@ -90,7 +91,7 @@ def _log_provider(*_args, **_kwargs):
 
 async def test_get_directories_requires_user_id() -> None:
     repo = _StubDirectoryRepo(user_to_ids={}, by_id={})
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc())
+    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
     context = _FakeContext()
 
     request = GetDirectoriesRequest(user_id="")
@@ -110,7 +111,7 @@ async def test_get_directories_returns_only_user_visible_directories() -> None:
         user_to_ids={"user-1": ["dir-1", "dir-2", "dir-3"]},
         by_id={"dir-1": dir_1, "dir-2": dir_2, "dir-3": dir_3},
     )
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc())
+    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
     context = _FakeContext()
 
     request = GetDirectoriesRequest(user_id="user-1", parent_id="parent-a", limit=1, offset=1)
@@ -126,7 +127,7 @@ async def test_get_directories_excludes_missing_directory_records() -> None:
         user_to_ids={"user-1": ["dir-1", "dir-missing"]},
         by_id={"dir-1": DirectoryEntity(id="dir-1", name="one", parent_id=UNDEFINED, relations=[])},
     )
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc())
+    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
     context = _FakeContext()
 
     request = GetDirectoriesRequest(user_id="user-1")
@@ -137,7 +138,7 @@ async def test_get_directories_excludes_missing_directory_records() -> None:
 
 async def test_delete_directory_requires_id() -> None:
     repo = _StubDirectoryRepo(user_to_ids={}, by_id={})
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc())
+    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
     context = _FakeContext()
 
     result = await service.DeleteDirectory(DeleteDirectoryRequest(id="", user_id="user-1"), cast(ServicerContext, context))
@@ -149,7 +150,7 @@ async def test_delete_directory_requires_id() -> None:
 
 async def test_delete_directory_returns_not_found_when_repo_reports_no_delete() -> None:
     repo = _StubDirectoryRepo(user_to_ids={}, by_id={})
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc())
+    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
     context = _FakeContext()
 
     result = await service.DeleteDirectory(DeleteDirectoryRequest(id="dir-missing", user_id="user-1"), cast(ServicerContext, context))
@@ -165,7 +166,7 @@ async def test_delete_directory_returns_deleted_id_on_success() -> None:
         user_to_ids={},
         by_id={"dir-1": DirectoryEntity(id="dir-1", name="one", relations=[])},
     )
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc())
+    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
     context = _FakeContext()
 
     result = await service.DeleteDirectory(DeleteDirectoryRequest(id="dir-1", user_id="user-1"), cast(ServicerContext, context))
@@ -177,7 +178,7 @@ async def test_delete_directory_returns_deleted_id_on_success() -> None:
 
 async def test_patch_directory_requires_id() -> None:
     repo = _StubDirectoryRepo(user_to_ids={}, by_id={})
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc())
+    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
     context = _FakeContext()
 
     result = await service.PatchDirectory(
@@ -192,7 +193,7 @@ async def test_patch_directory_requires_id() -> None:
 
 async def test_patch_directory_returns_not_found_for_missing_directory() -> None:
     repo = _StubDirectoryRepo(user_to_ids={}, by_id={})
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc())
+    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
     context = _FakeContext()
 
     result = await service.PatchDirectory(
@@ -220,7 +221,7 @@ async def test_patch_directory_updates_requested_fields() -> None:
             )
         },
     )
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc())
+    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
     context = _FakeContext()
 
     result = await service.PatchDirectory(

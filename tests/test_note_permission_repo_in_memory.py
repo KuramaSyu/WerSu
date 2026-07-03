@@ -1,4 +1,4 @@
-from src.db.repos.note.note import UserContext
+from tests.stubs.user_context import _UserContext as UserContext
 from src.api import (
     ObjectRef,
     Relationship,

@@ -1,20 +1,10 @@
 from datetime import datetime
 
+from tests.stubs.user_context import _UserContext
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.repos.sharing.sharing import SharingPostgresRepo
-
-
-class _UserContext(UserContextABC):
-    """Small user context for repo tests."""
-
-    def __init__(self, user_id: str = "actor") -> None:
-        self._user_id = user_id
-
-    @property
-    def user_id(self) -> str:
-        return self._user_id
 
 
 class _FakeTable:

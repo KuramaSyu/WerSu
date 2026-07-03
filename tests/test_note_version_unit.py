@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 
 

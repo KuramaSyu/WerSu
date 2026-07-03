@@ -4,11 +4,12 @@ from typing import List, Optional
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.api.types import Pagination
 from src.api.user_context import UserContextABC
 from src.db.entities import DirectoryEntity, NoteEntity
 from src.db.repos.directory.directory import DirectoryRepo
-from src.db.repos.note.note import NoteRepoFacadeABC, SearchType, UserContext
+from src.db.repos.note.note import NoteRepoFacadeABC, SearchType
 from src.api import (
     DirectoryRelationEnum,
     NoteRelationEnum,

@@ -5,6 +5,7 @@ from typing import List, Optional
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.api.user_context import UserContextABC
 from src.db.entities.note.versioning import NoteVersionEntry
 from src.db.repos.directory.directory import DirectoryRepo, DirectoryRepoSpicedbPostgres

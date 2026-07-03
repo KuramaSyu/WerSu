@@ -3,6 +3,7 @@ from typing import Any, Dict
 
 import pytest
 
+from tests.stubs.user_context import _UserContext as UserContext
 from src.api import UNDEFINED
 from src.api.undefined import UndefinedNoneOr
 from src.utils.dict_helper import drop_undefined, drop_except_keys
