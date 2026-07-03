@@ -23,6 +23,7 @@ from src.grpc_mod.sharing_service import GrpcSharingService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.services import PermissionServiceRepo, UserService, DirectoryActivityService, AttachmentFacade, share_access
 from src.services.sharing import DefaultSharingService
+from src.services.note import NoteService
 from src.facades.share_action_facade import ShareActionFacade
 from src.utils import logging_provider
 from src.db import Database, NoteEmbeddingPostgresRepo, NoteVersionPostgresRepo
@@ -273,6 +274,13 @@ async def serve():
         log=logging_provider,
     )
 
+    app_note_service = NoteService(
+        note_repo=note_repo,
+        permission_repo=permission_repo,
+        jwt_provider=jwt_provider,
+        directory_repo=directory_repo,
+    )
+
     ### Register gRPC services by injecting the service layer ###
     log.info("Setting up gRPC services...")
     grpc_visitor = ConvertToGrpcVisitor()
@@ -307,7 +315,7 @@ async def serve():
     )
 
     note_service = GrpcNoteService(
-        repo=note_repo,
+        note_service=app_note_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
         context_factory=user_context_factory,

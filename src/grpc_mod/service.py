@@ -15,8 +15,7 @@ import inspect
 
 from torch import log_
 
-from src.api import LoggingProvider
-from src.api.types import Pagination
+from src.api import LoggingProvider, NoteServiceABC
 from src.api.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities import NoteEntity
@@ -187,12 +186,12 @@ class GrpcNoteService(NoteServiceServicer):
 
     def __init__(
         self,
-        repo: NoteRepoFacadeABC,
+        note_service: NoteServiceABC,
         log: LoggingProvider,
         to_grpc: ConvertToGrpcVisitor,
         context_factory: ContextFactory[UserContextABC],
     ):
-        self.repo = repo
+        self._note_service = note_service
         self.log = log(__name__, self)
         self._svc_logger = logging.getLogger("src.services")
 
@@ -206,8 +205,12 @@ class GrpcNoteService(NoteServiceServicer):
     async def GetNote(self, request: GetNoteRequest, context: ServicerContext) -> Note:
         try:
             user_ctx = await self._context.create(request.user_id)
-            note_entity = await self.repo.select_by_id(request.id, user_ctx)
-            return note_entity.convert(self._to_grpc)
+            response = await self._note_service.get_note(request.id, user_ctx)
+            if response.note is None:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details(f"Note not found where user with id {request.user_id} has permissions")
+                return Note()
+            return response.note.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error fetching note: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -218,7 +221,7 @@ class GrpcNoteService(NoteServiceServicer):
     async def PostNote(self, request: PostNoteRequest, context: ServicerContext) -> Note:
         try:
             user_context = await self._context.create(request.author_id)
-            note_entity = await self.repo.insert(
+            note_entity = await self._note_service.insert_note(
                 NoteEntity(
                     note_id=UNDEFINED,
                     author_id=request.author_id,
@@ -228,7 +231,7 @@ class GrpcNoteService(NoteServiceServicer):
                     title=request.title,
                     updated_at=datetime.now(),
                 ),
-                user=user_context,
+                user_context,
             )
             return note_entity.convert(self._to_grpc)
         except asyncpg.UniqueViolationError as e:
@@ -245,7 +248,7 @@ class GrpcNoteService(NoteServiceServicer):
     async def PatchNote(self, request: AlterNoteRequest, context: ServicerContext) -> Note:
         try:
             user_ctx = await self._context.create(request.author_id)
-            note_entity = await self.repo.update(
+            note_entity = await self._note_service.update_note(
                 NoteEntity(
                     note_id=request.id,
                     author_id=request.author_id,
@@ -269,33 +272,33 @@ class GrpcNoteService(NoteServiceServicer):
     async def DeleteNote(self, request: DeleteNoteRequest, context: ServicerContext) -> Note:
         try:
             user_ctx = await self._context.create(request.author_id)
-            deleted_note_entities = await self.repo.delete(
+            deleted_note = await self._note_service.delete_note(
                 request.id,
                 user_ctx,
             )
-            
-            if deleted_note_entities is None:
+
+            if deleted_note is None:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
                 context.set_details(f"Note not found where user with id {request.author_id} has permissions")
                 return Note()
-            assert len(deleted_note_entities) <= 1
-            return deleted_note_entities[0].convert(self._to_grpc)
+            return deleted_note.convert(self._to_grpc)
         except Exception:
             self.log.error(f"Error deleting note: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while deleting note")
             return Note()
-        
+
     @log_service_call()
     async def SearchNotes(
         self, request: GetSearchNotesRequest, context: ServicerContext
     ) -> AsyncIterator[MinimalNote]:
         user_ctx = await self._context.create(request.user_id)
-        notes = await self.repo.search_notes(
-            to_search_type(request.search_type),
+        notes = await self._note_service.search_notes(
+            to_search_type(request.search_type).name,
             request.query,
-            pagination=Pagination(limit=request.limit, offset=request.offset),
-            ctx=user_ctx,
+            user_ctx,
+            limit=request.limit,
+            offset=request.offset,
         )
         for note in notes:
             grpc_note = self._to_grpc.visit_note_minimal(note)
