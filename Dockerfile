@@ -22,6 +22,8 @@ RUN uv sync
 
 COPY src /app/src
 COPY logging.yaml /app/logging.yaml
+
+# does not work. goal is caching of the huggingface models
 ENV HUGS_CACHE=/models
 
 CMD ["uv", "run", "--", "python", "-m", "src.main"]
