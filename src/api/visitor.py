@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from src.api.note_service import NoteResponse
     from src.db.entities.directory.directory import DirectoryEntity
     from src.db.entities.note.metadata import NoteEntity
     from src.db.entities.note.sharing import NoteShareEntity
@@ -132,5 +133,19 @@ class EntityVisitor(ABC):
 
         Raises:
             NotImplementedError: If the visitor does not support this view.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_note_response(self, response: NoteResponse) -> Any:
+        """Handle a :class:`~src.api.note_service.NoteResponse`.
+
+        Used by the gRPC layer to render the result of
+        :meth:`~src.api.note_service.NoteServiceABC.get_note` --
+        which pairs a resolved :class:`NoteEntity` with an
+        attachment id -> JWT map for temporary users.
+
+        Raises:
+            NotImplementedError: If the visitor does not support note responses.
         """
         raise NotImplementedError

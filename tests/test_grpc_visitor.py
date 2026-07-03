@@ -21,6 +21,7 @@ from datetime import datetime
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
+from src.api.note_service import NoteResponse
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
@@ -29,7 +30,7 @@ from src.api.visitor import AcceptsVisitor, EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.proto.attachments_pb2 import Attachment as GrpcAttachment
-from src.grpc_mod.proto.note_pb2 import Directory, Note
+from src.grpc_mod.proto.note_pb2 import Directory, Note, NoteResponse as GrpcNoteResponse
 from src.grpc_mod.proto.sharing_pb2 import NoteShare
 from src.grpc_mod.proto.user_pb2 import User
 from tests.stubs.visitor import StubVisitor, make_relationship
@@ -79,7 +80,7 @@ def test_partial_visitor_must_implement_all_visit_methods() -> None:
         def visit_user(self, entity): ...  # type: ignore[override]
         def visit_note_share(self, entity): ...  # type: ignore[override]
         def visit_attachment(self, entity): ...  # type: ignore[override]
-        # visit_attachment_metadata is intentionally omitted
+        # visit_attachment_metadata and visit_note_response are intentionally omitted
 
     with pytest.raises(TypeError):
         _HalfVisitor()  # type: ignore[abstract]
@@ -381,3 +382,114 @@ def test_visitor_is_reusable_across_entities(entity, expected_type) -> None:
 
     assert isinstance(first, expected_type)
     assert isinstance(second, expected_type)
+
+
+# ---------------------------------------------------------------------------
+# visit_note_response
+# ---------------------------------------------------------------------------
+
+
+def test_visit_note_response_returns_empty_note_when_note_is_none() -> None:
+    """A `None` note renders as an empty proto `NoteResponse` with no map."""
+    response = NoteResponse(note=None)
+
+    proto = _visitor().visit_note_response(response)
+
+    assert isinstance(proto, GrpcNoteResponse)
+    assert proto.note.id == ""
+    assert dict(proto.id_token_map) == {}
+
+
+def test_visit_note_response_forwards_note_and_empty_token_map() -> None:
+    """A resolved note renders as a `NoteResponse` with the inner Note populated."""
+    entity = NoteEntity(
+        note_id="n1",
+        title="t",
+        content="c",
+        author_id="a1",
+        permissions=[],
+    )
+    response = NoteResponse(note=entity)
+
+    proto = _visitor().visit_note_response(response)
+
+    assert isinstance(proto, GrpcNoteResponse)
+    assert proto.note.id == "n1"
+    assert proto.note.title == "t"
+    assert proto.note.content == "c"
+    assert proto.note.author_id == "a1"
+    assert dict(proto.id_token_map) == {}
+
+
+def test_visit_note_response_forwards_id_token_map_for_temporary_users() -> None:
+    """A non-empty `id_token_map` flows through to the proto map as-is."""
+    entity = NoteEntity(
+        note_id="n1",
+        title="t",
+        content="c",
+        author_id="a1",
+        permissions=[],
+    )
+    response = NoteResponse(
+        note=entity,
+        id_token_map={"att-a": "jwt.att-a", "att-b": "jwt.att-b"},
+    )
+
+    proto = _visitor().visit_note_response(response)
+
+    assert isinstance(proto, GrpcNoteResponse)
+    assert dict(proto.id_token_map) == {
+        "att-a": "jwt.att-a",
+        "att-b": "jwt.att-b",
+    }
+
+
+def test_stub_visitor_records_note_responses() -> None:
+    """`StubVisitor.visit_note_response` records responses when enabled."""
+    stub = StubVisitor()
+    response = NoteResponse(note=NoteEntity(note_id="n1", title="t", content="c", author_id="a1"))
+
+    result = stub.visit_note_response(response)
+
+    assert stub.note_responses == [response]
+    assert result is response
+
+
+def test_stub_visitor_can_mute_note_response_recording() -> None:
+    """`record_note_response=False` makes `visit_note_response` a pass-through."""
+    stub = StubVisitor(record_note_response=False)
+    response = NoteResponse(note=NoteEntity(note_id="n1", title="t", content="c", author_id="a1"))
+
+    result = stub.visit_note_response(response)
+
+    assert stub.note_responses == []
+    assert result is response
+
+
+def test_note_response_dispatches_to_visit_note_response() -> None:
+    """`NoteResponse.convert(visitor)` routes to `visitor.visit_note_response`."""
+    stub = _stub()
+    response = NoteResponse(
+        note=NoteEntity(note_id="n1", title="t", content="c", author_id="a1"),
+    )
+
+    result = response.convert(stub)
+
+    assert stub.note_responses == [response]
+    assert result is response
+
+
+def test_note_response_convert_is_an_alias_for_visit() -> None:
+    """`NoteResponse.convert` and `NoteResponse.visit` route to the same handler."""
+    entity = NoteEntity(
+        note_id="n1",
+        title="t",
+        content="c",
+        author_id="a1",
+        permissions=[],
+    )
+    response = NoteResponse(note=entity)
+    visitor = _visitor()
+
+    assert response.convert(visitor) == response.visit(visitor)
+    assert isinstance(response.convert(visitor), GrpcNoteResponse)

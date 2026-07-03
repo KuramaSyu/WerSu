@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any, List
 
 from src.api import Relationship
+from src.api.note_service import NoteResponse
 from src.api.relationship import ObjectRef, SubjectRef
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
@@ -51,6 +52,7 @@ class StubVisitor(EntityVisitor):
         record_note_share: bool = True,
         record_attachment: bool = True,
         record_attachment_metadata: bool = True,
+        record_note_response: bool = True,
     ) -> None:
         """Initialize empty record lists and the per-handler `record_*` flags.
 
@@ -63,6 +65,8 @@ class StubVisitor(EntityVisitor):
             record_attachment: record entities in :meth:`visit_attachment`.
             record_attachment_metadata: record entities in
                 :meth:`visit_attachment_metadata`.
+            record_note_response: record responses in
+                :meth:`visit_note_response`.
         """
         self.notes: List[NoteEntity] = []
         self.note_minimals: List[NoteEntity] = []
@@ -71,6 +75,7 @@ class StubVisitor(EntityVisitor):
         self.note_shares: List[NoteShareEntity] = []
         self.attachments: List[Attachment] = []
         self.attachment_metadatas: List[Attachment] = []
+        self.note_responses: List[NoteResponse] = []
         self.share_users: List[tuple[str, Any]] = []
         self._record_note = record_note
         self._record_note_minimal = record_note_minimal
@@ -79,6 +84,7 @@ class StubVisitor(EntityVisitor):
         self._record_note_share = record_note_share
         self._record_attachment = record_attachment
         self._record_attachment_metadata = record_attachment_metadata
+        self._record_note_response = record_note_response
 
     def visit_note(self, entity: NoteEntity) -> NoteEntity:
         if self._record_note:
@@ -114,6 +120,11 @@ class StubVisitor(EntityVisitor):
         if self._record_attachment_metadata:
             self.attachment_metadatas.append(entity)
         return entity
+
+    def visit_note_response(self, response: NoteResponse) -> NoteResponse:
+        if self._record_note_response:
+            self.note_responses.append(response)
+        return response
 
     def visit_share_user(self, access_as: str, online_until: Any) -> Any:
         self.share_users.append((access_as, online_until))
