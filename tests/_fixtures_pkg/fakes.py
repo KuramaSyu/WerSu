@@ -14,10 +14,13 @@ from __future__ import annotations
 from typing import Any, List, Optional
 
 from src.api.user_context import UserContextABC
+from src.db.database import DatabaseABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.embedding import NoteEmbeddingEntity
+from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.versioning import NoteVersionEntry
 from src.db.repos.directory.directory import DirectoryRepo
+from src.db.repos.note.content import NoteContentRepo
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.db.repos.note.versioning import NoteVersionRepoABC
 
@@ -67,16 +70,20 @@ class _FakeVersionRepo(NoteVersionRepoABC):
 
     def __init__(self, entries: Optional[dict[str, NoteVersionEntry]] = None) -> None:
         self._entries = entries or {}
+        self.last_snapshot: Optional[dict] = None
+        self.last_append: Optional[dict] = None
 
     @property
     def max_deltas_per_snapshot(self) -> int:
         return 0
 
     async def record_initial_snapshot(self, *args, **kwargs):  # type: ignore[override]
-        raise NotImplementedError()
+        self.last_snapshot = {"args": args, "kwargs": kwargs}
+        return None
 
     async def append_version(self, *args, **kwargs):  # type: ignore[override]
-        raise NotImplementedError()
+        self.last_append = {"args": args, "kwargs": kwargs}
+        return None
 
     async def list_versions(self, note_id: str, limit: int, offset: int) -> List[NoteVersionEntry]:
         entry = self._entries.get(note_id)
@@ -132,9 +139,121 @@ class _TestSpiceDbClient:
         return None
 
 
+class _FakeDatabase(DatabaseABC):
+    """In-memory :class:`DatabaseABC` used by pure unit tests.
+
+    Only the methods :class:`src.db.repos.note.note.NoteFacade`
+    and the search strategies call are implemented; the rest raise
+    to make accidental use loud.  Tests queue the responses they
+    expect to see.
+    """
+
+    def __init__(self) -> None:
+        self.fetchrow_calls: list[tuple[str, tuple]] = []
+        self.fetchrow_responses: list[dict] = []
+        self.fetch_calls: list[tuple[str, tuple]] = []
+        self.fetch_responses: list[list[dict]] = []
+
+    async def init_db(self) -> None:
+        return None
+
+    async def close(self) -> None:
+        return None
+
+    @property
+    def pool(self):
+        raise NotImplementedError("_FakeDatabase has no asyncpg pool")
+
+    async def execute(self, query: str, *args) -> str:
+        raise NotImplementedError("_FakeDatabase.execute is not implemented")
+
+    async def fetch(self, query: str, *args):
+        self.fetch_calls.append((query, args))
+        if not self.fetch_responses:
+            raise AssertionError("_FakeDatabase.fetch called without a queued response")
+        return self.fetch_responses.pop(0)
+
+    async def fetchrow(self, query: str, *args):
+        self.fetchrow_calls.append((query, args))
+        if not self.fetchrow_responses:
+            raise AssertionError("_FakeDatabase.fetchrow called without a queued response")
+        return self.fetchrow_responses.pop(0)
+
+
+class _FakeNoteContentRepo(NoteContentRepo):
+    """In-memory :class:`NoteContentRepo` used by pure unit tests.
+
+    Implements the three methods :class:`src.db.repos.note.note.NoteFacade`
+    uses: :meth:`select_by_id`, :meth:`update`, :meth:`delete`.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, NoteEntity] = {}
+
+    def seed(self, note: NoteEntity) -> None:
+        """Insert `note` into the in-memory store keyed by its `note_id`."""
+        self._store[str(note.note_id)] = note
+
+    async def insert(self, metadata: NoteEntity) -> NoteEntity:
+        self._store[str(metadata.note_id)] = metadata
+        return metadata
+
+    async def update(self, set: NoteEntity, where: NoteEntity) -> NoteEntity:
+        existing = self._store.get(str(where.note_id))
+        if existing is None:
+            raise RuntimeError(f"note {where.note_id!r} not found")
+        merged = NoteEntity(
+            note_id=existing.note_id,
+            title=set.title if set.title is not None else existing.title,
+            content=set.content if set.content is not None else existing.content,
+            updated_at=set.updated_at if set.updated_at is not None else existing.updated_at,
+            author_id=set.author_id if set.author_id is not None else existing.author_id,
+            embeddings=existing.embeddings,
+            permissions=existing.permissions,
+        )
+        self._store[str(merged.note_id)] = merged
+        return merged
+
+    async def delete(self, metadata: NoteEntity) -> List[NoteEntity]:
+        existing = self._store.pop(str(metadata.note_id), None)
+        return [existing] if existing is not None else []
+
+    async def select(self, metadata: NoteEntity) -> List[NoteEntity]:
+        return [n for n in self._store.values() if n.note_id == metadata.note_id]
+
+    async def select_by_id(self, note_id: str) -> NoteEntity:
+        existing = self._store.get(str(note_id))
+        if existing is None:
+            raise RuntimeError(f"note {note_id!r} not found")
+        return existing
+
+
+class _FakeJwtProvider:
+    """Stub :class:`~src.api.jwt_provider.JwtProvider` that returns deterministic tokens."""
+
+    def __init__(self) -> None:
+        self.create_calls: list[tuple[str, str]] = []
+
+    def create_attachment_token(
+        self,
+        user_id: str,
+        attachment_id: str,
+        *,
+        ttl_seconds: int = 15 * 60,
+    ) -> str:
+        self.create_calls.append((user_id, attachment_id))
+        return f"jwt:{user_id}:{attachment_id}"
+
+    def verify_attachment_token(self, token: str, *, expected_attachment_id: str):
+        raise NotImplementedError
+
+
 __all__ = [
     "_FakeEmbeddingGenerator",
     "_FakeEmbeddingRepo",
+    "_FakeNoteContentRepo",
+    "_FakeDatabase",
+    "_FakeJwtProvider",
     "_FakeVersionRepo",
     "_TestDirectoryRepo",
     "_TestSpiceDbClient",
