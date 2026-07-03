@@ -12,4 +12,5 @@ from .user_context import UserContextABC
 from .permission_repo import *
 from .relationship import *
 from .user_action import UserActionRepoABC
+from .note_service import NoteResponse, NoteServiceABC
 from .visitor import AcceptsVisitor, EntityVisitor
