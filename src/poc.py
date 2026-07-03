@@ -1,3 +1,9 @@
+"""
+This POC contains the idea I tried before I really started
+this project, to evaluate, if it's even worth instead of 
+just taking an existing solution.
+"""
+
 import asyncio
 import asyncpg
 from datetime import datetime
@@ -15,6 +21,7 @@ async def init():
     conn = await asyncpg.connect("postgresql://postgres:postgres@localhost:5433/db")
 
     content: str
+    # was valid until a long time ago, where the schema was in there.
     with open("init.sql") as f:
         content = f.read()
 
