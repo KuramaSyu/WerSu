@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from src.api.user_context import UserContextABC
+from src.api.visitor import AcceptsVisitor, EntityVisitor
 
 if TYPE_CHECKING:
     from src.db.entities.note.metadata import NoteEntity
 
 
 @dataclass
-class NoteResponse:
+class NoteResponse(AcceptsVisitor):
     """Result of a :meth:`NoteServiceABC.get_note` call.
 
     Attributes:
@@ -24,6 +25,10 @@ class NoteResponse:
 
     note: Optional[NoteEntity] = None
     id_token_map: dict[str, str] = field(default_factory=dict)
+
+    def visit(self, visitor: EntityVisitor) -> Any:
+        """Dispatch this response to ``visitor.visit_note_response``"""
+        return visitor.visit_note_response(self)
 
 
 class NoteServiceABC(ABC):
