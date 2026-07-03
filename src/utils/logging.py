@@ -187,7 +187,10 @@ def logging_provider(
 
     logger_name = f"{file}"
     if cls_instance:
-        logger_name += f".{cls_instance.__class__.__name__}"
+        # what i wanted with .__name__ is just the name. but this also has the prefix. 
+        # hence I tried __qualname__ but that gives the full path as well. Now I just split
+        # and take the last part
+        logger_name += f".{cls_instance.__class__.__name__.split('.')[-1]}"
     if prefix:
         logger_name = f"[{prefix}] {logger_name}"
 
