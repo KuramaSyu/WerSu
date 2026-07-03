@@ -17,7 +17,7 @@ from typing import Any
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from src.api import Relationship
+from src.api import NoteResponse, Relationship
 from src.api.relationship import ObjectTypeEnum
 from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined
 from src.db.entities.directory.directory import DirectoryEntity
@@ -32,6 +32,7 @@ from src.grpc_mod.proto.note_pb2 import (
     Directory,
     MinimalNote,
     Note,
+    NoteResponse as GrpcNoteResponse,
     PermissionObjectType,
     PermissionRelationship,
     PermissionResource,
@@ -209,6 +210,16 @@ class ConvertToGrpcVisitor(EntityVisitor):
         basic_args["stripped_content"] = basic_args.pop("content")
 
         return MinimalNote(**basic_args)
+
+    def visit_note_response(self, response: NoteResponse) -> GrpcNoteResponse:
+        """Convert a :class:`~src.api.note_service.NoteResponse` to a gRPC ``NoteResponse``."""
+        proto_note = (
+            self.visit_note(response.note) if response.note is not None else Note()
+        )
+        return GrpcNoteResponse(
+            note=proto_note,
+            id_token_map=dict(response.id_token_map),
+        )
 
     # ---- directory -----------------------------------------------------
 
