@@ -52,6 +52,11 @@ message Note {
     repeated PermissionRelationship permissions = 7;
 }
 
+message NoteResponse {
+    Note note = 1;
+    map<string, string> id_token_map = 2;
+}
+
 message NoteEmbedding {
     string model = 1;
     repeated float embedding = 2;
@@ -229,7 +234,10 @@ message RestoreNoteVersionRequest {
 
 // Note Service
 service NoteService {
-    rpc GetNote(GetNoteRequest) returns (Note);
+    // GetNote returns a Note from DB. If the user is a public/temp user,
+    // then an additional id_token_map will be returned, containing a
+    // JWT for each attachment in the file. 
+    rpc GetNote(GetNoteRequest) returns (NoteResponse);
     rpc PostNote(PostNoteRequest) returns (Note);
     rpc PatchNote(AlterNoteRequest) returns (Note);
     rpc DeleteNote(DeleteNoteRequest) returns (Note);
