@@ -132,7 +132,15 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             directory_repo=directory_repo,
             logging_provider=logging_provider,
         )
-        user_repo = UserPostgresRepo(db=db)
+        user_repo = UserPostgresRepo(
+            table=Table(
+                db=db,
+                table_name="users",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            logging_provider=logging_provider,
+        )
         user_context_factory = RepoContextFactory(user_repo=user_repo)
         user_service = UserService(user_repo=user_repo, directory_repo=directory_repo)
         permission_service = PermissionServiceRepo(

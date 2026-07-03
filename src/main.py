@@ -176,6 +176,12 @@ async def serve():
         id_fields=["id"],
     )
 
+    users_table = Table(
+        **common_table_kwargs,
+        table_name="users",
+        id_fields=["id"],
+    )
+
     # setup S3 connection
     s3_client = boto3.client(
         "s3",
@@ -206,7 +212,10 @@ async def serve():
     log.info(f"Embedding model initialized in {time.perf_counter() - model_init_started:.2f}s")
 
     ### Setup Repos ###
-    user_repo = UserPostgresRepo(db=db)
+    user_repo = UserPostgresRepo(
+        table=users_table,
+        logging_provider=logging_provider,
+    )
 
     # Factory used by every gRPC service to create user instances
     user_context_factory = RepoContextFactory(user_repo=user_repo)
@@ -274,13 +283,6 @@ async def serve():
         log=logging_provider,
     )
 
-    app_note_service = NoteService(
-        note_repo=note_repo,
-        permission_repo=permission_repo,
-        jwt_provider=jwt_provider,
-        directory_repo=directory_repo,
-    )
-
     ### Register gRPC services by injecting the service layer ###
     log.info("Setting up gRPC services...")
     grpc_visitor = ConvertToGrpcVisitor()
@@ -293,6 +295,14 @@ async def serve():
         to_grpc=grpc_visitor,
         context_factory=user_context_factory,
     )
+
+    note_service = NoteService(
+        note_repo=note_repo,
+        permission_repo=permission_repo,
+        jwt_provider=jwt_provider,
+        directory_repo=directory_repo,
+    )
+
     sharing_service = DefaultSharingService(
         share_facade=ShareActionFacade(
             sharing_repo=sharing_repo,
@@ -315,7 +325,7 @@ async def serve():
     )
 
     note_service = GrpcNoteService(
-        note_service=app_note_service,
+        note_service=note_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
         context_factory=user_context_factory,

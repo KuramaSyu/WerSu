@@ -184,4 +184,12 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
 @pytest.fixture(scope="function")
 async def user_repo(db: Database) -> UserRepoABC:
     """Return the Postgres-backed user repo wired to the function-scoped db."""
-    return UserPostgresRepo(db)
+    return UserPostgresRepo(
+        table=Table(
+            db=db,
+            table_name="users",
+            id_fields=["id"],
+            logging_provider=logging_provider,
+        ),
+        logging_provider=logging_provider,
+    )

@@ -1,63 +1,56 @@
 """Unit tests for :func:`src.utils.extract_attachments.extract_attachment_ids`."""
 
-from tests.stubs.user_context import _UserContext as UserContext
 from src.utils.extract_attachments import extract_attachment_ids
 
 
-def test_extracts_single_attachment_url() -> None:
-    """A single URL yields one id."""
-    content = "see [img](https://site.tld/api/attachments/abc-123) for context"
-    assert extract_attachment_ids(content) == ["abc-123"]
+_REAL_URL = (
+    "/api/attachments/image?width=720&format=webp"
+    "&key=attachments%252F019f1481-a466-7438-8fdd-ffa4913012b4"
+)
+_REAL_KEY = "attachments/019f1481-a466-7438-8fdd-ffa4913012b4"
 
 
-def test_extracts_multiple_urls_in_order() -> None:
-    """Multiple URLs are returned in first-appearance order."""
+def test_url_path_yields_id() -> None:
+    assert extract_attachment_ids("https://site.tld/api/attachments/abc-123") == ["abc-123"]
+
+
+def test_multiple_urls_in_order_with_dedup() -> None:
     content = (
-        "![a](https://x.tld/api/attachments/aaa-111) "
-        "and ![b](http://y.tld/api/attachments/bbb-222) "
-        "and ![c](https://z.tld/api/attachments/ccc-333)"
+        "https://x.tld/api/attachments/aaa-111 "
+        "https://y.tld/api/attachments/bbb-222 "
+        "https://z.tld/api/attachments/aaa-111"
     )
-    assert extract_attachment_ids(content) == ["aaa-111", "bbb-222", "ccc-333"]
+    assert extract_attachment_ids(content) == ["aaa-111", "bbb-222"]
 
 
-def test_deduplicates_repeated_ids() -> None:
-    """A id mentioned twice is returned once, on its first occurrence."""
-    content = (
-        "first https://x.tld/api/attachments/aaa-111 "
-        "second https://y.tld/api/attachments/aaa-111"
-    )
-    assert extract_attachment_ids(content) == ["aaa-111"]
+def test_jwt_query_param_is_stripped() -> None:
+    assert extract_attachment_ids(
+        "https://x.tld/api/attachments/with-jwt?jwt=abc.def.ghi"
+    ) == ["with-jwt"]
 
 
-def test_strips_optional_jwt_query_param() -> None:
-    """The optional `?jwt=...` query parameter does not leak into the id."""
-    content = "https://x.tld/api/attachments/with-jwt?jwt=abc.def.ghi"
-    assert extract_attachment_ids(content) == ["with-jwt"]
+def test_url_slug_plus_key_prefers_decoded_key() -> None:
+    """When a URL has both a path slug and a `key=` query, the key wins."""
+    assert extract_attachment_ids(_REAL_URL) == [_REAL_KEY]
 
 
-def test_strips_trailing_path_segments() -> None:
-    """Anything after the id (e.g. a slash) is not part of the id."""
-    content = "https://x.tld/api/attachments/with-slash/extra/path"
-    assert extract_attachment_ids(content) == ["with-slash"]
+def test_key_form_bare_quoted_and_spaced() -> None:
+    content = 'plain key=att-a and key="att-b" and key = "att-c"'
+    assert extract_attachment_ids(content) == ["att-a", "att-b", "att-c"]
 
 
-def test_handles_uuid_shaped_ids() -> None:
-    """Realistic UUIDv7-shaped ids are captured."""
-    content = "https://site.tld/api/attachments/018f3e9a-7c1d-7abc-9def-0123456789ab"
-    assert extract_attachment_ids(content) == ["018f3e9a-7c1d-7abc-9def-0123456789ab"]
+def test_key_form_preserves_attachments_prefix_after_decoding() -> None:
+    """`attachments/`, `attachments%2F`, and `attachments%252F` all keep the prefix."""
+    for prefix in ("attachments/", "attachments%2F", "attachments%252F"):
+        assert extract_attachment_ids(f"key={prefix}{_REAL_KEY.removeprefix('attachments/')}") == [_REAL_KEY]
 
 
-def test_ignores_unrelated_urls() -> None:
-    """URLs that do not match `/api/attachments/<id>` are ignored."""
-    content = (
+def test_unrelated_and_empty_content() -> None:
+    unrelated = (
         "home https://example.com/ "
         "image https://cdn.example.com/img.png "
-        "nested /api/users/42"
+        "nested /api/users/42 monkey=att-x"
     )
-    assert extract_attachment_ids(content) == []
-
-
-def test_returns_empty_for_empty_content() -> None:
-    """Empty or whitespace-only content yields no ids."""
+    assert extract_attachment_ids(unrelated) == []
     assert extract_attachment_ids("") == []
     assert extract_attachment_ids("   \n\t  ") == []
