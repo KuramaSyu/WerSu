@@ -3,8 +3,8 @@ file: grpc_server.log
 loggers:
   __main__: DEBUG
   src: DEBUG
-  src.grpc_mod.service: INFO
-  src.services: INFO
+  src.grpc_mod.service: DEBUG
+  src.services: DEBUG
   src.db.database: INFO
   src.db.table: INFO
   httpcore.http11: ERROR

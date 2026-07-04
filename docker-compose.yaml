@@ -72,7 +72,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: i-will-find-it-app
+    container_name: wersu-grpc
     restart: unless-stopped
     environment:
       DATABASE_DSN: postgres://postgres:postgres@postgres:5432/db?sslmode=disable

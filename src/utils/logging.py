@@ -28,7 +28,7 @@ class ColoredFormatter(logging.Formatter):
     }
 
     def format(self, record):
-        levelname = record.levelname[0]  # First letter only
+        levelname = record.levelname.upper()  # levelname in upper letters
         color = self.COLORS.get(record.levelname, "")
 
         if record.levelname == "DEBUG":
@@ -166,7 +166,7 @@ def _get_effective_level(logger_name: str) -> int:
 
 
 def logging_provider(
-    file: str,
+    file_or_class: str | object,
     cls_instance: Optional[object] = None,
     *,
     prefix: Optional[str] = None,
@@ -174,8 +174,7 @@ def logging_provider(
     """provides a logger for the given file and class name
 
     Args:
-        file: typically the module ``__name__``; becomes the leading
-            segment of the logger name.
+        file_or_class: typically the module name or class instance
         cls_instance: when given, the class qualname is appended to the
             logger name (e.g. ``"SharingService"``).
         prefix: optional short tag wrapped in ``[ ]`` and prepended
@@ -184,15 +183,15 @@ def logging_provider(
             ``"[sharing facade] src.services.sharing.SharingService"``.
     """
     _configure_handlers()
-
-    logger_name = f"{file}"
+    logger_name = ""
+    if isinstance(file_or_class, str):
+        logger_name = file_or_class
+    else:
+        logger_name = file_or_class.__class__.__name__
     if cls_instance:
-        # what i wanted with .__name__ is just the name. but this also has the prefix. 
-        # hence I tried __qualname__ but that gives the full path as well. Now I just split
-        # and take the last part
-        logger_name += f".{cls_instance.__class__.__name__.split('.')[-1]}"
+        logger_name = f"{cls_instance.__class__.__name__.split('.')[-1]}"
     if prefix:
-        logger_name = f"[{prefix}] {logger_name}"
+        logger_name += f" [{prefix}]"
 
     log = getLogger(logger_name)
     log.setLevel(_get_effective_level(logger_name))
