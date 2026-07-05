@@ -24,6 +24,7 @@ from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.services import PermissionServiceRepo, UserService, DirectoryActivityService, AttachmentFacade, share_access
 from src.services.sharing import DefaultSharingService
 from src.services.note import NoteService
+from src.services.directory import DirectoryService
 from src.facades.share_action_facade import ShareActionFacade
 from src.utils import logging_provider
 from src.db import Database, NoteEmbeddingPostgresRepo, NoteVersionPostgresRepo
@@ -335,8 +336,14 @@ async def serve():
 
     add_NoteVersionServiceServicer_to_server(note_version_service, server)
 
-    directory_service = GrpcDirectoryService(
+    directory_app_service = DirectoryService(
         directory_repo=directory_repo,
+        note_repo=note_repo,
+        permission_repo=permission_repo,
+    )
+
+    directory_service = GrpcDirectoryService(
+        directory_service=directory_app_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
         context_factory=user_context_factory,
