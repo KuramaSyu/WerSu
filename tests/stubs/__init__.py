@@ -11,16 +11,18 @@ Each stub lives in its own file:
 * :mod:`tests.stubs.visitor`        -> catch-all :class:`EntityVisitor` for visitor tests
 * :mod:`tests.stubs.user_action_repo` -> in-memory user-action repo
 * :mod:`tests.stubs.logging`        -> standard-library logger provider
+* :mod:`tests.stubs.directory_service` -> in-memory :class:`DirectoryServiceABC`
 
 The names are also re-exported here so legacy code paths that import
 ``from tests.stubs import _FakeSharingRepo`` keep working.
 """
 
 from .attachments import *  # noqa: F401,F403
+from .directory_service import _StubDirectoryService  # noqa: F401
 from .logging import silent_logger  # noqa: F401
 from .permission_repo import _FakePermissionRepo  # noqa: F401
 from .permission_service import _FakePermissionService  # noqa: F401
 from .sharing_repo import _FakeSharingRepo  # noqa: F401
 from .user_action_repo import _FakeUserActionRepo  # noqa: F401
-from .user_context import _UserContext  # noqa: F401
+from .user_context import _UserContext, _UserContextFactory  # noqa: F401
 from .user_repo import _FakeUserRepo  # noqa: F401

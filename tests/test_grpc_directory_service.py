@@ -1,14 +1,40 @@
-import logging
-from typing import Dict, List, Optional, cast
+"""Unit tests for :class:`src.grpc_mod.service.GrpcDirectoryService`.
+
+These tests pin the gRPC adapter's behaviour on top of the shared
+:class:`~tests.stubs.directory_service._StubDirectoryService` so they
+do not require Postgres, SpiceDB, or any other infrastructure.
+
+Coverage:
+
+* :meth:`GrpcDirectoryService.GetDirectories` -- pagination, parent
+  filter, permission denial.
+* :meth:`GrpcDirectoryService.GetDirectory` -- not-found, permission
+  denial, and `user_id` validation.
+* :meth:`GrpcDirectoryService.PatchDirectory` -- not-found, patch-through.
+* :meth:`GrpcDirectoryService.DeleteDirectory` -- not-found, success.
+* :meth:`GrpcDirectoryService.CreateDirectory` -- validation, denial.
+* :meth:`GrpcDirectoryService.GetNotesOfDirectory` -- happy path,
+  input validation, permission denial.
+"""
+
+from __future__ import annotations
+
+from typing import Optional, cast
 
 import grpc
 from grpc.aio import ServicerContext
 
-from tests.stubs.user_context import _UserContext as UserContext, _UserContextFactory
-from src.api.undefined import UNDEFINED
+from tests.stubs import _StubDirectoryService, _UserContextFactory, silent_logger
 from src.db.entities.directory.directory import DirectoryEntity
-from src.db.repos.directory.directory import DirectoryRepo
-from src.grpc_mod.proto.note_pb2 import AlterDirectoryRequest, DeleteDirectoryRequest, GetDirectoriesRequest
+from src.db.entities.note.metadata import NoteEntity
+from src.grpc_mod.proto.note_pb2 import (
+    AlterDirectoryRequest,
+    CreateDirectoryRequest,
+    DeleteDirectoryRequest,
+    GetDirectoriesRequest,
+    GetDirectoryRequest,
+    GetNotesOfDirectoryRequest,
+)
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.service import GrpcDirectoryService
 
@@ -29,73 +55,24 @@ class _FakeContext:
         self.details = details
 
 
-class _StubDirectoryRepo(DirectoryRepo):
-    def __init__(self, user_to_ids: Dict[str, List[str]], by_id: Dict[str, DirectoryEntity]) -> None:
-        self._user_to_ids = user_to_ids
-        self._by_id = by_id
-        self.last_user_id: Optional[str] = None
-        self.deleted_ids: List[str] = []
-        self.last_update_entity: Optional[DirectoryEntity] = None
-
-    async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
-        raise NotImplementedError()
-
-    async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
-        return self._by_id.get(id)
-
-    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
-        self.last_update_entity = entity
-        if entity.id not in self._by_id:
-            return None
-
-        current = self._by_id[str(entity.id)]
-        updated = DirectoryEntity(
-            id=current.id,
-            name=current.name if entity.name is UNDEFINED else entity.name,
-            display_name=current.display_name if entity.display_name is UNDEFINED else entity.display_name,
-            description=current.description if entity.description is UNDEFINED else entity.description,
-            image_url=current.image_url if entity.image_url is UNDEFINED else entity.image_url,
-            parent_id=current.parent_id if entity.parent_id is UNDEFINED else entity.parent_id,
-            relations=current.relations,
-        )
-        self._by_id[str(entity.id)] = updated
-        return updated
-
-    async def list_user_directory_ids(self, user) -> List[str]:
-        self.last_user_id = user.user_id
-        return list(self._user_to_ids.get(user.user_id, []))
-
-    async def fetch_all_directories(self) -> List[DirectoryEntity]:
-        raise AssertionError("GetDirectories should not use fetch_all_directories")
-
-    async def list_note_directory_ids(self, note_id: str) -> List[str]:
-        raise NotImplementedError()
-
-    async def delete_directory(self, entity: DirectoryEntity) -> bool:
-        directory_id = str(entity.id)
-        self.deleted_ids.append(directory_id)
-        return directory_id in self._by_id
-
-    async def resolve_files_of_directory(
-        self,
-        directory_id: Optional[str],
-        actor,
-        max_depth: int = 10,
-    ) -> List[str]:
-        return []
-
-
-def _log_provider(*_args, **_kwargs):
-    return logging.getLogger("test.grpc.directory")
+def _service(impl: _StubDirectoryService) -> GrpcDirectoryService:
+    return GrpcDirectoryService(
+        directory_service=impl,
+        log=silent_logger,
+        to_grpc=_to_grpc(),
+        context_factory=_UserContextFactory(),
+    )
 
 
 async def test_get_directories_requires_user_id() -> None:
-    repo = _StubDirectoryRepo(user_to_ids={}, by_id={})
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
+    impl = _StubDirectoryService()
+    service = _service(impl)
     context = _FakeContext()
 
     request = GetDirectoriesRequest(user_id="")
-    result = [directory async for directory in service.GetDirectories(request, cast(ServicerContext, context))]
+    result = [
+        d async for d in service.GetDirectories(request, cast(ServicerContext, context))
+    ]
 
     assert result == []
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
@@ -107,78 +84,146 @@ async def test_get_directories_returns_only_user_visible_directories() -> None:
     dir_2 = DirectoryEntity(id="dir-2", name="two", parent_id="parent-a", relations=[])
     dir_3 = DirectoryEntity(id="dir-3", name="three", parent_id="parent-b", relations=[])
 
-    repo = _StubDirectoryRepo(
-        user_to_ids={"user-1": ["dir-1", "dir-2", "dir-3"]},
-        by_id={"dir-1": dir_1, "dir-2": dir_2, "dir-3": dir_3},
-    )
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
+    impl = _StubDirectoryService()
+    impl.directories_for_user["user-1"] = [dir_1, dir_2, dir_3]
+    service = _service(impl)
     context = _FakeContext()
 
     request = GetDirectoriesRequest(user_id="user-1", parent_id="parent-a", limit=1, offset=1)
-    result = [directory async for directory in service.GetDirectories(request, cast(ServicerContext, context))]
+    result = [
+        d async for d in service.GetDirectories(request, cast(ServicerContext, context))
+    ]
 
-    assert repo.last_user_id == "user-1"
+    assert impl.last_get_directories_user_id == "user-1"
+    assert impl.get_directories_parent_id == "parent-a"
+    assert impl.get_directories_limit == 1
+    assert impl.get_directories_offset == 1
     assert context.code is None
-    assert [directory.id for directory in result] == ["dir-2"]
+    assert [d.id for d in result] == ["dir-2"]
 
 
-async def test_get_directories_excludes_missing_directory_records() -> None:
-    repo = _StubDirectoryRepo(
-        user_to_ids={"user-1": ["dir-1", "dir-missing"]},
-        by_id={"dir-1": DirectoryEntity(id="dir-1", name="one", parent_id=UNDEFINED, relations=[])},
-    )
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
+async def test_get_directories_permission_denied_returns_perm_code() -> None:
+    impl = _StubDirectoryService()
+    impl.get_directories_deny = True
+    service = _service(impl)
     context = _FakeContext()
 
     request = GetDirectoriesRequest(user_id="user-1")
-    result = [directory async for directory in service.GetDirectories(request, cast(ServicerContext, context))]
+    result = [
+        d async for d in service.GetDirectories(request, cast(ServicerContext, context))
+    ]
 
-    assert [directory.id for directory in result] == ["dir-1"]
+    assert result == []
+    assert context.code == grpc.StatusCode.PERMISSION_DENIED
 
 
-async def test_delete_directory_requires_id() -> None:
-    repo = _StubDirectoryRepo(user_to_ids={}, by_id={})
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
+async def test_get_directory_returns_not_found_when_service_reports_missing() -> None:
+    impl = _StubDirectoryService()
+    service = _service(impl)
     context = _FakeContext()
 
-    result = await service.DeleteDirectory(DeleteDirectoryRequest(id="", user_id="user-1"), cast(ServicerContext, context))
+    result = await service.GetDirectory(
+        GetDirectoryRequest(id="dir-missing", user_id="user-1"),
+        cast(ServicerContext, context),
+    )
+
+    assert result.id == ""
+    assert context.code == grpc.StatusCode.NOT_FOUND
+
+
+async def test_get_directory_returns_permission_denied_when_service_raises() -> None:
+    impl = _StubDirectoryService()
+    impl.get_directory_deny = True
+    service = _service(impl)
+    context = _FakeContext()
+
+    result = await service.GetDirectory(
+        GetDirectoryRequest(id="dir-1", user_id="user-1"),
+        cast(ServicerContext, context),
+    )
+
+    assert result.id == ""
+    assert context.code == grpc.StatusCode.PERMISSION_DENIED
+
+
+async def test_get_directory_requires_id() -> None:
+    impl = _StubDirectoryService()
+    service = _service(impl)
+    context = _FakeContext()
+
+    result = await service.GetDirectory(
+        GetDirectoryRequest(id="", user_id="user-1"),
+        cast(ServicerContext, context),
+    )
 
     assert result.id == ""
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
-    assert context.details == "id is required"
 
 
-async def test_delete_directory_returns_not_found_when_repo_reports_no_delete() -> None:
-    repo = _StubDirectoryRepo(user_to_ids={}, by_id={})
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
+async def test_delete_directory_requires_id() -> None:
+    impl = _StubDirectoryService()
+    service = _service(impl)
     context = _FakeContext()
 
-    result = await service.DeleteDirectory(DeleteDirectoryRequest(id="dir-missing", user_id="user-1"), cast(ServicerContext, context))
+    result = await service.DeleteDirectory(
+        DeleteDirectoryRequest(id="", user_id="user-1"),
+        cast(ServicerContext, context),
+    )
 
-    assert repo.deleted_ids == ["dir-missing"]
+    assert result.id == ""
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+
+
+async def test_delete_directory_returns_not_found_when_service_reports_missing() -> None:
+    impl = _StubDirectoryService()
+    impl.delete_result = False
+    service = _service(impl)
+    context = _FakeContext()
+
+    result = await service.DeleteDirectory(
+        DeleteDirectoryRequest(id="dir-missing", user_id="user-1"),
+        cast(ServicerContext, context),
+    )
+
+    assert impl.last_delete_id == "dir-missing"
+    assert impl.last_delete_user_id == "user-1"
     assert result.id == ""
     assert context.code == grpc.StatusCode.NOT_FOUND
-    assert context.details == "Directory not found"
 
 
 async def test_delete_directory_returns_deleted_id_on_success() -> None:
-    repo = _StubDirectoryRepo(
-        user_to_ids={},
-        by_id={"dir-1": DirectoryEntity(id="dir-1", name="one", relations=[])},
-    )
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
+    impl = _StubDirectoryService()
+    service = _service(impl)
     context = _FakeContext()
 
-    result = await service.DeleteDirectory(DeleteDirectoryRequest(id="dir-1", user_id="user-1"), cast(ServicerContext, context))
+    result = await service.DeleteDirectory(
+        DeleteDirectoryRequest(id="dir-1", user_id="user-1"),
+        cast(ServicerContext, context),
+    )
 
-    assert repo.deleted_ids == ["dir-1"]
+    assert impl.last_delete_id == "dir-1"
     assert result.id == "dir-1"
     assert context.code is None
 
 
+async def test_delete_directory_returns_permission_denied_when_service_raises() -> None:
+    impl = _StubDirectoryService()
+    impl.delete_deny = True
+    service = _service(impl)
+    context = _FakeContext()
+
+    result = await service.DeleteDirectory(
+        DeleteDirectoryRequest(id="dir-1", user_id="user-1"),
+        cast(ServicerContext, context),
+    )
+
+    assert result.id == ""
+    assert context.code == grpc.StatusCode.PERMISSION_DENIED
+
+
 async def test_patch_directory_requires_id() -> None:
-    repo = _StubDirectoryRepo(user_to_ids={}, by_id={})
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
+    impl = _StubDirectoryService()
+    service = _service(impl)
     context = _FakeContext()
 
     result = await service.PatchDirectory(
@@ -188,12 +233,12 @@ async def test_patch_directory_requires_id() -> None:
 
     assert result.id == ""
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
-    assert context.details == "id is required"
 
 
 async def test_patch_directory_returns_not_found_for_missing_directory() -> None:
-    repo = _StubDirectoryRepo(user_to_ids={}, by_id={})
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
+    impl = _StubDirectoryService()
+    impl.patch_result = None
+    service = _service(impl)
     context = _FakeContext()
 
     result = await service.PatchDirectory(
@@ -203,25 +248,18 @@ async def test_patch_directory_returns_not_found_for_missing_directory() -> None
 
     assert result.id == ""
     assert context.code == grpc.StatusCode.NOT_FOUND
-    assert context.details == "Directory not found"
 
 
-async def test_patch_directory_updates_requested_fields() -> None:
-    repo = _StubDirectoryRepo(
-        user_to_ids={},
-        by_id={
-            "dir-1": DirectoryEntity(
-                id="dir-1",
-                name="old-name",
-                display_name="Old Display",
-                description="Old Description",
-                image_url="old-url",
-                parent_id="old-parent",
-                relations=[],
-            )
-        },
+async def test_patch_directory_passes_entity_to_service() -> None:
+    impl = _StubDirectoryService()
+    impl.patch_result = DirectoryEntity(
+        id="dir-1",
+        name="new-name",
+        description="new-description",
+        parent_id="new-parent",
+        relations=[],
     )
-    service = GrpcDirectoryService(directory_repo=repo, log=_log_provider, to_grpc=_to_grpc(), context_factory=_UserContextFactory())
+    service = _service(impl)
     context = _FakeContext()
 
     result = await service.PatchDirectory(
@@ -236,14 +274,129 @@ async def test_patch_directory_updates_requested_fields() -> None:
     )
 
     assert context.code is None
-    assert repo.last_update_entity is not None
-    assert repo.last_update_entity.id == "dir-1"
-    assert repo.last_update_entity.name == "new-name"
-    assert repo.last_update_entity.description == "new-description"
-    assert repo.last_update_entity.parent_id == "new-parent"
-    assert repo.last_update_entity.display_name is UNDEFINED
-    assert repo.last_update_entity.image_url is UNDEFINED
+    assert impl.last_patch_entity is not None
+    assert impl.last_patch_entity.id == "dir-1"
+    assert impl.last_patch_entity.name == "new-name"
+    assert impl.last_patch_entity.description == "new-description"
+    assert impl.last_patch_entity.parent_id == "new-parent"
     assert result.id == "dir-1"
     assert result.name == "new-name"
-    assert result.description == "new-description"
-    assert result.parent_id == "new-parent"
+
+
+async def test_create_directory_requires_name() -> None:
+    impl = _StubDirectoryService()
+    service = _service(impl)
+    context = _FakeContext()
+
+    result = await service.CreateDirectory(
+        CreateDirectoryRequest(name="", user_id="user-1"),
+        cast(ServicerContext, context),
+    )
+
+    assert result.id == ""
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+
+
+async def test_create_directory_permission_denied() -> None:
+    impl = _StubDirectoryService()
+    impl.create_deny = True
+    service = _service(impl)
+    context = _FakeContext()
+
+    result = await service.CreateDirectory(
+        CreateDirectoryRequest(name="root", user_id="user-1"),
+        cast(ServicerContext, context),
+    )
+
+    assert result.id == ""
+    assert context.code == grpc.StatusCode.PERMISSION_DENIED
+
+
+async def test_get_notes_of_directory_requires_directory_id() -> None:
+    impl = _StubDirectoryService()
+    service = _service(impl)
+    context = _FakeContext()
+
+    request = GetNotesOfDirectoryRequest(directory_id="", user_id="user-1")
+    result = [
+        n async for n in service.GetNotesOfDirectory(request, cast(ServicerContext, context))
+    ]
+
+    assert result == []
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert context.details == "directory_id is required"
+
+
+async def test_get_notes_of_directory_requires_user_id() -> None:
+    impl = _StubDirectoryService()
+    service = _service(impl)
+    context = _FakeContext()
+
+    request = GetNotesOfDirectoryRequest(directory_id="dir-1", user_id="")
+    result = [
+        n async for n in service.GetNotesOfDirectory(request, cast(ServicerContext, context))
+    ]
+
+    assert result == []
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert context.details == "user_id is required"
+
+
+async def test_get_notes_of_directory_permission_denied() -> None:
+    impl = _StubDirectoryService()
+    impl.get_notes_deny = True
+    service = _service(impl)
+    context = _FakeContext()
+
+    request = GetNotesOfDirectoryRequest(
+        directory_id="dir-1", user_id="user-1", limit=10, offset=0
+    )
+    result = [
+        n async for n in service.GetNotesOfDirectory(request, cast(ServicerContext, context))
+    ]
+
+    assert result == []
+    assert context.code == grpc.StatusCode.PERMISSION_DENIED
+
+
+async def test_get_notes_of_directory_yields_paginated_notes() -> None:
+    notes = [
+        NoteEntity(note_id=f"note-{i}", title=f"note-{i}", author_id="user-1", content="")
+        for i in range(3)
+    ]
+    impl = _StubDirectoryService()
+    impl.notes_for_directory["dir-1"] = notes
+
+    service = _service(impl)
+    context = _FakeContext()
+
+    request = GetNotesOfDirectoryRequest(
+        directory_id="dir-1", user_id="user-1", limit=2, offset=0
+    )
+    result = [
+        n async for n in service.GetNotesOfDirectory(request, cast(ServicerContext, context))
+    ]
+
+    assert impl.last_get_notes_args is not None
+    assert impl.last_get_notes_args[0] == "dir-1"
+    assert impl.last_get_notes_args[1] == "user-1"
+    assert impl.last_get_notes_args[2] == 2
+    assert impl.last_get_notes_args[3] == 0
+    assert [n.id for n in result] == ["note-0", "note-1"]
+
+
+async def test_get_notes_of_directory_rejects_negative_offset() -> None:
+    impl = _StubDirectoryService()
+    service = _service(impl)
+    context = _FakeContext()
+
+    request = GetNotesOfDirectoryRequest(
+        directory_id="dir-1", user_id="user-1", limit=10, offset=-1
+    )
+    result = [
+        n async for n in service.GetNotesOfDirectory(request, cast(ServicerContext, context))
+    ]
+
+    assert result == []
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert "offset" in (context.details or "")

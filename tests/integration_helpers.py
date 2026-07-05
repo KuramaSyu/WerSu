@@ -153,14 +153,21 @@ def make_user_entity(
     discriminator: str,
     email: str,
     avatar: str = "https://cdn.example/avatar.png",
+    type: str = "human",
 ) -> UserEntity:
-    """Factory for a human ``UserEntity`` with sensible defaults."""
+    """Factory for a human ``UserEntity`` with sensible defaults.
+
+    Sets ``type='human'`` explicitly so the matching DB column
+    isn't emitted as ``UNDEFINED`` (which would defer directory
+    bootstrap in :func:`UserService.create_user`).
+    """
     return UserEntity(
         discord_id=discord_id,
         avatar=avatar,
         username=username,
         discriminator=discriminator,
         email=email,
+        type=type,
     )
 
 

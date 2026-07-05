@@ -29,8 +29,8 @@ async def test_create_user(user_repo: UserRepoABC, test_user: UserEntity):
 
 async def test_update_user(db: Database, user_repo: UserRepoABC, test_user: UserEntity):
     """Creates a test user, updates it, and retrieves it once by discord_id and once by id"""
-    await user_repo.insert(test_user)
-    updated_user = replace(test_user, avatar="http://somewere")
+    inserted = await user_repo.insert(test_user)
+    updated_user = replace(inserted, avatar="http://somewere")
     ret_user_update = await user_repo.update(updated_user)
     ret_user_discord = await user_repo.select_by_discord_id(updated_user.discord_id)
     assert ret_user_discord and ret_user_discord.id

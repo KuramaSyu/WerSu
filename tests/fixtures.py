@@ -40,7 +40,11 @@ from src.utils import logging_provider
 from tests._fixtures_pkg.fakes import (  # noqa: F401
     _FakeEmbeddingGenerator,
     _FakeEmbeddingRepo,
+    _FakeNoteContentRepo,
+    _FakeNoteRepoFacade,
+    _FakeJwtProvider,
     _FakeVersionRepo,
+    _FakeDatabase,
     _TestDirectoryRepo,
     _TestSpiceDbClient,
 )
@@ -82,6 +86,7 @@ def test_user() -> UserEntity:
         username="KuramaSyu",
         discriminator="1234",
         email="kuramaSyu@example.com",
+        type="human",
     )
 
 

@@ -11,8 +11,9 @@ work (the parent ``tests.fixtures`` package re-exports them).
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
+from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.database import DatabaseABC
 from src.db.entities.directory.directory import DirectoryEntity
@@ -22,6 +23,7 @@ from src.db.entities.note.versioning import NoteVersionEntry
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.content import NoteContentRepo
 from src.db.repos.note.embedding import NoteEmbeddingRepo
+from src.db.repos.note.note import NoteRepoFacadeABC, SearchType
 from src.db.repos.note.versioning import NoteVersionRepoABC
 
 
@@ -96,32 +98,106 @@ class _FakeVersionRepo(NoteVersionRepoABC):
 
 
 class _TestDirectoryRepo(DirectoryRepo):
-    """In-memory directory repo used by unit tests."""
+    """In-memory directory repo used by unit tests.
+
+    The default behaviour (used by every existing test that just wants
+    *something* resolvable per user) seeds one directory per user id:
+    ``"<default-name>-<user_id>"``.  Tests that need to drive
+    create / update / delete / lookups by id, or a richer directory
+    set, can populate ``self.directories_by_id`` /
+    ``self.user_to_directory_ids`` directly.
+    """
+
+    def __init__(self) -> None:
+        # ``directories_by_id``: directory id -> DirectoryEntity.  Tests
+        # can pre-populate this to control what ``fetch_directory``
+        # returns.
+        self.directories_by_id: Dict[str, DirectoryEntity] = {}
+        # ``user_to_directory_ids``: user id -> list of directory ids.
+        # When populated, ``list_user_directory_ids`` returns the
+        # corresponding ids; otherwise the legacy fallback of a single
+        # default directory is used so older tests keep working.
+        self.user_to_directory_ids: Dict[str, List[str]] = {}
+        # Recorded calls for assertions.
+        self.created: List[DirectoryEntity] = []
+        self.updated: List[DirectoryEntity] = []
+        self.deleted: List[str] = []
+        self._next_directory_id = 0
 
     @property
     def _default_directory_name(self) -> str:
         return self.get_default_directory_specs()[0].name
 
+    def _seed_default_directory(self, user: UserContextABC) -> str:
+        """Return and lazily create the default directory for ``user``."""
+        directory_id = f"{self._default_directory_name}-{user.user_id}"
+        if directory_id not in self.directories_by_id:
+            self.directories_by_id[directory_id] = DirectoryEntity(
+                id=directory_id, name=self._default_directory_name
+            )
+        return directory_id
+
     async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
-        raise NotImplementedError()
+        self._next_directory_id += 1
+        new_id = entity.id if entity.id not in (None, UNDEFINED) else f"dir-{self._next_directory_id}"
+        created = DirectoryEntity(
+            id=new_id,
+            name=entity.name,
+            display_name=entity.display_name,
+            description=entity.description,
+            image_url=entity.image_url,
+            parent_id=entity.parent_id,
+            readme_note_id=entity.readme_note_id,
+            relations=entity.relations,
+        )
+        self.directories_by_id[str(new_id)] = created
+        self.created.append(created)
+        return created
 
     async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
+        existing = self.directories_by_id.get(id)
+        if existing is not None:
+            return existing
+        # Fall back to the legacy stub so older tests that only ever
+        # asked for the default directory keep working.
         return DirectoryEntity(id=id, name=self._default_directory_name)
 
     async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
-        return entity
+        self.updated.append(entity)
+        existing = self.directories_by_id.get(str(entity.id))
+        if existing is None:
+            return None
+        updated = DirectoryEntity(
+            id=existing.id,
+            name=existing.name if entity.name is UNDEFINED else entity.name,
+            display_name=existing.display_name if entity.display_name is UNDEFINED else entity.display_name,
+            description=existing.description if entity.description is UNDEFINED else entity.description,
+            image_url=existing.image_url if entity.image_url is UNDEFINED else entity.image_url,
+            parent_id=existing.parent_id if entity.parent_id is UNDEFINED else entity.parent_id,
+            readme_note_id=existing.readme_note_id if entity.readme_note_id is UNDEFINED else entity.readme_note_id,
+            relations=existing.relations,
+        )
+        self.directories_by_id[str(entity.id)] = updated
+        return updated
 
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
-        return [f"{self._default_directory_name}-{user.user_id}"]
+        if user.user_id in self.user_to_directory_ids:
+            return list(self.user_to_directory_ids[user.user_id])
+        # Default fallback: one default-named directory per user.
+        return [self._seed_default_directory(user)]
 
     async def fetch_all_directories(self) -> List[DirectoryEntity]:
-        return []
+        return list(self.directories_by_id.values())
 
     async def list_note_directory_ids(self, note_id: str) -> List[str]:
         return []
 
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
-        raise NotImplementedError()
+        directory_id = str(entity.id)
+        self.deleted.append(directory_id)
+        if directory_id in self.directories_by_id:
+            del self.directories_by_id[directory_id]
+        return True
 
     async def resolve_files_of_directory(
         self,
@@ -129,6 +205,61 @@ class _TestDirectoryRepo(DirectoryRepo):
         actor: UserContextABC,
         max_depth: int = 10,
     ) -> List[str]:
+        return []
+
+
+class _FakeNoteRepoFacade(NoteRepoFacadeABC):
+    """In-memory :class:`NoteRepoFacadeABC` used by unit tests.
+
+    Stores notes by id; ``insert`` mints a sequential id, every other
+    CRUD method delegates to the in-memory store.  Tests can drive
+    behaviour by populating ``notes_by_id`` ahead of time or by
+    reading ``insert_calls`` / ``select_calls`` for assertions.
+    """
+
+    def __init__(self) -> None:
+        self.notes_by_id: Dict[str, NoteEntity] = {}
+        self.select_calls: List[str] = []
+        self.insert_calls: List[NoteEntity] = []
+        self.update_calls: List[NoteEntity] = []
+        self.delete_calls: List[str] = []
+        self.search_calls: List[tuple] = []
+        self._next_note_id = 0
+
+    async def insert(self, note: NoteEntity, user: UserContextABC) -> NoteEntity:
+        self.insert_calls.append(note)
+        self._next_note_id += 1
+        if note.note_id in (None, UNDEFINED):
+            note.note_id = f"note-{self._next_note_id}"
+        if note.permissions is UNDEFINED:
+            note.permissions = []
+        self.notes_by_id[str(note.note_id)] = note
+        return note
+
+    async def update(self, note: NoteEntity, ctx: UserContextABC) -> NoteEntity:
+        self.update_calls.append(note)
+        existing = self.notes_by_id.get(str(note.note_id))
+        if existing is not None:
+            self.notes_by_id[str(note.note_id)] = note
+        return note
+
+    async def delete(self, note_id: str, ctx: UserContextABC) -> Optional[List[NoteEntity]]:
+        self.delete_calls.append(str(note_id))
+        existing = self.notes_by_id.pop(str(note_id), None)
+        return [existing] if existing is not None else None
+
+    async def select_by_id(self, note_id: str, ctx: UserContextABC) -> Optional[NoteEntity]:
+        self.select_calls.append(str(note_id))
+        return self.notes_by_id.get(str(note_id))
+
+    async def search_notes(
+        self,
+        search_type: "SearchType",
+        query: str,
+        ctx: UserContextABC,
+        pagination,
+    ) -> List[NoteEntity]:
+        self.search_calls.append((search_type, query, pagination))
         return []
 
 
@@ -252,6 +383,7 @@ __all__ = [
     "_FakeEmbeddingGenerator",
     "_FakeEmbeddingRepo",
     "_FakeNoteContentRepo",
+    "_FakeNoteRepoFacade",
     "_FakeDatabase",
     "_FakeJwtProvider",
     "_FakeVersionRepo",

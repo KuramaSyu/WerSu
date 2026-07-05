@@ -103,6 +103,7 @@ def _make_test_user() -> UserEntity:
         username="paul",
         discriminator="0001",
         email="paul@example.com",
+        type="human",
     )
 
 
