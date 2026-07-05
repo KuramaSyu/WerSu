@@ -87,6 +87,11 @@ def s3_client(garage_config):
     Create an S3-compatible client pointed at Garage.
 
     Garage implements the S3 API, so boto3 can be used directly.
+
+    Also ensures the configured bucket exists -- the local dev
+    instance started via ``docker compose up garage`` only ships the
+    ``garage`` bucket by default, so the test creates the default
+    bucket on first use.
     """
     client = boto3.client(
         "s3",
