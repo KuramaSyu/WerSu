@@ -190,10 +190,14 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
         update_fields = NoteEmbeddingEntity(note_id=UNDEFINED, model=UNDEFINED, embedding=embedding_seq)
         
         # now update it by note_id
-        return await self._update(
-            set=update_fields,
-            where=NoteEmbeddingEntity(note_id, UNDEFINED, UNDEFINED)
-        )
+        try:
+            return await self._update(
+                set=update_fields,
+                where=NoteEmbeddingEntity(note_id, UNDEFINED, UNDEFINED)
+            )
+        except ValueError:
+            # if update fails, insert it
+            return await self.insert(note_id, title, content)
 
     async def _update(self, set: NoteEmbeddingEntity, where: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
         set_dict = asdict(set)
@@ -207,7 +211,7 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
             where=asdict(where)
         )
         if not record:
-            raise Exception("Failed to update embedding")
+            raise ValueError(f"Failed to update embedding for note_id: {where.note_id}")
         return set
 
     async def delete(self, embedding: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
