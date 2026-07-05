@@ -64,6 +64,7 @@ class DirectoryRelationEnum(StrEnum):
     VIEW = "view"
     WRITE = "write"
     DELETE = "delete"
+    EDIT_PERMISSIONS = "edit_permissions"
 
 
 ObjectType: TypeAlias = Literal["note", "directory", "user", "attachment"]
@@ -93,6 +94,7 @@ DirectoryRelationName: TypeAlias = Literal[
     "view",
     "write",
     "delete",
+    "edit_permissions",
 ]
 """String-literal union of every :class:`DirectoryRelationEnum` value."""
 
