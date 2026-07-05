@@ -246,3 +246,87 @@ class HasNoteEditPermissionsPerm(PermissionCheckChain):
         return f"user has no permission to edit permissions for note {self._note_id}"
 
 
+class HasDirectoryViewPerm(PermissionCheckChain):
+    """Permission check for viewing a directory."""
+    OBJECT_TYPE: ObjectType = "directory"
+    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.VIEW
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, directory_id: str) -> None:
+        super().__init__()
+        self._directory_id = directory_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        return await self._permission_repo.has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._directory_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no permission to view directory {self._directory_id}"
+
+
+class HasDirectoryWritePerm(PermissionCheckChain):
+    """Permission check for writing/patching a directory."""
+    OBJECT_TYPE: ObjectType = "directory"
+    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.WRITE
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, directory_id: str) -> None:
+        super().__init__()
+        self._directory_id = directory_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        return await self._permission_repo.has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._directory_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no permission to write to directory {self._directory_id}"
+
+
+class HasDirectoryDeletePerm(PermissionCheckChain):
+    """Permission check for deleting a directory."""
+    OBJECT_TYPE: ObjectType = "directory"
+    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.DELETE
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, directory_id: str) -> None:
+        super().__init__()
+        self._directory_id = directory_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        return await self._permission_repo.has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._directory_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no permission to delete directory {self._directory_id}"
+
+
+class HasDirectoryEditPermissionsPerm(PermissionCheckChain):
+    """Permission check for managing a directory's sharing and permission settings."""
+    OBJECT_TYPE: ObjectType = "directory"
+    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.EDIT_PERMISSIONS
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, directory_id: str) -> None:
+        super().__init__()
+        self._directory_id = directory_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        return await self._permission_repo.has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._directory_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no permission to edit permissions for directory {self._directory_id}"
+
+
