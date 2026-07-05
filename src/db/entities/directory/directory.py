@@ -24,6 +24,12 @@ class DirectoryEntity(AcceptsVisitor):
         Optional image URL for the directory.
     parent_id : UndefinedNoneOr[str], default=UNDEFINED
         Optional parent directory ID (stored as SpiceDB `parent` relation).
+    readme_note_id : UndefinedNoneOr[str], default=UNDEFINED
+        Optional id of the ``README.md`` note pinned to this directory.
+        When set, :meth:`src.services.directory.DirectoryService.get_directory`
+        and :meth:`~src.services.directory.DirectoryService.get_directories`
+        fetch the note and overlay the parsed `image_url` and
+        `description` onto the result.
     relations : UndefinedOr[List[Relationship]], default=UNDEFINED
         User-facing relations such as `admin`, `writer`, and `reader`.
     """
@@ -34,6 +40,7 @@ class DirectoryEntity(AcceptsVisitor):
     description: UndefinedNoneOr[str] = UNDEFINED
     image_url: UndefinedNoneOr[str] = UNDEFINED
     parent_id: UndefinedNoneOr[str] = UNDEFINED
+    readme_note_id: UndefinedNoneOr[str] = UNDEFINED
     relations: UndefinedOr[List[Relationship]] = UNDEFINED
 
     def visit(self, visitor: EntityVisitor):

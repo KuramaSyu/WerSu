@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from src.grpc_mod.proto import note_pb2 as src_dot_grpc__mod_dot_proto_dot_note__pb2
+from src.grpc_mod.proto import note_pb2 as note__pb2
 
 GRPC_GENERATED_VERSION = '1.81.0'
 GRPC_VERSION = grpc.__version__
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in src/grpc_mod/proto/note_pb2_grpc.py depends on'
+        + ' but the generated code in note_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -37,28 +37,28 @@ class NoteServiceStub:
         """
         self.GetNote = channel.unary_unary(
                 '/proto.NoteService/GetNote',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteResponse.FromString,
+                request_serializer=note__pb2.GetNoteRequest.SerializeToString,
+                response_deserializer=note__pb2.NoteResponse.FromString,
                 _registered_method=True)
         self.PostNote = channel.unary_unary(
                 '/proto.NoteService/PostNote',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+                request_serializer=note__pb2.PostNoteRequest.SerializeToString,
+                response_deserializer=note__pb2.Note.FromString,
                 _registered_method=True)
         self.PatchNote = channel.unary_unary(
                 '/proto.NoteService/PatchNote',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterNoteRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+                request_serializer=note__pb2.AlterNoteRequest.SerializeToString,
+                response_deserializer=note__pb2.Note.FromString,
                 _registered_method=True)
         self.DeleteNote = channel.unary_unary(
                 '/proto.NoteService/DeleteNote',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteNoteRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+                request_serializer=note__pb2.DeleteNoteRequest.SerializeToString,
+                response_deserializer=note__pb2.Note.FromString,
                 _registered_method=True)
         self.SearchNotes = channel.unary_stream(
                 '/proto.NoteService/SearchNotes',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.FromString,
+                request_serializer=note__pb2.GetSearchNotesRequest.SerializeToString,
+                response_deserializer=note__pb2.MinimalNote.FromString,
                 _registered_method=True)
 
 
@@ -104,28 +104,28 @@ def add_NoteServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'GetNote': grpc.unary_unary_rpc_method_handler(
                     servicer.GetNote,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteResponse.SerializeToString,
+                    request_deserializer=note__pb2.GetNoteRequest.FromString,
+                    response_serializer=note__pb2.NoteResponse.SerializeToString,
             ),
             'PostNote': grpc.unary_unary_rpc_method_handler(
                     servicer.PostNote,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
+                    request_deserializer=note__pb2.PostNoteRequest.FromString,
+                    response_serializer=note__pb2.Note.SerializeToString,
             ),
             'PatchNote': grpc.unary_unary_rpc_method_handler(
                     servicer.PatchNote,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterNoteRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
+                    request_deserializer=note__pb2.AlterNoteRequest.FromString,
+                    response_serializer=note__pb2.Note.SerializeToString,
             ),
             'DeleteNote': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteNote,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteNoteRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
+                    request_deserializer=note__pb2.DeleteNoteRequest.FromString,
+                    response_serializer=note__pb2.Note.SerializeToString,
             ),
             'SearchNotes': grpc.unary_stream_rpc_method_handler(
                     servicer.SearchNotes,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.SerializeToString,
+                    request_deserializer=note__pb2.GetSearchNotesRequest.FromString,
+                    response_serializer=note__pb2.MinimalNote.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -154,8 +154,8 @@ class NoteService:
             request,
             target,
             '/proto.NoteService/GetNote',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteResponse.FromString,
+            note__pb2.GetNoteRequest.SerializeToString,
+            note__pb2.NoteResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -181,8 +181,8 @@ class NoteService:
             request,
             target,
             '/proto.NoteService/PostNote',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+            note__pb2.PostNoteRequest.SerializeToString,
+            note__pb2.Note.FromString,
             options,
             channel_credentials,
             insecure,
@@ -208,8 +208,8 @@ class NoteService:
             request,
             target,
             '/proto.NoteService/PatchNote',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterNoteRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+            note__pb2.AlterNoteRequest.SerializeToString,
+            note__pb2.Note.FromString,
             options,
             channel_credentials,
             insecure,
@@ -235,8 +235,8 @@ class NoteService:
             request,
             target,
             '/proto.NoteService/DeleteNote',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteNoteRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+            note__pb2.DeleteNoteRequest.SerializeToString,
+            note__pb2.Note.FromString,
             options,
             channel_credentials,
             insecure,
@@ -262,8 +262,8 @@ class NoteService:
             request,
             target,
             '/proto.NoteService/SearchNotes',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.FromString,
+            note__pb2.GetSearchNotesRequest.SerializeToString,
+            note__pb2.MinimalNote.FromString,
             options,
             channel_credentials,
             insecure,
@@ -286,28 +286,33 @@ class DirectoryServiceStub:
         """
         self.GetDirectory = channel.unary_unary(
                 '/proto.DirectoryService/GetDirectory',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+                request_serializer=note__pb2.GetDirectoryRequest.SerializeToString,
+                response_deserializer=note__pb2.Directory.FromString,
                 _registered_method=True)
         self.GetDirectories = channel.unary_stream(
                 '/proto.DirectoryService/GetDirectories',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoriesRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+                request_serializer=note__pb2.GetDirectoriesRequest.SerializeToString,
+                response_deserializer=note__pb2.Directory.FromString,
                 _registered_method=True)
         self.CreateDirectory = channel.unary_unary(
                 '/proto.DirectoryService/CreateDirectory',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.CreateDirectoryRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+                request_serializer=note__pb2.CreateDirectoryRequest.SerializeToString,
+                response_deserializer=note__pb2.Directory.FromString,
                 _registered_method=True)
         self.PatchDirectory = channel.unary_unary(
                 '/proto.DirectoryService/PatchDirectory',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterDirectoryRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+                request_serializer=note__pb2.AlterDirectoryRequest.SerializeToString,
+                response_deserializer=note__pb2.Directory.FromString,
                 _registered_method=True)
         self.DeleteDirectory = channel.unary_unary(
                 '/proto.DirectoryService/DeleteDirectory',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteDirectoryRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+                request_serializer=note__pb2.DeleteDirectoryRequest.SerializeToString,
+                response_deserializer=note__pb2.Directory.FromString,
+                _registered_method=True)
+        self.GetNotesOfDirectory = channel.unary_stream(
+                '/proto.DirectoryService/GetNotesOfDirectory',
+                request_serializer=note__pb2.GetNotesOfDirectoryRequest.SerializeToString,
+                response_deserializer=note__pb2.MinimalNote.FromString,
                 _registered_method=True)
 
 
@@ -344,33 +349,44 @@ class DirectoryServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetNotesOfDirectory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_DirectoryServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'GetDirectory': grpc.unary_unary_rpc_method_handler(
                     servicer.GetDirectory,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
+                    request_deserializer=note__pb2.GetDirectoryRequest.FromString,
+                    response_serializer=note__pb2.Directory.SerializeToString,
             ),
             'GetDirectories': grpc.unary_stream_rpc_method_handler(
                     servicer.GetDirectories,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoriesRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
+                    request_deserializer=note__pb2.GetDirectoriesRequest.FromString,
+                    response_serializer=note__pb2.Directory.SerializeToString,
             ),
             'CreateDirectory': grpc.unary_unary_rpc_method_handler(
                     servicer.CreateDirectory,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.CreateDirectoryRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
+                    request_deserializer=note__pb2.CreateDirectoryRequest.FromString,
+                    response_serializer=note__pb2.Directory.SerializeToString,
             ),
             'PatchDirectory': grpc.unary_unary_rpc_method_handler(
                     servicer.PatchDirectory,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterDirectoryRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
+                    request_deserializer=note__pb2.AlterDirectoryRequest.FromString,
+                    response_serializer=note__pb2.Directory.SerializeToString,
             ),
             'DeleteDirectory': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteDirectory,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteDirectoryRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
+                    request_deserializer=note__pb2.DeleteDirectoryRequest.FromString,
+                    response_serializer=note__pb2.Directory.SerializeToString,
+            ),
+            'GetNotesOfDirectory': grpc.unary_stream_rpc_method_handler(
+                    servicer.GetNotesOfDirectory,
+                    request_deserializer=note__pb2.GetNotesOfDirectoryRequest.FromString,
+                    response_serializer=note__pb2.MinimalNote.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -398,8 +414,8 @@ class DirectoryService:
             request,
             target,
             '/proto.DirectoryService/GetDirectory',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+            note__pb2.GetDirectoryRequest.SerializeToString,
+            note__pb2.Directory.FromString,
             options,
             channel_credentials,
             insecure,
@@ -425,8 +441,8 @@ class DirectoryService:
             request,
             target,
             '/proto.DirectoryService/GetDirectories',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoriesRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+            note__pb2.GetDirectoriesRequest.SerializeToString,
+            note__pb2.Directory.FromString,
             options,
             channel_credentials,
             insecure,
@@ -452,8 +468,8 @@ class DirectoryService:
             request,
             target,
             '/proto.DirectoryService/CreateDirectory',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.CreateDirectoryRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+            note__pb2.CreateDirectoryRequest.SerializeToString,
+            note__pb2.Directory.FromString,
             options,
             channel_credentials,
             insecure,
@@ -479,8 +495,8 @@ class DirectoryService:
             request,
             target,
             '/proto.DirectoryService/PatchDirectory',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterDirectoryRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+            note__pb2.AlterDirectoryRequest.SerializeToString,
+            note__pb2.Directory.FromString,
             options,
             channel_credentials,
             insecure,
@@ -506,8 +522,35 @@ class DirectoryService:
             request,
             target,
             '/proto.DirectoryService/DeleteDirectory',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteDirectoryRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
+            note__pb2.DeleteDirectoryRequest.SerializeToString,
+            note__pb2.Directory.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetNotesOfDirectory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/proto.DirectoryService/GetNotesOfDirectory',
+            note__pb2.GetNotesOfDirectoryRequest.SerializeToString,
+            note__pb2.MinimalNote.FromString,
             options,
             channel_credentials,
             insecure,
@@ -530,23 +573,23 @@ class PermissionServiceStub:
         """
         self.GetPermissions = channel.unary_unary(
                 '/proto.PermissionService/GetPermissions',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetPermissionsRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+                request_serializer=note__pb2.GetPermissionsRequest.SerializeToString,
+                response_deserializer=note__pb2.PermissionsResponse.FromString,
                 _registered_method=True)
         self.CreatePermission = channel.unary_unary(
                 '/proto.PermissionService/CreatePermission',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.CreatePermissionRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+                request_serializer=note__pb2.CreatePermissionRequest.SerializeToString,
+                response_deserializer=note__pb2.PermissionsResponse.FromString,
                 _registered_method=True)
         self.DeletePermission = channel.unary_unary(
                 '/proto.PermissionService/DeletePermission',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeletePermissionRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+                request_serializer=note__pb2.DeletePermissionRequest.SerializeToString,
+                response_deserializer=note__pb2.PermissionsResponse.FromString,
                 _registered_method=True)
         self.ReplacePermissions = channel.unary_unary(
                 '/proto.PermissionService/ReplacePermissions',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.ReplacePermissionsRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+                request_serializer=note__pb2.ReplacePermissionsRequest.SerializeToString,
+                response_deserializer=note__pb2.PermissionsResponse.FromString,
                 _registered_method=True)
 
 
@@ -582,23 +625,23 @@ def add_PermissionServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'GetPermissions': grpc.unary_unary_rpc_method_handler(
                     servicer.GetPermissions,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetPermissionsRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.SerializeToString,
+                    request_deserializer=note__pb2.GetPermissionsRequest.FromString,
+                    response_serializer=note__pb2.PermissionsResponse.SerializeToString,
             ),
             'CreatePermission': grpc.unary_unary_rpc_method_handler(
                     servicer.CreatePermission,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.CreatePermissionRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.SerializeToString,
+                    request_deserializer=note__pb2.CreatePermissionRequest.FromString,
+                    response_serializer=note__pb2.PermissionsResponse.SerializeToString,
             ),
             'DeletePermission': grpc.unary_unary_rpc_method_handler(
                     servicer.DeletePermission,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeletePermissionRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.SerializeToString,
+                    request_deserializer=note__pb2.DeletePermissionRequest.FromString,
+                    response_serializer=note__pb2.PermissionsResponse.SerializeToString,
             ),
             'ReplacePermissions': grpc.unary_unary_rpc_method_handler(
                     servicer.ReplacePermissions,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.ReplacePermissionsRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.SerializeToString,
+                    request_deserializer=note__pb2.ReplacePermissionsRequest.FromString,
+                    response_serializer=note__pb2.PermissionsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -626,8 +669,8 @@ class PermissionService:
             request,
             target,
             '/proto.PermissionService/GetPermissions',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetPermissionsRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+            note__pb2.GetPermissionsRequest.SerializeToString,
+            note__pb2.PermissionsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -653,8 +696,8 @@ class PermissionService:
             request,
             target,
             '/proto.PermissionService/CreatePermission',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.CreatePermissionRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+            note__pb2.CreatePermissionRequest.SerializeToString,
+            note__pb2.PermissionsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -680,8 +723,8 @@ class PermissionService:
             request,
             target,
             '/proto.PermissionService/DeletePermission',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.DeletePermissionRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+            note__pb2.DeletePermissionRequest.SerializeToString,
+            note__pb2.PermissionsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -707,8 +750,8 @@ class PermissionService:
             request,
             target,
             '/proto.PermissionService/ReplacePermissions',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.ReplacePermissionsRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.PermissionsResponse.FromString,
+            note__pb2.ReplacePermissionsRequest.SerializeToString,
+            note__pb2.PermissionsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -731,23 +774,23 @@ class NoteVersionServiceStub:
         """
         self.GetNoteVersions = channel.unary_stream(
                 '/proto.NoteVersionService/GetNoteVersions',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionsRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.FromString,
+                request_serializer=note__pb2.GetNoteVersionsRequest.SerializeToString,
+                response_deserializer=note__pb2.NoteVersionSummary.FromString,
                 _registered_method=True)
         self.GetDirectoryActivity = channel.unary_stream(
                 '/proto.NoteVersionService/GetDirectoryActivity',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryActivityRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.FromString,
+                request_serializer=note__pb2.GetDirectoryActivityRequest.SerializeToString,
+                response_deserializer=note__pb2.NoteVersionSummary.FromString,
                 _registered_method=True)
         self.GetNoteVersionContent = channel.unary_unary(
                 '/proto.NoteVersionService/GetNoteVersionContent',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionContentRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionContent.FromString,
+                request_serializer=note__pb2.GetNoteVersionContentRequest.SerializeToString,
+                response_deserializer=note__pb2.NoteVersionContent.FromString,
                 _registered_method=True)
         self.RestoreNoteVersion = channel.unary_unary(
                 '/proto.NoteVersionService/RestoreNoteVersion',
-                request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.RestoreNoteVersionRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+                request_serializer=note__pb2.RestoreNoteVersionRequest.SerializeToString,
+                response_deserializer=note__pb2.Note.FromString,
                 _registered_method=True)
 
 
@@ -783,23 +826,23 @@ def add_NoteVersionServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'GetNoteVersions': grpc.unary_stream_rpc_method_handler(
                     servicer.GetNoteVersions,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionsRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.SerializeToString,
+                    request_deserializer=note__pb2.GetNoteVersionsRequest.FromString,
+                    response_serializer=note__pb2.NoteVersionSummary.SerializeToString,
             ),
             'GetDirectoryActivity': grpc.unary_stream_rpc_method_handler(
                     servicer.GetDirectoryActivity,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryActivityRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.SerializeToString,
+                    request_deserializer=note__pb2.GetDirectoryActivityRequest.FromString,
+                    response_serializer=note__pb2.NoteVersionSummary.SerializeToString,
             ),
             'GetNoteVersionContent': grpc.unary_unary_rpc_method_handler(
                     servicer.GetNoteVersionContent,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionContentRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionContent.SerializeToString,
+                    request_deserializer=note__pb2.GetNoteVersionContentRequest.FromString,
+                    response_serializer=note__pb2.NoteVersionContent.SerializeToString,
             ),
             'RestoreNoteVersion': grpc.unary_unary_rpc_method_handler(
                     servicer.RestoreNoteVersion,
-                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.RestoreNoteVersionRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
+                    request_deserializer=note__pb2.RestoreNoteVersionRequest.FromString,
+                    response_serializer=note__pb2.Note.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -827,8 +870,8 @@ class NoteVersionService:
             request,
             target,
             '/proto.NoteVersionService/GetNoteVersions',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionsRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.FromString,
+            note__pb2.GetNoteVersionsRequest.SerializeToString,
+            note__pb2.NoteVersionSummary.FromString,
             options,
             channel_credentials,
             insecure,
@@ -854,8 +897,8 @@ class NoteVersionService:
             request,
             target,
             '/proto.NoteVersionService/GetDirectoryActivity',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryActivityRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionSummary.FromString,
+            note__pb2.GetDirectoryActivityRequest.SerializeToString,
+            note__pb2.NoteVersionSummary.FromString,
             options,
             channel_credentials,
             insecure,
@@ -881,8 +924,8 @@ class NoteVersionService:
             request,
             target,
             '/proto.NoteVersionService/GetNoteVersionContent',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteVersionContentRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteVersionContent.FromString,
+            note__pb2.GetNoteVersionContentRequest.SerializeToString,
+            note__pb2.NoteVersionContent.FromString,
             options,
             channel_credentials,
             insecure,
@@ -908,8 +951,8 @@ class NoteVersionService:
             request,
             target,
             '/proto.NoteVersionService/RestoreNoteVersion',
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.RestoreNoteVersionRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
+            note__pb2.RestoreNoteVersionRequest.SerializeToString,
+            note__pb2.Note.FromString,
             options,
             channel_credentials,
             insecure,

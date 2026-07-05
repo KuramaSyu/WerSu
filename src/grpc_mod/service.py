@@ -15,11 +15,10 @@ import inspect
 
 from torch import log_
 
-from src.api import LoggingProvider, NoteServiceABC
+from src.api import LoggingProvider, NoteServiceABC, DirectoryServiceABC
 from src.api.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities import NoteEntity
-from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, RelationEnum, Relationship, SubjectRef
@@ -61,6 +60,7 @@ from src.grpc_mod.proto.note_pb2 import (
     GetNoteVersionContentRequest,
     GetNoteVersionsRequest,
     GetDirectoryActivityRequest,
+    GetNotesOfDirectoryRequest,
     GetNoteRequest,
     GetPermissionsRequest,
     GetSearchNotesRequest,
@@ -313,12 +313,12 @@ class GrpcDirectoryService(DirectoryServiceServicer):
 
     def __init__(
         self,
-        directory_repo: DirectoryRepo,
+        directory_service: DirectoryServiceABC,
         log: LoggingProvider,
         to_grpc: ConvertToGrpcVisitor,
         context_factory: ContextFactory[UserContextABC],
     ):
-        self._directory_repo = directory_repo
+        self._directory_service = directory_service
         self.log = log(__name__, self)
         self._to_grpc = to_grpc
         self._context = context_factory
@@ -330,14 +330,26 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
                 context.set_details("id is required")
                 return Directory()
+            if not request.user_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("user_id is required")
+                return Directory()
 
-            directory = await self._directory_repo.fetch_directory(request.id)
+            user_ctx = await self._context.create(request.user_id)
+            directory = await self._directory_service.get_directory(
+                request.id, user_ctx
+            )
             if directory is None:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
                 context.set_details("Directory not found")
                 return Directory()
 
             return directory.convert(self._to_grpc)
+        except PermissionError as e:
+            self.log.warning(f"Permission denied in GetDirectory: {e}")
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(e))
+            return Directory()
         except Exception:
             self.log.error(f"Error fetching directory: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -354,40 +366,29 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 context.set_details("user_id is required")
                 return
 
-            if request.HasField("offset") and request.offset < 0:
-                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
-                context.set_details("offset must be greater than or equal to 0")
-                return
-            if request.HasField("limit") and request.limit < 0:
-                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
-                context.set_details("limit must be greater than or equal to 0")
-                return
+            user_ctx = await self._context.create(request.user_id)
+            parent_id = request.parent_id if request.HasField("parent_id") else None
+            limit = request.limit if request.HasField("limit") else None
+            offset = request.offset if request.HasField("offset") else None
 
-            directory_ids = await self._directory_repo.list_user_directory_ids(
-                await self._context.create(request.user_id)
+            directories = await self._directory_service.get_directories(
+                user_ctx=user_ctx,
+                parent_id=parent_id,
+                limit=limit,
+                offset=offset,
             )
-            directories = []
-            for directory_id in directory_ids:
-                directory = await self._directory_repo.fetch_directory(directory_id)
-                if directory is not None:
-                    directories.append(directory)
-
-            if request.HasField("parent_id"):
-                directories = [
-                    directory
-                    for directory in directories
-                    if directory.parent_id not in (UNDEFINED, None)
-                    and str(directory.parent_id) == request.parent_id
-                ]
-
-            offset = request.offset if request.HasField("offset") else 0
-            if request.HasField("limit"):
-                directories = directories[offset: offset + request.limit]
-            else:
-                directories = directories[offset:]
 
             for directory in directories:
                 yield directory.convert(self._to_grpc)
+        except PermissionError as e:
+            self.log.warning(f"Permission denied in GetDirectories: {e}")
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(e))
+            return
+        except ValueError as e:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(e))
+            return
         except Exception:
             self.log.error(f"Error fetching directories: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -401,25 +402,30 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
                 context.set_details("name is required")
                 return Directory()
-            
-            # directory#admin@user:<id> <-- this gets updated in SpiceDB Directory Repo
-            user_admin_relation = Relationship(
-                resource=ObjectRef(object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED),
-                relation=NoteRelationEnum.ADMIN,
-                subject=SubjectRef(object_type=ObjectTypeEnum.USER, object_id=request.user_id),
-            )
+            if not request.user_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("user_id is required")
+                return Directory()
 
-            directory = await self._directory_repo.create_directory(
+            user_ctx = await self._context.create(request.user_id)
+            directory = await self._directory_service.create_directory(
                 DirectoryEntity(
+                    id=UNDEFINED,
                     name=request.name,
                     display_name=request.display_name if request.HasField("display_name") else UNDEFINED,
                     description=request.description if request.HasField("description") else UNDEFINED,
                     image_url=request.image_url if request.HasField("image_url") else UNDEFINED,
                     parent_id=request.parent_id if request.HasField("parent_id") else UNDEFINED,
-                    relations=[user_admin_relation],
-                )
+                    relations=[],
+                ),
+                user_ctx,
             )
             return directory.convert(self._to_grpc)
+        except PermissionError as e:
+            self.log.warning(f"Permission denied in CreateDirectory: {e}")
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(e))
+            return Directory()
         except Exception:
             self.log.error(f"Error creating directory: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -433,8 +439,13 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
                 context.set_details("id is required")
                 return Directory()
+            if not request.user_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("user_id is required")
+                return Directory()
 
-            updated = await self._directory_repo.update_directory(
+            user_ctx = await self._context.create(request.user_id)
+            updated = await self._directory_service.patch_directory(
                 DirectoryEntity(
                     id=request.id,
                     name=request.name if request.HasField("name") else UNDEFINED,
@@ -443,7 +454,8 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                     image_url=request.image_url if request.HasField("image_url") else UNDEFINED,
                     parent_id=request.parent_id if request.HasField("parent_id") else UNDEFINED,
                     relations=UNDEFINED,
-                )
+                ),
+                user_ctx,
             )
             if updated is None:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
@@ -451,6 +463,11 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 return Directory()
 
             return updated.convert(self._to_grpc)
+        except PermissionError as e:
+            self.log.warning(f"Permission denied in PatchDirectory: {e}")
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(e))
+            return Directory()
         except Exception:
             self.log.error(f"Error patching directory: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -464,19 +481,86 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
                 context.set_details("id is required")
                 return Directory()
+            if not request.user_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("user_id is required")
+                return Directory()
 
-            deleted = await self._directory_repo.delete_directory(DirectoryEntity(id=request.id))
+            user_ctx = await self._context.create(request.user_id)
+            deleted = await self._directory_service.delete_directory(
+                request.id, user_ctx
+            )
             if not deleted:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
                 context.set_details("Directory not found")
                 return Directory()
 
             return Directory(id=request.id)
+        except PermissionError as e:
+            self.log.warning(f"Permission denied in DeleteDirectory: {e}")
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(e))
+            return Directory()
         except Exception:
             self.log.error(f"Error deleting directory: {traceback.format_exc()}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while deleting directory")
             return Directory()
+
+    @log_service_call()
+    async def GetNotesOfDirectory(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+        request: GetNotesOfDirectoryRequest,
+        context: ServicerContext,
+    ) -> AsyncIterator[MinimalNote]:
+        """Stream paginated notes belonging to ``request.directory_id``.
+
+        The first page (offset 0) always contains a ``README.md``
+        note; when one is missing from the directory the service
+        creates it before yielding results.  Later pages return
+        ordinary notes ordered after the README.
+        """
+        try:
+            if not request.directory_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("directory_id is required")
+                return
+            if not request.user_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("user_id is required")
+                return
+            if request.limit < 0:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("limit must be greater than or equal to 0")
+                return
+            if request.offset < 0:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("offset must be greater than or equal to 0")
+                return
+
+            user_ctx = await self._context.create(request.user_id)
+            notes = await self._directory_service.get_directory_notes(
+                directory_id=request.directory_id,
+                user_ctx=user_ctx,
+                limit=request.limit,
+                offset=request.offset,
+            )
+            for note in notes:
+                yield self._to_grpc.visit_note_minimal(note)
+        except PermissionError as e:
+            self.log.warning(f"Permission denied in GetNotesOfDirectory: {e}")
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(e))
+            return
+        except ValueError as e:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(e))
+            return
+        except Exception:
+            self.log.error(f"Error fetching notes of directory: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while fetching directory notes")
+            return
 
 
 class GrpcNoteVersionService(NoteVersionServiceServicer):

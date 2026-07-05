@@ -212,16 +212,21 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         - entity.relations are iterated, and resource.object_id is set to the created directory ID before insertion into SpiceDB
         """
         entity_data = convert_entity_for_db(entity)
+        readme_note_id = (
+            None if entity_data.readme_note_id is UNDEFINED
+            else entity_data.readme_note_id
+        )
         record = await self._db.fetchrow(
             """
-            INSERT INTO note.directory(name, display_name, description, image_url)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, name, display_name, description, image_url
+            INSERT INTO note.directory(name, display_name, description, image_url, readme_note_id)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, name, display_name, description, image_url, readme_note_id
             """,
             entity_data.name,
             entity_data.display_name,
             entity_data.description,
             entity_data.image_url,
+            readme_note_id,
         )
         if not record:
             raise RuntimeError("Failed to create directory")
@@ -258,13 +263,14 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
             description=record["description"],
             image_url=record["image_url"],
             parent_id=entity_data.parent_id,
+            readme_note_id=record["readme_note_id"],
             relations=entity_data.relations if isinstance(entity_data.relations, list) else [],
         )
 
     async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
         record = await self._db.fetchrow(
             """
-            SELECT id, name, display_name, description, image_url
+            SELECT id, name, display_name, description, image_url, readme_note_id
             FROM note.directory
             WHERE id = $1
             """,
@@ -282,6 +288,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
             description=record["description"],
             image_url=record["image_url"],
             parent_id=parent_id,
+            readme_note_id=record["readme_note_id"],
             relations=relations,
         )
 
@@ -304,6 +311,9 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         if entity.image_url is not UNDEFINED:
             updates.append(f"image_url = ${len(args) + 1}")
             args.append(None if entity.image_url is None else str(entity.image_url))
+        if entity.readme_note_id is not UNDEFINED:
+            updates.append(f"readme_note_id = ${len(args) + 1}")
+            args.append(None if entity.readme_note_id is None else str(entity.readme_note_id))
 
         if updates:
             args.append(str(entity.id))
@@ -356,7 +366,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
 
         rows = await self._db.fetch(
             """
-            SELECT id, name, display_name, description, image_url
+            SELECT id, name, display_name, description, image_url, readme_note_id
             FROM note.directory
             WHERE id = ANY($1::text[])
             """,
@@ -380,6 +390,7 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
                     description=row["description"],
                     image_url=row["image_url"],
                     parent_id=parent_id,
+                    readme_note_id=row["readme_note_id"],
                     relations=relations,
                 )
             )
