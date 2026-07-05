@@ -47,7 +47,7 @@ class UserService(UserServiceABC):
         assert created_user.id is not None
 
         if is_undefined(user.type) or user.type in ["temporary", "system"]:
-            return self.created_user
+            return created_user
     
         # only human users get a directory with relations
         admin_relation = Relationship(
