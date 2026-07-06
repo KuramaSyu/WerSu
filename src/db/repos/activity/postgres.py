@@ -114,14 +114,23 @@ class PostgresActivityRepo(ActivityRepoABC):
                 "use get_activities() for history queries"
             )
 
-        # get strategy which generates SQL for the most_used 
+        # get strategy which generates SQL for the most_used
         algorithm = "count" if filter.algorithm is UNDEFINED else filter.algorithm
         strategy = get_strategy(algorithm)
         dialect = "sqlite" if isinstance(self._table.builder, SqliteSqlBuilder) else "postgres"
         strat_sql = strategy.build(filter, None, None, dialect=dialect)
 
-        # add WHERE to the strategy's SQL
+        # add WHERE to the strategy's SQL.  Strategies declare
+        # any non-pair predicates (e.g. ``note_id IS NOT NULL``)
+        # in ``StrategyResult.where``; the staged builder's
+        # ``where_clause`` API only accepts ``WhereClause``, so we
+        # path the strategy's predicate through
+        # ``WhereClause.add_raw``.  ``note_id`` is the primary
+        # offender -- directory/role events leave it NULL and would
+        # otherwise roll into one phantom group.
         where = await self._build_where_clause(filter)
+        if strat_sql.where:
+            where = where.add_raw(strat_sql.where)
         staged = (
             self._table.builder.select_from(self._table.name)
             .columns(*strat_sql.select_columns.split(", "))

@@ -32,12 +32,22 @@ class StrategyResult:
         group_by: comma-separated GROUP BY columns, or empty string.
         order_by: ORDER BY fragment (the repo appends ``LIMIT $N``
             after binding its own params).
+        where: optional raw-SQL predicate the repo appends to
+            the WHERE clause.  Use this for conditions that don't
+            fit the (``column``, value) pair model -- e.g.
+            ``"note_id IS NOT NULL"`` when the activity log also
+            carries non-note-scoped events whose ``note_id`` column
+            is NULL but whose ``GROUP BY note_id`` would otherwise
+            roll them into a phantom bucket.  Strategies may also
+            use it to drop events that the ``score_expr`` would
+            mis-attribute.  Empty string means "no extra predicate".
     """
 
     select_columns: str
     score_expr: str
     group_by: str
     order_by: str
+    where: str = ""
 
 
 class MostUsedStrategyABC(ABC):
@@ -105,13 +115,19 @@ class CountStrategy(MostUsedStrategyABC):
         resolved_directory_ids: Optional[List[str]],
         dialect: str = "postgres",
     ) -> StrategyResult:
-        """Return ``note_id, COUNT(*) AS score`` grouped by ``note_id``."""
+        """Return ``note_id, COUNT(*) AS score`` grouped by ``note_id``.
+
+        Adds note_id IS NOT NULL so directory/role events
+        where note_id is NULL don't collapse into one
+        phantom bucket after ``GROUP BY 
+        """
         score_expr = _score_expr(filter, dialect)
         return StrategyResult(
             select_columns=f"note_id, {score_expr} AS score",
             score_expr=score_expr,
             group_by="note_id",
             order_by="score DESC",
+            where="note_id IS NOT NULL",
         )
 
 
@@ -130,13 +146,19 @@ class LogCountStrategy(MostUsedStrategyABC):
         resolved_directory_ids: Optional[List[str]],
         dialect: str = "postgres",
     ) -> StrategyResult:
-        """Return ``note_id, LN(<score> + 1) AS score`` grouped by ``note_id``."""
+        """Return ``note_id, LN(<score> + 1) AS score`` grouped by ``note_id``.
+
+        Mirrors :class:`CountStrategy`'s ``note_id IS NOT NULL``
+        guard so non-note-scoped activity rows never enter the
+        score.
+        """
         score_expr = f"LN({_score_expr(filter, dialect)} + 1)"
         return StrategyResult(
             select_columns=f"note_id, {score_expr} AS score",
             score_expr=score_expr,
             group_by="note_id",
             order_by="score DESC",
+            where="note_id IS NOT NULL",
         )
 
 
