@@ -18,6 +18,7 @@ placeholder syntax.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -161,6 +162,12 @@ class PostgresActivityRepo(ActivityRepoABC):
         _validate_target_shape(activity)
 
         values = drop_undefined(asdict(activity))
+        # Postgres' JSONB column does not accept a Python ``dict`` from
+        # asyncpg; serialise ``metadata`` to a JSON string before
+        # handing it to the table layer so the same row shape works
+        # on both Postgres and SQLite.
+        if "metadata" in values and not isinstance(values["metadata"], str):
+            values["metadata"] = json.dumps(dict(values["metadata"]))
 
         records = await self._table.insert(values, returning=self._returning)
         if not records:
