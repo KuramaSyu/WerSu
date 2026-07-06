@@ -147,6 +147,12 @@ class GrpcActivityStatisticsService(ActivityStatisticsServiceServicer):
             algorithm = _proto_algorithm_to_str(request.algorithm)
             limit = request.limit if request.HasField("limit") else None
 
+            # ``limit`` lives on the top-level request, not on the
+            # filter; drop any ``filter.limit`` value so we don't
+            # collide with the explicit ``limit=limit`` we hand to
+            # ``get_most_used``.
+            filter_kwargs.pop("limit", None)
+
             rows = await self._statistics_service.get_most_used(
                 actor, algorithm=algorithm, limit=limit, **filter_kwargs,
             )
