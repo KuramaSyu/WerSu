@@ -513,6 +513,41 @@ class TestGetMostUsed:
         assert "n-3" not in note_ids
         assert "n-1" in note_ids
 
+    @pytest.mark.asyncio
+    async def test_count_strategy_skips_none_note_id_group(
+        self, repo: PostgresActivityRepo,
+    ) -> None:
+        """Directory/role events leave ``note_id IS NULL`` and would
+        otherwise collapse into one phantom ``note_id=None`` row.
+        The strategy only counts note-scoped events, so the NULL group
+        must be dropped from the result.
+        """
+        # note-scoped events
+        await _insert(repo, action="note_viewed", note_id="n-1")
+        await _insert(repo, action="note_viewed", note_id="n-1")
+        await _insert(repo, action="note_viewed", note_id="n-2")
+        # directory + role events have note_id=None
+        await _insert(repo, action="directory_viewed", note_id=None,
+                      directory_id="d-1")
+        await _insert(repo, action="directory_viewed", note_id=None,
+                      directory_id="d-1")
+        await _insert(repo, action="directory_viewed", note_id=None,
+                      directory_id="d-2")
+        await _insert(repo, action="role_grant", note_id=None,
+                      role_id="r-1")
+
+        rows = await repo.get_most_used(
+            ActivityFilterBuilder().show_most_used().build()
+        )
+        ids = [r.note_id for r in rows]
+        assert "None" not in ids
+        assert "" not in ids
+        # n-1 is the actual top scorer among note-scoped events
+        assert rows[0].note_id == "n-1"
+        assert rows[0].score == 2
+        assert rows[1].note_id == "n-2"
+        assert rows[1].score == 1
+
 
 # edit_activity + remove_activity_by_id
 
