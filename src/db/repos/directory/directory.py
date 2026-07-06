@@ -1,7 +1,5 @@
 import asyncio
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import ClassVar, List, Optional, Sequence, Tuple
+from typing import List, Optional, Tuple
 
 from authzed.api.v1 import (
     AsyncClient,
@@ -11,6 +9,7 @@ from authzed.api.v1 import (
 )
 from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest
 
+from src.api.directory_repo import DefaultDirectorySpec, DirectoryRepo
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.database import Database
@@ -25,171 +24,6 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-
-
-@dataclass(frozen=True)
-class DefaultDirectorySpec:
-    name: str
-    display_name: str
-    description: str
-
-
-class DirectoryRepo(ABC):
-    """Abstract repository interface for directory persistence and relations."""
-
-    DEFAULT_DIRECTORY_SPECS: ClassVar[Sequence[DefaultDirectorySpec]] = (
-        DefaultDirectorySpec(
-            name="fleeting_notes",
-            display_name="Fleeting Notes",
-            description=(
-                "Capture quick, raw thoughts with minimal friction. "
-                "In the zettelkasten flow, these are temporary inbox notes "
-                "to revisit, refine, or discard soon."
-            ),
-        ),
-        DefaultDirectorySpec(
-            name="literature_notes",
-            display_name="Literature Notes",
-            description=(
-                "Store notes extracted from sources like books, papers, and articles. "
-                "In zettelkasten, literature notes summarize references in your own words "
-                "before transforming them into permanent notes."
-            ),
-        ),
-        DefaultDirectorySpec(
-            name="permanent_notes",
-            display_name="Permanent Notes",
-            description=(
-                "Keep evergreen, atomic ideas that connect to other notes over time. "
-                "These are the durable knowledge units in a zettelkasten, written clearly "
-                "for future reuse and linking."
-            ),
-        ),
-    )
-
-    def get_default_directory_specs(self) -> Sequence[DefaultDirectorySpec]:
-        """Return the default zettelkasten directory specifications.
-
-        Returns
-        -------
-        Sequence[DefaultDirectorySpec]
-            Immutable specification sequence used for new user bootstrap.
-        """
-        return self.DEFAULT_DIRECTORY_SPECS
-
-    @abstractmethod
-    async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
-        """Create a directory.
-
-        Parameters
-        ----------
-        entity : DirectoryEntity
-            Directory payload containing Postgres fields and optional relations.
-
-        Returns
-        -------
-        DirectoryEntity
-            Created directory entity with generated ID.
-        """
-        ...
-
-    @abstractmethod
-    async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
-        """Fetch a directory by ID.
-
-        Parameters
-        ----------
-        id : str
-            Directory ID.
-
-        Returns
-        -------
-        Optional[DirectoryEntity]
-            Directory including parent and user relations, or `None` if not found.
-        """
-        ...
-
-    @abstractmethod
-    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
-        """Partially update a directory by ID.
-
-        Fields set to ``UNDEFINED`` are left unchanged.
-        """
-        ...
-
-    @abstractmethod
-    async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
-        """Fetch all directory IDs visible to a user.
-
-        Parameters
-        ----------
-        user : UserContextABC
-            Current user context.
-
-        Returns
-        -------
-        List[DirectoryEntity]
-            Directories the user can view.
-        """
-        ...
-
-    @abstractmethod
-    async def list_note_directory_ids(self, note_id: str) -> List[str]:
-        """Lookup directories that are related to a specific note.
-
-        Parameters
-        ----------
-        note_id : str
-            Note ID to lookup.
-
-        Returns
-        -------
-        List[str]
-            Distinct directory IDs referenced by the note.
-        """
-        ...
-
-    @abstractmethod
-    async def delete_directory(self, entity: DirectoryEntity) -> bool:
-        """Delete a directory.
-
-        Parameters
-        ----------
-        entity : DirectoryEntity
-            Directory containing at least the `id`.
-
-        Returns
-        -------
-        bool
-            `True` if one directory row was deleted in Postgres.
-        """
-        ...
-
-    @abstractmethod
-    async def resolve_files_of_directory(
-        self,
-        directory_id: Optional[str],
-        actor: UserContextABC,
-        max_depth: int = 10,
-    ) -> List[str]:
-        """Resolve note IDs that belong to a directory and its subdirectories.
-
-        Parameters
-        ----------
-        directory_id : Optional[str]
-            Directory ID to start from. If `None` or empty, resolve all files
-            for directories visible to the user.
-        actor : UserContextABC
-            Current user context.
-        max_depth : int
-            Maximum recursion depth (0 means only the provided directory).
-
-        Returns
-        -------
-        List[str]
-            Note IDs discovered in the directory subtree.
-        """
-        ...
 
 
 class DirectoryRepoSpicedbPostgres(DirectoryRepo):
@@ -478,10 +312,34 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         if not start_directories:
             return []
 
+        note_ids: set[str] = set()
+        for start in start_directories:
+            sub_notes, _ = await self.resolve_subtree(start, max_depth=max_depth)
+            note_ids.update(sub_notes)
+        return sorted(note_ids)
+
+    async def resolve_subtree(
+        self,
+        directory_id: str,
+        max_depth: int = 10,
+    ) -> Tuple[List[str], List[str]]:
+        """Walk a directory subtree via SpiceDB and collect ids.
+
+        No permission check is performed here -- the activity log
+        queries the full subtree and the service layer applies
+        per-row visibility.  The walk matches
+        :meth:`resolve_files_of_directory`'s queue + visited
+        pattern so the two stay in lockstep.
+        """
+        if max_depth < 0:
+            raise ValueError("max_depth must be >= 0")
+
         visited: set[str] = set()
         note_ids: set[str] = set()
-        queue: list[tuple[str, int]] = [(directory_id, 0) for directory_id in start_directories]
+        directory_ids: set[str] = {str(directory_id)}
+        queue: list[tuple[str, int]] = [(str(directory_id), 0)]
 
+        # tree traversal: pop a directory, collect its notes, enqueue its children.
         while queue:
             current_id, depth = queue.pop(0)
             if current_id in visited:
@@ -515,11 +373,11 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
                 if rel.resource.object_id in (UNDEFINED, None):
                     continue
                 child_id = str(rel.resource.object_id)
-                if child_id in visited:
-                    continue
-                queue.append((child_id, depth + 1))
+                directory_ids.add(child_id)
+                if child_id not in visited:
+                    queue.append((child_id, depth + 1))
 
-        return sorted(note_ids)
+        return sorted(note_ids), sorted(directory_ids)
 
     async def _fetch_spicedb_relations(self, directory_id: str) -> Tuple[Optional[str], List[Relationship]]:
         """Fetch parent ID and user relations from SpiceDB."""
