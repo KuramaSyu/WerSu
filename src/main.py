@@ -10,6 +10,7 @@ import boto3
 from authzed.api.v1 import AsyncClient
 import grpc
 
+from src.api.activity_statistics_service import ActivityStatisticsServiceABC
 from src.api.jwt_provider import PyJwtProvider
 from src.api.sharing import ShareAccessServiceABC, SharingRepoABC
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
@@ -18,10 +19,14 @@ from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos import NotePermissionRepoSpicedb
 from src.db.repos.sharing.sharing import SharingPostgresRepo
+from src.grpc_mod.activity_statistics_service import GrpcActivityStatisticsService
+from src.grpc_mod.proto.activity_pb2_grpc import add_ActivityStatisticsServiceServicer_to_server
 from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_server
 from src.grpc_mod.sharing_service import GrpcSharingService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.services import PermissionServiceRepo, UserService, DirectoryActivityService, AttachmentFacade, share_access
+from src.services.activity_logger_service import DefaultActivityLoggerService
+from src.services.activity_statistics_service import DefaultActivityStatisticsService
 from src.services.sharing import DefaultSharingService
 from src.services.note import NoteService
 from src.services.directory import DirectoryService
@@ -308,11 +313,17 @@ async def serve():
         context_factory=user_context_factory,
     )
 
+    activity_logger_service = DefaultActivityLoggerService(
+        activity_repo=activity_repo,
+        logging_provider=logging_provider,
+    )
+
     note_service = NoteService(
         note_repo=note_repo,
         permission_repo=permission_repo,
         jwt_provider=jwt_provider,
         directory_repo=directory_repo,
+        activity_logger=activity_logger_service,
     )
 
     sharing_service = DefaultSharingService(
@@ -326,6 +337,7 @@ async def serve():
         permission_service=permission_service,
         logging_provider=logging_provider,
         user_repo=user_repo,
+        activity_logger=activity_logger_service,
     )
     share_access_service: ShareAccessServiceABC = share_access.ShareAccessService(
         sharing_repo=sharing_repo,
@@ -334,6 +346,12 @@ async def serve():
         user_action_repo=user_action_repo,
         logger=logging_provider,
         context_factory=user_context_factory,
+    )
+    activity_statistics_service: ActivityStatisticsServiceABC = DefaultActivityStatisticsService(
+        activity_repo=activity_repo,
+        permission_repo=permission_repo,
+        directory_repo=directory_repo,
+        logging_provider=logging_provider,
     )
 
     note_service = GrpcNoteService(
@@ -351,6 +369,7 @@ async def serve():
         directory_repo=directory_repo,
         note_repo=note_repo,
         permission_repo=permission_repo,
+        activity_logger=activity_logger_service,
     )
 
     directory_service = GrpcDirectoryService(
@@ -392,6 +411,15 @@ async def serve():
         context_factory=user_context_factory,
     )
     add_AttachmentServiceServicer_to_server(grpc_attachment_service, server)
+
+    # setup gRPC activity statistics service
+    activity_statistics_service = GrpcActivityStatisticsService(
+        statistics_service=activity_statistics_service,
+        log=logging_provider,
+        to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
+    )
+    add_ActivityStatisticsServiceServicer_to_server(activity_statistics_service, server)
 
     # configure server
     listen_addr = f"{grpc_host}:{grpc_port}"

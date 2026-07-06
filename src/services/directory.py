@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from src.api import (
+    ActivityLoggerServiceABC,
     DirectoryRelationEnum,
     DirectoryServiceABC,
     NoteRelationEnum,
@@ -57,10 +58,12 @@ class DirectoryService(DirectoryServiceABC):
         directory_repo: DirectoryRepo,
         note_repo: NoteRepoFacadeABC,
         permission_repo: PermissionRepoABC,
+        activity_logger: ActivityLoggerServiceABC,
     ) -> None:
         self._directory_repo = directory_repo
         self._note_repo = note_repo
         self._permission_repo = permission_repo
+        self._activity_logger = activity_logger
 
     async def get_directory_notes(
         self,
@@ -131,6 +134,7 @@ class DirectoryService(DirectoryServiceABC):
         if directory is None:
             return None
         await self._apply_readme_overrides(directory, user_ctx)
+        await self._activity_logger.directory_viewed(directory_id, user_ctx)
         return directory
 
     async def get_directories(
@@ -170,6 +174,10 @@ class DirectoryService(DirectoryServiceABC):
             ]
         for directory in directories:
             await self._apply_readme_overrides(directory, user_ctx)
+            # if directory.id not in (UNDEFINED, None):
+            #     await self._activity_logger.directory_viewed(
+            #         str(directory.id), user_ctx
+            #     )
         effective_offset = offset if offset is not None else 0
         if limit is not None:
             return directories[effective_offset : effective_offset + limit]
@@ -242,6 +250,9 @@ class DirectoryService(DirectoryServiceABC):
             )
             if refreshed is not None:
                 created = refreshed
+            await self._activity_logger.directory_created(
+                str(created.id), user_ctx
+            )
         return created
 
     async def patch_directory(
@@ -263,7 +274,12 @@ class DirectoryService(DirectoryServiceABC):
         if not result:
             raise result.error
 
-        return await self._directory_repo.update_directory(entity)
+        updated = await self._directory_repo.update_directory(entity)
+        if updated is not None:
+            await self._activity_logger.directory_edited(
+                str(entity.id), user_ctx
+            )
+        return updated
 
     async def delete_directory(
         self,
@@ -281,9 +297,14 @@ class DirectoryService(DirectoryServiceABC):
         if not result:
             raise result.error
 
-        return await self._directory_repo.delete_directory(
+        deleted = await self._directory_repo.delete_directory(
             DirectoryEntity(id=directory_id)
         )
+        if deleted:
+            await self._activity_logger.directory_deleted(
+                directory_id, user_ctx
+            )
+        return deleted
 
     async def _assert_directory_view(
         self,

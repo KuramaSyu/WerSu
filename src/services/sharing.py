@@ -2,7 +2,7 @@ from dataclasses import replace
 from datetime import datetime
 from typing import List, Literal
 
-from src.api import PermissionRepoABC
+from src.api import PermissionRepoABC, ActivityLoggerServiceABC
 from src.api.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
 from src.api.sharing import SharingServiceABC
 from src.api.types import LoggingProvider
@@ -26,11 +26,13 @@ class DefaultSharingService(SharingServiceABC):
         permission_service: PermissionServiceABC,
         logging_provider: LoggingProvider,
         user_repo: UserRepoABC,
+        activity_logger: ActivityLoggerServiceABC,
     ) -> None:
         self._share_facade = share_facade
         self._permission_repo = permission_repo
         self._permission_service = permission_service
         self._user_repo = user_repo
+        self._activity_logger = activity_logger
         self.log = logging_provider(__name__, self)
 
     async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
@@ -66,6 +68,12 @@ class DefaultSharingService(SharingServiceABC):
             relation=relation,
             subject=SubjectRef("user", access_as),
         )])
+
+        await self._activity_logger.note_shared(
+            str(created.note_id),
+            ctx,
+            metadata={"permission": str(relation), "access_as": access_as},
+        )
 
         return created
 
@@ -119,17 +127,25 @@ class DefaultSharingService(SharingServiceABC):
                 raise ValueError(f"Share has no id: {share!r}")
 
             access_as = str(share.access_as)
+            note_id = str(share.note_id)
+            share_id = str(share.id)
 
             # UNDEFINED on the relation matches every relation the access user holds here.
             await self._permission_repo.delete(
                 Relationship(
-                    resource=ObjectRef("note", str(share.note_id)),
+                    resource=ObjectRef("note", note_id),
                     relation=UNDEFINED,
                     subject=SubjectRef("user", access_as),
                 )
             )
 
-            await self._share_facade.delete_share(str(share.id), ctx)
+            await self._share_facade.delete_share(share_id, ctx)
+
+            await self._activity_logger.note_unshared(
+                note_id,
+                ctx,
+                metadata={"share_id": share_id, "access_as": access_as},
+            )
 
 
 

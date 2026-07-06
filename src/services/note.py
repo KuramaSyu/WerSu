@@ -25,6 +25,7 @@ from src.api import (
     PermissionRepoABC,
     Relationship,
     SubjectRef,
+    ActivityLoggerServiceABC,
 )
 from src.api.jwt_provider import JwtProvider
 from src.api.relationship import AttachmentRelationEnum
@@ -33,6 +34,7 @@ from src.api.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, Pagination, SearchType
+from src.domain.permission_chain import HasNoteDeletePerm, HasNoteWritePerm
 from src.utils.extract_attachments import extract_attachment_ids
 
 
@@ -49,11 +51,13 @@ class NoteService(NoteServiceABC):
         permission_repo: PermissionRepoABC,
         jwt_provider: JwtProvider,
         directory_repo: DirectoryRepo,
+        activity_logger: ActivityLoggerServiceABC,
     ) -> None:
         self._note_repo = note_repo
         self._permission_repo = permission_repo
         self._jwt_provider = jwt_provider
         self._directory_repo = directory_repo
+        self._activity_logger = activity_logger
 
     async def get_note(
         self,
@@ -63,6 +67,8 @@ class NoteService(NoteServiceABC):
         note = await self._note_repo.select_by_id(note_id, user_ctx)
         if note is None:
             return NoteResponse(note=None)
+
+        await self._activity_logger.note_viewed(note_id, user_ctx)
 
         note.permissions = await self._fetch_note_permissions(note_id)
 
@@ -78,22 +84,20 @@ class NoteService(NoteServiceABC):
         user_ctx: UserContextABC,
     ) -> NoteEntity:
         parent_directory_id = await self._resolve_parent_directory_id(note, user_ctx)
+        # The repo owns the owner + parent_directory relation writes;
+        # this layer only adds the eventual-consistency backfill below.
         inserted = await self._note_repo.insert(note, user_ctx)
 
-        # perm that user owns the note
-        owner_relation = Relationship(
-            resource=ObjectRef(ObjectTypeEnum.NOTE, inserted.note_id),
-            relation=NoteRelationEnum.OWNER,
-            subject=SubjectRef(ObjectTypeEnum.USER, user_ctx.user_id),
-        )
+        await self._activity_logger.note_created(str(inserted.note_id), user_ctx)
 
-        # perm that note has a parent directory
+        # Local copy used only for the read-after-write backfill so the
+        # parent_directory relation shows up even if SpiceDB hasn't
+        # converged yet.  The actual relation was inserted by the repo.
         parent_dir_relation = Relationship(
             resource=ObjectRef(ObjectTypeEnum.NOTE, inserted.note_id),
             relation=NoteRelationEnum.PARENT_DIRECTORY,
             subject=SubjectRef(ObjectTypeEnum.DIRECTORY, parent_directory_id),
         )
-        await self._permission_repo.insert([owner_relation, parent_dir_relation])
 
         inserted.permissions = await self._fetch_note_permissions(str(inserted.note_id))
         # SpiceDB can be eventually consistent right after the insert;
@@ -114,6 +118,12 @@ class NoteService(NoteServiceABC):
         note: NoteEntity,
         user_ctx: UserContextABC,
     ) -> NoteEntity:
+        write_check = HasNoteWritePerm(str(note.note_id)).set_permission_repo(
+            self._permission_repo
+        )
+        write_result = await write_check.check(user_ctx)
+        if not write_result:
+            raise write_result.error
         return await self._note_repo.update(note, user_ctx)
 
     async def delete_note(
@@ -121,10 +131,17 @@ class NoteService(NoteServiceABC):
         note_id: str,
         user_ctx: UserContextABC,
     ) -> Optional[NoteEntity]:
+        delete_check = HasNoteDeletePerm(note_id).set_permission_repo(
+            self._permission_repo
+        )
+        delete_result = await delete_check.check(user_ctx)
+        if not delete_result:
+            raise delete_result.error
         deleted = await self._note_repo.delete(note_id, user_ctx)
         if not deleted:
             return None
         assert len(deleted) <= 1
+        await self._activity_logger.note_deleted(note_id, user_ctx)
         return deleted[0]
 
     async def search_notes(
