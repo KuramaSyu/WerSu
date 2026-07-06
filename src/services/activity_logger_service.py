@@ -182,6 +182,17 @@ class DefaultActivityLoggerService(ActivityLoggerServiceABC):
             metadata=self._meta(metadata),
         )
 
+    async def note_unshared(
+        self, note_id: str, actor: UserContextABC, *,
+        metadata: Optional[Mapping[str, object]] = None,
+    ) -> None:
+        await self._record(
+            action="note_unshared",
+            actor=actor,
+            target={"note_id": note_id},
+            metadata=self._meta(metadata),
+        )
+
     async def note_restored(
         self, note_id: str, actor: UserContextABC, *,
         metadata: Optional[Mapping[str, object]] = None,

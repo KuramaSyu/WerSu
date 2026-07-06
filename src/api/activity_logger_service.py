@@ -186,6 +186,13 @@ class ActivityLoggerServiceABC(ABC):
         """Record that ``actor`` shared ``note_id``."""
 
     @abstractmethod
+    async def note_unshared(
+        self, note_id: str, actor: UserContextABC, *,
+        metadata: Optional[Mapping[str, object]] = None,
+    ) -> None:
+        """Record that ``actor`` tore down a share on ``note_id``."""
+
+    @abstractmethod
     async def note_restored(
         self, note_id: str, actor: UserContextABC, *,
         metadata: Optional[Mapping[str, object]] = None,
