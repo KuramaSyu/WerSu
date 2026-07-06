@@ -52,6 +52,7 @@ from tests._fixtures_pkg.fakes import (
     _FakeNoteContentRepo,
     _TestDirectoryRepo,
 )
+from tests.stubs.activity_logger_service import _FakeActivityLoggerService
 from tests.stubs.user_context import _UserContext as _UserCtx
 
 
@@ -62,6 +63,23 @@ def _log_provider(*_args, **_kwargs):
 
 def _human_ctx(user_id: str = "user-1") -> _UserCtx:
     return _UserCtx(user_id=user_id)
+
+
+async def _grant_admin(
+    perm_repo: PermissionRepoABC,
+    user_id: str,
+    note_id: str,
+) -> None:
+    """Insert an admin relation granting `user_id` write/delete on `note_id`."""
+    await perm_repo.insert(
+        [
+            Relationship(
+                resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
+                relation=NoteRelationEnum.ADMIN,
+                subject=SubjectRef(ObjectTypeEnum.USER, user_id),
+            )
+        ]
+    )
 
 
 class _TemporaryUserContext(_UserCtx):
@@ -89,6 +107,7 @@ def _make_service(
     DirectoryRepo,
     NotePermissionRepoInMemory,
     _FakeJwtProvider,
+    _FakeActivityLoggerService,
 ]:
     """Build a :class:`NoteService` wired against the in-memory fakes.
 
@@ -103,6 +122,7 @@ def _make_service(
     fake_permission = permission_repo or NotePermissionRepoInMemory()
     fake_directory = directory_repo or _TestDirectoryRepo()
     fake_jwt = jwt_provider or _FakeJwtProvider()
+    fake_activity_logger = _FakeActivityLoggerService()
     facade = NoteFacade(
         db=fake_db,
         content_repo=fake_content,
@@ -116,8 +136,9 @@ def _make_service(
         permission_repo=fake_permission,
         jwt_provider=fake_jwt,
         directory_repo=fake_directory,
+        activity_logger=fake_activity_logger,
     )
-    return service, fake_db, fake_content, fake_directory, fake_permission, fake_jwt
+    return service, fake_db, fake_content, fake_directory, fake_permission, fake_jwt, fake_activity_logger
 
 
 def _seed_note(note_id: str = "note-1", **overrides) -> NoteEntity:
@@ -147,7 +168,7 @@ async def test_get_note_propagates_error_when_repo_misses() -> None:
     runs in practice; pin the propagated error so future refactors
     do not silently change the failure mode.
     """
-    service, _db, _content, _dir, _perm, _jwt = _make_service()
+    service, _db, _content, _dir, _perm, _jwt, _activity_logger = _make_service()
 
     with pytest.raises(RuntimeError, match="ghost"):
         await service.get_note("ghost", _human_ctx())
@@ -158,7 +179,7 @@ async def test_get_note_propagates_error_when_repo_misses() -> None:
 
 async def test_get_note_attaches_permissions_for_existing_note() -> None:
     """`get_note` populates `note.permissions` with stored relations."""
-    service, _db, content_repo, _dir, permission_repo, _jwt = _make_service()
+    service, _db, content_repo, _dir, permission_repo, _jwt, _activity_logger = _make_service()
 
     note = _seed_note(note_id="note-1")
     content_repo.seed(note)
@@ -184,7 +205,7 @@ async def test_get_note_attaches_permissions_for_existing_note() -> None:
 
 async def test_get_note_mints_jwts_for_temporary_user_when_viewing_attachment() -> None:
     """`get_note` mints one JWT per embedded attachment for temporary users."""
-    service, _db, content_repo, _dir, permission_repo, jwt_provider = _make_service()
+    service, _db, content_repo, _dir, permission_repo, jwt_provider, _activity_logger = _make_service()
 
     note = _seed_note(
         note_id="note-1",
@@ -216,7 +237,7 @@ async def test_get_note_mints_jwts_for_temporary_user_when_viewing_attachment() 
 
 async def test_get_note_skips_attachments_without_view_permission() -> None:
     """Attachments the temp user cannot view do not get a JWT."""
-    service, _db, content_repo, _dir, permission_repo, _jwt = _make_service()
+    service, _db, content_repo, _dir, permission_repo, _jwt, _activity_logger = _make_service()
 
     note = _seed_note(
         note_id="note-1",
@@ -247,7 +268,7 @@ async def test_get_note_skips_attachments_without_view_permission() -> None:
 
 async def test_insert_note_resolves_parent_directory_and_writes_owner_relation() -> None:
     """`insert_note` writes owner + parent_directory relations and returns the note."""
-    service, _db, _content, _dir, permission_repo, _jwt = _make_service()
+    service, _db, _content, _dir, permission_repo, _jwt, _activity_logger = _make_service()
 
     result = await service.insert_note(
         NoteEntity(
@@ -287,7 +308,7 @@ async def test_insert_note_resolves_parent_directory_and_writes_owner_relation()
 
 async def test_insert_note_rejects_inaccessible_parent_dir() -> None:
     """`insert_note` raises when `parent_dir_id` is not in the user's dirs."""
-    service, _db, _content, _dir, _perm, _jwt = _make_service()
+    service, _db, _content, _dir, _perm, _jwt, _activity_logger = _make_service()
 
     with pytest.raises(ValueError, match="not accessible"):
         await service.insert_note(
@@ -309,8 +330,9 @@ async def test_insert_note_rejects_inaccessible_parent_dir() -> None:
 
 async def test_update_note_delegates_to_note_repo() -> None:
     """`update_note` forwards to the note repo and returns its result."""
-    service, _db, content_repo, _dir, _perm, _jwt = _make_service()
+    service, _db, content_repo, _dir, _perm, _jwt, _activity_logger = _make_service()
     content_repo.seed(_seed_note(note_id="note-1", content="old"))
+    await _grant_admin(_perm, "user-1", "note-1")
 
     result = await service.update_note(
         NoteEntity(
@@ -327,10 +349,29 @@ async def test_update_note_delegates_to_note_repo() -> None:
     assert result.content == "new content"
 
 
+async def test_update_note_raises_when_user_lacks_write() -> None:
+    """`update_note` raises `PermissionError` when the user cannot write to the note."""
+    service, _db, content_repo, _dir, _perm, _jwt, _activity_logger = _make_service()
+    content_repo.seed(_seed_note(note_id="note-1"))
+
+    with pytest.raises(PermissionError):
+        await service.update_note(
+            NoteEntity(
+                note_id="note-1",
+                title="New title",
+                content="new content",
+                updated_at=datetime(2026, 7, 4, 9, 30, 0),
+                author_id="user-1",
+            ),
+            _human_ctx("user-1"),
+        )
+
+
 async def test_delete_note_returns_deleted_entity() -> None:
     """`delete_note` returns the deleted entity when the repo removes it."""
-    service, _db, content_repo, _dir, _perm, _jwt = _make_service()
+    service, _db, content_repo, _dir, _perm, _jwt, _activity_logger = _make_service()
     content_repo.seed(_seed_note(note_id="note-1"))
+    await _grant_admin(_perm, "user-1", "note-1")
 
     deleted = await service.delete_note("note-1", _human_ctx("user-1"))
 
@@ -338,13 +379,13 @@ async def test_delete_note_returns_deleted_entity() -> None:
     assert deleted.note_id == "note-1"
 
 
-async def test_delete_note_returns_none_when_repo_yields_empty() -> None:
-    """`delete_note` returns `None` when nothing matched."""
-    service, _db, _content, _dir, _perm, _jwt = _make_service()
+async def test_delete_note_raises_when_user_lacks_delete() -> None:
+    """`delete_note` raises `PermissionError` when the user cannot delete the note."""
+    service, _db, content_repo, _dir, _perm, _jwt, _activity_logger = _make_service()
+    content_repo.seed(_seed_note(note_id="note-1"))
 
-    deleted = await service.delete_note("ghost", _human_ctx())
-
-    assert deleted is None
+    with pytest.raises(PermissionError):
+        await service.delete_note("note-1", _human_ctx("user-1"))
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +400,7 @@ async def test_search_notes_enriches_results_with_directory_relations() -> None:
     relation pointing at a note id that the search strategy will
     surface, then verify the returned note has the relation.
     """
-    service, fake_db, content_repo, directory_repo, permission_repo, _jwt = _make_service()
+    service, fake_db, content_repo, directory_repo, permission_repo, _jwt, _activity_logger = _make_service()
 
     # queue the search-strategy's `SELECT id, title, ...` response
     fake_db.fetch_responses.append(
@@ -416,7 +457,7 @@ async def test_search_notes_enriches_results_with_directory_relations() -> None:
 
 async def test_search_notes_returns_empty_list_when_no_matches() -> None:
     """`search_notes` returns an empty list and does not call enrichment."""
-    service, fake_db, _content, _dir, _perm, _jwt = _make_service()
+    service, fake_db, _content, _dir, _perm, _jwt, _activity_logger = _make_service()
     # the date strategy hits the database; queue an empty result set
     fake_db.fetch_responses.append([])
 
@@ -429,3 +470,70 @@ async def test_search_notes_returns_empty_list_when_no_matches() -> None:
     )
 
     assert results == []
+
+
+# ---------------------------------------------------------------------------
+# activity logging
+# ---------------------------------------------------------------------------
+
+
+async def test_get_note_records_note_viewed() -> None:
+    """`get_note` records a `note_viewed` event for successful fetches."""
+    service, _db, content_repo, _dir, _perm, _jwt, activity_logger = _make_service()
+    content_repo.seed(_seed_note(note_id="note-1"))
+
+    await service.get_note("note-1", _human_ctx("user-1"))
+
+    assert activity_logger.calls == [
+        ("note_viewed", "note-1", "user-1", {})
+    ]
+
+
+async def test_get_note_does_not_record_on_miss() -> None:
+    """`get_note` does not record `note_viewed` when the repo raises."""
+    service, _db, _content, _dir, _perm, _jwt, activity_logger = _make_service()
+
+    try:
+        await service.get_note("ghost", _human_ctx())
+    except RuntimeError:
+        pass
+
+    assert activity_logger.calls == []
+
+
+async def test_insert_note_records_note_created() -> None:
+    """`insert_note` records a `note_created` event after the repo insert."""
+    service, _db, _content, _dir, _perm, _jwt, activity_logger = _make_service()
+
+    result = await service.insert_note(
+        NoteEntity(
+            title="New",
+            content="body",
+            updated_at=datetime(2026, 7, 3, 12, 0, 0),
+            author_id="user-1",
+        ),
+        _human_ctx("user-1"),
+    )
+
+    assert ("note_created", str(result.note_id), "user-1", {}) in activity_logger.calls
+
+
+async def test_delete_note_records_note_deleted() -> None:
+    """`delete_note` records a `note_deleted` event when the repo removes a row."""
+    service, _db, content_repo, _dir, perm_repo, _jwt, activity_logger = _make_service()
+    content_repo.seed(_seed_note(note_id="note-1"))
+    await _grant_admin(perm_repo, "user-1", "note-1")
+
+    await service.delete_note("note-1", _human_ctx("user-1"))
+
+    assert ("note_deleted", "note-1", "user-1", {}) in activity_logger.calls
+
+
+async def test_delete_note_does_not_record_on_permission_denied() -> None:
+    """`delete_note` skips the activity logger when the perm check denies the call."""
+    service, _db, _content, _dir, _perm, _jwt, activity_logger = _make_service()
+
+    with pytest.raises(PermissionError):
+        await service.delete_note("ghost", _human_ctx("user-1"))
+
+    assert activity_logger.calls == []
