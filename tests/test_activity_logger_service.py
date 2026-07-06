@@ -105,6 +105,15 @@ class TestNoteMethods:
         assert repo.added[0].action == "note_shared"
 
     @pytest.mark.asyncio
+    async def test_note_unshared(
+        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        alice: _FakeUserContext,
+    ) -> None:
+        await logger.note_unshared("n-1", alice)
+        assert repo.added[0].action == "note_unshared"
+        assert repo.added[0].note_id == "n-1"
+
+    @pytest.mark.asyncio
     async def test_note_restored(
         self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
