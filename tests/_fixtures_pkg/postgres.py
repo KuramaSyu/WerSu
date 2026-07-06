@@ -28,7 +28,9 @@ from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user import RepoContextFactory
 from src.db.repos.user.user_action import UserActionPostgresRepo
+from src.db.repos.activity.postgres import PostgresActivityRepo
 from src.db.table import Table
+from src.services.activity_logger_service import DefaultActivityLoggerService
 from src.services.permissions import PermissionServiceRepo
 from src.services.sharing import DefaultSharingService
 from src.facades.share_action_facade import ShareActionFacade
@@ -157,6 +159,16 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             ),
             logging_provider=logging_provider,
         )
+        activity_repo = PostgresActivityRepo(
+            table=Table(
+                db=db,
+                table_name="activity",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            directory_repo=directory_repo,
+            logging_provider=logging_provider,
+        )
         user_action_repo = UserActionPostgresRepo(
             table=Table(
                 db=db,
@@ -177,6 +189,10 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             permission_service=permission_service,
             logging_provider=logging_provider,
             user_repo=user_repo,
+            activity_logger=DefaultActivityLoggerService(
+                activity_repo=activity_repo,
+                logging_provider=logging_provider,
+            ),
         )
 
         try:
