@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from src.grpc_mod.proto import activity_pb2 as activity__pb2
+from src.grpc_mod.proto import activity_pb2 as src_dot_grpc__mod_dot_proto_dot_activity__pb2
 
 GRPC_GENERATED_VERSION = '1.81.0'
 GRPC_VERSION = grpc.__version__
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in activity_pb2_grpc.py depends on'
+        + ' but the generated code in src/grpc_mod/proto/activity_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -36,13 +36,13 @@ class ActivityStatisticsServiceStub:
         """
         self.GetActivityHistory = channel.unary_stream(
                 '/proto.ActivityStatisticsService/GetActivityHistory',
-                request_serializer=activity__pb2.GetActivityHistoryRequest.SerializeToString,
-                response_deserializer=activity__pb2.Activity.FromString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_activity__pb2.GetActivityHistoryRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_activity__pb2.Activity.FromString,
                 _registered_method=True)
         self.GetMostUsedActivity = channel.unary_stream(
                 '/proto.ActivityStatisticsService/GetMostUsedActivity',
-                request_serializer=activity__pb2.GetMostUsedActivityRequest.SerializeToString,
-                response_deserializer=activity__pb2.ActivityScore.FromString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_activity__pb2.GetMostUsedActivityRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_activity__pb2.ActivityScore.FromString,
                 _registered_method=True)
 
 
@@ -68,13 +68,13 @@ def add_ActivityStatisticsServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'GetActivityHistory': grpc.unary_stream_rpc_method_handler(
                     servicer.GetActivityHistory,
-                    request_deserializer=activity__pb2.GetActivityHistoryRequest.FromString,
-                    response_serializer=activity__pb2.Activity.SerializeToString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_activity__pb2.GetActivityHistoryRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_activity__pb2.Activity.SerializeToString,
             ),
             'GetMostUsedActivity': grpc.unary_stream_rpc_method_handler(
                     servicer.GetMostUsedActivity,
-                    request_deserializer=activity__pb2.GetMostUsedActivityRequest.FromString,
-                    response_serializer=activity__pb2.ActivityScore.SerializeToString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_activity__pb2.GetMostUsedActivityRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_activity__pb2.ActivityScore.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -102,8 +102,8 @@ class ActivityStatisticsService:
             request,
             target,
             '/proto.ActivityStatisticsService/GetActivityHistory',
-            activity__pb2.GetActivityHistoryRequest.SerializeToString,
-            activity__pb2.Activity.FromString,
+            src_dot_grpc__mod_dot_proto_dot_activity__pb2.GetActivityHistoryRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_activity__pb2.Activity.FromString,
             options,
             channel_credentials,
             insecure,
@@ -129,8 +129,8 @@ class ActivityStatisticsService:
             request,
             target,
             '/proto.ActivityStatisticsService/GetMostUsedActivity',
-            activity__pb2.GetMostUsedActivityRequest.SerializeToString,
-            activity__pb2.ActivityScore.FromString,
+            src_dot_grpc__mod_dot_proto_dot_activity__pb2.GetMostUsedActivityRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_activity__pb2.ActivityScore.FromString,
             options,
             channel_credentials,
             insecure,
