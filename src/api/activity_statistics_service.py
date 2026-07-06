@@ -37,7 +37,7 @@ class ActivityStatisticsServiceABC(ABC):
     """Read-side facade over the activity log.
 
     Implementations:
-    * :class:`src.services.activity_statistics_service.PostgresActivityStatisticsService`
+    * :class:`src.services.activity_statistics_service.DefaultActivityStatisticsService`
     """
 
     @abstractmethod
