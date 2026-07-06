@@ -1,6 +1,6 @@
 """Unit tests for permission service authorization and relationship mutations."""
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import pytest
 
@@ -8,7 +8,7 @@ from tests.stubs.user_context import _UserContext as UserContext
 from src.api.types import Pagination
 from src.api.user_context import UserContextABC
 from src.db.entities import DirectoryEntity, NoteEntity
-from src.db.repos.directory.directory import DirectoryRepo
+from src.api.directory_repo import DirectoryRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, SearchType
 from src.api import (
     DirectoryRelationEnum,
@@ -88,6 +88,13 @@ class _StubDirectoryRepo(DirectoryRepo):
         max_depth: int = 10,
     ) -> List[str]:
         return []
+
+    async def resolve_subtree(
+        self,
+        directory_id: str,
+        max_depth: int = 10,
+    ) -> Tuple[List[str], List[str]]:
+        return ([], [directory_id])
 
 
 async def test_permission_service_create_and_list_note_relationships() -> None:

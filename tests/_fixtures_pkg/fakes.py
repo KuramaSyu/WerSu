@@ -11,7 +11,7 @@ work (the parent ``tests.fixtures`` package re-exports them).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
@@ -20,7 +20,7 @@ from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.embedding import NoteEmbeddingEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.versioning import NoteVersionEntry
-from src.db.repos.directory.directory import DirectoryRepo
+from src.api.directory_repo import DirectoryRepo
 from src.db.repos.note.content import NoteContentRepo
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.db.repos.note.note import NoteRepoFacadeABC, SearchType
@@ -118,6 +118,11 @@ class _TestDirectoryRepo(DirectoryRepo):
         # corresponding ids; otherwise the legacy fallback of a single
         # default directory is used so older tests keep working.
         self.user_to_directory_ids: Dict[str, List[str]] = {}
+        # ``subtree_by_root``: root directory id ->
+        # ``(note_ids, directory_ids)``.  Tests that need a populated
+        # subtree seed this so ``resolve_subtree`` returns their ids.
+        # Roots not in the dict fall back to ``([], [directory_id])``.
+        self.subtree_by_root: Dict[str, Tuple[List[str], List[str]]] = {}
         # Recorded calls for assertions.
         self.created: List[DirectoryEntity] = []
         self.updated: List[DirectoryEntity] = []
@@ -206,6 +211,19 @@ class _TestDirectoryRepo(DirectoryRepo):
         max_depth: int = 10,
     ) -> List[str]:
         return []
+
+    async def resolve_subtree(
+        self,
+        directory_id: str,
+        max_depth: int = 10,
+    ) -> Tuple[List[str], List[str]]:
+        """In-memory stub.
+
+        Returns the seeded ``(note_ids, directory_ids)`` for
+        ``directory_id`` from :attr:`subtree_by_root`, or the root
+        alone when no seed is present.
+        """
+        return self.subtree_by_root.get(directory_id, ([], [directory_id]))
 
 
 class _FakeNoteRepoFacade(NoteRepoFacadeABC):

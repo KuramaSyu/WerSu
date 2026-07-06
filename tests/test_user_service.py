@@ -1,12 +1,12 @@
 from dataclasses import replace
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from tests.stubs.user_context import _UserContext as UserContext
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
-from src.db.repos.directory.directory import DirectoryRepo
+from src.api.directory_repo import DirectoryRepo
 from src.db.repos.note.permission import DirectoryRelationEnum, ObjectTypeEnum
 from src.db.repos.user.user import UserRepoABC
 from src.services.user import UserService
@@ -94,6 +94,13 @@ class _InMemoryDirectoryRepo(DirectoryRepo):
         max_depth: int = 10,
     ) -> List[str]:
         return []
+
+    async def resolve_subtree(
+        self,
+        directory_id: str,
+        max_depth: int = 10,
+    ) -> Tuple[List[str], List[str]]:
+        return ([], [directory_id])
 
 
 def _make_test_user() -> UserEntity:

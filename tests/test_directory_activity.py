@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
 from src.api.user_context import UserContextABC
 from src.db.entities.note.versioning import NoteVersionEntry
-from src.db.repos.directory.directory import DirectoryRepo, DirectoryRepoSpicedbPostgres
+from src.api.directory_repo import DirectoryRepo
+from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
 from tests.stubs import _UserContext
 from src.api import (
     DirectoryRelationEnum,
@@ -54,6 +55,13 @@ class _FakeDirectoryRepo(DirectoryRepo):
         max_depth: int = 10,
     ) -> List[str]:
         return list(self._note_ids)
+
+    async def resolve_subtree(
+        self,
+        directory_id: str,
+        max_depth: int = 10,
+    ) -> Tuple[List[str], List[str]]:
+        return (list(self._note_ids), [directory_id])
 
 
 async def test_resolve_files_of_directory_depth_and_cycle() -> None:

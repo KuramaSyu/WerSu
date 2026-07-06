@@ -13,6 +13,7 @@ from typing import Any, List
 from src.api import Relationship
 from src.api.note_service import NoteResponse
 from src.api.relationship import ObjectRef, SubjectRef
+from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
@@ -53,6 +54,8 @@ class StubVisitor(EntityVisitor):
         record_attachment: bool = True,
         record_attachment_metadata: bool = True,
         record_note_response: bool = True,
+        record_activity: bool = True,
+        record_activity_score: bool = True,
     ) -> None:
         """Initialize empty record lists and the per-handler `record_*` flags.
 
@@ -67,6 +70,9 @@ class StubVisitor(EntityVisitor):
                 :meth:`visit_attachment_metadata`.
             record_note_response: record responses in
                 :meth:`visit_note_response`.
+            record_activity: record entities in :meth:`visit_activity`.
+            record_activity_score: record scores in
+                :meth:`visit_activity_score`.
         """
         self.notes: List[NoteEntity] = []
         self.note_minimals: List[NoteEntity] = []
@@ -76,6 +82,8 @@ class StubVisitor(EntityVisitor):
         self.attachments: List[Attachment] = []
         self.attachment_metadatas: List[Attachment] = []
         self.note_responses: List[NoteResponse] = []
+        self.activities: List[ActivityEntity] = []
+        self.activity_scores: List[ActivityScore] = []
         self.share_users: List[tuple[str, Any]] = []
         self._record_note = record_note
         self._record_note_minimal = record_note_minimal
@@ -85,6 +93,8 @@ class StubVisitor(EntityVisitor):
         self._record_attachment = record_attachment
         self._record_attachment_metadata = record_attachment_metadata
         self._record_note_response = record_note_response
+        self._record_activity = record_activity
+        self._record_activity_score = record_activity_score
 
     def visit_note(self, entity: NoteEntity) -> NoteEntity:
         if self._record_note:
@@ -125,6 +135,16 @@ class StubVisitor(EntityVisitor):
         if self._record_note_response:
             self.note_responses.append(response)
         return response
+
+    def visit_activity(self, entity: ActivityEntity) -> ActivityEntity:
+        if self._record_activity:
+            self.activities.append(entity)
+        return entity
+
+    def visit_activity_score(self, score: ActivityScore) -> ActivityScore:
+        if self._record_activity_score:
+            self.activity_scores.append(score)
+        return score
 
     def visit_share_user(self, access_as: str, online_until: Any) -> Any:
         self.share_users.append((access_as, online_until))
