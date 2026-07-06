@@ -21,6 +21,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from src.api import NoteResponse, Relationship
 from src.api.relationship import ObjectTypeEnum
 from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined
+from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
@@ -371,13 +372,12 @@ class ConvertToGrpcVisitor(EntityVisitor):
 
     # ---- activity log --------------------------------------------------
 
-    def visit_activity(self, entity: Any) -> "Activity":
+    def visit_activity(self, entity: ActivityEntity) -> Activity:
         """Convert an :class:`~src.db.entities.activity.ActivityEntity` to a gRPC ``Activity`` message.
 
         ``metadata`` is JSON-serialised into ``metadata_json`` because
         proto messages don't model nested maps-of-anything cleanly.
         """
-        from src.db.entities.activity import ActivityEntity
         assert isinstance(entity, ActivityEntity)
         assert entity.id is not None
 
@@ -410,18 +410,17 @@ class ConvertToGrpcVisitor(EntityVisitor):
             metadata_json=self._metadata_to_json(entity.metadata),
         )
 
-    def visit_activity_score(self, score: Any) -> "ActivityScore":
+    def visit_activity_score(self, score: ActivityScore) -> GrpcActivityScore:
         """Convert an :class:`~src.db.entities.activity.ActivityScore` to a gRPC ``ActivityScore``."""
-        from src.db.entities.activity import ActivityScore
         assert isinstance(score, ActivityScore)
-        return ActivityScore(
+        return GrpcActivityScore(
             note_id=score.note_id,
             score=float(score.score),
         )
 
     @staticmethod
-    def _accessed_as_to_proto(accessed_as: Any) -> "AccessedAs.ValueType":
-        """Translate the ``accessed_as`` literal into the proto enum."""
+    def _accessed_as_to_proto(accessed_as: str) -> int:
+        """Translate the ``accessed_as`` literal into the proto enum int."""
         if accessed_as == "system":
             return ACCESSED_AS_SYSTEM
         if accessed_as == "user":
