@@ -236,6 +236,7 @@ def test_activity_kind_is_exhaustive() -> None:
         "note_deleted",
         "note_published",
         "note_shared",
+        "note_unshared",
         "note_restored",
         "note_archived",
         "note_version_restored",

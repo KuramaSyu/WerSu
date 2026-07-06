@@ -12,11 +12,13 @@ Each stub lives in its own file:
 * :mod:`tests.stubs.user_action_repo` -> in-memory user-action repo
 * :mod:`tests.stubs.logging`        -> standard-library logger provider
 * :mod:`tests.stubs.directory_service` -> in-memory :class:`DirectoryServiceABC`
+* :mod:`tests.stubs.activity_logger_service` -> in-memory activity logger fake
 
 The names are also re-exported here so legacy code paths that import
 ``from tests.stubs import _FakeSharingRepo`` keep working.
 """
 
+from .activity_logger_service import _FakeActivityLoggerService  # noqa: F401
 from .attachments import *  # noqa: F401,F403
 from .directory_service import _StubDirectoryService  # noqa: F401
 from .logging import silent_logger  # noqa: F401
