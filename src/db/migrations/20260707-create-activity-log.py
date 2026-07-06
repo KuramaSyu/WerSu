@@ -52,6 +52,7 @@ class Migration(MigrationABC):
                 'note_deleted',
                 'note_published',
                 'note_shared',
+                'note_unshared',
                 'note_restored',
                 'note_archived',
                 'note_version_restored',
