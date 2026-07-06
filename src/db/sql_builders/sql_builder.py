@@ -32,7 +32,7 @@ abstract bases (:class:`InsertStmtABC`, :class:`UpdateStmtABC`,
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 from src.db.sql_builders.sql_statement import SqlStatement
 from src.db.sql_builders.statements import (
@@ -40,15 +40,19 @@ from src.db.sql_builders.statements import (
     InsertStmtABC,
     PostgresDeleteStmt,
     PostgresInsertStmt,
+    PostgresSelectFromStmt,
     PostgresSelectStmt,
     PostgresUpdateStmt,
+    SelectFromStmtABC,
     SelectStmtABC,
     SqliteDeleteStmt,
     SqliteInsertStmt,
+    SqliteSelectFromStmt,
     SqliteSelectStmt,
     SqliteUpdateStmt,
     UpdateStmtABC,
 )
+from src.db.sql_builders.where_clause import WhereClause
 
 
 class SqlBuilderABC(ABC):
@@ -200,6 +204,38 @@ class SqlBuilderABC(ABC):
         """
 
     @abstractmethod
+    def select_from(self, table: str) -> "SelectFromStmtABC":
+        """Start a fluent ``SELECT ... FROM <table> WHERE <WhereClause>``.
+
+        Use this when the WHERE clause carries pair shapes the
+        dict-based :meth:`SelectStmtABC.where` can't express --
+        ``IS NULL``, raw ``>= $N`` fragments, ``IN ($N, $N+1)``
+        lists, OR groups, ...  Build the :class:`WhereClause`
+        incrementally via :meth:`WhereClause.add_and` /
+        :meth:`WhereClause.add_or`, then bind it with
+        :meth:`SelectFromStmtABC.where_clause`.
+
+        The chain shape mirrors :class:`SelectStmtABC`: ``columns``,
+        ``where_clause``, ``order_by``, ``limit``, ``offset``,
+        ``group_by``, ``build``.
+
+        Example::
+
+            clause = WhereClause.empty() \\
+                .add_and(("note_id", "n-1")) \\
+                .add_or(("directory_id", ["d-1", "d-2"]))
+
+            stmt = (
+                builder.select_from("activity")
+                    .columns("id", "actor_id", "at")
+                    .where_clause(clause)
+                    .order_by("at DESC")
+                    .limit(50)
+                    .build()
+            )
+        """
+
+    @abstractmethod
     def fetch(self, sql: str, args: Sequence[object]) -> SqlStatement:
         """Wrap a caller-supplied ``sql``/``args`` into a :class:`SqlStatement`.
 
@@ -227,6 +263,9 @@ class PostgresSqlBuilder(SqlBuilderABC):
     def select(self) -> PostgresSelectStmt:
         return PostgresSelectStmt()
 
+    def select_from(self, table: str) -> "PostgresSelectFromStmt":
+        return PostgresSelectFromStmt(table)
+
     def fetch(self, sql: str, args: Sequence[object]) -> SqlStatement:
         return SqlStatement(sql, tuple(args))
 
@@ -248,6 +287,9 @@ class SqliteSqlBuilder(SqlBuilderABC):
 
     def select(self) -> SqliteSelectStmt:
         return SqliteSelectStmt()
+
+    def select_from(self, table: str) -> "SqliteSelectFromStmt":
+        return SqliteSelectFromStmt(table)
 
     def fetch(self, sql: str, args: Sequence[object]) -> SqlStatement:
         return SqlStatement(sql, tuple(args))

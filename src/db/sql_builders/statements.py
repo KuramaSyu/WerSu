@@ -18,10 +18,10 @@ just text.  This makes the builders trivially unit-testable.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.db.sql_builders.sql_statement import SqlStatement
-from src.db.sql_builders.where_clause import WhereClause
+from src.db.sql_builders.where_clause import WhereClause, render_where
 
 
 class _PlaceholderStyleMixin:
@@ -183,6 +183,64 @@ class SelectStmtABC(ABC):
         """Materialise the staged state into a :class:`SqlStatement`."""
 
 
+class SelectFromStmtABC(ABC):
+    """Fluent ``SELECT`` staged builder that takes a pre-built :class:`WhereClause`.
+
+    Use this when the WHERE clause carries pair shapes the dict-based
+    :meth:`SelectStmtABC.where` can't express -- ``IS NULL``, raw
+    ``>= $N`` fragments, ``column IN ($N, $N+1)`` lists, OR groups,
+    and so on.  The :class:`WhereClause` is built incrementally via
+    :meth:`WhereClause.add_and` / :meth:`WhereClause.add_or` and
+    then handed off here::
+
+        clause = WhereClause.empty() \\
+            .add_and(("note_id", "n-1")) \\
+            .add_or(("directory_id", ["d-1", "d-2"]))
+
+        stmt = (
+            builder
+                .select_from(table)
+                .columns("id", "actor_id", "at")
+                .where_clause(clause)
+                .order_by("at DESC")
+                .limit(50)
+                .offset(10)
+                .build()
+        )
+
+    The chain shape mirrors :class:`SelectStmtABC` so callers can
+    switch between the two without rewriting their query code.
+    """
+
+    @abstractmethod
+    def columns(self, *cols: str) -> "SelectFromStmtABC":
+        """Pin the projection columns.  Defaults to ``*`` on :meth:`build`."""
+
+    @abstractmethod
+    def where_clause(self, clause: WhereClause) -> "SelectFromStmtABC":
+        """Bind the WHERE clause built outside this staged builder."""
+
+    @abstractmethod
+    def order_by(self, fragment: str) -> "SelectFromStmtABC":
+        """Append a raw ``ORDER BY`` fragment."""
+
+    @abstractmethod
+    def group_by(self, fragment: str) -> "SelectFromStmtABC":
+        """Append a raw ``GROUP BY`` fragment."""
+
+    @abstractmethod
+    def limit(self, n: int) -> "SelectFromStmtABC":
+        """Append ``LIMIT n`` (bound placeholder, not inlined)."""
+
+    @abstractmethod
+    def offset(self, n: int) -> "SelectFromStmtABC":
+        """Append ``OFFSET n`` (bound placeholder, not inlined)."""
+
+    @abstractmethod
+    def build(self) -> SqlStatement:
+        """Materialise the staged state into a :class:`SqlStatement`."""
+
+
 class _PostgresCommon:
     """Shared formatting helpers for Postgres staged builders."""
 
@@ -196,27 +254,12 @@ class _PostgresCommon:
     def _where_sql(where: WhereClause, start_n: int) -> Tuple[str, Tuple[Any, ...]]:
         """Render ``where`` to a ``$n``-numbered SQL fragment.
 
-        Returns ``(sql_fragment, bound_params)``.
+        Thin wrapper over :func:`render_where` that pins the dialect
+        to ``"postgres"`` and threads the start placeholder index
+        through (so an UPDATE statement's WHERE picks up where the
+        SET clause's ``$n`` left off).
         """
-        if where.is_empty:
-            return "", ()
-
-        parts: List[str] = []
-        params: List[Any] = []
-        n = start_n
-
-        if where.and_pairs:
-            sub = " AND ".join(f"{col} = ${n + i}" for i, (col, _) in enumerate(where.and_pairs))
-            parts.append(f"({sub})")
-            params.extend(v for _, v in where.and_pairs)
-            n += len(where.and_pairs)
-
-        if where.or_pairs:
-            sub = " OR ".join(f"{col} = ${n + i}" for i, (col, _) in enumerate(where.or_pairs))
-            parts.append(f"({sub})")
-            params.extend(v for _, v in where.or_pairs)
-
-        return " AND ".join(parts), tuple(params)
+        return render_where(where, dialect="postgres", start_n=start_n)
 
 
 class PostgresInsertStmt(_PostgresCommon, InsertStmtABC):
@@ -430,6 +473,72 @@ class PostgresSelectStmt(_PostgresCommon, SelectStmtABC):
         return SqlStatement("\n".join(parts), where_params)
 
 
+class PostgresSelectFromStmt(_PostgresCommon, SelectFromStmtABC):
+    """Postgres ``SELECT ... FROM ... WHERE <WhereClause>`` staged builder.
+
+    The table name is bound at construction time by
+    :meth:`PostgresSqlBuilder.select_from`; everything else chains
+    fluently.  ``LIMIT`` / ``OFFSET`` are bound placeholders, not
+    inlined literals -- the staged builder handles the numbering.
+    """
+
+    def __init__(self, table: str) -> None:
+        self._table = table
+        self._columns: Tuple[str, ...] = ()
+        self._where: WhereClause = WhereClause.empty()
+        self._order_by: Optional[str] = None
+        self._group_by: Optional[str] = None
+        self._limit: Optional[int] = None
+        self._offset: Optional[int] = None
+
+    def columns(self, *cols: str) -> "PostgresSelectFromStmt":
+        self._columns = cols
+        return self
+
+    def where_clause(self, clause: WhereClause) -> "PostgresSelectFromStmt":
+        self._where = clause
+        return self
+
+    def order_by(self, fragment: str) -> "PostgresSelectFromStmt":
+        self._order_by = fragment
+        return self
+
+    def group_by(self, fragment: str) -> "PostgresSelectFromStmt":
+        self._group_by = fragment
+        return self
+
+    def limit(self, n: int) -> "PostgresSelectFromStmt":
+        self._limit = n
+        return self
+
+    def offset(self, n: int) -> "PostgresSelectFromStmt":
+        self._offset = n
+        return self
+
+    def build(self) -> SqlStatement:
+        cols = ", ".join(self._columns) if self._columns else "*"
+        where_sql, where_params = render_where(
+            self._where, dialect="postgres", start_n=1
+        )
+
+        parts = [f"SELECT {cols} FROM {self._table}"]
+        if where_sql:
+            parts.append(f"WHERE {where_sql}")
+        if self._group_by:
+            parts.append(f"GROUP BY {self._group_by}")
+        if self._order_by:
+            parts.append(f"ORDER BY {self._order_by}")
+
+        params: List[object] = list(where_params)
+        if self._limit is not None:
+            params.append(self._limit)
+            parts.append(f"LIMIT ${len(params)}")
+        if self._offset is not None:
+            params.append(self._offset)
+            parts.append(f"OFFSET ${len(params)}")
+        return SqlStatement("\n".join(parts), tuple(params))
+
+
 class _SqliteCommon:
     """Shared formatting helpers for SQLite staged builders."""
 
@@ -444,27 +553,9 @@ class _SqliteCommon:
     def _where_sql(where: WhereClause) -> Tuple[str, Tuple[Any, ...]]:
         """Render ``where`` to a ``?``-numbered SQL fragment.
 
-        Returns ``(sql_fragment, bound_params)``.  ORDER MATTERS:
-        the AND group is emitted first, then the OR group, so the
-        param tuple matches the placeholder order.
+        Thin wrapper over :func:`render_where` pinned to ``"sqlite"``.
         """
-        if where.is_empty:
-            return "", ()
-
-        parts: List[str] = []
-        params: List[Any] = []
-
-        if where.and_pairs:
-            sub = " AND ".join(f"{col} = ?" for col, _ in where.and_pairs)
-            parts.append(f"({sub})")
-            params.extend(v for _, v in where.and_pairs)
-
-        if where.or_pairs:
-            sub = " OR ".join(f"{col} = ?" for col, _ in where.or_pairs)
-            parts.append(f"({sub})")
-            params.extend(v for _, v in where.or_pairs)
-
-        return " AND ".join(parts), tuple(params)
+        return render_where(where, dialect="sqlite")
 
 
 class SqliteInsertStmt(_SqliteCommon, InsertStmtABC):
@@ -671,3 +762,61 @@ class SqliteSelectStmt(_SqliteCommon, SelectStmtABC):
             parts.append(f"OFFSET {self._offset}")
 
         return SqlStatement("\n".join(parts), where_params)
+
+
+class SqliteSelectFromStmt(_SqliteCommon, SelectFromStmtABC):
+    """SQLite ``SELECT ... FROM ... WHERE <WhereClause>`` staged builder."""
+
+    def __init__(self, table: str) -> None:
+        self._table = table
+        self._columns: Tuple[str, ...] = ()
+        self._where: WhereClause = WhereClause.empty()
+        self._order_by: Optional[str] = None
+        self._group_by: Optional[str] = None
+        self._limit: Optional[int] = None
+        self._offset: Optional[int] = None
+
+    def columns(self, *cols: str) -> "SqliteSelectFromStmt":
+        self._columns = cols
+        return self
+
+    def where_clause(self, clause: WhereClause) -> "SqliteSelectFromStmt":
+        self._where = clause
+        return self
+
+    def order_by(self, fragment: str) -> "SqliteSelectFromStmt":
+        self._order_by = fragment
+        return self
+
+    def group_by(self, fragment: str) -> "SqliteSelectFromStmt":
+        self._group_by = fragment
+        return self
+
+    def limit(self, n: int) -> "SqliteSelectFromStmt":
+        self._limit = n
+        return self
+
+    def offset(self, n: int) -> "SqliteSelectFromStmt":
+        self._offset = n
+        return self
+
+    def build(self) -> SqlStatement:
+        cols = ", ".join(self._columns) if self._columns else "*"
+        where_sql, where_params = render_where(self._where, dialect="sqlite")
+
+        parts = [f"SELECT {cols} FROM {self._table}"]
+        if where_sql:
+            parts.append(f"WHERE {where_sql}")
+        if self._group_by:
+            parts.append(f"GROUP BY {self._group_by}")
+        if self._order_by:
+            parts.append(f"ORDER BY {self._order_by}")
+
+        params: List[object] = list(where_params)
+        if self._limit is not None:
+            params.append(self._limit)
+            parts.append("LIMIT ?")
+        if self._offset is not None:
+            params.append(self._offset)
+            parts.append("OFFSET ?")
+        return SqlStatement("\n".join(parts), tuple(params))

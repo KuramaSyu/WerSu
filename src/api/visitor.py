@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.api.note_service import NoteResponse
+    from src.db.entities.activity import ActivityEntity, ActivityScore
     from src.db.entities.directory.directory import DirectoryEntity
     from src.db.entities.note.metadata import NoteEntity
     from src.db.entities.note.sharing import NoteShareEntity
@@ -147,5 +148,31 @@ class EntityVisitor(ABC):
 
         Raises:
             NotImplementedError: If the visitor does not support note responses.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_activity(self, entity: "ActivityEntity") -> Any:
+        """Handle an :class:`~src.db.entities.activity.ActivityEntity`.
+
+        Used by the gRPC layer to render individual activity log
+        rows.  Implementations map each field to its proto equivalent;
+        ``metadata`` is JSON-serialised.
+
+        Raises:
+            NotImplementedError: If the visitor does not support activity rows.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_activity_score(self, score: "ActivityScore") -> Any:
+        """Handle an :class:`~src.db.entities.activity.ActivityScore`.
+
+        Used by the gRPC layer to render aggregate most-used scores.
+        The aggregation collapses many events into one ``(note_id,
+        score)`` pair; the visitor renders the score as a float.
+
+        Raises:
+            NotImplementedError: If the visitor does not support activity scores.
         """
         raise NotImplementedError

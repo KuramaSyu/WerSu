@@ -12,6 +12,19 @@ from .user_context import UserContextABC
 from .permission_repo import *
 from .relationship import *
 from .user_action import UserActionRepoABC
+from .activity import ActivityRepoABC, ActivityFilterBuilder
+from .activity_logger_service import (
+    ActivityLoggerError,
+    ActivityLoggerServiceABC,
+    RoleChangeMetadata,
+    RoleGrantMetadata,
+    RoleRevokeMetadata,
+)
+from .activity_statistics_service import (
+    ActivityStatisticsServiceABC,
+    Algorithm,
+)
 from .note_service import NoteResponse, NoteServiceABC
 from .directory_service import DirectoryServiceABC
+from .directory_repo import DefaultDirectorySpec, DirectoryRepo
 from .visitor import AcceptsVisitor, EntityVisitor

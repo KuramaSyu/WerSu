@@ -13,6 +13,7 @@ not delegate out of this module.  Keeping the logic here is what lets the
 from __future__ import annotations
 
 import datetime as _dt
+import json
 from typing import Any
 
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -26,6 +27,13 @@ from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
 from src.api.visitor import EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
+from src.grpc_mod.proto.activity_pb2 import (
+    ACCESSED_AS_SYSTEM,
+    ACCESSED_AS_UNSPECIFIED,
+    ACCESSED_AS_USER,
+    Activity,
+    ActivityScore as GrpcActivityScore,
+)
 from src.grpc_mod.proto.attachments_pb2 import Attachment as GrpcAttachment
 from src.grpc_mod.proto.attachments_pb2 import AttachmentMetadata
 from src.grpc_mod.proto.note_pb2 import (
@@ -360,3 +368,76 @@ class ConvertToGrpcVisitor(EntityVisitor):
             access_as=access_as,
             online_until=_to_proto_nullable_timestamp(online_until),
         )
+
+    # ---- activity log --------------------------------------------------
+
+    def visit_activity(self, entity: Any) -> "Activity":
+        """Convert an :class:`~src.db.entities.activity.ActivityEntity` to a gRPC ``Activity`` message.
+
+        ``metadata`` is JSON-serialised into ``metadata_json`` because
+        proto messages don't model nested maps-of-anything cleanly.
+        """
+        from src.db.entities.activity import ActivityEntity
+        assert isinstance(entity, ActivityEntity)
+        assert entity.id is not None
+
+        accessed_as_value = self._accessed_as_to_proto(entity.accessed_as)
+        at_ts = Timestamp()
+        if isinstance(entity.at, _dt.datetime):
+            at_ts.FromDatetime(entity.at)
+
+        basic_args = drop_undefined(
+            drop_except_keys(
+                asdict(entity),
+                {"id", "actor_id", "accessed_as", "action",
+                 "note_id", "directory_id", "role_id", "at", "metadata"},
+            )
+        )
+        # strip the per-row flags we model separately
+        basic_args.pop("accessed_as", None)
+        basic_args.pop("at", None)
+        basic_args.pop("metadata", None)
+
+        return Activity(
+            id=basic_args.pop("id"),
+            actor_id=basic_args.pop("actor_id", "") or "",
+            accessed_as=accessed_as_value,
+            action=basic_args.pop("action", "") or "",
+            note_id=basic_args.pop("note_id", "") or "",
+            directory_id=basic_args.pop("directory_id", "") or "",
+            role_id=basic_args.pop("role_id", "") or "",
+            at=at_ts,
+            metadata_json=self._metadata_to_json(entity.metadata),
+        )
+
+    def visit_activity_score(self, score: Any) -> "ActivityScore":
+        """Convert an :class:`~src.db.entities.activity.ActivityScore` to a gRPC ``ActivityScore``."""
+        from src.db.entities.activity import ActivityScore
+        assert isinstance(score, ActivityScore)
+        return ActivityScore(
+            note_id=score.note_id,
+            score=float(score.score),
+        )
+
+    @staticmethod
+    def _accessed_as_to_proto(accessed_as: Any) -> "AccessedAs.ValueType":
+        """Translate the ``accessed_as`` literal into the proto enum."""
+        if accessed_as == "system":
+            return ACCESSED_AS_SYSTEM
+        if accessed_as == "user":
+            return ACCESSED_AS_USER
+        return ACCESSED_AS_UNSPECIFIED
+
+    @staticmethod
+    def _metadata_to_json(metadata: Any) -> str:
+        """Serialise the per-row metadata payload to a JSON string.
+
+        ``UNDEFINED`` and ``None`` both produce an empty object so the
+        client always sees valid JSON.
+        """
+        if is_undefined(metadata) or metadata is None:
+            return "{}"
+        try:
+            return json.dumps(dict(metadata))
+        except (TypeError, ValueError):
+            return json.dumps({})

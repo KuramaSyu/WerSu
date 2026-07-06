@@ -37,6 +37,7 @@ from src.db.repos.attachments.attachments import (
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user import RepoContextFactory
 from src.db.repos.user.user_action import UserActionPostgresRepo
+from src.db.repos.activity.postgres import PostgresActivityRepo
 from src.db.table import Table, setup_table_logging
 from src.grpc_mod.proto.attachments_pb2_grpc import add_AttachmentServiceServicer_to_server
 from src.grpc_mod.proto.note_pb2_grpc import (
@@ -182,6 +183,11 @@ async def serve():
         table_name="users",
         id_fields=["id"],
     )
+    activity_table = Table(
+        **common_table_kwargs,
+        table_name="activity",
+        id_fields=["id"],
+    )
 
     # setup S3 connection
     s3_client = boto3.client(
@@ -260,6 +266,11 @@ async def serve():
     )
     user_action_repo = UserActionPostgresRepo(
         table=user_action_table,
+        logging_provider=logging_provider,
+    )
+    activity_repo = PostgresActivityRepo(
+        table=activity_table,
+        directory_repo=directory_repo,
         logging_provider=logging_provider,
     )
 

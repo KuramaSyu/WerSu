@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Optional
 
 from src.api.undefined import UNDEFINED, UndefinedOr
-from src.api.user_context import ContextFactory, UserContextABC, UserTypeT
+from src.api.user_context import ActorAs, ContextFactory, UserContextABC, UserTypeT
 from src.db.entities.user.user import UserEntity
 from src.utils.async_ttl import AsyncTtlCacheInfo, async_ttl
 
@@ -81,7 +81,9 @@ class RepoContextFactory(ContextFactory[UserContextABC]):
 class UnimplementedUserContext(UserContextABC):
     """Placeholder context for call sites that have no real user id.
 
-    Used by share-access flows where the caller is anonymous.
+    Used by share-access flows where the caller is anonymous.  Defaults
+    to ``as == "system"`` because there is no real user behind the
+    call.
     """
 
     def __init__(self) -> None:
@@ -94,6 +96,10 @@ class UnimplementedUserContext(UserContextABC):
     @property
     def type(self) -> UndefinedOr[UserTypeT]:
         return UNDEFINED
+
+    @property
+    def accessed_as(self) -> "ActorAs":
+        return "system"
 
     async def is_temporary_user(self) -> bool:
         return False
