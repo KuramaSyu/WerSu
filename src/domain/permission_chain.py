@@ -198,9 +198,14 @@ class HasNoteDeletePerm(PermissionCheckChain):
 
 
     async def _check(self, user_ctx: UserContextABC) -> bool:
-        relationship = self._get_relation(self._note_id, user_ctx.user_id)
-        return await self._permission_repo.check(relationship)
-    
+        # `delete` is a computed permission in SpiceDB, so check the
+        # effective permission instead of expecting a direct relationship tuple.
+        return await self._permission_repo.has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._note_id),
+        )
+
     def _get_error_message(self) -> str:
         return f"user has no permission to delete note {self._note_id}"
 
@@ -216,9 +221,14 @@ class HasNoteWritePerm(PermissionCheckChain):
 
 
     async def _check(self, user_ctx: UserContextABC) -> bool:
-        relationship = self._get_relation(self._note_id, user_ctx.user_id)
-        return await self._permission_repo.check(relationship)
-    
+        # `write` is a computed permission in SpiceDB, so check the
+        # effective permission instead of expecting a direct relationship tuple.
+        return await self._permission_repo.has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._note_id),
+        )
+
     def _get_error_message(self) -> str:
         return f"user has no permission to write to note {self._note_id}"
 
