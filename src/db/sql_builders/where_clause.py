@@ -31,7 +31,7 @@ should fall through to :meth:`SqlBuilderABC.fetch`.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Tuple, Union
+from typing import Iterable, Literal, Sequence, Tuple, Union
 
 
 # A pair is either (column_or_sql, value) -> ``column = $N`` (or
@@ -54,21 +54,28 @@ class WhereClause:
     Attributes:
         and_pairs: pairs joined by ``AND``.
         or_pairs: pairs joined by ``OR``.
+        raw_and: raw-SQL predicates (no bound parameters) joined
+            by ``AND``.  Use :meth:`add_raw` to push a predicate
+            that doesn't fit the pair model (e.g. ``"note_id IS
+            NOT NULL"``).
+        raw_or: raw-SQL predicates joined by ``OR``.
 
     Note:
-        Both groups are tuples (not dicts) so the same column may
-        legitimately appear with two different values.  The
+        Both pair groups are tuples (not dicts) so the same column
+        may legitimately appear with two different values.  The
         :meth:`build` factory accepts a dict for convenience; that
         collapses duplicate keys inside one group.  Construct the
         class directly if you need repeats or any non-equality
-        operator.  Use :meth:`add_and` / :meth:`add_or` to grow an
-        existing clause incrementally -- the data flow used by
-        ``PostgresActivityRepo`` when assembling many optional
-        filters one at a time.
+        operator.  Use :meth:`add_and` / :meth:`add_or` /
+        :meth:`add_raw` to grow an existing clause incrementally
+        -- the data flow used by ``PostgresActivityRepo`` when
+        assembling many optional filters one at a time.
     """
 
     and_pairs: Tuple[WherePair, ...] = ()
     or_pairs: Tuple[WherePair, ...] = ()
+    raw_and: Tuple[str, ...] = ()
+    raw_or: Tuple[str, ...] = ()
 
     @classmethod
     def build(
@@ -76,16 +83,22 @@ class WhereClause:
         *,
         and_: dict | None = None,
         or_: dict | None = None,
+        raw_and: Sequence[str] | None = None,
+        raw_or: Sequence[str] | None = None,
     ) -> "WhereClause":
         """Build a clause from two optional dicts.
 
         Args:
             and_: pairs joined by ``AND``.  ``None`` => no AND group.
             or_: pairs joined by ``OR``.  ``None`` => no OR group.
+            raw_and: raw-SQL predicates joined by ``AND``.
+            raw_or: raw-SQL predicates joined by ``OR``.
         """
         return cls(
             and_pairs=tuple((and_ or {}).items()),
             or_pairs=tuple((or_ or {}).items()),
+            raw_and=tuple(raw_and or ()),
+            raw_or=tuple(raw_or or ()),
         )
 
     @classmethod
@@ -95,8 +108,13 @@ class WhereClause:
 
     @property
     def is_empty(self) -> bool:
-        """``True`` when both groups are empty."""
-        return not self.and_pairs and not self.or_pairs
+        """``True`` when every group is empty."""
+        return (
+            not self.and_pairs
+            and not self.or_pairs
+            and not self.raw_and
+            and not self.raw_or
+        )
 
     def add_and(self, *pairs: WherePair) -> "WhereClause":
         """Return a new clause with ``pairs`` appended to the AND group.
@@ -107,6 +125,8 @@ class WhereClause:
         return WhereClause(
             and_pairs=self.and_pairs + tuple(pairs),
             or_pairs=self.or_pairs,
+            raw_and=self.raw_and,
+            raw_or=self.raw_or,
         )
 
     def add_or(self, *pairs: WherePair) -> "WhereClause":
@@ -118,7 +138,84 @@ class WhereClause:
         return WhereClause(
             and_pairs=self.and_pairs,
             or_pairs=self.or_pairs + tuple(pairs),
+            raw_and=self.raw_and,
+            raw_or=self.raw_or,
         )
+
+    def add_raw(self, predicate: str, *, group: Literal["and", "or"] = "and") -> "WhereClause":
+        """Append a parameter-free raw-SQL predicate.
+
+        Use this for predicates the (column, value) pair model
+        can't express, e.g. ``"note_id IS NOT NULL"``.  Predicates
+        must not contain placeholders (``$N`` / ``?``); if they do
+        it's a programmer error because the rendered WHERE clause
+        would never bind them.
+
+        Args:
+            predicate: SQL fragment to splice into the WHERE.
+                Must not contain ``$N`` or ``?`` placeholders.
+            group: which group to append to -- ``"and"`` (default)
+                or ``"or"``.
+
+        Returns:
+            WhereClause: a fresh instance; the original is
+            unchanged.
+
+        Raises:
+            ValueError: if ``predicate`` looks like it binds a
+                parameter (it would render with no placeholder
+                and silently drop the value).
+        """
+        if "$" in predicate or "?" in predicate:
+            raise ValueError(
+                "WhereClause.add_raw only accepts parameter-free "
+                "predicates; bind values via add_and/add_or pairs"
+            )
+        if group == "or":
+            return WhereClause(
+                and_pairs=self.and_pairs,
+                or_pairs=self.or_pairs,
+                raw_and=self.raw_and,
+                raw_or=self.raw_or + (predicate,),
+            )
+        return WhereClause(
+            and_pairs=self.and_pairs,
+            or_pairs=self.or_pairs,
+            raw_and=self.raw_and + (predicate,),
+            raw_or=self.raw_or,
+        )
+
+    def __add__(self, other: "WhereClause") -> "WhereClause":
+        """Return ``self + other`` -- merge two clauses pair-by-pair.
+
+        The AND groups of both sides are concatenated, the OR
+        groups of both sides are concatenated, the raw predicate
+        lists of both sides are concatenated, and the whole
+        combined object lands in the AND group when rendered.
+        Empty operands drop out, so ``clause + WhereClause.empty()``
+        is just ``clause``.
+
+        Returns:
+            WhereClause: a fresh clause combining every pair and
+            raw predicate from both sides; neither operand is
+            mutated.
+
+        Returns NotImplemented for non-:class:`WhereClause` so
+        Python falls back to the right-hand operand's own
+        ``__radd__`` / raises ``TypeError`` as usual.
+        """
+        if not isinstance(other, WhereClause):
+            return NotImplemented
+        return WhereClause(
+            and_pairs=self.and_pairs + other.and_pairs,
+            or_pairs=self.or_pairs + other.or_pairs,
+            raw_and=self.raw_and + other.raw_and,
+            raw_or=self.raw_or + other.raw_or,
+        )
+
+    def __radd__(self, other: "WhereClause") -> "WhereClause":
+        """Mirror :meth:`__add__` so ``empty() + clause`` also works."""
+        return self.__add__(other)
 
     def total_params(self) -> int:
         """Number of bound values this clause consumes.
@@ -260,20 +357,22 @@ def render_where(
     params: list[object] = []
     n = start_n
 
-    if where.and_pairs:
+    if where.and_pairs or where.raw_and:
         and_subs: list[str] = []
         for pair in where.and_pairs:
             sub, n, sub_params = _emit(pair, n)
             and_subs.append(sub)
             params.extend(sub_params)
+        and_subs.extend(where.raw_and)
         parts.append(f"({' AND '.join(and_subs)})")
 
-    if where.or_pairs:
+    if where.or_pairs or where.raw_or:
         or_subs: list[str] = []
         for pair in where.or_pairs:
             sub, n, sub_params = _emit(pair, n)
             or_subs.append(sub)
             params.extend(sub_params)
+        or_subs.extend(where.raw_or)
         parts.append(f"({' OR '.join(or_subs)})")
 
     return " AND ".join(parts), tuple(params)
