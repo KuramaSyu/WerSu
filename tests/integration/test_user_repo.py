@@ -7,7 +7,7 @@ from testcontainers.postgres import PostgresContainer
 from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.user.user import UserEntity
-from src.db.repos.note.note import NoteRepoFacadeABC
+from src.api.note_facade import NoteRepoFacadeABC
 from src.db.repos.user.user import UserRepoABC
 import src.api
 from src.db.repos import UserPostgresRepo, Database

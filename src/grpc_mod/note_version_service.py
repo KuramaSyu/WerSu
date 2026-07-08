@@ -20,10 +20,10 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
+from src.api.note_facade import NoteRepoFacadeABC
 from src.api.undefined import UNDEFINED
 from src.api.user_context import ContextFactory, UserContextABC
 from src.db.entities import NoteEntity
-from src.db.repos.note.note import NoteRepoFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.grpc_mod._log_decorator import log_service_call
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor

@@ -9,7 +9,7 @@ from src.api.types import Pagination
 from src.api.user_context import UserContextABC
 from src.db.entities import DirectoryEntity, NoteEntity
 from src.api.directory_repo import DirectoryRepo
-from src.db.repos.note.note import NoteRepoFacadeABC, SearchType
+from src.api.note_facade import NoteRepoFacadeABC, SearchType
 from src.api import (
     DirectoryRelationEnum,
     NoteRelationEnum,
@@ -41,6 +41,17 @@ class _StubNoteRepo(NoteRepoFacadeABC):
         if note_id in self._note_ids:
             return NoteEntity(note_id=note_id)
         return None
+
+    async def select_by_ids(
+        self,
+        note_ids: List[str],
+        ctx: UserContext,
+    ) -> List[NoteEntity]:
+        return [
+            NoteEntity(note_id=nid)
+            for nid in note_ids
+            if nid in self._note_ids
+        ]
 
     async def search_notes(
         self,

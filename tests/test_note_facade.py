@@ -25,7 +25,8 @@ from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.api.directory_repo import DirectoryRepo
 from src.db.repos.note import note as note_module
-from src.db.repos.note.note import NoteFacade, SearchType
+from src.db.repos.note.note import NoteFacade
+from src.api.note_facade import SearchType
 from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from tests._fixtures_pkg.fakes import (
     _FakeDatabase,

@@ -4,7 +4,7 @@ from typing import List, Sequence
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.repos.directory.directory import DirectoryRepo
-from src.db.repos.note.note import NoteRepoFacadeABC
+from src.api.note_facade import NoteRepoFacadeABC
 from src.api import (
     DirectoryRelationEnum,
     PermissionRepoABC,

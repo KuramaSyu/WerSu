@@ -97,7 +97,7 @@ class NoteContentRepo(ABC):
         note_id: str,
     ) -> NoteEntity:
         """select metadata by ID
-        
+
         Args:
         -----
         note_id: `str`
@@ -107,6 +107,27 @@ class NoteContentRepo(ABC):
         --------
         `NoteEntity`:
             the matching entity
+        """
+        ...
+
+    @abstractmethod
+    async def select_by_ids(
+        self,
+        note_ids: List[str],
+    ) -> List[NoteEntity]:
+        """Bulk variant of :meth:`select_by_id`.
+
+        Args:
+            note_ids: ids to resolve.  Order is preserved in the
+                returned list.  Empty input is a programming error.
+
+        Raises:
+            ValueError: when `note_ids` is empty or any id is missing.
+
+        Returns:
+            List[NoteEntity]: matching notes in `note_ids` order.
+            `embeddings` and `permissions` are never populated here -
+            callers enrich from the permission repo.
         """
         ...
 
@@ -191,3 +212,38 @@ class NoteContentPostgresRepo(NoteContentRepo):
 
         # neither embeddings nor permissions are fetched here
         return NoteEntity(**record, embeddings=[], permissions=[])
+
+    async def select_by_ids(self, note_ids: List[str]) -> List[NoteEntity]:
+        if not note_ids:
+            raise ValueError("note_ids must not be empty")
+
+        # single round-trip; `id = ANY($1::text[])` lets Postgres reuse
+        # the primary-key index for fast membership lookups.
+        records = await self._table.fetch(
+            f"""
+            SELECT id, title, content, updated_at, author_id
+            FROM {self._table.name}
+            WHERE id = ANY($1::text[])
+            """,
+            list(note_ids),
+        )
+        if not records:
+            raise ValueError(
+                f"Notes with ids {note_ids!r} could not be resolved"
+            )
+
+        by_id = {str(r["id"]): r for r in records}
+        missing = [nid for nid in note_ids if nid not in by_id]
+        if missing:
+            raise ValueError(
+                f"Notes with ids {missing!r} could not be resolved"
+            )
+
+        notes: List[NoteEntity] = []
+        for nid in note_ids:
+            record_dict = dict(by_id[nid])
+            record_dict["note_id"] = record_dict.pop("id")
+            notes.append(
+                NoteEntity(**record_dict, embeddings=[], permissions=[])
+            )
+        return notes

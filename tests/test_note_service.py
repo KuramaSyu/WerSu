@@ -40,7 +40,8 @@ from src.api.relationship import (
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.api.directory_repo import DirectoryRepo
-from src.db.repos.note.note import NoteFacade, NoteRepoFacadeABC, SearchType
+from src.db.repos.note.note import NoteFacade
+from src.api.note_facade import NoteRepoFacadeABC, SearchType
 from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from src.services.note import NoteService
 from src.api.user_context import UserContextABC

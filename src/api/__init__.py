@@ -24,7 +24,13 @@ from .activity_statistics_service import (
     ActivityStatisticsServiceABC,
     Algorithm,
 )
-from .note_service import NoteResponse, NoteServiceABC
+from .note_service import (
+    GetNotesOptions,
+    GetNotesOptionsBuilder,
+    NoteResponse,
+    NoteServiceABC,
+)
+from .note_facade import NoteRepoFacadeABC, SearchType
 from .directory_service import DirectoryServiceABC
 from .directory_repo import DefaultDirectorySpec, DirectoryRepo
 from .visitor import AcceptsVisitor, EntityVisitor

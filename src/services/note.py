@@ -1,6 +1,7 @@
 """Concrete :class:`~src.api.note_service.NoteServiceABC` implementation.
 
-This service composes :class:`src.db.repos.note.note.NoteFacade`
+This service composes :class:`src.api.note_facade.NoteRepoFacadeABC`
+(via its :class:`~src.db.repos.note.note.NoteFacade` implementation)
 with the permission and directory repos and orchestrates every
 permission-related concern (parent-directory resolution, owner /
 parent-dir relation insert, post-fetch permission enrichment, search
@@ -27,13 +28,15 @@ from src.api import (
     SubjectRef,
     ActivityLoggerServiceABC,
 )
+from src.api.note_service import GetNotesOptions, _normalise_get_notes_options
 from src.api.jwt_provider import JwtProvider
+from src.api.note_facade import NoteRepoFacadeABC, SearchType
 from src.api.relationship import AttachmentRelationEnum
+from src.api.types import Pagination
 from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryRepo
-from src.db.repos.note.note import NoteRepoFacadeABC, Pagination, SearchType
 from src.domain.permission_chain import HasNoteDeletePerm, HasNoteWritePerm
 from src.utils.extract_attachments import extract_attachment_ids
 
@@ -84,25 +87,21 @@ class NoteService(NoteServiceABC):
         user_ctx: UserContextABC,
     ) -> NoteEntity:
         parent_directory_id = await self._resolve_parent_directory_id(note, user_ctx)
-        # The repo owns the owner + parent_directory relation writes;
-        # this layer only adds the eventual-consistency backfill below.
+
+        # insert note itself along with directory relation and owner relation
         inserted = await self._note_repo.insert(note, user_ctx)
 
         await self._activity_logger.note_created(str(inserted.note_id), user_ctx)
 
-        # Local copy used only for the read-after-write backfill so the
-        # parent_directory relation shows up even if SpiceDB hasn't
-        # converged yet.  The actual relation was inserted by the repo.
+        # a local copy for later usage; this already got inserted in the note repo
         parent_dir_relation = Relationship(
             resource=ObjectRef(ObjectTypeEnum.NOTE, inserted.note_id),
             relation=NoteRelationEnum.PARENT_DIRECTORY,
             subject=SubjectRef(ObjectTypeEnum.DIRECTORY, parent_directory_id),
         )
 
+        # check directories again -- is this really necessary?
         inserted.permissions = await self._fetch_note_permissions(str(inserted.note_id))
-        # SpiceDB can be eventually consistent right after the insert;
-        # make sure the parent_directory relation shows up even before
-        # the read-after-write converges.
         has_parent_dir = any(
             str(rel.relation) == str(NoteRelationEnum.PARENT_DIRECTORY)
             and str(rel.subject.object_type) == str(ObjectTypeEnum.DIRECTORY)
@@ -159,6 +158,67 @@ class NoteService(NoteServiceABC):
             pagination=Pagination(limit=limit, offset=offset),
         )
         await self._attach_directory_relations(notes, user_ctx)
+        return notes
+
+    async def get_notes(
+        self,
+        note_ids: List[str],
+        user_ctx: UserContextABC,
+        options: Optional[GetNotesOptions] = None,
+    ) -> List[NoteEntity]:
+        """Bulk version of :meth:`get_note`.
+
+        Resolves every id through :meth:`select_by_ids`, enforces the
+        read permission per note, and applies the `options` shaping
+        (drop or truncate `content`).  Per-note activity logging is
+        intentionally skipped here - this method is used by list
+        endpoints that read many notes at once.
+
+        Args:
+            note_ids: ids to resolve.
+            user_ctx: caller identity used for permission checks.
+            options: optional :class:`GetNotesOptions`; see the
+                docstring on
+                :meth:`~src.api.note_service.NoteServiceABC.get_notes`.
+
+        Raises:
+            ValueError: when `note_ids` is empty or any id is
+                missing.
+            TypeError: when `options` is not a mapping.
+
+        Returns:
+            List[NoteEntity]: resolved notes in `note_ids` order.
+        """
+        if not note_ids:
+            raise ValueError("note_ids must not be empty")
+
+        resolved = _normalise_get_notes_options(options)
+
+        notes = await self._note_repo.select_by_ids(note_ids, user_ctx)
+
+        # check read permission per note; mirrors the per-id paths
+        # that gate on Has*ViewPerm (or rely on select_by_id to mask
+        # invisible ones).  Centralising this keeps policy auditable.
+        from src.domain.permission_chain import HasNoteViewPerm  # local to avoid import cycle
+
+        for note in notes:
+            read_check = HasNoteViewPerm(str(note.note_id)).set_permission_repo(
+                self._permission_repo
+            )
+            read_result = await read_check.check(user_ctx)
+            if not read_result:
+                raise read_result.error
+
+        # apply content shaping
+        include_content = bool(resolved.get("include_content", True))
+        strip_content_at = int(resolved.get("strip_content_at", 0))
+        for note in notes:
+            if not include_content:
+                note.content = None
+                continue
+            if strip_content_at > 0 and isinstance(note.content, str):
+                if len(note.content) > strip_content_at:
+                    note.content = note.content[:strip_content_at]
         return notes
 
     async def _fetch_note_permissions(self, note_id: str) -> List[Relationship]:

@@ -9,7 +9,7 @@ from tests.stubs.user_context import _UserContext as UserContext, _UserContextFa
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.versioning import NoteVersionContent, NoteVersionEntry
-from src.db.repos.note.note import NoteRepoFacadeABC
+from src.api.note_facade import NoteRepoFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.grpc_mod.proto.note_pb2 import (
     GetNoteVersionContentRequest,
@@ -103,6 +103,9 @@ class _StubNoteRepo(NoteRepoFacadeABC):
         raise NotImplementedError()
 
     async def select_by_id(self, note_id: str, ctx: UserContext):
+        raise NotImplementedError()
+
+    async def select_by_ids(self, note_ids, ctx: UserContext):
         raise NotImplementedError()
 
     async def search_notes(self, search_type, query: str, ctx: UserContext, pagination):

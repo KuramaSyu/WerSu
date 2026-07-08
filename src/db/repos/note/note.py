@@ -1,11 +1,10 @@
-from abc import ABC, abstractmethod
 from dataclasses import replace
 from datetime import datetime
-from enum import Enum
-from typing import List, Optional, Type
+from typing import List, Optional
 
 import asyncpg
 
+from src.api.note_facade import NoteRepoFacadeABC, SearchType
 from src.api.relationship import AttachmentRelationEnum
 from src.api.types import LoggingProvider, Pagination
 from src.api.user_context import UserContextABC
@@ -27,143 +26,6 @@ from src.db.repos.note.search_strategy import (
     FuzzyTitleContentSearchStrategy,
     WebNoteSearchStrategy,
 )
-
-class SearchType(Enum):
-    NO_SEARCH = 1
-    FULL_TEXT_TITLE = 2
-    FUZZY = 3
-    CONTEXT = 4
-
-
-class NoteRepoFacadeABC(ABC):
-    """Represents the ABC for note-operations which operate over multiple relations"""
-    @property
-    def embedding_table_name(self) -> str:
-        return "note.embedding"
-
-    @property
-    def content_table_name(self) -> str:
-        return "note.content"
-    
-    @property
-    def permission_table_name(self) -> str:
-        return "note.permission"
-
-    @abstractmethod
-    async def insert(
-        self,
-        note: NoteEntity,
-        user: UserContextABC,
-    ) -> NoteEntity:
-        """inserts a full note into 
-        Note DB, stores relations (note#owner@user) and stores 
-        directory relation (note#parent_directory@users_fleeting_dir) or a given 
-        directory.
-        The embedding will be generated automatically.
-        Added embeddings will be ignored.
-        
-        Args:
-        -----
-        note: `NoteMetadataEntity`
-            the note of a note
-        user: `UserContextABC`
-            information about the user to create owner relation to note
-
-        Returns:
-        --------
-        `NoteMetadataEntity`:
-            the updated entity (updated ID)
-        """
-        ...
-
-    @abstractmethod
-    async def update(
-        self,
-        note: NoteEntity,
-        ctx: UserContextABC,
-    ) -> NoteEntity:
-        """updates note (content only)
-        
-        Args:
-        -----
-        note: `NoteEntity`
-            the note
-
-        Returns:
-        --------
-        `NoteEntity`:
-            the updated entity
-        """
-        ...
-
-    @abstractmethod
-    async def delete(
-        self,
-        note_id: str,
-        ctx: UserContextABC,
-    ) -> Optional[List[NoteEntity]]:
-        """delete note
-        
-        Args:
-        -----
-        note_id: `str`
-            the ID of the note to delete
-
-        Returns:
-        --------
-        `NoteMetadataEntity`:
-            the updated entity
-        """
-        ...
-
-
-    @abstractmethod
-    async def select_by_id(
-        self,
-        note_id: str,
-        ctx: UserContextABC,
-    ) -> Optional[NoteEntity]:
-        """select a whole note by its ID
-        
-        Args:
-        -----
-        note_id: `str`
-            the ID of the note
-
-            
-        Returns:
-        --------
-        `NoteMetadataEntity`:
-            the updated entity
-            
-        """
-        ...
-
-    @abstractmethod
-    async def search_notes(
-        self,
-        search_type: SearchType,
-        query: str,
-        ctx: UserContextABC,
-        pagination: Pagination
-    ) -> List[NoteEntity]:
-        """search notes according to the search type
-        
-        Args:
-        -----
-        search_type: `SearchType`
-            the type of search to perform
-        query: `str`
-            the search query
-        pagination: `Pagination`
-            pagination parameters (limit, offset)
-
-        Returns:
-        --------
-        `List[MinimalNote]`:
-            the list of matching minimal notes
-        """
-        ...
 
 
 class NoteFacade(NoteRepoFacadeABC):
@@ -207,8 +69,8 @@ class NoteFacade(NoteRepoFacadeABC):
             resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
         )
 
-        # since note doesn't store child_attachment, but attachments store parent_note relation, 
-        # we need to lookup attachments separately and then merge them here
+        # attachments store parent_note relation, 
+        # we need to lookup attachments separately
         # lookup attachments:???#parent_note@note:note_id
         attachment_relations = await self._permission_repo.lookup_relationships(
             Relationship(
@@ -217,6 +79,7 @@ class NoteFacade(NoteRepoFacadeABC):
                 subject=SubjectRef(ObjectTypeEnum.NOTE, note_id)
             )
         )
+        # merge user/directory relations with attachment relations
         return sorted(
             relations + attachment_relations,
             key=lambda rel: (
@@ -252,18 +115,20 @@ class NoteFacade(NoteRepoFacadeABC):
             )
             note.embeddings.append(embedding)
 
-        # resolve parent directory
+        # add a parent directory
         user_directory_ids = await self._directory_repo.list_user_directory_ids(user)
-        requested_parent_dir_id = note.parent_dir_id if note.parent_dir_id not in (UNDEFINED, None) else None
 
-        if requested_parent_dir_id is not None:
-            requested_parent_dir_id = str(requested_parent_dir_id)
-            if requested_parent_dir_id not in user_directory_ids:
+        if note.parent_dir_id:
+            # user has specified a parent directory -> use this
+            requested_parent_dir = str(note.parent_dir_id)
+            if requested_parent_dir not in user_directory_ids:
                 raise ValueError(
-                    f"Provided parent_dir_id '{requested_parent_dir_id}' is not accessible for user '{user.user_id}'"
+                    f"Provided parent_dir_id '{requested_parent_dir}' is not accessible for user '{user.user_id}'"
                 )
-            parent_directory_id = requested_parent_dir_id
+            parent_directory_id = requested_parent_dir
         else:
+            # user has not specified a parent directory -> use the default directory
+            # this should resolve to fleeting notes. there is no error handling if it does not exist
             directories = [
                 await self._directory_repo.fetch_directory(directory_id)
                 for directory_id in user_directory_ids
@@ -274,11 +139,13 @@ class NoteFacade(NoteRepoFacadeABC):
             parent_directory_id = str(directories[0].id)
         
         # insert permissions
+        # user -> fileowner relation
         owner_relation = Relationship(
             resource=ObjectRef(ObjectTypeEnum.NOTE, note_id), 
             relation=NoteRelationEnum.OWNER,
             subject=SubjectRef(ObjectTypeEnum.USER, user.user_id)
         )
+        # directory -> parent_directory relation
         parent_dir_relation = Relationship(
             resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
             relation=NoteRelationEnum.PARENT_DIRECTORY,
@@ -286,15 +153,15 @@ class NoteFacade(NoteRepoFacadeABC):
         )
         await self._permission_repo.insert([owner_relation, parent_dir_relation])
         note.permissions = await self._fetch_note_permissions(note_id=note_id)
-        # Ensure newly created notes always return the parent directory relationship
-        # even if the permission backend is eventually consistent.
-        has_parent_dir = any(
+
+        # check that the parent dir relation was inserted
+        given_dir_is_parent_dir_of_note = any(
             str(rel.relation) == str(NoteRelationEnum.PARENT_DIRECTORY)
             and str(rel.subject.object_type) == str(ObjectTypeEnum.DIRECTORY)
             and str(rel.subject.object_id) == str(parent_directory_id)
             for rel in note.permissions
         )
-        if not has_parent_dir:
+        if not given_dir_is_parent_dir_of_note:
             self.log.warning(
                 "Parent directory relationship missing in fetched permissions; adding it to response"
             )
@@ -357,11 +224,17 @@ class NoteFacade(NoteRepoFacadeABC):
     async def delete(self, note_id: str, ctx: UserContextABC) -> Optional[List[NoteEntity]]:
         return await self._content_repo.delete(NoteEntity(note_id=note_id, author_id=ctx.user_id))
     
-    async def select_by_id(self, note_id: str, ctx: UserContextABC) -> Optional[NoteEntity]:
+    async def select_by_id(
+        self,
+        note_id: str,
+        ctx: UserContextABC,
+        *,
+        include_permissions: bool = True,
+    ) -> Optional[NoteEntity]:
         record = await self._content_repo.select_by_id(note_id)
         if not record:
             return None
-        
+
         # fetch embeddings
         # end user don't care about embeddings -> only a backend thing
 
@@ -374,8 +247,48 @@ class NoteFacade(NoteRepoFacadeABC):
         # )
         # record.embeddings = embeddings
 
-        record.permissions = await self._fetch_note_permissions(note_id=note_id)
+        if include_permissions:
+            record.permissions = await self._fetch_note_permissions(note_id=note_id)
         return record
+
+    async def select_by_ids(
+        self,
+        note_ids: List[str],
+        ctx: UserContextABC,
+        *,
+        include_permissions: bool = True,
+    ) -> List[NoteEntity]:
+        """Resolve a batch of notes by id.
+
+        Delegates the projection to
+        :meth:`~src.db.repos.note.content.NoteContentRepo.select_by_ids`
+        and then enriches each hit with its direct + attachment
+        relations the same way :meth:`select_by_id` does.
+
+        Args:
+            note_ids: ids to resolve.  Order is preserved in the
+                result list.  Empty input is a programming error.
+            ctx: caller identity; unused today but kept symmetric
+                with :meth:`select_by_id` so future permission
+                filters can be applied per-fetch.
+            include_permissions: when `False`, skip the
+                per-note permission lookup on every hit.
+                Defaults to `True`.
+
+        Raises:
+            ValueError: when `note_ids` is empty or any id is missing.
+
+        Returns:
+            List[NoteEntity]: resolved notes in `note_ids` order.
+        """
+        entities = await self._content_repo.select_by_ids(note_ids)
+        if not include_permissions:
+            return entities
+        for note in entities:
+            note.permissions = await self._fetch_note_permissions(
+                note_id=str(note.note_id),
+            )
+        return entities
 
     async def search_notes(
         self,

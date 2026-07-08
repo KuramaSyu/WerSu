@@ -84,6 +84,14 @@ class _StubNoteService(NoteServiceABC):
     ):  # pragma: no cover - unused
         raise NotImplementedError
 
+    async def get_notes(
+        self,
+        note_ids,
+        user_ctx,
+        options=None,
+    ):  # pragma: no cover - unused
+        raise NotImplementedError
+
 
 def _log_provider(*_args, **_kwargs):
     return logging.getLogger("test.grpc.note")

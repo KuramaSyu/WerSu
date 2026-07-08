@@ -23,7 +23,7 @@ from src.db.entities.note.versioning import NoteVersionEntry
 from src.api.directory_repo import DirectoryRepo
 from src.db.repos.note.content import NoteContentRepo
 from src.db.repos.note.embedding import NoteEmbeddingRepo
-from src.db.repos.note.note import NoteRepoFacadeABC, SearchType
+from src.api.note_facade import NoteRepoFacadeABC, SearchType
 from src.db.repos.note.versioning import NoteVersionRepoABC
 
 
@@ -266,9 +266,35 @@ class _FakeNoteRepoFacade(NoteRepoFacadeABC):
         existing = self.notes_by_id.pop(str(note_id), None)
         return [existing] if existing is not None else None
 
-    async def select_by_id(self, note_id: str, ctx: UserContextABC) -> Optional[NoteEntity]:
+    async def select_by_id(
+        self,
+        note_id: str,
+        ctx: UserContextABC,
+        *,
+        include_permissions: bool = True,
+    ) -> Optional[NoteEntity]:
+        del ctx, include_permissions
         self.select_calls.append(str(note_id))
         return self.notes_by_id.get(str(note_id))
+
+    async def select_by_ids(
+        self,
+        note_ids: List[str],
+        ctx: UserContextABC,
+        *,
+        include_permissions: bool = True,
+    ) -> List[NoteEntity]:
+        del ctx, include_permissions
+        self.select_calls.append(list(note_ids))
+        results: List[NoteEntity] = []
+        for nid in note_ids:
+            note = self.notes_by_id.get(nid)
+            if note is None:
+                raise ValueError(
+                    f"Notes with ids {nid!r} could not be resolved"
+                )
+            results.append(note)
+        return results
 
     async def search_notes(
         self,
@@ -332,8 +358,9 @@ class _FakeDatabase(DatabaseABC):
 class _FakeNoteContentRepo(NoteContentRepo):
     """In-memory :class:`NoteContentRepo` used by pure unit tests.
 
-    Implements the three methods :class:`src.db.repos.note.note.NoteFacade`
-    uses: :meth:`select_by_id`, :meth:`update`, :meth:`delete`.
+    Implements the methods :class:`src.db.repos.note.note.NoteFacade`
+    uses: :meth:`select_by_id`, :meth:`select_by_ids`, :meth:`update`,
+    :meth:`delete`.
     """
 
     def __init__(self) -> None:
@@ -375,6 +402,16 @@ class _FakeNoteContentRepo(NoteContentRepo):
         if existing is None:
             raise RuntimeError(f"note {note_id!r} not found")
         return existing
+
+    async def select_by_ids(self, note_ids: List[str]) -> List[NoteEntity]:
+        if not note_ids:
+            raise ValueError("note_ids must not be empty")
+        missing = [nid for nid in note_ids if str(nid) not in self._store]
+        if missing:
+            raise ValueError(
+                f"Notes with ids {missing!r} could not be resolved"
+            )
+        return [self._store[str(nid)] for nid in note_ids]  # type: ignore[arg-type]  # noqa: F821
 
 
 class _FakeJwtProvider:

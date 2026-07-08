@@ -28,7 +28,8 @@ from src.db.migrations.runner import MigrationRunner
 from src.db.repos import Database, UserPostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
-from src.db.repos.note.note import NoteFacade, NoteRepoFacadeABC
+from src.db.repos.note.note import NoteFacade
+from src.api.note_facade import NoteRepoFacadeABC
 from src.db.repos.note.permission import NotePermissionRepoInMemory
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.user.user import UserRepoABC
