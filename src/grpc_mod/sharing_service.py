@@ -39,7 +39,7 @@ from src.grpc_mod.proto.sharing_pb2 import (
     UpdateShareRequest,
 )
 from src.grpc_mod.proto.sharing_pb2_grpc import SharingServiceServicer
-from src.grpc_mod.service import log_service_call
+from src.grpc_mod._log_decorator import log_service_call
 
 
 class GrpcSharingService(SharingServiceServicer):

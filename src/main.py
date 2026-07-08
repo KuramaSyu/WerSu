@@ -54,14 +54,12 @@ from src.grpc_mod.proto.note_pb2_grpc import (
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteFacade
-from src.grpc_mod.service import (
-    GrpcAttachmentService,
-    GrpcDirectoryService,
-    GrpcNoteService,
-    GrpcNoteVersionService,
-    GrpcPermissionService,
-    GrpcUserService,
-)
+from src.grpc_mod.attachment_service import GrpcAttachmentService
+from src.grpc_mod.directory_service import GrpcDirectoryService
+from src.grpc_mod.note_service import GrpcNoteService
+from src.grpc_mod.note_version_service import GrpcNoteVersionService
+from src.grpc_mod.permission_service import GrpcPermissionService
+from src.grpc_mod.user_service import GrpcUserService
 from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.utils.spicedb_client import create_spicedb_async_client
 

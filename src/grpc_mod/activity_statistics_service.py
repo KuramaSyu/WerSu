@@ -35,7 +35,7 @@ from src.grpc_mod.proto.activity_pb2 import (
 from src.grpc_mod.proto.activity_pb2_grpc import (
     ActivityStatisticsServiceServicer,
 )
-from src.grpc_mod.service import log_service_call
+from src.grpc_mod._log_decorator import log_service_call
 
 
 _ALGORITHM_TO_PROTO = {
