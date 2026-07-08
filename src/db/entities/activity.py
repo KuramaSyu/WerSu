@@ -105,6 +105,14 @@ class ActivityEntity(AcceptsVisitor):
     # action-specific payload (JSONB).
     metadata: UndefinedOr[Mapping[str, object]] = UNDEFINED
 
+    # Optional enrichment produced by the activity statistics service
+    # when the filter pins the query to a single note.  Populated via
+    # :meth:`NoteContentRepo.select_by_ids` and forwarded through the
+    # visitor's ``metadata_json`` so they ride on the existing
+    # payload rather than introducing new proto fields.
+    note_title: UndefinedOr[str] = UNDEFINED
+    note_stripped_content: UndefinedOr[str] = UNDEFINED
+
     def visit(self, visitor: EntityVisitor) -> Any:
         """Dispatch this activity row to ``visitor.visit_activity``."""
         return visitor.visit_activity(self)
@@ -118,10 +126,16 @@ class ActivityScore(AcceptsVisitor):
     or timestamp -- the aggregation collapses many events into one
     ``(note_id, score)`` pair per note.  ``score`` is the value the
     chosen strategy computed (raw count or log-flattened count).
+
+    ``title`` and ``stripped_content`` are always populated by the
+    service layer via a single ``select_by_ids`` lookup; they are
+    forwarded as direct proto fields on ``ActivityScore``.
     """
 
     note_id: str
     score: float
+    title: UndefinedOr[str] = UNDEFINED
+    stripped_content: UndefinedOr[str] = UNDEFINED
 
     def visit(self, visitor: EntityVisitor) -> Any:
         """Dispatch this score to ``visitor.visit_activity_score``."""

@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n!src/grpc_mod/proto/activity.proto\x12\x05proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd7\x01\n\x08\x41\x63tivity\x12\n\n\x02id\x18\x01 \x01(\t\x12\x10\n\x08\x61\x63tor_id\x18\x02 \x01(\t\x12&\n\x0b\x61\x63\x63\x65ssed_as\x18\x03 \x01(\x0e\x32\x11.proto.AccessedAs\x12\x0e\n\x06\x61\x63tion\x18\x04 \x01(\t\x12\x0f\n\x07note_id\x18\x05 \x01(\t\x12\x14\n\x0c\x64irectory_id\x18\x06 \x01(\t\x12\x0f\n\x07role_id\x18\x07 \x01(\t\x12&\n\x02\x61t\x18\x08 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x15\n\rmetadata_json\x18\t \x01(\t\"/\n\rActivityScore\x12\x0f\n\x07note_id\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x01\"\x9d\x02\n\x0e\x41\x63tivityFilter\x12\x0f\n\x07note_id\x18\x01 \x01(\t\x12\x14\n\x0c\x64irectory_id\x18\x02 \x01(\t\x12\x10\n\x08\x61\x63tor_id\x18\x03 \x01(\t\x12\x0f\n\x07role_id\x18\x04 \x01(\t\x12&\n\x0b\x61\x63\x63\x65ssed_as\x18\x05 \x01(\x0e\x32\x11.proto.AccessedAs\x12\x0f\n\x07\x61\x63tions\x18\x06 \x03(\t\x12\x11\n\x04\x64\x61ys\x18\x07 \x01(\x05H\x00\x88\x01\x01\x12\x12\n\x05limit\x18\x08 \x01(\x05H\x01\x88\x01\x01\x12\x13\n\x06offset\x18\t \x01(\x05H\x02\x88\x01\x01\x12\x1b\n\x0eunique_per_day\x18\n \x01(\x08H\x03\x88\x01\x01\x42\x07\n\x05_daysB\x08\n\x06_limitB\t\n\x07_offsetB\x11\n\x0f_unique_per_day\"S\n\x19GetActivityHistoryRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12%\n\x06\x66ilter\x18\x02 \x01(\x0b\x32\x15.proto.ActivityFilter\"\x9f\x01\n\x1aGetMostUsedActivityRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12%\n\x06\x66ilter\x18\x02 \x01(\x0b\x32\x15.proto.ActivityFilter\x12+\n\talgorithm\x18\x03 \x01(\x0e\x32\x18.proto.MostUsedAlgorithm\x12\x12\n\x05limit\x18\x04 \x01(\x05H\x00\x88\x01\x01\x42\x08\n\x06_limit*W\n\nAccessedAs\x12\x1b\n\x17\x41\x43\x43\x45SSED_AS_UNSPECIFIED\x10\x00\x12\x14\n\x10\x41\x43\x43\x45SSED_AS_USER\x10\x01\x12\x16\n\x12\x41\x43\x43\x45SSED_AS_SYSTEM\x10\x02*z\n\x11MostUsedAlgorithm\x12#\n\x1fMOST_USED_ALGORITHM_UNSPECIFIED\x10\x00\x12\x1d\n\x19MOST_USED_ALGORITHM_COUNT\x10\x01\x12!\n\x1dMOST_USED_ALGORITHM_LOG_COUNT\x10\x02\x32\xb8\x01\n\x19\x41\x63tivityStatisticsService\x12I\n\x12GetActivityHistory\x12 .proto.GetActivityHistoryRequest\x1a\x0f.proto.Activity0\x01\x12P\n\x13GetMostUsedActivity\x12!.proto.GetMostUsedActivityRequest\x1a\x14.proto.ActivityScore0\x01\x42\x31Z/github.com/KuramaSyu/Wersu-Rest/src/proto;protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n!src/grpc_mod/proto/activity.proto\x12\x05proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd7\x01\n\x08\x41\x63tivity\x12\n\n\x02id\x18\x01 \x01(\t\x12\x10\n\x08\x61\x63tor_id\x18\x02 \x01(\t\x12&\n\x0b\x61\x63\x63\x65ssed_as\x18\x03 \x01(\x0e\x32\x11.proto.AccessedAs\x12\x0e\n\x06\x61\x63tion\x18\x04 \x01(\t\x12\x0f\n\x07note_id\x18\x05 \x01(\t\x12\x14\n\x0c\x64irectory_id\x18\x06 \x01(\t\x12\x0f\n\x07role_id\x18\x07 \x01(\t\x12&\n\x02\x61t\x18\x08 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x15\n\rmetadata_json\x18\t \x01(\t\"X\n\rActivityScore\x12\x0f\n\x07note_id\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x01\x12\r\n\x05title\x18\x03 \x01(\t\x12\x18\n\x10stripped_content\x18\x04 \x01(\t\"\x9d\x02\n\x0e\x41\x63tivityFilter\x12\x0f\n\x07note_id\x18\x01 \x01(\t\x12\x14\n\x0c\x64irectory_id\x18\x02 \x01(\t\x12\x10\n\x08\x61\x63tor_id\x18\x03 \x01(\t\x12\x0f\n\x07role_id\x18\x04 \x01(\t\x12&\n\x0b\x61\x63\x63\x65ssed_as\x18\x05 \x01(\x0e\x32\x11.proto.AccessedAs\x12\x0f\n\x07\x61\x63tions\x18\x06 \x03(\t\x12\x11\n\x04\x64\x61ys\x18\x07 \x01(\x05H\x00\x88\x01\x01\x12\x12\n\x05limit\x18\x08 \x01(\x05H\x01\x88\x01\x01\x12\x13\n\x06offset\x18\t \x01(\x05H\x02\x88\x01\x01\x12\x1b\n\x0eunique_per_day\x18\n \x01(\x08H\x03\x88\x01\x01\x42\x07\n\x05_daysB\x08\n\x06_limitB\t\n\x07_offsetB\x11\n\x0f_unique_per_day\"S\n\x19GetActivityHistoryRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12%\n\x06\x66ilter\x18\x02 \x01(\x0b\x32\x15.proto.ActivityFilter\"\x9f\x01\n\x1aGetMostUsedActivityRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12%\n\x06\x66ilter\x18\x02 \x01(\x0b\x32\x15.proto.ActivityFilter\x12+\n\talgorithm\x18\x03 \x01(\x0e\x32\x18.proto.MostUsedAlgorithm\x12\x12\n\x05limit\x18\x04 \x01(\x05H\x00\x88\x01\x01\x42\x08\n\x06_limit*W\n\nAccessedAs\x12\x1b\n\x17\x41\x43\x43\x45SSED_AS_UNSPECIFIED\x10\x00\x12\x14\n\x10\x41\x43\x43\x45SSED_AS_USER\x10\x01\x12\x16\n\x12\x41\x43\x43\x45SSED_AS_SYSTEM\x10\x02*z\n\x11MostUsedAlgorithm\x12#\n\x1fMOST_USED_ALGORITHM_UNSPECIFIED\x10\x00\x12\x1d\n\x19MOST_USED_ALGORITHM_COUNT\x10\x01\x12!\n\x1dMOST_USED_ALGORITHM_LOG_COUNT\x10\x02\x32\xb8\x01\n\x19\x41\x63tivityStatisticsService\x12I\n\x12GetActivityHistory\x12 .proto.GetActivityHistoryRequest\x1a\x0f.proto.Activity0\x01\x12P\n\x13GetMostUsedActivity\x12!.proto.GetMostUsedActivityRequest\x1a\x14.proto.ActivityScore0\x01\x42\x31Z/github.com/KuramaSyu/Wersu-Rest/src/proto;protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,20 +33,20 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'src.grpc_mod.proto.activity
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z/github.com/KuramaSyu/Wersu-Rest/src/proto;proto'
-  _globals['_ACCESSEDAS']._serialized_start=879
-  _globals['_ACCESSEDAS']._serialized_end=966
-  _globals['_MOSTUSEDALGORITHM']._serialized_start=968
-  _globals['_MOSTUSEDALGORITHM']._serialized_end=1090
+  _globals['_ACCESSEDAS']._serialized_start=920
+  _globals['_ACCESSEDAS']._serialized_end=1007
+  _globals['_MOSTUSEDALGORITHM']._serialized_start=1009
+  _globals['_MOSTUSEDALGORITHM']._serialized_end=1131
   _globals['_ACTIVITY']._serialized_start=78
   _globals['_ACTIVITY']._serialized_end=293
   _globals['_ACTIVITYSCORE']._serialized_start=295
-  _globals['_ACTIVITYSCORE']._serialized_end=342
-  _globals['_ACTIVITYFILTER']._serialized_start=345
-  _globals['_ACTIVITYFILTER']._serialized_end=630
-  _globals['_GETACTIVITYHISTORYREQUEST']._serialized_start=632
-  _globals['_GETACTIVITYHISTORYREQUEST']._serialized_end=715
-  _globals['_GETMOSTUSEDACTIVITYREQUEST']._serialized_start=718
-  _globals['_GETMOSTUSEDACTIVITYREQUEST']._serialized_end=877
-  _globals['_ACTIVITYSTATISTICSSERVICE']._serialized_start=1093
-  _globals['_ACTIVITYSTATISTICSSERVICE']._serialized_end=1277
+  _globals['_ACTIVITYSCORE']._serialized_end=383
+  _globals['_ACTIVITYFILTER']._serialized_start=386
+  _globals['_ACTIVITYFILTER']._serialized_end=671
+  _globals['_GETACTIVITYHISTORYREQUEST']._serialized_start=673
+  _globals['_GETACTIVITYHISTORYREQUEST']._serialized_end=756
+  _globals['_GETMOSTUSEDACTIVITYREQUEST']._serialized_start=759
+  _globals['_GETMOSTUSEDACTIVITYREQUEST']._serialized_end=918
+  _globals['_ACTIVITYSTATISTICSSERVICE']._serialized_start=1134
+  _globals['_ACTIVITYSTATISTICSSERVICE']._serialized_end=1318
 # @@protoc_insertion_point(module_scope)

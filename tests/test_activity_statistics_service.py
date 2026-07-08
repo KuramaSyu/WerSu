@@ -13,6 +13,8 @@ from typing import AsyncGenerator, List, Optional
 import pytest
 
 from src.api.undefined import UNDEFINED
+
+from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.activity.postgres import PostgresActivityRepo
 from src.db.sql_builders import SqlBuilderFactory
 from src.db.sqlite_database import SqliteDatabase
@@ -21,7 +23,7 @@ from src.services.activity_statistics_service import (
     DefaultActivityStatisticsService,
 )
 from src.utils.logging import logging_provider
-from tests._fixtures_pkg.fakes import _TestDirectoryRepo
+from tests._fixtures_pkg.fakes import _FakeNoteContentRepo, _TestDirectoryRepo
 from tests.stubs.user_context import _UserContext as _FakeUserContext
 from tests.stubs.view_permission_repo import _FakeViewPermissionRepo as _FakePermissionRepo
 
@@ -94,6 +96,42 @@ def activity_repo(
 
 
 @pytest.fixture
+def note_content_repo() -> _FakeNoteContentRepo:
+    """In-memory note store preloaded with the notes tests reference.
+
+    Tests that need different titles / content mutate ``seed`` calls
+    on this fixture, or replace the repo entirely.
+    """
+    repo = _FakeNoteContentRepo()
+    repo.seed(NoteEntity(
+        note_id="n-1",
+        title="Note One",
+        content="hello world",
+    ))
+    repo.seed(NoteEntity(
+        note_id="n-2",
+        title="Note Two",
+        # a string deliberately longer than the 280-char strip
+        # limit so the truncation path is exercised.
+        content=(
+            "another note body that is longer than the default strip "
+            "length so we can verify the truncation behaviour of the "
+            "activity statistics service enrichment layer that "
+            "mirrors the note list endpoint's behaviour and clips "
+            "everything past the configured character ceiling to "
+            "keep streaming payloads bounded for clients and tests "
+            "alike across every supported language and runtime."
+        ),
+    ))
+    repo.seed(NoteEntity(
+        note_id="n-other",
+        title="Other",
+        content="other",
+    ))
+    return repo
+
+
+@pytest.fixture
 def alice() -> _FakeUserContext:
     return _FakeUserContext(user_id="alice")
 
@@ -132,6 +170,7 @@ class TestPermissionGating:
     async def test_get_history_rejects_note_actor_cannot_view(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=[])  # alice can't view any
@@ -139,6 +178,7 @@ class TestPermissionGating:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         with pytest.raises(PermissionError, match="cannot view note"):
             await svc.get_history(alice, note_id="n-1")
@@ -147,6 +187,7 @@ class TestPermissionGating:
     async def test_get_history_rejects_directory_actor_cannot_view(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_directory_ids=[])
@@ -154,6 +195,7 @@ class TestPermissionGating:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         with pytest.raises(PermissionError, match="cannot view directory"):
             await svc.get_history(alice, directory_id="d-1")
@@ -162,6 +204,7 @@ class TestPermissionGating:
     async def test_get_most_used_rejects_note_actor_cannot_view(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=[])
@@ -169,12 +212,10 @@ class TestPermissionGating:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         with pytest.raises(PermissionError):
             await svc.get_most_used(alice, note_id="n-1")
-
-
-# History queries
 
 
 class TestGetHistory:
@@ -184,6 +225,7 @@ class TestGetHistory:
     async def test_filters_by_note_id_when_allowed(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1"])
@@ -191,6 +233,7 @@ class TestGetHistory:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         await _insert(activity_repo, action="note_viewed", note_id="n-1")
         await _insert(activity_repo, action="note_viewed", note_id="n-2")
@@ -198,11 +241,15 @@ class TestGetHistory:
         rows = await svc.get_history(alice, note_id="n-1")
         assert len(rows) == 1
         assert rows[0].note_id == "n-1"
+        # enrichment only fires for the single-note path
+        assert rows[0].note_title == "Note One"
+        assert rows[0].note_stripped_content == "hello world"
 
     @pytest.mark.asyncio
     async def test_filters_by_actor_id(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1", "n-2"])
@@ -210,6 +257,7 @@ class TestGetHistory:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         await _insert(activity_repo, action="note_viewed", note_id="n-1", actor_id="alice")
         await _insert(activity_repo, action="note_viewed", note_id="n-2", actor_id="bob")
@@ -217,11 +265,14 @@ class TestGetHistory:
         rows = await svc.get_history(alice, note_id="n-1", actor_id="alice")
         assert len(rows) == 1
         assert rows[0].actor_id == "alice"
+        # enrichment is single-note only -> fired here too
+        assert rows[0].note_title == "Note One"
 
     @pytest.mark.asyncio
     async def test_filters_by_action_set(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1"])
@@ -229,6 +280,7 @@ class TestGetHistory:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         await _insert(activity_repo, action="note_viewed", note_id="n-1")
         await _insert(activity_repo, action="note_edited", note_id="n-1")
@@ -239,11 +291,14 @@ class TestGetHistory:
             actions=["note_viewed", "note_edited"],
         )
         assert sorted(r.action for r in rows) == ["note_edited", "note_viewed"]
+        # every row pinned to n-1 -> enriched
+        assert all(r.note_title == "Note One" for r in rows)
 
     @pytest.mark.asyncio
     async def test_pagination_via_limit_and_offset(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1"])
@@ -251,6 +306,7 @@ class TestGetHistory:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         for _ in range(5):
             await _insert(activity_repo, action="note_viewed", note_id="n-1")
@@ -260,6 +316,10 @@ class TestGetHistory:
         assert len(page1) == 2
         assert len(page2) == 2
         assert {r.id for r in page1}.isdisjoint({r.id for r in page2})
+        # every page row is enriched with the pinned note's title
+        for r in (*page1, *page2):
+            assert r.note_title == "Note One"
+            assert r.note_stripped_content == "hello world"
 
 
 # "Everything visible" -> directory resolution
@@ -272,6 +332,7 @@ class TestVisibleDirectoryResolution:
     async def test_no_targets_resolves_to_visible_dirs(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         # alice can see d-a, d-b
@@ -284,6 +345,7 @@ class TestVisibleDirectoryResolution:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         await _insert(activity_repo, action="note_viewed", note_id="n-1")  # in d-a
         await _insert(activity_repo, action="note_viewed", note_id="n-2")  # in d-b
@@ -294,6 +356,10 @@ class TestVisibleDirectoryResolution:
         assert "n-3" not in note_ids
         assert "n-1" in note_ids
         assert "n-2" in note_ids
+        # no ``note_id`` pin -> no enrichment; entities stay UNDEFINED
+        for r in rows:
+            assert r.note_title is UNDEFINED
+            assert r.note_stripped_content is UNDEFINED
 
 
 # Most-used
@@ -306,6 +372,7 @@ class TestGetMostUsed:
     async def test_count_strategy(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1", "n-2"])
@@ -313,6 +380,7 @@ class TestGetMostUsed:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         await _insert(activity_repo, action="note_viewed", note_id="n-1")
         await _insert(activity_repo, action="note_viewed", note_id="n-2")
@@ -322,11 +390,20 @@ class TestGetMostUsed:
         rows = await svc.get_most_used(alice)
         assert rows[0].note_id == "n-2"
         assert rows[0].score == 3
+        # every score is enriched with title + stripped content
+        titles = {r.note_id: r.title for r in rows}
+        contents = {r.note_id: r.stripped_content for r in rows}
+        assert titles["n-1"] == "Note One"
+        assert titles["n-2"] == "Note Two"
+        assert contents["n-1"] == "hello world"
+        # n-2's body is preserved verbatim because it is short.
+        assert contents["n-2"].startswith("another note body")
 
     @pytest.mark.asyncio
     async def test_log_count_algorithm(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         import math
@@ -335,6 +412,7 @@ class TestGetMostUsed:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         await _insert(activity_repo, action="note_viewed", note_id="n-1")
         await _insert(activity_repo, action="note_viewed", note_id="n-2")
@@ -345,11 +423,43 @@ class TestGetMostUsed:
         scores = {r.note_id: r.score for r in rows}
         assert math.isclose(scores["n-2"], math.log(6), rel_tol=1e-9)
         assert math.isclose(scores["n-1"], math.log(2), rel_tol=1e-9)
+        # log_count path also enriches with title + stripped content
+        assert all(r.title for r in rows)
+        assert all(r.stripped_content for r in rows)
+
+    @pytest.mark.asyncio
+    async def test_enrichment_truncates_long_content_to_120_chars(
+        self, activity_repo: PostgresActivityRepo,
+        directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
+        alice: _FakeUserContext,
+    ) -> None:
+        # Override n-1 with a body longer than the strip limit so the
+        # truncation branch in the enrichment layer is exercised.
+        override = NoteEntity(
+            note_id="n-1",
+            title="Note One",
+            content="x" * 500,
+        )
+        note_content_repo._store[str(override.note_id)] = override
+        perms = _FakePermissionRepo(viewable_note_ids=["n-1"])
+        svc = DefaultActivityStatisticsService(
+            activity_repo=activity_repo,
+            permission_repo=perms,
+            directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
+        )
+        await _insert(activity_repo, action="note_viewed", note_id="n-1")
+        rows = await svc.get_most_used(alice)
+        assert len(rows) == 1
+        assert rows[0].title == "Note One"
+        assert len(rows[0].stripped_content) == 120
 
     @pytest.mark.asyncio
     async def test_unique_per_day_algorithm(
         self, activity_repo: PostgresActivityRepo,
         directory_repo: _TestDirectoryRepo,
+        note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1"])
@@ -357,6 +467,7 @@ class TestGetMostUsed:
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
+            note_content_repo=note_content_repo,
         )
         # alice: 2 views on n-1 -> 1 unique
         await _insert(activity_repo, action="note_viewed", note_id="n-1", actor_id="alice")
@@ -369,3 +480,6 @@ class TestGetMostUsed:
         )
         assert rows[0].note_id == "n-1"
         assert rows[0].score == 2
+        # single-note query still always enriched for most_used
+        assert rows[0].title == "Note One"
+        assert rows[0].stripped_content == "hello world"

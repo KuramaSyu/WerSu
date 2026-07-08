@@ -244,9 +244,10 @@ async def serve():
         max_deltas_per_snapshot=max_note_deltas,
     )
 
+    note_content_repo = NoteContentPostgresRepo(content_table)
     note_repo: NoteFacade = NoteFacade(
         db=db,
-        content_repo=NoteContentPostgresRepo(content_table),
+        content_repo=note_content_repo,
         embedding_repo=NoteEmbeddingPostgresRepo(
             table=embedding_table,
             embedding_generator=embedding_generator
@@ -349,6 +350,7 @@ async def serve():
         activity_repo=activity_repo,
         permission_repo=permission_repo,
         directory_repo=directory_repo,
+        note_content_repo=note_content_repo,
         logging_provider=logging_provider,
     )
 

@@ -13,7 +13,7 @@ time so each gets expanded to its subtree.
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 from src.api.activity import ActivityRepoABC
 from src.api.activity_statistics_service import (
@@ -24,12 +24,28 @@ from src.api.directory_repo import DirectoryRepo
 from src.api.permission_repo import PermissionRepoABC
 from src.api.relationship import ObjectRef
 from src.api.types import LoggingProvider
+from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.activity import ActivityEntity, ActivityFilterBuilder, ActivityScore
+from src.db.repos.note.content import NoteContentRepo
 from src.utils import logging_provider as default_logging_provider
 
 
 _VIEW_PERMISSION = "view"
+# Default number of characters of note ``content`` to keep when
+# enriching activity rows / scores.  Matches
+# :data:`src.api.note_service._DEFAULT_STRIP_CONTENT_AT`; mirrored
+# here to avoid an import cycle.
+_STRIP_CONTENT_AT: int = 120
+
+
+def _strip_content(content: Optional[str]) -> Optional[str]:
+    """Truncate ``content`` to ``_STRIP_CONTENT_AT`` characters."""
+    if not isinstance(content, str):
+        return content
+    if len(content) > _STRIP_CONTENT_AT:
+        return content[:_STRIP_CONTENT_AT]
+    return content
 
 
 class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
@@ -41,6 +57,11 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
         directory_repo: contract used to resolve "all directories the
             actor can view" when neither ``note_id`` nor
             ``directory_id`` is supplied.
+        note_content_repo: storage contract used to enrich returned
+            rows with the note title and a stripped preview of the
+            note body.  Used by :meth:`get_history` (only when the
+            filter pins the query to a single note) and
+            :meth:`get_most_used` (always).
         logging_provider: optional logger factory; falls back to
             :func:`src.utils.logging_provider`.
     """
@@ -50,11 +71,13 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
         activity_repo: ActivityRepoABC,
         permission_repo: PermissionRepoABC,
         directory_repo: DirectoryRepo,
+        note_content_repo: NoteContentRepo,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         self._activity_repo = activity_repo
         self._permission_repo = permission_repo
         self._directory_repo = directory_repo
+        self._note_content_repo = note_content_repo
         self.log = (logging_provider or default_logging_provider)(__name__, self)
 
     async def _resolve_visible_directory_ids(
@@ -87,7 +110,7 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
                 f"actor {actor.user_id} cannot view directory {directory_id}"
             )
 
-    def _apply_kwargs(
+    def _apply_kwargs_to_builder(
         self,
         builder: ActivityFilterBuilder,
         *,
@@ -135,7 +158,7 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
             await self._assert_view_on_directory(actor, directory_id)
 
         builder = ActivityFilterBuilder().use_history()
-        self._apply_kwargs(
+        self._apply_kwargs_to_builder(
             builder,
             note_id=note_id,
             directory_id=directory_id,
@@ -155,7 +178,61 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
             for d_id in await self._resolve_visible_directory_ids(actor):
                 builder.set_directory(d_id)
 
-        return await self._activity_repo.get_activities(builder.build())
+        rows = await self._activity_repo.get_activities(builder.build())
+
+        if note_id is not None:
+            await self._add_title_and_content(rows, note_id)
+        return rows
+
+    async def _add_title_and_content(
+        self,
+        rows: List[ActivityEntity],
+        note_id: str,
+    ) -> None:
+        """Add ``note_title`` / ``note_stripped_content`` onto each row"""
+        if not rows:
+            return
+        try:
+            notes = await self._note_content_repo.select_by_ids([note_id])
+        except ValueError:
+            return
+        if not notes:
+            return
+        note = notes[0]
+        title = unwrap_undefined_or(note.title, None)
+        content = _strip_content(note.content)
+        for row in rows:
+            row.note_title = title
+            row.note_stripped_content = content 
+
+    async def _enrich_scores_with_notes(
+        self,
+        scores: List[ActivityScore],
+    ) -> None:
+        """Add ``title`` / ``stripped_content`` onto each score row"""
+        if not scores:
+            return
+    
+        unique_ids: set[str] = set()
+        for s in scores:
+            unique_ids.add(s.note_id)
+
+        if not unique_ids:
+            return
+        try:
+            notes = await self._note_content_repo.select_by_ids(list(unique_ids))
+        except ValueError:
+            return
+        title_by_id: Dict[str, Optional[str]] = {
+            str(n.note_id): unwrap_undefined_or(n.title, None)
+            for n in notes
+        }
+        content_by_id: Dict[str, Optional[str]] = {
+            str(n.note_id): _strip_content(n.content) for n in notes
+        }
+        for s in scores:
+            s.title = title_by_id.get(s.note_id, UNDEFINED)
+            s.stripped_content = content_by_id.get(s.note_id, UNDEFINED)
 
     async def get_most_used(
         self,
@@ -178,7 +255,7 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
             await self._assert_view_on_directory(actor, directory_id)
 
         builder = ActivityFilterBuilder().show_most_used()
-        self._apply_kwargs(
+        self._apply_kwargs_to_builder(
             builder,
             note_id=note_id,
             directory_id=directory_id,
@@ -198,7 +275,11 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
             for d_id in await self._resolve_visible_directory_ids(actor):
                 builder.set_directory(d_id)
 
-        return await self._activity_repo.get_most_used(builder.build())
+        scores = await self._activity_repo.get_most_used(builder.build())
+
+        # add note title and content to score
+        await self._enrich_scores_with_notes(scores)
+        return scores
 
 
 __all__ = ["DefaultActivityStatisticsService"]

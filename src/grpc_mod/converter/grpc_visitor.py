@@ -377,6 +377,10 @@ class ConvertToGrpcVisitor(EntityVisitor):
 
         ``metadata`` is JSON-serialised into ``metadata_json`` because
         proto messages don't model nested maps-of-anything cleanly.
+        The ``note_title`` / ``note_stripped_content`` enrichment that
+        the activity statistics service stamps onto history rows is
+        folded into that same JSON payload so callers see them as
+        regular metadata keys without new proto fields.
         """
         assert isinstance(entity, ActivityEntity)
         assert entity.id is not None
@@ -390,13 +394,16 @@ class ConvertToGrpcVisitor(EntityVisitor):
             drop_except_keys(
                 asdict(entity),
                 {"id", "actor_id", "accessed_as", "action",
-                 "note_id", "directory_id", "role_id", "at", "metadata"},
+                 "note_id", "directory_id", "role_id", "at", "metadata",
+                 "note_title", "note_stripped_content"},
             )
         )
         # strip the per-row flags we model separately
         basic_args.pop("accessed_as", None)
         basic_args.pop("at", None)
         basic_args.pop("metadata", None)
+        basic_args.pop("note_title", None)
+        basic_args.pop("note_stripped_content", None)
 
         return Activity(
             id=basic_args.pop("id"),
@@ -407,15 +414,29 @@ class ConvertToGrpcVisitor(EntityVisitor):
             directory_id=basic_args.pop("directory_id", "") or "",
             role_id=basic_args.pop("role_id", "") or "",
             at=at_ts,
-            metadata_json=self._metadata_to_json(entity.metadata),
+            metadata_json=self._build_activity_metadata_json(entity),
         )
 
     def visit_activity_score(self, score: ActivityScore) -> GrpcActivityScore:
-        """Convert an :class:`~src.db.entities.activity.ActivityScore` to a gRPC ``ActivityScore``."""
+        """Convert an :class:`~src.db.entities.activity.ActivityScore` to a gRPC ``ActivityScore``.
+
+        ``title`` and ``stripped_content`` are forwarded as direct
+        proto fields so callers can render previews without parsing
+        JSON.  Both default to the empty string when the service
+        layer did not enrich the row (e.g. a deleted note).
+        """
         assert isinstance(score, ActivityScore)
+        title = score.title if not is_undefined(score.title) else ""
+        stripped = (
+            score.stripped_content
+            if not is_undefined(score.stripped_content)
+            else ""
+        )
         return GrpcActivityScore(
             note_id=score.note_id,
             score=float(score.score),
+            title=str(title or ""),
+            stripped_content=str(stripped or ""),
         )
 
     @staticmethod
@@ -438,5 +459,39 @@ class ConvertToGrpcVisitor(EntityVisitor):
             return "{}"
         try:
             return json.dumps(dict(metadata))
+        except (TypeError, ValueError):
+            return json.dumps({})
+
+    @classmethod
+    def _build_activity_metadata_json(cls, entity: ActivityEntity) -> str:
+        """Serialise the activity row's metadata, plus enrichment fields.
+
+        The activity statistics service stamps ``note_title`` /
+        ``note_stripped_content`` onto rows when the query is pinned
+        to a single note.  Those ride on the existing
+        ``metadata_json`` payload so we don't have to add new proto
+        fields to ``Activity``; this helper merges them on top of the
+        user-supplied metadata without ever clobbering keys the
+        caller actually wrote.
+        """
+        merged: dict[str, Any] = {}
+        raw = cls._metadata_to_json(entity.metadata)
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    merged.update(parsed)
+            except (TypeError, ValueError):
+                # Fall through; existing metadata will be dropped.
+                pass
+        if not is_undefined(entity.note_title) and entity.note_title is not None:
+            merged["note_title"] = entity.note_title
+        if (
+            not is_undefined(entity.note_stripped_content)
+            and entity.note_stripped_content is not None
+        ):
+            merged["note_stripped_content"] = entity.note_stripped_content
+        try:
+            return json.dumps(merged)
         except (TypeError, ValueError):
             return json.dumps({})

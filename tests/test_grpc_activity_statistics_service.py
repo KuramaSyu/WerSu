@@ -370,6 +370,89 @@ class TestVisitorConversion:
         assert json.loads(rows[0].metadata_json) == {"from": "v1", "to": "v2"}
 
     @pytest.mark.asyncio
+    async def test_metadata_merges_with_enrichment_without_overriding(
+        self, grpc_servicer: GrpcActivityStatisticsService,
+        stats_service: MagicMock,
+    ) -> None:
+        """Pre-existing metadata keys survive the enrichment stamp.
+
+        The statistics service stamps ``note_title`` /
+        ``note_stripped_content`` onto single-note history rows;
+        the visitor must merge those on top of any metadata the
+        caller already wrote without clobbering the caller's keys.
+        Keys that the visitor injects (``note_title`` /
+        ``note_stripped_content``) are still present in the merged
+        payload.
+        """
+        import json
+        row = _entity(
+            metadata={"from": "v1", "to": "v2", "permission": "read"},
+        )
+        row.note_title = "Note One"
+        row.note_stripped_content = "hello world"
+        stats_service.get_history.return_value = [row]
+        req = GetActivityHistoryRequest(user_id="alice", filter=ActivityFilter())
+        ctx = MagicMock()
+        rows = []
+        async for r in grpc_servicer.GetActivityHistory(req, ctx):
+            rows.append(r)
+        merged = json.loads(rows[0].metadata_json)
+        # caller's keys survive unchanged
+        assert merged["from"] == "v1"
+        assert merged["to"] == "v2"
+        assert merged["permission"] == "read"
+        # enrichment fields ride along
+        assert merged["note_title"] == "Note One"
+        assert merged["note_stripped_content"] == "hello world"
+
+    @pytest.mark.asyncio
+    async def test_metadata_enrichment_only_overrides_when_set(
+        self, grpc_servicer: GrpcActivityStatisticsService,
+        stats_service: MagicMock,
+    ) -> None:
+        """A caller-written ``note_title`` is not clobbered by the enrichment.
+
+        If the activity row's metadata already carries a ``note_title``
+        key but the service did not stamp an enrichment (e.g. the
+        filter had no note_id pin), the visitor leaves the metadata
+        untouched.
+        """
+        import json
+        row = _entity(metadata={"note_title": "Original"})
+        # neither enrichment field set -> nothing stamped
+        stats_service.get_history.return_value = [row]
+        req = GetActivityHistoryRequest(user_id="alice", filter=ActivityFilter())
+        ctx = MagicMock()
+        rows = []
+        async for r in grpc_servicer.GetActivityHistory(req, ctx):
+            rows.append(r)
+        assert json.loads(rows[0].metadata_json) == {"note_title": "Original"}
+
+    @pytest.mark.asyncio
+    async def test_activity_score_proto_carries_title_and_stripped_content(
+        self, grpc_servicer: GrpcActivityStatisticsService,
+        stats_service: MagicMock,
+    ) -> None:
+        """Most-used scores forward title and stripped content as direct fields."""
+        stats_service.get_most_used.return_value = [
+            ActivityScore(
+                note_id="n-1",
+                score=3.0,
+                title="Note One",
+                stripped_content="hello world",
+            ),
+        ]
+        req = GetMostUsedActivityRequest(user_id="alice", filter=ActivityFilter())
+        ctx = MagicMock()
+        scores = []
+        async for r in grpc_servicer.GetMostUsedActivity(req, ctx):
+            scores.append(r)
+        assert scores[0].note_id == "n-1"
+        assert scores[0].score == 3.0
+        assert scores[0].title == "Note One"
+        assert scores[0].stripped_content == "hello world"
+
+    @pytest.mark.asyncio
     async def test_accessed_as_user_proto_value(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,

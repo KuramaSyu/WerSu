@@ -5,14 +5,14 @@ import "google/protobuf/timestamp.proto";
 package proto;
 option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
 
-// How the actor was acting when the event happened.
+// Discriminator for who was acting when an event happened.
 enum AccessedAs {
     ACCESSED_AS_UNSPECIFIED = 0;
     ACCESSED_AS_USER = 1;
     ACCESSED_AS_SYSTEM = 2;
 }
 
-// Which scoring algorithm produced the score in an ActivityScore.
+// Discriminator for the scoring strategy used in an ActivityScore.
 enum MostUsedAlgorithm {
     MOST_USED_ALGORITHM_UNSPECIFIED = 0;
     MOST_USED_ALGORITHM_COUNT = 1;
@@ -32,15 +32,15 @@ message Activity {
     string metadata_json = 9;
 }
 
-// Aggregate score for a single note from a ``most_used`` query.
+// Aggregate score for one note plus its title and stripped content.
 message ActivityScore {
     string note_id = 1;
     double score = 2;
+    string title = 3;
+    string stripped_content = 4;
 }
 
-// History filter. Empty fields mean "do not filter on this column".
-// ``unique_per_day`` collapses repeats to one count per (actor, day)
-// pair before aggregating; it composes with any algorithm.
+// History filter for both RPCs.
 message ActivityFilter {
     string note_id = 1;
     string directory_id = 2;
@@ -54,15 +54,13 @@ message ActivityFilter {
     optional bool unique_per_day = 10;
 }
 
-// Request for ``GetActivityHistory``. The requester user_id is used
-// for permission checks and to scope "all visible directories".
+// Request for GetActivityHistory.
 message GetActivityHistoryRequest {
     string user_id = 1;
     ActivityFilter filter = 2;
 }
 
-// Request for ``GetMostUsedActivity``. Same permission semantics as
-// ``GetActivityHistory``; ``algorithm`` defaults to ``count``.
+// Request for GetMostUsedActivity.
 message GetMostUsedActivityRequest {
     string user_id = 1;
     ActivityFilter filter = 2;
@@ -71,9 +69,9 @@ message GetMostUsedActivityRequest {
 }
 
 service ActivityStatisticsService {
-    // Stream the activity log for everything the actor can view.
+    // Streams the activity log for everything the actor can view.
     rpc GetActivityHistory(GetActivityHistoryRequest) returns (stream Activity);
 
-    // Stream aggregate note scores for everything the actor can view.
+    // Streams aggregate note scores for everything the actor can view.
     rpc GetMostUsedActivity(GetMostUsedActivityRequest) returns (stream ActivityScore);
 }

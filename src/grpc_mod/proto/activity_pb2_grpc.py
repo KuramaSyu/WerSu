@@ -50,14 +50,14 @@ class ActivityStatisticsServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
     def GetActivityHistory(self, request, context):
-        """Stream the activity log for everything the actor can view.
+        """Streams the activity log for everything the actor can view.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetMostUsedActivity(self, request, context):
-        """Stream aggregate note scores for everything the actor can view.
+        """Streams aggregate note scores for everything the actor can view.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
