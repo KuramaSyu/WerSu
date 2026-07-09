@@ -28,4 +28,5 @@ dependencies = [
     "boto3>=1.43.21",
     "grpcio-tools>=1.81.0",
     "pyjwt>=2.10.1",
+    "html2text>=2025.4.15",
 ]
