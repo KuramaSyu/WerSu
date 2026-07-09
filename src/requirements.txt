@@ -9,3 +9,4 @@ colorama
 authzed
 typing_extensions
 pyyaml
+html2text
