@@ -81,3 +81,18 @@ class _FakeViewPermissionRepo(PermissionRepoABC):
         self, user: UserContextABC, resource: ObjectRef,
     ) -> List[str]:
         return ["view"] if await self.has_permission(user, "view", resource) else []
+
+    async def resolve_children(
+        self,
+        directory_id: str,
+        *,
+        max_depth: int = 10,
+        exclusive: bool = True,
+    ) -> "ResolvedChildren":
+        from src.api.permission_repo import ResolvedChildren
+
+        # The view-only stub knows no relations.  Tests that need
+        # tree resolution use :class:`NotePermissionRepoInMemory`
+        # instead; this stub is only here to keep the ABC
+        # instantiable.
+        return ResolvedChildren(sub_directory_ids=[], note_ids=[], attachment_ids=[])

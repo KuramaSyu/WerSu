@@ -53,15 +53,33 @@ class InMemoryAttachmentMetadataRepo(AttachmentsMetadataRepoABC):
     def __init__(self) -> None:
         self._metadata: Dict[str, Attachment] = {}
 
-    async def post_metadata(self, attachment: Attachment) -> None:
+    async def post_metadata(
+        self, attachment: Attachment, user_ctx: UserContextABC | None = None
+    ) -> None:
+        del user_ctx
         if attachment.key is UNDEFINED or attachment.key is None:
             raise ValueError("Attachment key must be set before storing metadata")
         self._metadata[str(attachment.key)] = replace(attachment, content=b"")
 
-    async def get_metadata(self, key: str) -> Attachment:
+    async def get_metadata(
+        self, key: str, user_ctx: UserContextABC | None = None
+    ) -> Attachment:
+        del user_ctx
         if key not in self._metadata:
             raise KeyError(f"Attachment metadata not found for key={key}")
         return self._metadata[key]
 
-    async def delete_metadata(self, key: str) -> None:
+    async def update_metadata(
+        self, attachment: Attachment, user_ctx: UserContextABC | None = None
+    ) -> Attachment:
+        del user_ctx
+        if attachment.key is UNDEFINED or attachment.key is None:
+            raise ValueError("Attachment key must be given perform an update")
+        self._metadata[str(attachment.key)] = replace(attachment, content=b"")
+        return self._metadata[str(attachment.key)]
+
+    async def delete_metadata(
+        self, key: str, user_ctx: UserContextABC | None = None
+    ) -> None:
+        del user_ctx
         self._metadata.pop(key, None)

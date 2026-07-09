@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from src.api.directory_service import DirectoryServiceABC
+from src.api.permission_repo import DirectoryChild
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
@@ -163,6 +164,20 @@ class _StubDirectoryService(DirectoryServiceABC):
         if directory_id in self.directories_by_id:
             del self.directories_by_id[directory_id]
         return self.delete_result
+
+    async def dry_delete(
+        self,
+        directory_id: str,
+        user_ctx: UserContextABC,
+    ) -> List[DirectoryChild]:
+        self.last_delete_id = directory_id
+        self.last_delete_user_id = user_ctx.user_id
+        if self.delete_deny:
+            raise PermissionError("not allowed")
+        # The stub has no resolver; tests that exercise the real
+        # recursive-delete behaviour wire the production
+        # ``DirectoryService`` directly.
+        return []
 
 
 __all__ = ["_StubDirectoryService"]
