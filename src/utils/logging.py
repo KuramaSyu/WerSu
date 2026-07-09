@@ -150,13 +150,13 @@ def _configure_handlers() -> None:
     _HANDLERS_CONFIGURED = True
 
 
-def _get_effective_level(logger_name: str) -> int:
+def _get_effective_level(logger_path: str) -> int:
     config = _load_config()
     loggers = config.get("loggers", {})
 
     best_match = None
     for name, level in loggers.items():
-        if logger_name == name or logger_name.startswith(f"{name}."):
+        if logger_path == name or logger_path.startswith(f"{name}."):
             if best_match is None or len(name) > len(best_match[0]):
                 best_match = (name, level)
 
@@ -183,16 +183,21 @@ def logging_provider(
             ``"[sharing facade] src.services.sharing.SharingService"``.
     """
     _configure_handlers()
+    logger_path = ""
     logger_name = ""
     if isinstance(file_or_class, str):
         logger_name = file_or_class
+        logger_path = file_or_class
     else:
         logger_name = file_or_class.__class__.__name__
+        logger_path = file_or_class.__class__.__module__
     if cls_instance:
         logger_name = f"{cls_instance.__class__.__name__.split('.')[-1]}"
+        logger_path = f"{cls_instance.__class__.__module__}.{logger_name}"
     if prefix:
         logger_name += f" [{prefix}]"
 
+
     log = getLogger(logger_name)
-    log.setLevel(_get_effective_level(logger_name))
+    log.setLevel(_get_effective_level(logger_path))
     return log
