@@ -86,7 +86,7 @@ services:
       S3_ENDPOINT: ${S3_ENDPOINT}
       JWT_SECRET: ${JWT_SECRET}
     volumes:
-      - ./data/app/huggingface-models:/models
+      - ./data/app/huggingface-models:/root/models
     ports:
       - "50052:50052"
     depends_on:

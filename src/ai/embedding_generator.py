@@ -1,6 +1,7 @@
 from abc import ABC, abstractclassmethod, abstractmethod, abstractstaticmethod
 from datetime import datetime
 from enum import Enum
+import os
 
 import numpy as np
 
@@ -129,7 +130,7 @@ class EmbeddingGenerator(EmbeddingGeneratorABC):
     """Generates embeddings for given text using specified model."""
     def __init__(self, model_name: Models, logging_provider: LoggingProvider):
         from sentence_transformers import SentenceTransformer
-        self.model = SentenceTransformer(model_name.value, cache_folder="/models")
+        self.model = SentenceTransformer(model_name.value, cache_folder=os.path.expanduser("~/models"), )
         self.model_enum = model_name
         self.log = logging_provider(__name__, self)
 
