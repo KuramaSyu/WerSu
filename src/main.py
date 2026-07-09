@@ -30,6 +30,10 @@ from src.services.activity_statistics_service import DefaultActivityStatisticsSe
 from src.services.sharing import DefaultSharingService
 from src.services.note import NoteService
 from src.services.directory import DirectoryService
+from src.services.thirdparty_migrations import (
+    ThirdpartyMigrationsServiceABC,
+)
+from src.services.thirdparty_migrations.bookstack import BookstackBookImport
 from src.facades.share_action_facade import ShareActionFacade
 from src.utils import logging_provider
 from src.db import Database, NoteEmbeddingPostgresRepo, NoteVersionPostgresRepo
@@ -51,6 +55,9 @@ from src.grpc_mod.proto.note_pb2_grpc import (
     add_PermissionServiceServicer_to_server,
     add_NoteVersionServiceServicer_to_server,
 )
+from src.grpc_mod.proto.thirdparty_migrations_pb2_grpc import (
+    add_ThirdpartyMigrationsServiceServicer_to_server,
+)
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteFacade
@@ -59,6 +66,7 @@ from src.grpc_mod.directory_service import GrpcDirectoryService
 from src.grpc_mod.note_service import GrpcNoteService
 from src.grpc_mod.note_version_service import GrpcNoteVersionService
 from src.grpc_mod.permission_service import GrpcPermissionService
+from src.grpc_mod.thirdparty_migrations_service import GrpcThirdpartyMigrationsService
 from src.grpc_mod.user_service import GrpcUserService
 from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.utils.spicedb_client import create_spicedb_async_client
@@ -84,6 +92,8 @@ async def serve():
     Construction Root which instantiates all dependencies, wires them 
     together via constructor injection, and starts the gRPC server with 
     the most upper layer service implementations.  This is the entrypoint for the application.
+    I decided to not split it into multiple functions, since this shows exactly, how all dependencies are wired together.
+    So this is the single point in this application, which shows the complete dependency graph + complexity. 
     """
     # setup logging
     log = logging_provider(__name__)
@@ -94,6 +104,8 @@ async def serve():
         log,
         "postgres://postgres:postgres@localhost:5433/db?sslmode=disable"
     )
+
+    # extract env vars
     grpc_host = get_os_env_variable("GRPC_HOST", log, "[::]")
     grpc_port = get_os_env_variable("GRPC_PORT", log, "50052")
     grpc_spicedb_credentials = get_os_env_variable("GRPC_SPICEDB_CREDENTIALS", log, UNDEFINED)
@@ -317,7 +329,7 @@ async def serve():
         logging_provider=logging_provider,
     )
 
-    note_service = NoteService(
+    note_app_service = NoteService(
         note_repo=note_repo,
         permission_repo=permission_repo,
         jwt_provider=jwt_provider,
@@ -355,7 +367,7 @@ async def serve():
     )
 
     note_service = GrpcNoteService(
-        note_service=note_service,
+        note_service=note_app_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
         context_factory=user_context_factory,
@@ -370,6 +382,16 @@ async def serve():
         note_repo=note_repo,
         permission_repo=permission_repo,
         activity_logger=activity_logger_service,
+        note_service=note_app_service,
+        attachment_facade=attachment_service,
+        log=logging_provider,
+    )
+
+    migrations_service: ThirdpartyMigrationsServiceABC = BookstackBookImport(
+        attachment_facade=attachment_service,
+        directory_service=directory_app_service,
+        note_service=note_service,
+        log=logging_provider,
     )
 
     directory_service = GrpcDirectoryService(
@@ -379,6 +401,13 @@ async def serve():
         context_factory=user_context_factory,
     )
     add_DirectoryServiceServicer_to_server(directory_service, server)
+
+    grpc_migrations_service = GrpcThirdpartyMigrationsService(
+        migrations_service=migrations_service,
+        log=logging_provider,
+        context_factory=user_context_factory,
+    )
+    add_ThirdpartyMigrationsServiceServicer_to_server(grpc_migrations_service, server)
 
 
     grpc_permission_service = GrpcPermissionService(
