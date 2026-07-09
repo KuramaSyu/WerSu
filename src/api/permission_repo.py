@@ -7,6 +7,7 @@ new implementation of this ABC.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import List
 from warnings import deprecated
 
@@ -181,3 +182,86 @@ class PermissionRepoABC(ABC):
             List[str]: the granted permission names.
         """
         ...
+
+    @abstractmethod
+    async def resolve_children(
+        self,
+        directory_id: str,
+        *,
+        max_depth: int = 10,
+        exclusive: bool = True,
+    ) -> "ResolvedChildren":
+        """Walk a directory subtree and collect every child resource.
+
+        Walks ``directory#parent@directory`` recursively to gather the
+        set of sub-directories under ``directory_id``, then expands
+        one more hop via ``note#parent_directory@directory`` and
+        ``attachment#parent_note@note`` to gather the notes and
+        attachments that live inside the subtree.
+
+        When ``exclusive`` is ``True`` (the default) a note or
+        attachment is included only when its **only** parent relation
+        points back into the resolved subtree.  Notes parented under
+        any directory outside the subtree, and attachments parented
+        under any note outside the subtree, are filtered out so the
+        caller never deletes something shared with a sibling tree.
+
+        Args:
+            directory_id: id of the root directory.
+            max_depth: recursion cap for the directory subtree;
+                ``0`` means only the root directory itself.
+            exclusive: when ``True``, drop notes/attachments that
+                have a parent outside the subtree.
+
+        Returns:
+            :class:`ResolvedChildren`: the discovered ids.
+
+        Raises:
+            ValueError: ``max_depth`` is negative.
+        """
+        ...
+
+
+@dataclass
+class ResolvedChildren:
+    """Subtree-resolved ids returned by
+    :meth:`PermissionRepoABC.resolve_children`.
+
+    Attributes:
+        sub_directory_ids: directory ids reachable from the root
+            via ``directory#parent@directory``, **including** the
+            root directory itself.
+        note_ids: note ids whose only ``parent_directory`` points
+            into ``sub_directory_ids`` (when ``exclusive=True``).
+        attachment_ids: attachment ids whose only ``parent_note``
+            points into ``note_ids`` (when ``exclusive=True``).
+    """
+
+    sub_directory_ids: List[str] = field(default_factory=list)
+    note_ids: List[str] = field(default_factory=list)
+    attachment_ids: List[str] = field(default_factory=list)
+
+
+@dataclass
+class DirectoryChild:
+    """One entry returned by :meth:`DirectoryService.dry_delete`.
+
+    Attributes:
+        id: id of the child resource.
+        kind: one of ``"directory"``, ``"note"``, ``"attachment"``.
+        name: human-readable name.  Directories use their
+            ``name`` field; notes use their ``title``; attachments
+            use their ``filename`` (or ``key`` when the filename is
+            not set).
+    """
+
+    id: str
+    kind: str
+    name: str
+
+
+__all__ = [
+    "PermissionRepoABC",
+    "ResolvedChildren",
+    "DirectoryChild",
+]

@@ -12,13 +12,15 @@ future caller) can stay free of permission/repo plumbing.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from src.api import (
     ActivityLoggerServiceABC,
     DirectoryRelationEnum,
     DirectoryServiceABC,
+    LoggingProvider,
     NoteRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
@@ -26,6 +28,7 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
+from src.api.permission_repo import DirectoryChild
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
@@ -40,6 +43,11 @@ from src.domain.permission_chain import (
 from src.utils.readme_parser import parse_readme
 
 
+if TYPE_CHECKING:
+    from src.services.attachments import AttachmentFacadeABC
+    from src.services.note import NoteService
+
+
 README_TITLE = "README.md"
 """Title of the auto-managed ``README.md`` note for each directory."""
 
@@ -51,6 +59,13 @@ class DirectoryService(DirectoryServiceABC):
     :mod:`src.domain.permission_chain` before it touches the underlying
     repos.  The README bookkeeping for
     :meth:`get_directory_notes` is also performed exclusively here.
+
+    Recursive delete + :meth:`dry_delete` require an
+    :class:`AttachmentFacadeABC` and a :class:`NoteService` so the
+    service can fan the cascade out to attachment rows and notes.
+    These are optional so existing call sites that only need read /
+    CRUD operations on a single directory keep working without
+    having to wire them.
     """
 
     def __init__(
@@ -59,11 +74,19 @@ class DirectoryService(DirectoryServiceABC):
         note_repo: NoteRepoFacadeABC,
         permission_repo: PermissionRepoABC,
         activity_logger: ActivityLoggerServiceABC,
+        note_service: Optional["NoteService"] = None,
+        attachment_facade: Optional["AttachmentFacadeABC"] = None,
+        log: Optional["LoggingProvider"] = None,
     ) -> None:
         self._directory_repo = directory_repo
         self._note_repo = note_repo
         self._permission_repo = permission_repo
         self._activity_logger = activity_logger
+        self._note_service = note_service
+        self._attachment_facade = attachment_facade
+        self.log = (log or (lambda *_a, **_k: logging.getLogger("src.services.directory")))(
+            __name__, self
+        )
 
     async def get_directory_notes(
         self,
@@ -286,9 +309,16 @@ class DirectoryService(DirectoryServiceABC):
         directory_id: str,
         user_ctx: UserContextABC,
     ) -> bool:
-        """Delete a directory by id.
+        """Delete a directory and every exclusively-owned child.
 
         See :meth:`~src.api.directory_service.DirectoryServiceABC.delete_directory`.
+
+        Resolves the subtree via
+        :meth:`PermissionRepoABC.resolve_children`, then deletes
+        every sub-directory (recursively, through this method),
+        every note whose only parent sits inside the subtree, and
+        every attachment whose only parent note sits inside the
+        subtree.  Finally removes the directory row itself.
         """
         check = HasDirectoryDeletePerm(directory_id).set_permission_repo(
             self._permission_repo
@@ -296,6 +326,29 @@ class DirectoryService(DirectoryServiceABC):
         result = await check.check(user_ctx)
         if not result:
             raise result.error
+
+        children = await self._resolve_children(directory_id, user_ctx)
+
+        # Delete attachments first so the parent_note rows in
+        # SpiceDB drop before their notes do.  The repos do not
+        # cascade-delete relations on their own, so the order
+        # matters when something later in the call expects the
+        # attachment to be gone.
+        if children.attachment_ids:
+            await self._delete_attachments(children.attachment_ids, user_ctx)
+
+        # Delete notes next, before their parent directories go
+        # away, so the service can still look them up by id.
+        if children.note_ids:
+            await self._delete_notes(children.note_ids, user_ctx)
+
+        # Sub-directories last -- they recurse, so each one runs
+        # through this method again with its own delete permission
+        # check.
+        for sub_id in children.sub_directory_ids:
+            if sub_id == directory_id:
+                continue
+            await self.delete_directory(sub_id, user_ctx)
 
         deleted = await self._directory_repo.delete_directory(
             DirectoryEntity(id=directory_id)
@@ -305,6 +358,108 @@ class DirectoryService(DirectoryServiceABC):
                 directory_id, user_ctx
             )
         return deleted
+
+    async def dry_delete(
+        self,
+        directory_id: str,
+        user_ctx: UserContextABC,
+    ) -> List[DirectoryChild]:
+        """Resolve the exclusive subtree without deleting anything.
+
+        See :meth:`~src.api.directory_service.DirectoryServiceABC.dry_delete`.
+        """
+        await self._assert_directory_view(directory_id, user_ctx)
+
+        children = await self._resolve_children(directory_id, user_ctx)
+
+        result: List[DirectoryChild] = []
+        for sub_id in children.sub_directory_ids:
+            if sub_id == directory_id:
+                continue
+            directory = await self._directory_repo.fetch_directory(sub_id)
+            name = (
+                str(directory.name)
+                if directory is not None and directory.name not in (UNDEFINED, None)
+                else sub_id
+            )
+            result.append(DirectoryChild(id=sub_id, kind="directory", name=name))
+
+        for note_id in children.note_ids:
+            note = await self._note_repo.select_by_id(note_id, user_ctx)
+            title = (
+                str(note.title)
+                if note is not None and note.title not in (UNDEFINED, None)
+                else note_id
+            )
+            result.append(DirectoryChild(id=note_id, kind="note", name=title))
+
+        if self._attachment_facade is not None:
+            for attachment_key in children.attachment_ids:
+                try:
+                    metadata = await self._attachment_facade.get_metadata(
+                        attachment_key, user_ctx
+                    )
+                except Exception:
+                    metadata = None
+                if metadata is not None and metadata.filename not in (UNDEFINED, None, ""):
+                    name = str(metadata.filename)
+                else:
+                    name = attachment_key
+                result.append(
+                    DirectoryChild(id=attachment_key, kind="attachment", name=name)
+                )
+
+        # Sort by kind (directories, then notes, then attachments)
+        # then by id so the output is deterministic for tests and
+        # UI confirmation prompts.
+        kind_order = {"directory": 0, "note": 1, "attachment": 2}
+        result.sort(key=lambda c: (kind_order.get(c.kind, 99), c.id))
+        return result
+
+    async def _resolve_children(
+        self,
+        directory_id: str,
+        user_ctx: UserContextABC,
+    ):
+        from src.api.permission_repo import ResolvedChildren
+
+        return await self._permission_repo.resolve_children(
+            directory_id,
+            max_depth=10,
+            exclusive=True,
+        )
+
+    async def _delete_notes(
+        self,
+        note_ids: List[str],
+        user_ctx: UserContextABC,
+    ) -> None:
+        if self._note_service is None:
+            return
+        for note_id in note_ids:
+            try:
+                await self._note_service.delete_note(note_id, user_ctx)
+            except Exception as exc:
+                # best-effort: log + continue so a single note does
+                # not abort the whole cascade.
+                self.log.warning(
+                    "delete_note failed during cascade for %s: %s", note_id, exc
+                )
+
+    async def _delete_attachments(
+        self,
+        attachment_keys: List[str],
+        user_ctx: UserContextABC,
+    ) -> None:
+        if self._attachment_facade is None:
+            return
+        for key in attachment_keys:
+            try:
+                await self._attachment_facade.delete_attachment(key, user_ctx)
+            except Exception as exc:
+                self.log.warning(
+                    "delete_attachment failed during cascade for %s: %s", key, exc
+                )
 
     async def _assert_directory_view(
         self,

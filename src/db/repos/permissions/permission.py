@@ -13,6 +13,7 @@ import grpc
 from src.api.permission_repo import PermissionRepoABC
 from src.api.service_unavailable_error import ServiceUnavailableError
 from src.api import PermissionConverterABC, ObjectRef, SubjectRef, RelationEnum, Relationship, UserContextABC, ObjectTypeEnum, RelationName, NoteRelationEnum
+from src.api.relationship import AttachmentRelationEnum, DirectoryRelationEnum
 from src.api.undefined import is_undefined, unwrap_undefined
 from src.db.table import TableABC
 from src.utils import asdict
@@ -464,7 +465,7 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         )
         for rel in relationships:
             permissions.append(unwrap_undefined(rel.relation))
-        
+
         # AI generated:
         # candidates = self._permission_candidates_by_object_type.get(resource.object_type, [])
         # permissions: List[str] = []
@@ -475,6 +476,166 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
 
         return permissions
 
+    @handle_error
+    async def resolve_children(
+        self,
+        directory_id: str,
+        *,
+        max_depth: int = 10,
+        exclusive: bool = True,
+    ) -> "ResolvedChildren":
+        """Walk a directory subtree over SpiceDB and collect ids.
+
+        Mirrors the in-memory implementation's algorithm but uses
+        ``ExportBulkRelationships`` instead of scanning ``self._store``.
+        """
+
+        from src.api.permission_repo import ResolvedChildren
+
+        if max_depth < 0:
+            raise ValueError("max_depth must be >= 0")
+
+        root = str(directory_id)
+        consistency_kwargs: dict[str, Any] = {}
+        if self._consistent:
+            consistency_kwargs["consistency"] = Consistency(fully_consistent=True)
+
+        # 1. Walk ``directory#parent@directory`` to collect every
+        #    reachable directory id (root included).
+        sub_directory_ids: set[str] = {root}
+        queue: list[tuple[str, int]] = [(root, 0)]
+        while queue:
+            current_id, depth = queue.pop(0)
+            if depth >= max_depth:
+                continue
+            response_stream = self.client.ExportBulkRelationships(
+                ExportBulkRelationshipsRequest(
+                    optional_relationship_filter=RelationshipFilter(
+                        resource_type=ObjectTypeEnum.DIRECTORY.value,
+                        optional_relation=DirectoryRelationEnum.PARENT,
+                        optional_subject_filter=SubjectFilter(
+                            subject_type=ObjectTypeEnum.DIRECTORY.value,
+                            optional_subject_id=current_id,
+                        ),
+                    ),
+                    **consistency_kwargs,
+                )
+            )
+            async for response in response_stream:
+                for rel in response.relationships:
+                    if rel.resource.object_id in (UNDEFINED, None, ""):
+                        continue
+                    child_id = str(rel.resource.object_id)
+                    if child_id not in sub_directory_ids:
+                        sub_directory_ids.add(child_id)
+                        queue.append((child_id, depth + 1))
+
+        # 2. Collect every note that has at least one
+        #    ``note#parent_directory@directory`` relation pointing
+        #    into the subtree.
+        note_ids: set[str] = set()
+        for directory_id in list(sub_directory_ids):
+            response_stream = self.client.ExportBulkRelationships(
+                ExportBulkRelationshipsRequest(
+                    optional_relationship_filter=RelationshipFilter(
+                        resource_type=ObjectTypeEnum.NOTE.value,
+                        optional_relation=NoteRelationEnum.PARENT_DIRECTORY,
+                        optional_subject_filter=SubjectFilter(
+                            subject_type=ObjectTypeEnum.DIRECTORY.value,
+                            optional_subject_id=directory_id,
+                        ),
+                    ),
+                    **consistency_kwargs,
+                )
+            )
+            async for response in response_stream:
+                for rel in response.relationships:
+                    if rel.resource.object_id in (UNDEFINED, None, ""):
+                        continue
+                    note_ids.add(str(rel.resource.object_id))
+
+        # 3. Same for attachments.
+        attachment_ids: set[str] = set()
+        for note_id in list(note_ids):
+            response_stream = self.client.ExportBulkRelationships(
+                ExportBulkRelationshipsRequest(
+                    optional_relationship_filter=RelationshipFilter(
+                        resource_type=ObjectTypeEnum.ATTACHMENT.value,
+                        optional_relation=AttachmentRelationEnum.PARENT_NOTE,
+                        optional_subject_filter=SubjectFilter(
+                            subject_type=ObjectTypeEnum.NOTE.value,
+                            optional_subject_id=note_id,
+                        ),
+                    ),
+                    **consistency_kwargs,
+                )
+            )
+            async for response in response_stream:
+                for rel in response.relationships:
+                    if rel.resource.object_id in (UNDEFINED, None, ""):
+                        continue
+                    attachment_ids.add(str(rel.resource.object_id))
+
+        if exclusive:
+            # Drop notes whose only parents aren't all inside the
+            # subtree, and attachments similarly.  Pull the full
+            # list of parent relations for each candidate and check
+            # set membership.
+            exclusive_notes: set[str] = set()
+            for note_id in note_ids:
+                response_stream = self.client.ExportBulkRelationships(
+                    ExportBulkRelationshipsRequest(
+                        optional_relationship_filter=RelationshipFilter(
+                            resource_type=ObjectTypeEnum.NOTE.value,
+                            optional_resource_id=note_id,
+                            optional_relation=NoteRelationEnum.PARENT_DIRECTORY,
+                        ),
+                        **consistency_kwargs,
+                    )
+                )
+                parents: set[str] = set()
+                async for response in response_stream:
+                    for rel in response.relationships:
+                        subj = rel.subject.object
+                        if (
+                            subj.object_type == ObjectTypeEnum.DIRECTORY.value
+                            and subj.object_id not in (UNDEFINED, None, "")
+                        ):
+                            parents.add(str(subj.object_id))
+                if parents and parents.issubset(sub_directory_ids):
+                    exclusive_notes.add(note_id)
+            note_ids = exclusive_notes
+
+            exclusive_attachments: set[str] = set()
+            for attachment_key in attachment_ids:
+                response_stream = self.client.ExportBulkRelationships(
+                    ExportBulkRelationshipsRequest(
+                        optional_relationship_filter=RelationshipFilter(
+                            resource_type=ObjectTypeEnum.ATTACHMENT.value,
+                            optional_resource_id=attachment_key,
+                            optional_relation=AttachmentRelationEnum.PARENT_NOTE,
+                        ),
+                        **consistency_kwargs,
+                    )
+                )
+                parents: set[str] = set()
+                async for response in response_stream:
+                    for rel in response.relationships:
+                        subj = rel.subject.object
+                        if (
+                            subj.object_type == ObjectTypeEnum.NOTE.value
+                            and subj.object_id not in (UNDEFINED, None, "")
+                        ):
+                            parents.add(str(subj.object_id))
+                if parents and parents.issubset(note_ids):
+                    exclusive_attachments.add(attachment_key)
+            attachment_ids = exclusive_attachments
+
+        return ResolvedChildren(
+            sub_directory_ids=sorted(sub_directory_ids),
+            note_ids=sorted(note_ids),
+            attachment_ids=sorted(attachment_ids),
+        )
 
 
 class NotePermissionRepoInMemory(PermissionRepoABC):
@@ -634,8 +795,42 @@ class NotePermissionRepoInMemory(PermissionRepoABC):
         return permission in permissions
 
     async def check(self, relationship: Relationship) -> bool:
-        # In-memory check resolves to whether any stored direct relationship matches the filter.
-        return bool(await self.lookup_relationships(relationship))
+        # Resolve to whether the user has the requested permission on
+        # the resource, expanded via the implication map (so
+        # ``owner -> view`` is recognised even though only the
+        # ``owner`` relation is stored).  The production SpiceDB does
+        # this server-side; mirroring the expansion here keeps tests
+        # that rely on transitive permissions realistic.
+        if relationship.subject.object_type != "user":
+            return bool(await self.lookup_relationships(relationship))
+        if relationship.resource.object_id in (UNDEFINED, None):
+            return bool(await self.lookup_relationships(relationship))
+
+        # Build a synthetic UserContext for ``get_permissions``.
+        class _StubUser:
+            def __init__(self, user_id: str) -> None:
+                self.user_id = user_id
+
+            @property
+            def type(self):  # pragma: no cover - unused here
+                return UNDEFINED
+
+            @property
+            def accessed_as(self):  # pragma: no cover - unused here
+                return "user"
+
+            async def is_temporary_user(self) -> bool:  # pragma: no cover - unused
+                return False
+
+        stub = _StubUser(str(relationship.subject.object_id))
+        effective = await self.get_permissions(
+            stub,
+            ObjectRef(
+                object_type=relationship.resource.object_type,
+                object_id=str(relationship.resource.object_id),
+            ),
+        )
+        return str(relationship.relation) in effective
 
     async def get_permissions(self, user: UserContextABC, resource: ObjectRef) -> List[str]:
         assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
@@ -659,4 +854,114 @@ class NotePermissionRepoInMemory(PermissionRepoABC):
             permissions.update(implied_map.get(relation, {relation}))
 
         return sorted(permissions)
+
+    async def resolve_children(
+        self,
+        directory_id: str,
+        *,
+        max_depth: int = 10,
+        exclusive: bool = True,
+    ) -> "ResolvedChildren":
+        """Walk the subtree rooted at ``directory_id`` over ``self._store``.
+
+        Mirrors :meth:`DirectoryRepo.resolve_subtree` for the
+        directory-walk portion, then expands to notes and
+        attachments.  ``exclusive`` mirrors the production semantics:
+        a note or attachment is included only when **every** one of
+        its parent relations sits inside the resolved subtree.
+        """
+        from src.api.permission_repo import ResolvedChildren
+
+        if max_depth < 0:
+            raise ValueError("max_depth must be >= 0")
+
+        root = str(directory_id)
+
+        # 1. Walk ``directory#parent@directory`` to collect every
+        #    reachable directory id (root included).
+        sub_directory_ids: set[str] = {root}
+        queue: list[tuple[str, int]] = [(root, 0)]
+        while queue:
+            current_id, depth = queue.pop(0)
+            if depth >= max_depth:
+                continue
+            for rel in self._store:
+                if (
+                    str(rel.resource.object_type) == ObjectTypeEnum.DIRECTORY.value
+                    and str(rel.relation) == DirectoryRelationEnum.PARENT
+                    and str(rel.subject.object_type) == ObjectTypeEnum.DIRECTORY.value
+                    and str(rel.subject.object_id) == current_id
+                    and rel.resource.object_id not in (UNDEFINED, None)
+                ):
+                    child_id = str(rel.resource.object_id)
+                    if child_id not in sub_directory_ids:
+                        sub_directory_ids.add(child_id)
+                        queue.append((child_id, depth + 1))
+
+        # 2. Collect every note that has at least one
+        #    ``note#parent_directory@directory`` relation pointing
+        #    into the subtree.
+        note_ids: set[str] = set()
+        for rel in self._store:
+            if (
+                str(rel.resource.object_type) == ObjectTypeEnum.NOTE.value
+                and str(rel.relation) == NoteRelationEnum.PARENT_DIRECTORY
+                and str(rel.subject.object_type) == ObjectTypeEnum.DIRECTORY.value
+                and rel.subject.object_id in sub_directory_ids
+                and rel.resource.object_id not in (UNDEFINED, None)
+            ):
+                note_ids.add(str(rel.resource.object_id))
+
+        # 3. Same for attachments.
+        attachment_ids: set[str] = set()
+        for rel in self._store:
+            if (
+                str(rel.resource.object_type) == ObjectTypeEnum.ATTACHMENT.value
+                and str(rel.relation) == AttachmentRelationEnum.PARENT_NOTE
+                and str(rel.subject.object_type) == ObjectTypeEnum.NOTE.value
+                and rel.subject.object_id in note_ids
+                and rel.resource.object_id not in (UNDEFINED, None)
+            ):
+                attachment_ids.add(str(rel.resource.object_id))
+
+        if exclusive:
+            # Drop notes whose only parents aren't all inside the
+            # subtree, and attachments similarly.
+            exclusive_notes: set[str] = set()
+            for note_id in note_ids:
+                parents: set[str] = set()
+                for rel in self._store:
+                    if (
+                        str(rel.resource.object_type) == ObjectTypeEnum.NOTE.value
+                        and str(rel.resource.object_id) == note_id
+                        and str(rel.relation) == NoteRelationEnum.PARENT_DIRECTORY
+                        and str(rel.subject.object_type) == ObjectTypeEnum.DIRECTORY.value
+                        and rel.subject.object_id not in (UNDEFINED, None)
+                    ):
+                        parents.add(str(rel.subject.object_id))
+                if parents and parents.issubset(sub_directory_ids):
+                    exclusive_notes.add(note_id)
+            note_ids = exclusive_notes
+
+            exclusive_attachments: set[str] = set()
+            for attachment_key in attachment_ids:
+                parents: set[str] = set()
+                for rel in self._store:
+                    if (
+                        str(rel.resource.object_type) == ObjectTypeEnum.ATTACHMENT.value
+                        and str(rel.resource.object_id) == attachment_key
+                        and str(rel.relation) == AttachmentRelationEnum.PARENT_NOTE
+                        and str(rel.subject.object_type) == ObjectTypeEnum.NOTE.value
+                        and rel.subject.object_id not in (UNDEFINED, None)
+                    ):
+                        parents.add(str(rel.subject.object_id))
+                if parents and parents.issubset(note_ids):
+                    exclusive_attachments.add(attachment_key)
+            attachment_ids = exclusive_attachments
+
+        return ResolvedChildren(
+            sub_directory_ids=sorted(sub_directory_ids),
+            note_ids=sorted(note_ids),
+            attachment_ids=sorted(attachment_ids),
+        )
 

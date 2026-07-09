@@ -14,6 +14,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+from src.api.permission_repo import DirectoryChild
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
@@ -164,20 +165,66 @@ class DirectoryServiceABC(ABC):
         directory_id: str,
         user_ctx: UserContextABC,
     ) -> bool:
-        """Delete a directory by id.
+        """Delete a directory and every exclusively-owned child.
+
+        Walks the subtree rooted at ``directory_id`` via
+        :meth:`PermissionRepoABC.resolve_children` and deletes:
+
+        * every sub-directory (recursively, with their own children),
+        * every note whose only parent sits inside the subtree,
+        * every attachment whose only parent note sits inside the
+          subtree.
+
+        Notes or attachments that have an additional parent outside
+        the subtree are left alone -- the resolver filters them
+        out so the caller never destroys content that is shared with
+        a sibling tree.
 
         Args:
             directory_id: id of the directory to delete.
-            user_ctx: caller identity.
+            user_ctx: caller identity used for every nested
+                permission check.
 
         Raises:
             PermissionError: when `user_ctx` cannot delete
-                `directory_id`.
+                `directory_id` (or any nested child that the
+                resolver returns).
 
         Returns:
             bool: `True` when the directory row was deleted in the
             underlying repo, `False` when no directory with that
             id exists.
+        """
+        ...
+
+    @abstractmethod
+    async def dry_delete(
+        self,
+        directory_id: str,
+        user_ctx: UserContextABC,
+    ) -> List[DirectoryChild]:
+        """Resolve every exclusively-owned child without deleting it.
+
+        Mirrors :meth:`delete_directory`'s resolution semantics but
+        returns the discovered resources enriched with kind and
+        human-readable name instead of mutating anything.  Useful
+        for "are you sure?" confirmation prompts in the UI.
+
+        Args:
+            directory_id: id of the directory to dry-delete.
+            user_ctx: caller identity used for the read-side
+                permission check on the root directory.
+
+        Raises:
+            PermissionError: when `user_ctx` cannot view
+                `directory_id`.
+
+        Returns:
+            List[DirectoryChild]: every directory, note and
+            attachment that would be deleted by
+            :meth:`delete_directory`.  The list is sorted by kind
+            (directories first, then notes, then attachments) and
+            then by id for deterministic output.
         """
         ...
 
