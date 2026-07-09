@@ -1,0 +1,163 @@
+"""Unit tests for :class:`src.services.thirdparty_migrations.bookstack_html_converter.BookstackHtmlConverter`."""
+
+from __future__ import annotations
+
+from src.services.thirdparty_migrations.bookstack_html_converter import (
+    BookstackHtmlConverter,
+)
+from src.services.thirdparty_migrations.bookstack_models import BookstackPage
+
+
+def _builder(key: str) -> str:
+    """Trivial URL builder that wraps the key in a marker URL."""
+    return f"/u/{key}"
+
+
+def _converter() -> BookstackHtmlConverter:
+    return BookstackHtmlConverter(attachment_url_builder=_builder)
+
+
+# ---- html_to_markdown ---------------------------------------------------
+
+
+def test_empty_html_returns_empty_string() -> None:
+    assert _converter().html_to_markdown("") == ""
+
+
+def test_paragraph_round_trip() -> None:
+    md = _converter().html_to_markdown("<p>hello world</p>")
+    assert "hello world" in md
+
+
+def test_table_round_trip() -> None:
+    html = "<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>"
+    md = _converter().html_to_markdown(html)
+    # html2text emits pipe tables for tabular content.
+    assert "A" in md and "B" in md and "1" in md and "2" in md
+
+
+# ---- rewrite_image_sources ---------------------------------------------
+
+
+def test_rewrites_html_img_src() -> None:
+    body = '<p>before <img src="a.png" alt="x"/> after</p>'
+    out = _converter().rewrite_image_sources(body, {"a.png": "key-A"})
+    assert 'src="/u/key-A"' in out
+    assert "a.png" not in out
+
+
+def test_rewrites_markdown_image() -> None:
+    body = "before ![alt](a.png) after"
+    out = _converter().rewrite_image_sources(body, {"a.png": "key-A"})
+    assert "![alt](/u/key-A)" in out
+
+
+def test_unmapped_filename_is_left_alone_html() -> None:
+    body = '<img src="missing.png"/>'
+    out = _converter().rewrite_image_sources(body, {"other.png": "key-O"})
+    assert out == body
+
+
+def test_unmapped_filename_is_left_alone_markdown() -> None:
+    body = "![alt](missing.png)"
+    out = _converter().rewrite_image_sources(body, {})
+    assert out == body
+
+
+def test_lookup_falls_back_to_basename() -> None:
+    body = '<img src="subdir/a.png"/>'
+    out = _converter().rewrite_image_sources(body, {"a.png": "key-A"})
+    assert 'src="/u/key-A"' in out
+
+
+def test_multiple_images_in_one_body() -> None:
+    body = (
+        '<p><img src="a.png"/><img src="b.png"/></p>'
+        ' ![one](a.png) ![two](b.png)'
+    )
+    out = _converter().rewrite_image_sources(
+        body, {"a.png": "key-A", "b.png": "key-B"}
+    )
+    assert out.count("/u/key-A") == 2
+    assert out.count("/u/key-B") == 2
+
+
+# ---- convert_content ----------------------------------------------------
+
+
+def test_convert_content_prefers_markdown_when_present() -> None:
+    page = BookstackPage(
+        id=1,
+        name="P",
+        markdown="original",
+        html="<p>html</p>",
+    )
+    out = _converter().convert_content(page, {})
+    assert out == "original"
+
+
+def test_convert_content_falls_back_to_html() -> None:
+    page = BookstackPage(id=1, name="P", markdown="", html="<p>only html</p>")
+    out = _converter().convert_content(page, {})
+    assert "only html" in out
+
+
+def test_convert_content_rewrites_image_refs() -> None:
+    page = BookstackPage(
+        id=1,
+        name="P",
+        markdown='![caption](pic.png)',
+        html="",
+    )
+    out = _converter().convert_content(page, {"pic.png": "key-P"})
+    assert "![caption](/u/key-P)" in out
+
+
+def test_convert_content_returns_empty_when_both_blank() -> None:
+    page = BookstackPage(id=1, name="P")
+    assert _converter().convert_content(page, {}) == ""
+
+
+# ---- rewrite_cross_references ------------------------------------------
+
+
+def test_rewrite_image_cross_ref() -> None:
+    body = "see [[bsexport:image:42]] for details"
+    out = _converter().rewrite_cross_references(
+        body,
+        {"image": {42: "key-42"}},
+    )
+    assert out == "see /u/key-42 for details"
+
+
+def test_rewrite_attachment_cross_ref() -> None:
+    body = "report: [[bsexport:attachment:7]]"
+    out = _converter().rewrite_cross_references(
+        body,
+        {"attachment": {7: "key-7"}},
+    )
+    assert out == "report: /u/key-7"
+
+
+def test_unknown_kind_is_left_alone() -> None:
+    body = "see [[bsexport:page:99]] for the related page"
+    out = _converter().rewrite_cross_references(body, {})
+    assert out == body
+
+
+def test_unknown_id_is_left_alone() -> None:
+    body = "see [[bsexport:image:42]] for details"
+    out = _converter().rewrite_cross_references(
+        body,
+        {"image": {1: "key-1"}},  # 42 not in map
+    )
+    assert out == body
+
+
+def test_multiple_cross_refs_in_one_body() -> None:
+    body = "[[bsexport:image:1]] and [[bsexport:image:2]]"
+    out = _converter().rewrite_cross_references(
+        body,
+        {"image": {1: "key-1", 2: "key-2"}},
+    )
+    assert out == "/u/key-1 and /u/key-2"

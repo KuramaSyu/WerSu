@@ -21,6 +21,14 @@ from src.db.entities.note.embedding import NoteEmbeddingEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.versioning import NoteVersionEntry
 from src.api.directory_repo import DirectoryRepo
+from src.api.permission_repo import PermissionRepoABC
+from src.api.relationship import (
+    DirectoryRelationEnum,
+    ObjectRef,
+    ObjectTypeEnum,
+    Relationship,
+    SubjectRef,
+)
 from src.db.repos.note.content import NoteContentRepo
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.api.note_facade import NoteRepoFacadeABC, SearchType
@@ -108,7 +116,7 @@ class _TestDirectoryRepo(DirectoryRepo):
     ``self.user_to_directory_ids`` directly.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, permission_repo: Optional[PermissionRepoABC] = None) -> None:
         # ``directories_by_id``: directory id -> DirectoryEntity.  Tests
         # can pre-populate this to control what ``fetch_directory``
         # returns.
@@ -128,6 +136,12 @@ class _TestDirectoryRepo(DirectoryRepo):
         self.updated: List[DirectoryEntity] = []
         self.deleted: List[str] = []
         self._next_directory_id = 0
+        # Optional permission repo reference so that ``create_directory``
+        # can mirror the production behaviour of writing the relations
+        # the entity carries.  Without this, tests that use the real
+        # :class:`DirectoryService` would fail every visibility check
+        # inside :class:`NoteService` / :class:`NoteFacade`.
+        self._permission_repo = permission_repo
 
     @property
     def _default_directory_name(self) -> str:
@@ -157,6 +171,48 @@ class _TestDirectoryRepo(DirectoryRepo):
         )
         self.directories_by_id[str(new_id)] = created
         self.created.append(created)
+
+        # Mirror the production :class:`DirectoryRepoSpicedbPostgres`
+        # behaviour: write the entity's relations through the permission
+        # repo so that subsequent reads see the new directory as
+        # visible to the caller.
+        if self._permission_repo is not None and entity.relations:
+            resolved = []
+            for rel in entity.relations:
+                resolved.append(
+                    Relationship(
+                        resource=ObjectRef(
+                            object_type=rel.resource.object_type,
+                            object_id=str(new_id),
+                        ),
+                        relation=rel.relation,
+                        subject=rel.subject,
+                    )
+                )
+            await self._permission_repo.insert(resolved)
+
+        # Mirror the parent relation written when ``entity.parent_id``
+        # is set, matching the production repo.
+        if (
+            self._permission_repo is not None
+            and entity.parent_id not in (UNDEFINED, None, "")
+        ):
+            await self._permission_repo.insert(
+                [
+                    Relationship(
+                        resource=ObjectRef(
+                            object_type=ObjectTypeEnum.DIRECTORY,
+                            object_id=str(new_id),
+                        ),
+                        relation=DirectoryRelationEnum.PARENT,
+                        subject=SubjectRef(
+                            object_type=ObjectTypeEnum.DIRECTORY,
+                            object_id=str(entity.parent_id),
+                        ),
+                    )
+                ]
+            )
+
         return created
 
     async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
@@ -186,10 +242,37 @@ class _TestDirectoryRepo(DirectoryRepo):
         return updated
 
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
+        # Start from the test-managed map (always wins).
         if user.user_id in self.user_to_directory_ids:
-            return list(self.user_to_directory_ids[user.user_id])
-        # Default fallback: one default-named directory per user.
-        return [self._seed_default_directory(user)]
+            direct = set(self.user_to_directory_ids[user.user_id])
+        else:
+            direct = {self._seed_default_directory(user)}
+
+        # Mirror the production behaviour: ``admin``, ``writer``,
+        # ``reader`` and ``owner`` relations on a directory all imply
+        # ``view`` (see :data:`docs.spicedb-schema`), so any directory
+        # the user has one of those relations on is visible to them.
+        # The in-memory :class:`NotePermissionRepoInMemory` does not
+        # expand transitive implications, so this fallback lives on
+        # the directory repo instead.
+        if self._permission_repo is not None:
+            for rel in getattr(self._permission_repo, "_store", []):
+                try:
+                    if (
+                        str(rel.resource.object_type)
+                        == ObjectTypeEnum.DIRECTORY.value
+                        and str(rel.subject.object_type)
+                        == ObjectTypeEnum.USER.value
+                        and str(rel.subject.object_id) == user.user_id
+                        and str(rel.relation)
+                        in {"admin", "writer", "reader", "owner"}
+                        and rel.resource.object_id is not None
+                    ):
+                        direct.add(str(rel.resource.object_id))
+                except Exception:
+                    # Tolerate half-constructed relationships.
+                    continue
+        return sorted(direct)
 
     async def fetch_all_directories(self) -> List[DirectoryEntity]:
         return list(self.directories_by_id.values())
@@ -361,10 +444,27 @@ class _FakeNoteContentRepo(NoteContentRepo):
     Implements the methods :class:`src.db.repos.note.note.NoteFacade`
     uses: :meth:`select_by_id`, :meth:`select_by_ids`, :meth:`update`,
     :meth:`delete`.
+
+    The real :class:`NoteContentPostgresRepo` writes directly to the
+    ``note.content`` table via :class:`NoteFacade.insert`'s raw SQL
+    path.  Because the in-memory :class:`_FakeDatabase` only echoes
+    queued responses for that path, the content row never lands in
+    ``self._store`` automatically -- tests need to seed it explicitly
+    or pass an optional ``facade`` reference so :meth:`insert` and
+    :meth:`update` fall back to the facade's in-memory notes map.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, facade: Optional["_FakeNoteRepoFacade"] = None) -> None:
         self._store: dict[str, NoteEntity] = {}
+        self._facade = facade
+
+    def _lookup(self, note_id: str) -> Optional[NoteEntity]:
+        existing = self._store.get(str(note_id))
+        if existing is not None:
+            return existing
+        if self._facade is not None:
+            return self._facade.notes_by_id.get(str(note_id))
+        return None
 
     def seed(self, note: NoteEntity) -> None:
         """Insert `note` into the in-memory store keyed by its `note_id`."""
@@ -375,7 +475,7 @@ class _FakeNoteContentRepo(NoteContentRepo):
         return metadata
 
     async def update(self, set: NoteEntity, where: NoteEntity) -> NoteEntity:
-        existing = self._store.get(str(where.note_id))
+        existing = self._lookup(str(where.note_id))
         if existing is None:
             raise RuntimeError(f"note {where.note_id!r} not found")
         merged = NoteEntity(
@@ -392,13 +492,15 @@ class _FakeNoteContentRepo(NoteContentRepo):
 
     async def delete(self, metadata: NoteEntity) -> List[NoteEntity]:
         existing = self._store.pop(str(metadata.note_id), None)
+        if existing is None and self._facade is not None:
+            existing = self._facade.notes_by_id.pop(str(metadata.note_id), None)
         return [existing] if existing is not None else []
 
     async def select(self, metadata: NoteEntity) -> List[NoteEntity]:
         return [n for n in self._store.values() if n.note_id == metadata.note_id]
 
     async def select_by_id(self, note_id: str) -> NoteEntity:
-        existing = self._store.get(str(note_id))
+        existing = self._lookup(note_id)
         if existing is None:
             raise RuntimeError(f"note {note_id!r} not found")
         return existing
@@ -406,12 +508,12 @@ class _FakeNoteContentRepo(NoteContentRepo):
     async def select_by_ids(self, note_ids: List[str]) -> List[NoteEntity]:
         if not note_ids:
             raise ValueError("note_ids must not be empty")
-        missing = [nid for nid in note_ids if str(nid) not in self._store]
+        missing = [nid for nid in note_ids if self._lookup(nid) is None]
         if missing:
             raise ValueError(
                 f"Notes with ids {missing!r} could not be resolved"
             )
-        return [self._store[str(nid)] for nid in note_ids]  # type: ignore[arg-type]  # noqa: F821
+        return [self._lookup(str(nid)) for nid in note_ids]  # type: ignore[arg-type]  # noqa: F821
 
 
 class _FakeJwtProvider:
