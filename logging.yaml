@@ -2,9 +2,10 @@ level: INFO
 file: grpc_server.log
 loggers:
   __main__: DEBUG
-  src: DEBUG
-  src.grpc_mod.service: DEBUG
-  src.services: DEBUG
+  src: INFO
+  src.grpc_mod.service: INFO
+  src.grpc_mod.activity_statistics_service: DEBUG
+  src.services: INFO
   src.db.database: INFO
   src.db.table: INFO
   httpcore.http11: ERROR
