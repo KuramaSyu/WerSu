@@ -40,6 +40,19 @@ class GetNotesOptions(TypedDict, total=False):
     strip_content_at: int
 
 
+def resolve_options(options: Optional[GetNotesOptions]) -> GetNotesOptions:
+    """Resolve `options` (or `None`) into a full options dict.
+    """
+    if not options:
+        options = GetNotesOptions()
+    include_content = options.get("include_content", True)
+    strip_content_at = options.get("strip_content_at", _DEFAULT_STRIP_CONTENT_AT)
+    return GetNotesOptions(
+        include_content=bool(include_content),
+        strip_content_at=int(strip_content_at),
+    )
+
+
 class GetNotesOptionsBuilder:
     """Fluent builder for :class:`GetNotesOptions`.
 
