@@ -161,3 +161,51 @@ def test_multiple_cross_refs_in_one_body() -> None:
         {"image": {1: "key-1", 2: "key-2"}},
     )
     assert out == "/u/key-1 and /u/key-2"
+
+
+# ---- inline [[bsexport:...]] image src (BookStack gallery forms) ----
+
+
+def test_rewrites_inline_bsexport_image_src_html() -> None:
+    """`<img src="[[bsexport:image:N]]">` resolves via bsexport_index."""
+    body = '<p><img src="[[bsexport:image:67]]" alt="x"/></p>'
+    out = _converter().rewrite_image_sources(
+        body, {}, bsexport_index={67: "key-67"}
+    )
+    assert 'src="/u/key-67"' in out
+    assert "[[bsexport" not in out
+
+
+def test_rewrites_inline_bsexport_image_src_html2text_escaped() -> None:
+    """html2text escapes brackets in image src attributes."""
+    body = r"![x](\[\[bsexport:image:67\]\])"
+    out = _converter().rewrite_image_sources(
+        body, {}, bsexport_index={67: "key-67"}
+    )
+    assert "![x](/u/key-67)" in out
+
+
+def test_inline_bsexport_unknown_id_is_left_alone() -> None:
+    body = '<img src="[[bsexport:image:404]]" alt="x"/>'
+    out = _converter().rewrite_image_sources(
+        body, {}, bsexport_index={1: "key-1"}
+    )
+    assert out == body
+
+
+def test_rewrite_cross_references_handles_escaped_form() -> None:
+    """html2text-escaped `[[bsexport:image:N]]` is rewritten too."""
+    body = r"see \[\[bsexport:image:67\]\] for details"
+    out = _converter().rewrite_cross_references(
+        body, {"image": {67: "key-67"}}
+    )
+    assert out == "see /u/key-67 for details"
+
+
+def test_rewrite_cross_references_partial_escaping() -> None:
+    """Mixed plain + escaped cross-refs in one body."""
+    body = r"a [[bsexport:image:1]] b \[\[bsexport:image:2]\] c"
+    out = _converter().rewrite_cross_references(
+        body, {"image": {1: "key-1", 2: "key-2"}}
+    )
+    assert out == "a /u/key-1 b /u/key-2 c"
