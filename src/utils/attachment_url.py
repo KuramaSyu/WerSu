@@ -1,19 +1,3 @@
-"""Build the canonical attachment URL the frontend uses for images.
-
-The frontend renders every note/directory image through a single route:
-
-    /api/attachments/image?width=720&format=webp&key=<urlencoded key>
-
-The key is the S3 object key returned by
-:class:`src.services.attachments.AttachmentFacade.post_attachment`,
-typically ``attachments/<uuid>``.  The query parameter is double-URL-
-encoded so that :func:`src.utils.extract_attachments.extract_attachment_ids`
-can decode it back to the bare key (the regex there handles one or two
-rounds of decoding).  Keeping the same shape means everything that
-already scans note content for attachment references keeps working
-without any new parser code.
-"""
-
 from __future__ import annotations
 
 from urllib.parse import quote
