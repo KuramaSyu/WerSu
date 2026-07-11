@@ -59,6 +59,22 @@ class ParsedReadme:
     image_url: Optional[str]
     description: str
 
+    
+    def write_readme(self) -> str:
+        """Write a README note for the directory.
+
+        Args:
+            content: raw README body (may be empty).
+        """
+        lines: list[str] = []
+        if self.title:
+            lines.append(f"# {self.title}")
+        if self.image_url:
+            lines.append(f"![alt]({self.image_url})")
+        if self.description:
+            lines.append(self.description)
+        return "\n\n".join(lines)
+
 
 def parse_readme(content: Optional[str]) -> ParsedReadme:
     """Parse ``content`` into title, image URL, and description.
@@ -113,5 +129,7 @@ def parse_readme(content: Optional[str]) -> ParsedReadme:
         description=description,
     )
 
+
+        
 
 __all__ = ["ParsedReadme", "parse_readme"]
