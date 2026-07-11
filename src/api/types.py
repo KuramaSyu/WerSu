@@ -19,20 +19,21 @@ class LoggingProvider(Protocol):
 
     def __call__(
         self,
-        file: str,
+        file_or_class: str,
         cls_instance: Optional[object] = None,
         *,
         prefix: Optional[str] = None,
     ) -> logging.Logger:
-        """Return a logger for ``file``, optionally tagged with ``prefix``.
+        """Return a logger for `file_or_class`, optionally tagged with `prefix`.
 
         Args:
-            file: logger name, typically the module ``__name__``.
+            file_or_class: logger name, typically the module `__name__` or a class name.
             cls_instance: anchor whose class qualname is appended to
-                the logger name (usually ``self``).
-            prefix: optional short tag wrapped in ``[ ]`` and
-                prepended to the logger name (e.g. ``"sharing facade"``).
+                the logger name (usually `self`).
+            prefix: optional short tag wrapped in `[ ]` and
+                prepended to the logger name (e.g. `"sharing facade"`).
         """
+        ...
 
 
 @dataclass
