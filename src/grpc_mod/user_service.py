@@ -15,6 +15,7 @@ import grpc
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
+from src.api.undefined import UNDEFINED
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod._log_decorator import log_service_call
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
@@ -46,7 +47,7 @@ class GrpcUserService(UserServiceServicer):
         self._to_grpc = to_grpc
 
     @log_service_call()
-    async def GetUser(self, request: GetUserRequest, context: ServicerContext) -> User:
+    async def GetUser(self, request: GetUserRequest, context: ServicerContext[GetUserRequest, User]) -> User:
         try:
             return await self._GetUser(request, context)
         except Exception:
@@ -56,7 +57,7 @@ class GrpcUserService(UserServiceServicer):
             return User()
 
     @log_service_call()
-    async def _GetUser(self, request: GetUserRequest, context: ServicerContext) -> User:
+    async def _GetUser(self, request: GetUserRequest, context: ServicerContext[GetUserRequest, User]) -> User:
         if request.HasField("id"):
             user_entity = await self.user_service.get_user(user_id=request.id)
         elif request.HasField("discord_id"):
@@ -77,24 +78,25 @@ class GrpcUserService(UserServiceServicer):
         return user_entity.convert(self._to_grpc)
 
     @log_service_call()
-    async def AlterUser(self, request: AlterUserRequest, context: ServicerContext) -> User:
+    async def AlterUser(self, request: AlterUserRequest, context: ServicerContext[AlterUserRequest, User]) -> User:
         ...
 
     @log_service_call()
-    async def DeleteUser(self, request: DeleteUserRequest, context: ServicerContext) -> DeleteUserResponse:
+    async def DeleteUser(self, request: DeleteUserRequest, context: ServicerContext[DeleteUserRequest, DeleteUserResponse]) -> DeleteUserResponse:
         ...
 
     @log_service_call()
-    async def PostUser(self, request: PostUserRequest, context: ServicerContext) -> User:
+    async def PostUser(self, request: PostUserRequest, context: ServicerContext[PostUserRequest, User]) -> User:
         try:
             user_entity = await self.user_service.create_user(
                 UserEntity(
-                    id=None,
+                    id=UNDEFINED,  # UNDEFINED means, that it gets generated
                     discord_id=request.discord_id,
                     avatar=request.avatar,
                     username=request.username,
                     discriminator=request.discriminator,
                     email=request.email,
+                    type='human'  # otherwise they dont get default directories
                 )
             )
             self.log.debug(f"Created user entity: {user_entity}")
