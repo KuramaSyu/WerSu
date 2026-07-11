@@ -15,7 +15,8 @@ else reaches the permission repo.
 
 from __future__ import annotations
 
-from typing import List, Optional
+import datetime
+from typing import Callable, List, Optional
 
 from src.api import (
     NoteRelationEnum,
@@ -28,16 +29,16 @@ from src.api import (
     SubjectRef,
     ActivityLoggerServiceABC,
 )
-from src.api.note_service import GetNotesOptions, _normalise_get_notes_options
+from src.api.note_service import GetNotesOptions, resolve_options
 from src.api.jwt_provider import JwtProvider
 from src.api.note_facade import NoteRepoFacadeABC, SearchType
 from src.api.relationship import AttachmentRelationEnum
 from src.api.types import Pagination
-from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
+from src.api.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryRepo
-from src.domain.permission_chain import HasNoteDeletePerm, HasNoteWritePerm
+from src.domain.permission_chain import HasDirectoryWritePerm, HasNoteDeletePerm, HasNoteWritePerm
 from src.utils.extract_attachments import extract_attachment_ids
 
 
@@ -55,12 +56,14 @@ class NoteService(NoteServiceABC):
         jwt_provider: JwtProvider,
         directory_repo: DirectoryRepo,
         activity_logger: ActivityLoggerServiceABC,
+        now: Callable[[], datetime.datetime] = datetime.datetime.now,
     ) -> None:
         self._note_repo = note_repo
         self._permission_repo = permission_repo
         self._jwt_provider = jwt_provider
         self._directory_repo = directory_repo
         self._activity_logger = activity_logger
+        self._now = now
 
     async def get_note(
         self,
@@ -87,6 +90,10 @@ class NoteService(NoteServiceABC):
         user_ctx: UserContextABC,
     ) -> NoteEntity:
         parent_directory_id = await self._resolve_parent_directory_id(note, user_ctx)
+        note.parent_dir_id = parent_directory_id
+
+        if not note.updated_at:
+            note.updated_at = self._now()
 
         # insert note itself along with directory relation and owner relation
         inserted = await self._note_repo.insert(note, user_ctx)
@@ -121,7 +128,7 @@ class NoteService(NoteServiceABC):
             self._permission_repo
         )
         write_result = await write_check.check(user_ctx)
-        if not write_result:
+        if write_result.error:
             raise write_result.error
         return await self._note_repo.update(note, user_ctx)
 
@@ -134,7 +141,7 @@ class NoteService(NoteServiceABC):
             self._permission_repo
         )
         delete_result = await delete_check.check(user_ctx)
-        if not delete_result:
+        if delete_result.error:
             raise delete_result.error
         deleted = await self._note_repo.delete(note_id, user_ctx)
         if not deleted:
@@ -192,7 +199,7 @@ class NoteService(NoteServiceABC):
         if not note_ids:
             raise ValueError("note_ids must not be empty")
 
-        resolved = _normalise_get_notes_options(options)
+        resolved = resolve_options(options)
 
         notes = await self._note_repo.select_by_ids(note_ids, user_ctx)
 
@@ -206,7 +213,7 @@ class NoteService(NoteServiceABC):
                 self._permission_repo
             )
             read_result = await read_check.check(user_ctx)
-            if not read_result:
+            if read_result.error:
                 raise read_result.error
 
         # apply content shaping
@@ -249,35 +256,39 @@ class NoteService(NoteServiceABC):
         note: NoteEntity,
         user_ctx: UserContextABC,
     ) -> str:
-        """Pick the directory id the new note should be parented under.
-
-        If the caller already picked a `parent_dir_id` and that
-        directory is visible to them, use it.  Otherwise fall back to
-        the user's first default directory.
-        """
-        requested = note.parent_dir_id if note.parent_dir_id not in (UNDEFINED, None) else None
+        """ `note.parent_dir_id` if user has permission for that, otherwise the first default directory (fleeting notes)"""
+        requested = note.parent_dir_id
         user_directory_ids = await self._directory_repo.list_user_directory_ids(user_ctx)
-        if requested is not None:
-            requested_str = str(requested)
-            if requested_str not in user_directory_ids:
-                raise ValueError(
-                    f"Provided parent_dir_id {requested_str!r} is not accessible for "
-                    f"user {user_ctx.user_id!r}"
-                )
-            return requested_str
 
-        default_name = self._directory_repo.get_default_directory_specs()[0].name
-        directories = [
-            await self._directory_repo.fetch_directory(directory_id)
-            for directory_id in user_directory_ids
-        ]
-        matches = [d for d in directories if d and d.name == default_name]
-        if len(matches) != 1 or matches[0].id in (UNDEFINED, None):
+        # requested does not exist
+        if requested and requested not in user_directory_ids:
             raise ValueError(
-                f"Could not resolve default directory {default_name!r} for user {user_ctx.user_id!r}"
+                f"Provided parent_dir_id {requested!r} is not accessible for "
+                f"user {user_ctx.user_id!r}"
             )
-        return str(matches[0].id)
+    
+        # check write permission for the requested directory
+        if requested:
+            chain = HasDirectoryWritePerm(requested).set_permission_repo(self._permission_repo)
+            result = await chain.check(user_ctx)
+            if result.error:
+                raise result.error
+            return requested
+        
+        # requested is UNDEFINED -> return default directory
+        # get hardcoded default directory name
+        default_name = self._directory_repo.get_default_directory_specs()[0].name
 
+        # check lazyly for the name by traversing through all the users directories
+        for d_id in user_directory_ids:
+            d = await self._directory_repo.fetch_directory(d_id)
+            if d and d.name == default_name:
+                return unwrap_undefined(d.id)
+
+        raise ValueError(
+            f"Could not resolve default directory {default_name!r} for user {user_ctx.user_id!r}"
+        )
+    
     async def _attach_directory_relations(
         self,
         notes: List[NoteEntity],
@@ -310,15 +321,23 @@ class NoteService(NoteServiceABC):
             )
             # check if the found relationships belong to any note contained in notes.
             for rel in relationships:
-                note_id = rel.resource.object_id
-                if note_id not in (UNDEFINED, None) and note_id in notes_by_id:
-                    notes_by_id[note_id].permissions.append(
-                        Relationship(
-                            resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
-                            relation=NoteRelationEnum.PARENT_DIRECTORY,
-                            subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directory_id),
-                        )
+                note_id = unwrap_undefined(rel.resource.object_id)
+                target_note = notes_by_id.get(note_id)
+
+                if not target_note:
+                    # should never happen
+                    continue
+
+                if not target_note.permissions:
+                    target_note.permissions = []
+                
+                target_note.permissions.append(
+                    Relationship(
+                        resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
+                        relation=NoteRelationEnum.PARENT_DIRECTORY,
+                        subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directory_id),
                     )
+                )
 
     async def _build_attachment_tokens(
         self,
