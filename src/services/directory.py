@@ -28,8 +28,9 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
+from src.api.note_service import NoteServiceABC
 from src.api.permission_repo import DirectoryChild
-from src.api.undefined import UNDEFINED
+from src.api.undefined import UNDEFINED, unwrap_undefined
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
@@ -40,7 +41,9 @@ from src.domain.permission_chain import (
     HasDirectoryViewPerm,
     HasDirectoryWritePerm,
 )
-from src.utils.readme_parser import parse_readme
+from src.utils.attachment_url import build_attachment_url
+from src.utils.extract_attachments import extract_attachment_ids
+from src.utils.readme_parser import ParsedReadme, parse_readme
 
 
 if TYPE_CHECKING:
@@ -74,9 +77,9 @@ class DirectoryService(DirectoryServiceABC):
         note_repo: NoteRepoFacadeABC,
         permission_repo: PermissionRepoABC,
         activity_logger: ActivityLoggerServiceABC,
-        note_service: Optional["NoteService"] = None,
-        attachment_facade: Optional["AttachmentFacadeABC"] = None,
-        log: Optional["LoggingProvider"] = None,
+        note_service: NoteServiceABC,
+        attachment_facade: AttachmentFacadeABC,
+        log: LoggingProvider,
     ) -> None:
         self._directory_repo = directory_repo
         self._note_repo = note_repo
@@ -84,9 +87,7 @@ class DirectoryService(DirectoryServiceABC):
         self._activity_logger = activity_logger
         self._note_service = note_service
         self._attachment_facade = attachment_facade
-        self.log = (log or (lambda *_a, **_k: logging.getLogger("src.services.directory")))(
-            __name__, self
-        )
+        self.log = log(__name__, self)
 
     async def get_directory_notes(
         self,
@@ -219,12 +220,12 @@ class DirectoryService(DirectoryServiceABC):
         # check against it would always fail.  When the entity specifies
         # a parent directory, gate creation on a write check against it
         # so random callers can't nest directories wherever they want.
-        if entity.parent_id not in (UNDEFINED, None):
+        if entity.parent_id:
             check = HasDirectoryWritePerm(str(entity.parent_id)).set_permission_repo(
                 self._permission_repo
             )
             result = await check.check(user_ctx)
-            if not result:
+            if result.error:
                 raise result.error
 
         admin_relation = Relationship(
@@ -241,7 +242,7 @@ class DirectoryService(DirectoryServiceABC):
         if isinstance(entity.relations, list):
             existing_relations = list(entity.relations)
 
-        created = await self._directory_repo.create_directory(
+        created_dir = await self._directory_repo.create_directory(
             DirectoryEntity(
                 id=entity.id,
                 name=entity.name,
@@ -256,27 +257,43 @@ class DirectoryService(DirectoryServiceABC):
 
         # Create the README.md which contains description and image of directory
         # then also insert note#parent_directory@directory relation 
-        if created.id not in (UNDEFINED, None):
+        if created_dir.id:
             existing_readme_id = (
-                str(created.readme_note_id)
-                if created.readme_note_id not in (UNDEFINED, None, "")
+                str(created_dir.readme_note_id)
+                if created_dir.readme_note_id
                 else None
             )
-            if existing_readme_id is None:
-                await self._create_readme(str(created.id), user_ctx)
+            readme: Optional[NoteEntity] = None
+            if not existing_readme_id:
+                readme = await self._create_readme(
+                    str(created_dir.id), 
+                    user_ctx,
+
+                )
             else:
                 await self._bind_readme(
-                    str(created.id), existing_readme_id
+                    str(created_dir.id), existing_readme_id
                 )
+            
+            # update readme with given image url.
+            image_urls = extract_attachment_ids(created_dir.image_url or "")
+            if image_urls and created_dir.image_url:
+                attachment_key = image_urls[0]
+                readme = readme or await self._note_repo.select_by_id(str(existing_readme_id), user_ctx)
+                if not readme:
+                    self.log.warning(f"failed to fetch README note for directory {created_dir.id} to link attachment {attachment_key}")
+                else:
+                    await self._update_readme(readme, user_ctx, attachment_key=attachment_key)
+
             refreshed = await self._directory_repo.fetch_directory(
-                str(created.id)
+                str(created_dir.id)
             )
             if refreshed is not None:
-                created = refreshed
+                created_dir = refreshed
             await self._activity_logger.directory_created(
-                str(created.id), user_ctx
+                str(created_dir.id), user_ctx
             )
-        return created
+        return created_dir
 
     async def patch_directory(
         self,
@@ -287,14 +304,14 @@ class DirectoryService(DirectoryServiceABC):
 
         See :meth:`~src.api.directory_service.DirectoryServiceABC.patch_directory`.
         """
-        if entity.id in (UNDEFINED, None, ""):
+        if not entity.id:
             raise ValueError("id is required for patch_directory")
 
         check = HasDirectoryWritePerm(str(entity.id)).set_permission_repo(
             self._permission_repo
         )
         result = await check.check(user_ctx)
-        if not result:
+        if result.error:
             raise result.error
 
         updated = await self._directory_repo.update_directory(entity)
@@ -324,7 +341,7 @@ class DirectoryService(DirectoryServiceABC):
             self._permission_repo
         )
         result = await check.check(user_ctx)
-        if not result:
+        if result.error:
             raise result.error
 
         children = await self._resolve_children(directory_id, user_ctx)
@@ -421,8 +438,6 @@ class DirectoryService(DirectoryServiceABC):
         directory_id: str,
         user_ctx: UserContextABC,
     ):
-        from src.api.permission_repo import ResolvedChildren
-
         return await self._permission_repo.resolve_children(
             directory_id,
             max_depth=10,
@@ -434,8 +449,6 @@ class DirectoryService(DirectoryServiceABC):
         note_ids: List[str],
         user_ctx: UserContextABC,
     ) -> None:
-        if self._note_service is None:
-            return
         for note_id in note_ids:
             try:
                 await self._note_service.delete_note(note_id, user_ctx)
@@ -451,8 +464,6 @@ class DirectoryService(DirectoryServiceABC):
         attachment_keys: List[str],
         user_ctx: UserContextABC,
     ) -> None:
-        if self._attachment_facade is None:
-            return
         for key in attachment_keys:
             try:
                 await self._attachment_facade.delete_attachment(key, user_ctx)
@@ -471,8 +482,41 @@ class DirectoryService(DirectoryServiceABC):
             self._permission_repo
         )
         result = await check.check(user_ctx)
-        if not result:
+        if result.error:
             raise result.error
+        
+    async def _update_readme(
+        self,
+        readme: NoteEntity,
+        user_ctx: UserContextABC,
+        attachment_key: Optional[str] = None,
+    ) -> NoteEntity:
+        """Updates the README and links the attachment if provided. """
+        # now we have the ID -> link the attachment key to the note
+        if attachment_key:
+            await self._attachment_facade.link_attachment_to_note(
+                attachment_key, unwrap_undefined(readme.note_id), user_ctx
+            )
+
+        # miss use ParseReadme to create one
+        title = readme.title or "README.md"
+        content = readme.content or ""
+        ParsedReadme(
+            title=title,
+            description=content,
+            image_url=build_attachment_url(attachment_key) if attachment_key else None,
+        )
+
+        # update the readme if any of the fields are provided
+        if readme.title or readme.content or attachment_key:
+            content = ParsedReadme(
+                title=title,
+                description=content,
+                image_url=build_attachment_url(attachment_key) if attachment_key else None,
+            ).write_readme()
+            return await self._note_service.update_note(readme, user_ctx)
+        return readme
+
 
     async def _create_readme(
         self,
@@ -481,9 +525,8 @@ class DirectoryService(DirectoryServiceABC):
     ) -> NoteEntity:
         """Create a fresh ``README.md`` for `directory_id` and bind it.
 
-        Inserts an empty README note owned by `user_ctx`, then binds
-        it to the directory via :meth:`_bind_readme` so subsequent
-        reads resolve it without scanning parent-directory relations.
+        Inserts a README note owned by `user_ctx`, then binds
+        it to the directory via :meth:`_bind_readme`. It 
 
         Returns:
             :class:`~src.db.entities.note.metadata.NoteEntity`: the
@@ -500,7 +543,8 @@ class DirectoryService(DirectoryServiceABC):
             parent_dir_id=directory_id,
         )
         inserted = await self._note_repo.insert(readme, user_ctx)
-        if inserted.note_id not in (UNDEFINED, None):
+
+        if inserted.note_id:
             await self._bind_readme(directory_id, str(inserted.note_id))
         return inserted
 
