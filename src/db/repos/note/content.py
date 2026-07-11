@@ -8,6 +8,7 @@ from src.db.entities import NoteEntity
 from src.db.table import TableABC
 
 from src.utils import asdict
+from src.utils.dict_helper import drop_undefined
 
 
 class NoteContentRepo(ABC):
@@ -134,12 +135,20 @@ class NoteContentRepo(ABC):
 
 class NoteContentPostgresRepo(NoteContentRepo):
     """Provides an implementation using Postgres as the backend database"""
-    def __init__(self, table: TableABC[List[Record]]):
+    def __init__(self, table: TableABC):
         self._table = table
 
     async def insert(self, metadata: NoteEntity) -> NoteEntity:
+        # explicitly declare since the NoteEntity has more fields than the table
+        to_insert = drop_undefined({
+            "id": metadata.note_id,
+            "title": metadata.title,
+            "content": metadata.content,
+            "updated_at": metadata.updated_at,
+            "author_id": metadata.author_id,
+        })
         records = await self._table.insert(
-            asdict(metadata),
+            to_insert,
             returning="id, title, content, updated_at, author_id"
         )
         if not records:
@@ -150,9 +159,18 @@ class NoteContentPostgresRepo(NoteContentRepo):
 
     async def update(self, set: NoteEntity, where: NoteEntity) -> NoteEntity:
         where_arg = asdict(where)
+        to_insert = drop_undefined({
+            "id": set.note_id,
+            "title": set.title,
+            "content": set.content,
+            "updated_at": set.updated_at,
+            "author_id": set.author_id,
+        })
+        # re-map note_id -> id
         where_arg["id"] = where_arg.pop("note_id", None)
+
         record = await self._table.update(
-            set=asdict(set),
+            set=to_insert,
             where=where_arg,
             returning="id, title, content, updated_at, author_id"
         )
@@ -166,13 +184,15 @@ class NoteContentPostgresRepo(NoteContentRepo):
     async def delete(self, metadata: NoteEntity) -> Optional[List[NoteEntity]]:
         SQL_ID = self._table.get_id_fields()[0]
         ENTITY_ID = "note_id"
-        # remove permissions and embeddings, since these are not in the content table
-        conditions = asdict(
-            replace(metadata, permissions=UNDEFINED, embeddings=UNDEFINED)
-        )
 
-        # map entities note_id to table id
-        conditions[SQL_ID] = conditions.pop(ENTITY_ID, None)
+        # build dict with all valid fields
+        conditions = drop_undefined({
+            SQL_ID: metadata.note_id,  # convert note_id -> id for SQL
+            "title": metadata.title,
+            "content": metadata.content,
+            "updated_at": metadata.updated_at,
+            "author_id": metadata.author_id,
+        })
 
         if not conditions:
             raise ValueError(f"At least one field must be set to delete metadata: {metadata}")
@@ -181,7 +201,7 @@ class NoteContentPostgresRepo(NoteContentRepo):
             returning="id, title, content, updated_at, author_id"
         )
         if not records:
-            raise Exception("Failed to delete metadata")
+            raise Exception(f"Failed to delete metadata for conditions: {conditions}; returned: {records}")
         
         # convert records to note entities with id conversion
         entities = []
@@ -194,8 +214,16 @@ class NoteContentPostgresRepo(NoteContentRepo):
         return entities
     
     async def select(self, metadata: NoteEntity) -> List[NoteEntity]:
+        where = drop_undefined({
+            "id": metadata.note_id,
+            "title": metadata.title,
+            "content": metadata.content,
+            "updated_at": metadata.updated_at,
+            "author_id": metadata.author_id,
+        })
+
         records = await self._table.select(
-            where=asdict(metadata),
+            where=where,
             select="id, title, content, updated_at, author_id"
         )
         if not records:
