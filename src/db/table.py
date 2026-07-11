@@ -178,18 +178,6 @@ class TableABC(Protocol):
         """Alias for :meth:`fetch`."""
         return await self.fetch(sql, *args)
 
-    @staticmethod
-    def create_where_statement(columns: List[str], dollar_start: int = 1) -> str:
-        """Build an ``AND``-joined ``col=$N`` clause for Postgres.
-
-        Kept around for callers that hand-rolled SQL; new code should
-        prefer the fluent :class:`src.db.sql_builders.SqlBuilderABC`.
-        """
-        ...
-
-    def _create_sql_log_message(self, sql: str, values: List[Any]) -> None:
-        """Format an SQL + values pair into the debug-log string."""
-        ...
 
 
 class Table(TableABC):
@@ -361,7 +349,6 @@ class Table(TableABC):
         stmt = staged.build()
         self._log_statement(stmt)
         return_values = await self.db.fetchrow(stmt.sql, *stmt.params)
-        self.log.error(f"Update returned: {return_values}")
         return return_values
 
     async def delete(
