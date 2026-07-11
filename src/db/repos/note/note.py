@@ -2,7 +2,6 @@ from dataclasses import replace
 from datetime import datetime
 from typing import List, Optional
 
-import asyncpg
 
 from src.api.note_facade import NoteRepoFacadeABC, SearchType
 from src.api.relationship import AttachmentRelationEnum
@@ -10,14 +9,12 @@ from src.api.types import LoggingProvider, Pagination
 from src.api.user_context import UserContextABC
 from src.db.entities import NoteEntity
 from src.db.database import Database
-from src.db.entities.note.embedding import NoteEmbeddingEntity
 from src.db.repos.directory.directory import DirectoryRepo
 from src.db.repos.note.content import NoteContentRepo
 
 from src.db.repos.permissions import PermissionRepoABC
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
-from src.db.table import TableABC
-from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined, unwrap_undefined_or
+from src.api.undefined import UNDEFINED, unwrap_undefined_or
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.db.repos.note.search_strategy import (

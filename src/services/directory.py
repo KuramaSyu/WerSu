@@ -30,7 +30,7 @@ from src.api import (
 )
 from src.api.note_service import NoteServiceABC
 from src.api.permission_repo import DirectoryChild
-from src.api.undefined import UNDEFINED, unwrap_undefined
+from src.api.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
@@ -410,21 +410,20 @@ class DirectoryService(DirectoryServiceABC):
             )
             result.append(DirectoryChild(id=note_id, kind="note", name=title))
 
-        if self._attachment_facade is not None:
-            for attachment_key in children.attachment_ids:
-                try:
-                    metadata = await self._attachment_facade.get_metadata(
-                        attachment_key, user_ctx
-                    )
-                except Exception:
-                    metadata = None
-                if metadata is not None and metadata.filename not in (UNDEFINED, None, ""):
-                    name = str(metadata.filename)
-                else:
-                    name = attachment_key
-                result.append(
-                    DirectoryChild(id=attachment_key, kind="attachment", name=name)
+        # traverse all attachments to provide the filename instead of the key as name
+        for attachment_key in children.attachment_ids:
+            name = attachment_key
+            try:
+                metadata = await self._attachment_facade.get_metadata(
+                    attachment_key, user_ctx
                 )
+                name = metadata.filename or attachment_key
+            except Exception:
+                pass
+
+            result.append(
+                DirectoryChild(id=attachment_key, kind="attachment", name=name)
+            )
 
         # Sort by kind (directories, then notes, then attachments)
         # then by id so the output is deterministic for tests and
@@ -609,10 +608,10 @@ class DirectoryService(DirectoryServiceABC):
         if readme_id in (UNDEFINED, None):
             return
         readme = await self._note_repo.select_by_id(str(readme_id), user_ctx)
-        if readme is None:
+        if not readme:
             return
         parsed = parse_readme(
-            readme.content if readme.content is not UNDEFINED else None
+            unwrap_undefined_or(readme.content, None),
         )
         if parsed.image_url is not None:
             directory.image_url = parsed.image_url

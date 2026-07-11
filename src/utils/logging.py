@@ -8,14 +8,14 @@ import copy
 import yaml
 
 _CONFIG_ENV_VAR = "LOGGING_CONFIG_PATH"
-_DEFAULT_CONFIG = {
+_DEFAULT_CONFIG: Dict[str, Any] = {
     "level": "INFO",
     "file": "grpc_server.log",
     "loggers": {},
 }
 
-_CONFIG_CACHE: Optional[Dict[str, Any]] = None
-_HANDLERS_CONFIGURED = False
+_config_cache: Optional[Dict[str, Any]] = None
+_handles_configured = False
 
 
 class ColoredFormatter(logging.Formatter):
@@ -83,22 +83,19 @@ def _apply_logger_levels(config: Dict[str, Any]) -> None:
 
 
 def _load_config() -> Dict[str, Any]:
-    global _CONFIG_CACHE
-    if _CONFIG_CACHE is not None:
-        return _CONFIG_CACHE
+    global _config_cache
+    if _config_cache is not None:
+        return _config_cache
 
     config = copy.deepcopy(_DEFAULT_CONFIG)
     config_path = os.getenv(_CONFIG_ENV_VAR, "logging.yaml")
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r", encoding="utf-8") as handle:
-                raw = yaml.safe_load(handle) or {}
-            if isinstance(raw, dict) and "logging" in raw:
-                raw = raw["logging"]
-            if isinstance(raw, dict):
-                config.update(raw)
-        except Exception as exc:
-            print(f"Failed to read logging config {config_path}: {exc}", file=sys.stderr)
+    try:
+        with open(config_path, "r", encoding="utf-8") as handle:
+            raw: Dict[str, Any] = yaml.safe_load(handle) or {}
+        # raw = raw["logging"]
+        config.update(raw)
+    except Exception as exc:
+        print(f"Failed to read logging config {config_path}: {exc}", file=sys.stderr)
 
     config["level"] = _normalize_level(config.get("level"))
     loggers = config.get("loggers") or {}
@@ -114,13 +111,13 @@ def _load_config() -> Dict[str, Any]:
     # are configured before they emit their first log
     _apply_logger_levels(config)
 
-    _CONFIG_CACHE = config
-    return _CONFIG_CACHE
+    _config_cache = config
+    return _config_cache
 
 
 def _configure_handlers() -> None:
-    global _HANDLERS_CONFIGURED
-    if _HANDLERS_CONFIGURED:
+    global _handles_configured
+    if _handles_configured:
         return
 
     init(autoreset=False)
@@ -147,7 +144,7 @@ def _configure_handlers() -> None:
     root.addHandler(file_handler)
     root.addHandler(stdout_handler)
 
-    _HANDLERS_CONFIGURED = True
+    _handles_configured = True
 
 
 def _get_effective_level(logger_path: str) -> int:

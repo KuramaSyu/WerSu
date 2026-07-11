@@ -56,7 +56,7 @@ class UserPostgresRepo(UserRepoABC):
 
     def __init__(
         self,
-        table: TableABC[List[Record]],
+        table: TableABC,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         self._table = table
@@ -82,7 +82,7 @@ class UserPostgresRepo(UserRepoABC):
         Only fields that are not :obj:`~src.api.undefined.UNDEFINED` are
         written; explicit ``None`` clears the column.
         """
-        if user.id is None:
+        if not user.id:
             raise ValueError("User ID is required for update operation")
 
         set_values = drop_undefined(asdict(user))
@@ -116,7 +116,7 @@ class UserPostgresRepo(UserRepoABC):
         set_values.pop("id", None)
         set_values.pop("type", None)
         if not set_values:
-            if user.discord_id is None:
+            if not user.discord_id:
                 raise ValueError(
                     "User discord_id is required for upsert operation"
                 )

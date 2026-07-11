@@ -98,7 +98,7 @@ class AttachmentFacade(AttachmentFacadeABC):
         # permission check
         check = HasAttachmentWritePerm(attachment.key).set_permission_repo(self._permission_repo)
         has_permission = await check.check(user_ctx)
-        if not has_permission:
+        if has_permission.error:
             raise has_permission.error
         
         # update metadata
@@ -117,6 +117,8 @@ class AttachmentFacade(AttachmentFacadeABC):
             attachment.created_at = now
         if attachment.updated_at is UNDEFINED:
             attachment.updated_at = now
+        if attachment.filepath is UNDEFINED:
+            raise ValueError("Attachment filepath must be given. Try to provide it as /directory/path/filename.ext for debug purposes or later conversion")
 
         # send content to object storage
         if attachment.key is UNDEFINED:
@@ -133,9 +135,9 @@ class AttachmentFacade(AttachmentFacadeABC):
         # permission check
         check = HasAttachmentViewPerm(key).set_permission_repo(self._permission_repo)
         has_permission = await check.check(user_ctx)
-        if not has_permission:
-            return PermissionError(f"user {user_ctx.user_id} has no permission to view attachment {key}")
-        
+        if has_permission.error:
+            raise has_permission.error
+
         metadata = await self._metadata_repo.get_metadata(key)
         content_attachment = await self._attachment_repo.get_attachment(key)
 
