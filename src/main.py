@@ -5,7 +5,7 @@ import os
 import time
 
 import asyncio
-from typing import Optional, Callable
+from typing import Any, Callable, Dict, Optional, cast
 import boto3
 from authzed.api.v1 import AsyncClient
 import grpc
@@ -48,17 +48,17 @@ from src.db.repos.user import RepoContextFactory
 from src.db.repos.user.user_action import UserActionPostgresRepo
 from src.db.repos.activity.postgres import PostgresActivityRepo
 from src.db.table import Table, setup_table_logging
-from src.grpc_mod.proto.attachments_pb2_grpc import add_AttachmentServiceServicer_to_server
+from src.grpc_mod.proto.attachments_pb2_grpc import add_AttachmentServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.note_pb2_grpc import (
-    add_DirectoryServiceServicer_to_server,
-    add_NoteServiceServicer_to_server,
-    add_PermissionServiceServicer_to_server,
-    add_NoteVersionServiceServicer_to_server,
+    add_DirectoryServiceServicer_to_server,  # type: ignore[attr-defined]
+    add_NoteServiceServicer_to_server,  # type: ignore[attr-defined]
+    add_PermissionServiceServicer_to_server,  # type: ignore[attr-defined]
+    add_NoteVersionServiceServicer_to_server,  # type: ignore[attr-defined]
 )
 from src.grpc_mod.proto.thirdparty_migrations_pb2_grpc import (
-    add_ThirdpartyMigrationsServiceServicer_to_server,
+    add_ThirdpartyMigrationsServiceServicer_to_server,  # type: ignore[attr-defined]
 )
-from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server
+from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server  # type: ignore[attr-defined]
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteFacade
 from src.grpc_mod.attachment_service import GrpcAttachmentService
@@ -150,7 +150,7 @@ async def serve():
 
     # setup db tables and their primary keys
     log.info("Setting up database tables...")
-    common_table_kwargs = {"db": db, "logging_provider": logging_provider}
+    common_table_kwargs: Dict[str, Any] = {"db": db, "logging_provider": logging_provider}
     content_table = Table(
         **common_table_kwargs, 
         table_name="note.content", 
@@ -205,7 +205,7 @@ async def serve():
     )
 
     # setup S3 connection
-    s3_client = boto3.client(
+    s3_client: Any = boto3.client(  # type: ignore[reportUnknownMemberType]
         "s3",
         endpoint_url=s3_endpoint,
         aws_access_key_id=s3_access_key,
@@ -329,7 +329,7 @@ async def serve():
         logging_provider=logging_provider,
     )
 
-    note_app_service = NoteService(
+    app_note_service = NoteService(
         note_repo=note_repo,
         permission_repo=permission_repo,
         jwt_provider=jwt_provider,
@@ -366,13 +366,13 @@ async def serve():
         logging_provider=logging_provider,
     )
 
-    note_service = GrpcNoteService(
-        note_service=note_app_service,
+    grpc_note_service = GrpcNoteService(
+        note_service=app_note_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
         context_factory=user_context_factory,
     )
-    add_NoteServiceServicer_to_server(note_service, server)
+    add_NoteServiceServicer_to_server(grpc_note_service, server)
 
 
     add_NoteVersionServiceServicer_to_server(note_version_service, server)
@@ -382,7 +382,7 @@ async def serve():
         note_repo=note_repo,
         permission_repo=permission_repo,
         activity_logger=activity_logger_service,
-        note_service=note_app_service,
+        note_service=app_note_service,
         attachment_facade=attachment_service,
         log=logging_provider,
     )
@@ -390,7 +390,7 @@ async def serve():
     migrations_service: ThirdpartyMigrationsServiceABC = BookstackBookImport(
         attachment_facade=attachment_service,
         directory_service=directory_app_service,
-        note_service=note_service,
+        note_service=app_note_service,
         log=logging_provider,
     )
 
@@ -442,13 +442,13 @@ async def serve():
     add_AttachmentServiceServicer_to_server(grpc_attachment_service, server)
 
     # setup gRPC activity statistics service
-    activity_statistics_service = GrpcActivityStatisticsService(
+    grpc_activity_statistics_service = GrpcActivityStatisticsService(
         statistics_service=activity_statistics_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
         context_factory=user_context_factory,
     )
-    add_ActivityStatisticsServiceServicer_to_server(activity_statistics_service, server)
+    add_ActivityStatisticsServiceServicer_to_server(grpc_activity_statistics_service, server)
 
     # configure server
     listen_addr = f"{grpc_host}:{grpc_port}"
