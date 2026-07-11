@@ -24,7 +24,7 @@ import mimetypes
 from typing import Callable, Dict, List
 
 from src.api import DirectoryServiceABC, LoggingProvider, NoteServiceABC, UserContextABC
-from src.api.undefined import UNDEFINED
+from src.api.undefined import UNDEFINED, unwrap_undefined
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
@@ -34,7 +34,7 @@ from src.services.thirdparty_migrations import (
     MigrationResult,
     ThirdpartyMigrationsServiceABC,
 )
-from src.services.thirdparty_migrations._attachment_url import build_attachment_url
+from src.utils.attachment_url import build_attachment_url
 from src.services.thirdparty_migrations.bookstack_html_converter import (
     BookstackHtmlConverter,
 )
@@ -44,9 +44,10 @@ from src.services.thirdparty_migrations.bookstack_models import (
 )
 from src.services.thirdparty_migrations.bookstack_reader import (
     BookstackBookReader,
-    BookstackZipError,
 )
-from src.utils.extract_attachments import extract_attachment_ids
+from src.services.thirdparty_migrations._extract_bsexport import (
+    extract_bookstack_attachment_ids,
+)
 
 
 class BookstackBookImport(ThirdpartyMigrationsServiceABC):
@@ -107,15 +108,18 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
     ) -> MigrationResult:
         # 1. Upload every file referenced by the export, recording
         #    the new attachment key so we can rewrite inline refs.
-        file_index, id_index, attachments_uploaded = await self._upload_attachments(
+        self.log.debug(f"Uploading {len(book.files)} attachments for book {book.name}")
+        file_index, id_index, flat_id_index, attachments_uploaded = await self._upload_attachments(
             book, user_ctx
         )
 
         # 2. Create the book directory.  The cover is stored in
         #    image_url, which the auto-generated README picks up.
+        self.log.debug(f"Creating book directory for {book.name}")
         book_dir = await self._create_book_directory(book, file_index, user_ctx)
 
         # 3. Create chapter directories under the book directory.
+        self.log.debug(f"Creating {len(book.chapters)} chapter directories for {book.name}")
         chapter_dirs: Dict[int, str] = {}
         chapters: List[ImportedChapter] = []
         for chapter in book.chapters:
@@ -148,12 +152,13 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
 
         # 4. Two passes over pages so we can rewrite [[bsexport:...]]
         #    cross-refs once every old id has a known target.
+        self.log.debug(f"Creating {len(book.pages)} pages for {book.name}")
         first_pass: Dict[int, NoteEntity] = {}
         pages_imported = 0
         all_pages = self._collect_pages(book)
         for page in all_pages:
             try:
-                note = await self._create_page_note(page, chapter_dirs, book_dir, file_index, user_ctx)
+                note = await self._create_page_note(page, chapter_dirs, book_dir, file_index, flat_id_index, user_ctx)
             except Exception as exc:
                 self.log.error("failed to import page %r: %s", page.name, exc)
                 continue
@@ -162,18 +167,21 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
 
         # Second pass: link attachments referenced in each note's
         # content + handle page.images[] explicit entries.
+        self.log.debug(f"Linking attachments for {len(first_pass)} imported pages")
         for page in all_pages:
             note = first_pass.get(page.id)
             if note is None:
                 continue
-            await self._link_attachments_for_note(page, note, file_index, id_index, user_ctx)
+            await self._link_attachments_for_note(page, note, file_index, flat_id_index, user_ctx)
 
         # Rewrite cross-references in the inserted notes.  Page /
         # chapter / book kinds resolve to note / directory ids that
         # we now have; image / attachment kinds resolve via the
         # id_index map.
+        self.log.debug(f"Rewriting cross-references for {len(first_pass)} imported pages")
         await self._rewrite_cross_references(first_pass, id_index, user_ctx)
 
+        self.log.debug(f"BookStack import complete: {book.name}, {pages_imported} pages, {attachments_uploaded} attachments")
         return MigrationResult(
             root_directory_id=str(book_dir.id),
             pages_imported=pages_imported,
@@ -185,12 +193,13 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
         self,
         book: BookstackBook,
         user_ctx: UserContextABC,
-    ) -> tuple[Dict[str, str], Dict[str, Dict[int, str]], int]:
+    ) -> tuple[Dict[str, str], Dict[str, Dict[int, str]], Dict[int, str], int]:
         """Upload every file under ``files/`` and build rewrite maps.
 
         Returns:
             file_index: filename -> new attachment key.
-            id_index: cross-ref kind -> source id -> new attachment key.
+            id_index: Dict[type(image/attachment) -> Dict[source_id -> new_attachment_key]  ]
+            flat_id_index: Dict[source_id -> new_attachment_key]  (flattened from id_index, duplicates overridden)
             attachments_uploaded: total count of successful uploads.
         """
         file_index: Dict[str, str] = {}
@@ -204,7 +213,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
                 attachment = Attachment(
                     key=UNDEFINED,
                     filename=filename,
-                    filepath=UNDEFINED,
+                    filepath=f'/{book.name}/{filename}',
                     content_type=_guess_content_type(filename),
                     size=len(data),
                     content=data,
@@ -215,7 +224,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
             except Exception as exc:
                 self.log.error("failed to upload attachment %r: %s", filename, exc)
                 continue
-            key = str(stored.key)
+            key = unwrap_undefined(stored.key)
             file_index[filename] = key
             uploaded += 1
 
@@ -228,7 +237,13 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
             for att in page.attachments:
                 if att.id and att.file in file_index:
                     id_index["attachment"][att.id] = file_index[att.file]
-        return file_index, id_index, uploaded
+
+        flat_id_index: Dict[int, str] = {}
+        for _kind, kind_map in id_index.items():
+            for source_id, key in kind_map.items():
+                flat_id_index[source_id] = key
+
+        return file_index, id_index, flat_id_index, uploaded
 
     async def _create_book_directory(
         self,
@@ -258,10 +273,29 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
         chapter_dirs: Dict[int, str],
         book_dir: DirectoryEntity,
         file_index: Dict[str, str],
+        flat_id_index: Dict[int, str],
         user_ctx: UserContextABC,
     ) -> NoteEntity:
         parent_dir_id = chapter_dirs.get(page.chapter_id or -1) or str(book_dir.id)
-        body = self._converter.convert_content(page, file_index)
+        # Inline image-src refs in the page body may use the
+        # `[[bsexport:image:N]]` cross-ref form (either raw HTML or
+        # the html2text escaped variant).  Resolve them through the
+        # flat source-id -> new-key map so the first-pass note
+        # already carries the new attachment URL; the second-pass
+        # `rewrite_cross_references` then cleans up any plain-prose
+        # placeholders that survived (anchor hrefs, page/chapter
+        # cross-refs, etc).
+        valid_bsexport_index_to_uuid: Dict[int, str] = {}
+        for img in page.images:
+            if not img.id:
+                continue
+            if img.id not in flat_id_index:
+                continue
+            valid_bsexport_index_to_uuid[img.id] = flat_id_index[img.id]
+            
+        body = self._converter.convert_content(
+            page, file_index, bsexport_index=valid_bsexport_index_to_uuid
+        )
         return await self._note_service.insert_note(
             NoteEntity(
                 title=page.name,
@@ -277,18 +311,27 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
         page: BookstackPage,
         note: NoteEntity,
         file_index: Dict[str, str],
-        id_index: Dict[str, Dict[int, str]],
+        id_index: Dict[int, str],
         user_ctx: UserContextABC,
     ) -> None:
         note_id = str(note.note_id)
         content = note.content or ""
 
-        # (a) Inline refs inside the note body -- use the existing
-        # extract_attachment_ids helper so the same URL format the
-        # HTML converter writes is picked up.
+        # (a) Inline refs inside the note body.  After the two-pass
+        # rewrite every remaining `[[bsexport:image:N]]` /
+        # `[[bsexport:attachment:N]]` placeholder (in either the
+        # plain or the html2text-escaped form) refers to an entry in
+        # the per-kind `id_index` map built during upload.  We use
+        # the BookStack-specific extractor instead of the project-wide
+        # `extract_attachment_ids` helper because (i) the placeholder
+        # text is not a real URL, so it never appears in the renderer,
+        # and (ii) the helper scans for the BookStack cross-ref shape
+        # only -- plain prose like `key=123` (which the renderer
+        # helper now ignores) cannot leak through here.
         referenced: set[str] = set()
-        for key in extract_attachment_ids(content):
-            referenced.add(key)
+        for source_id in extract_bookstack_attachment_ids(content):
+            if source_id in id_index:
+                referenced.add(id_index[source_id])
 
         # (b) Explicit image entries declared on the page.
         for img in page.images:
@@ -316,7 +359,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
     ) -> None:
         if not first_pass:
             return
-        for page_id, note in first_pass.items():
+        for _page_id, note in first_pass.items():
             original = note.content or ""
             rewritten = self._converter.rewrite_cross_references(original, id_index)
             if rewritten == original:

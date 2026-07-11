@@ -16,7 +16,7 @@ from __future__ import annotations
 import io
 import json
 import zipfile
-from typing import Any, BinaryIO, Dict, List
+from typing import Any, Dict, List
 
 from .bookstack_models import (
     BookstackAttachment,
@@ -114,9 +114,11 @@ class BookstackBookReader:
     def _build_book(
         self, payload: Dict[str, Any], files: Dict[str, bytes]
     ) -> BookstackBook:
+        # a book contains multiple chapters and direct child pages
         chapters_payload = payload.get("chapters") or []
         direct_pages_payload = payload.get("pages") or []
 
+        # parse each chapter
         chapters: List[BookstackChapter] = [
             self._build_chapter(ch) for ch in chapters_payload if isinstance(ch, dict)
         ]
@@ -143,6 +145,8 @@ class BookstackBookReader:
 
     def _build_chapter(self, payload: Dict[str, Any]) -> BookstackChapter:
         chapter_id = int(payload.get("id") or 0)
+
+        # each chapter has a pages[] array -> parse each page
         pages = [
             self._build_page(pg, chapter_id=chapter_id)
             for pg in (payload.get("pages") or [])

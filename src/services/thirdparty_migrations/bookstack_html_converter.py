@@ -27,9 +27,9 @@ been inserted and every old id has a known target.
 from __future__ import annotations
 
 import html2text
-from typing import Callable, Dict, Iterable, Optional
+from typing import Callable, Dict, Optional
 
-from .bookstack_models import BookstackBook, BookstackPage
+from .bookstack_models import  BookstackPage
 
 AttachmentUrlBuilder = Callable[[str], str]
 """Callable that turns an attachment key into a displayable URL."""
@@ -38,7 +38,7 @@ AttachmentUrlBuilder = Callable[[str], str]
 # Match both HTML and Markdown image refs that target a known filename.
 # - HTML:  <img src="filename" ...>
 # - MD:    ![alt](filename)
-# The regex captures the filename so the caller can rewrite it.
+# The regex captures the <filename> so the caller can rewrite it.
 _IMG_HTML_RE = __import__("re").compile(
     r'(?P<full><img\s[^>]*?src=")(?P<filename>[^"]+?)("[^>]*>)',
     __import__("re").IGNORECASE,
@@ -47,9 +47,61 @@ _IMG_MD_RE = __import__("re").compile(
     r"(?P<full>!\[[^\]]*\]\()(?P<filename>[^)\s]+)(\))",
 )
 
-# Cross-references: [[bsexport:type:id]]
+# BookStack also writes inline image refs that point at a cross-ref
+# rather than a filename, e.g. `<img src="[[bsexport:image:67]]" ...>`
+# in raw HTML or `![x](\[\[bsexport:image:67\]\])` after :mod:`html2text`
+# has escaped the brackets.  We accept both forms and rewrite them
+# when :meth:`BookstackHtmlConverter.rewrite_image_sources` is given
+# a `bsexport_index` mapping (source id -> new attachment key) for
+# the current page.
+# Placeholder pattern for the inline image-src form.  We accept
+# both the plain `[[bsexport:kind:id]]` and the html2text-escaped
+# `\[\[bsexport:kind:id\]\]` variant.  Each leading backslash is
+# made optional so the regex matches either form; only the
+# `image` / `attachment` kinds are included because the importer
+# never creates attachment rows for `page` / `chapter` / `book`.
+# The two variants share the same placeholder body so we can use
+# one substitution callback for both forms.
+_PLACEHOLDER_BODY = (
+    r"\\?\["
+    r"\\?\["
+    r"bsexport:"
+    r"(?P<kind>image|attachment)"
+    r":(?P<id>\d+)"
+    r"\\?\]"
+    r"\\?\]"
+)
+
+_IMG_BSEXPORT_HTML_RE = __import__("re").compile(
+    r'(?P<full><img\s[^>]*?src=")'
+    + _PLACEHOLDER_BODY
+    + r'("[^>]*>)',
+    __import__("re").IGNORECASE,
+)
+_IMG_BSEXPORT_MD_RE = __import__("re").compile(
+    r"(?P<full>!\[[^\]]*\]\()"
+    + _PLACEHOLDER_BODY
+    + r"(\))",
+)
+
+# Cross-references: [[bsexport:type:id]] -- in plain prose.
 _BSEXPORT_RE = __import__("re").compile(
     r"\[\[bsexport:(?P<kind>image|attachment|page|chapter|book):(?P<id>\d+)\]\]"
+)
+
+# Same as above but for the backslash-escaped form that
+# :mod:`html2text` emits when the original HTML carried brackets in
+# an attribute value (e.g. an image src).  Without this the second-pass
+# rewrite would leave `\[\[bsexport:...\]\]` text in place and the
+# link step would try to fetch a bogus key.
+_BSEXPORT_ESCAPED_RE = __import__("re").compile(
+    r"\\?\["
+    r"\\?\["
+    r"bsexport:"
+    r"(?P<kind>image|attachment|page|chapter|book)"
+    r":(?P<id>\d+)"
+    r"\\?\]"
+    r"\\?\]"
 )
 
 
@@ -92,6 +144,8 @@ class BookstackHtmlConverter:
         self,
         page: BookstackPage,
         file_index: Dict[str, str],
+        *,
+        bsexport_index: Optional[Dict[int, str]] = None,
     ) -> str:
         """Pick the page's content source and run image-src rewrites.
 
@@ -117,12 +171,14 @@ class BookstackHtmlConverter:
             body = self.html_to_markdown(page.html)
         else:
             return ""
-        return self.rewrite_image_sources(body, file_index)
+        return self.rewrite_image_sources(body, file_index, bsexport_index=bsexport_index)
 
     def rewrite_image_sources(
         self,
         content: str,
         file_index: Dict[str, str],
+        *,
+        bsexport_index: Optional[Dict[int, str]] = None,
     ) -> str:
         """Replace ``files/<filename>`` references with attachment URLs.
 
@@ -147,8 +203,31 @@ class BookstackHtmlConverter:
                 return match.group(0)
             return f'{match.group("full")}{self._url_builder(new_key)}{match.group(3)}'
 
+        def bsexport_html_sub(match: __import__("re").Match[str]) -> str:
+            try:
+                source_id = int(match.group("id"))
+            except ValueError:
+                return match.group(0)
+            new_key = bsexport_index.get(source_id)
+            if new_key is None:
+                return match.group(0)
+            return f'{match.group("full")}{self._url_builder(new_key)}{match.group(4)}'
+
+        def bsexport_md_sub(match: __import__("re").Match[str]) -> str:
+            try:
+                source_id = int(match.group("id"))
+            except ValueError:
+                return match.group(0)
+            new_key = bsexport_index.get(source_id)
+            if new_key is None:
+                return match.group(0)
+            return f'{match.group("full")}{self._url_builder(new_key)}{match.group(4)}'
+
         content = _IMG_HTML_RE.sub(html_sub, content)
         content = _IMG_MD_RE.sub(md_sub, content)
+        if bsexport_index:
+            content = _IMG_BSEXPORT_HTML_RE.sub(bsexport_html_sub, content)
+            content = _IMG_BSEXPORT_MD_RE.sub(bsexport_md_sub, content)
         return content
 
     def rewrite_cross_references(
@@ -188,7 +267,9 @@ class BookstackHtmlConverter:
                 return url_builder(target)
             return ""
 
-        return _BSEXPORT_RE.sub(sub, content)
+        content = _BSEXPORT_RE.sub(sub, content)
+        content = _BSEXPORT_ESCAPED_RE.sub(sub, content)
+        return content
 
     @staticmethod
     def _lookup(file_index: Dict[str, str], filename: str) -> Optional[str]:
