@@ -8,9 +8,15 @@ cheap when the caller doesn't ask for enrichment.
 Tables joined:
 
 * ``note.content`` -- the note row.
-* ``note.directory_hierarchy`` -- the note->directory edge rows
-  with ``child_directory_id IS NULL``.
+* ``note.directory_note`` -- the note->directory edge rows.
 * ``note.note_tag`` -- the note->tag edge rows.
+
+The directory->note edge used to live on the XOR table
+``note.directory_hierarchy``; the split into
+``note.directory_note`` (and the sibling
+``note.directory_subdirectory`` for the directory tree) keeps
+the note-side JOIN a single-table read with no
+``IS NULL``/``IS NOT NULL`` filtering.
 """
 
 from __future__ import annotations
@@ -95,14 +101,13 @@ class CombinedNotePostgresRepo(CombinedNoteRepoABC):
             """
             SELECT n.id, n.title, n.content, n.updated_at, n.author_id,
                    COALESCE(
-                       array_agg(h.directory_id)
-                       FILTER (WHERE h.directory_id IS NOT NULL),
+                       array_agg(dn.directory_id)
+                       FILTER (WHERE dn.directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS directory_ids
             FROM note.content n
-            LEFT JOIN note.directory_hierarchy h
-                ON h.note_id = n.id
-                AND h.child_directory_id IS NULL
+            LEFT JOIN note.directory_note dn
+                ON dn.note_id = n.id
             WHERE n.id = $1
             GROUP BY n.id
             """,
@@ -149,8 +154,8 @@ class CombinedNotePostgresRepo(CombinedNoteRepoABC):
             """
             SELECT n.id, n.title, n.content, n.updated_at, n.author_id,
                    COALESCE(
-                       array_agg(DISTINCT h.directory_id)
-                       FILTER (WHERE h.directory_id IS NOT NULL),
+                       array_agg(DISTINCT dn.directory_id)
+                       FILTER (WHERE dn.directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS directory_ids,
                    COALESCE(
@@ -159,9 +164,8 @@ class CombinedNotePostgresRepo(CombinedNoteRepoABC):
                        '{}'::text[]
                    ) AS tag_ids
             FROM note.content n
-            LEFT JOIN note.directory_hierarchy h
-                ON h.note_id = n.id
-                AND h.child_directory_id IS NULL
+            LEFT JOIN note.directory_note dn
+                ON dn.note_id = n.id
             LEFT JOIN note.note_tag nt ON nt.note_id = n.id
             WHERE n.id = $1
             GROUP BY n.id
@@ -202,14 +206,13 @@ class CombinedNotePostgresRepo(CombinedNoteRepoABC):
             """
             SELECT n.id, n.title, n.content, n.updated_at, n.author_id,
                    COALESCE(
-                       array_agg(h.directory_id)
-                       FILTER (WHERE h.directory_id IS NOT NULL),
+                       array_agg(dn.directory_id)
+                       FILTER (WHERE dn.directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS directory_ids
             FROM note.content n
-            LEFT JOIN note.directory_hierarchy h
-                ON h.note_id = n.id
-                AND h.child_directory_id IS NULL
+            LEFT JOIN note.directory_note dn
+                ON dn.note_id = n.id
             WHERE n.id = ANY($1::text[])
             GROUP BY n.id
             """,
@@ -248,8 +251,8 @@ class CombinedNotePostgresRepo(CombinedNoteRepoABC):
             """
             SELECT n.id, n.title, n.content, n.updated_at, n.author_id,
                    COALESCE(
-                       array_agg(DISTINCT h.directory_id)
-                       FILTER (WHERE h.directory_id IS NOT NULL),
+                       array_agg(DISTINCT dn.directory_id)
+                       FILTER (WHERE dn.directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS directory_ids,
                    COALESCE(
@@ -258,9 +261,8 @@ class CombinedNotePostgresRepo(CombinedNoteRepoABC):
                        '{}'::text[]
                    ) AS tag_ids
             FROM note.content n
-            LEFT JOIN note.directory_hierarchy h
-                ON h.note_id = n.id
-                AND h.child_directory_id IS NULL
+            LEFT JOIN note.directory_note dn
+                ON dn.note_id = n.id
             LEFT JOIN note.note_tag nt ON nt.note_id = n.id
             WHERE n.id = ANY($1::text[])
             GROUP BY n.id
