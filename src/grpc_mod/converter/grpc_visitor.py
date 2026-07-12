@@ -18,9 +18,10 @@ from typing import Any
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from src.api import NoteResponse, Relationship
+from src.api import NoteResponse
 from src.api.relationship import ObjectTypeEnum
-from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined
+from src.api.undefined import UNDEFINED, UndefinedOr, is_undefined, unwrap_undefined
+from src.api.user_context import ActorAs
 from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
@@ -32,6 +33,7 @@ from src.grpc_mod.proto.activity_pb2 import (
     ACCESSED_AS_SYSTEM,
     ACCESSED_AS_UNSPECIFIED,
     ACCESSED_AS_USER,
+    AccessedAs,
     Activity,
     ActivityScore as GrpcActivityScore,
 )
@@ -138,9 +140,9 @@ def _attachment_timestamp(value: Any) -> Timestamp:
     return ts
 
 
-def _domain_permission_to_grpc(permission: Any) -> SharePermission:
+def _domain_permission_to_grpc(permission: Any) -> SharePermission.ValueType:
     """Map a domain ``UndefinedOr[Literal["read", "write"]]`` onto the proto enum."""
-    if is_undefined(permission) or permission is None:
+    if not permission:
         return SHARE_PERMISSION_UNSPECIFIED
     if permission == "read":
         return SHARE_PERMISSION_READ
@@ -193,11 +195,11 @@ class ConvertToGrpcVisitor(EntityVisitor):
         # the entity actually populated them -- otherwise drop the
         # UNDEFINED placeholder so the proto field stays at its
         # default (empty list).
-        if entity.directory_ids not in (UNDEFINED, None):
+        if entity.directory_ids:
             basic_args["directory_ids"] = [
                 str(v) for v in entity.directory_ids if v
             ]
-        if entity.tag_ids not in (UNDEFINED, None):
+        if entity.tag_ids:
             basic_args["tag_ids"] = [
                 str(v) for v in entity.tag_ids if v
             ]
@@ -232,11 +234,11 @@ class ConvertToGrpcVisitor(EntityVisitor):
         basic_args["permissions"] = _convert_permissions(perms)
         basic_args["id"] = basic_args.pop("note_id")
         basic_args["stripped_content"] = basic_args.pop("content")
-        if entity.directory_ids not in (UNDEFINED, None):
+        if entity.directory_ids:
             basic_args["directory_ids"] = [
                 str(v) for v in entity.directory_ids if v
             ]
-        if entity.tag_ids not in (UNDEFINED, None):
+        if entity.tag_ids:
             basic_args["tag_ids"] = [
                 str(v) for v in entity.tag_ids if v
             ]
@@ -245,7 +247,7 @@ class ConvertToGrpcVisitor(EntityVisitor):
     def visit_note_response(self, response: NoteResponse) -> GrpcNoteResponse:
         """Convert a :class:`~src.api.note_service.NoteResponse` to a gRPC ``NoteResponse``."""
         proto_note = (
-            self.visit_note(response.note) if response.note is not None else Note()
+            self.visit_note(response.note) if response.note else Note()
         )
         return GrpcNoteResponse(
             note=proto_note,
@@ -328,16 +330,16 @@ class ConvertToGrpcVisitor(EntityVisitor):
             relationships = _convert_permissions(entity.relations)
 
         slug_value = ""
-        if entity.slug not in (UNDEFINED, None):
+        if entity.slug:
             slug_value = str(entity.slug)
         display_name = ""
-        if entity.display_name not in (UNDEFINED, None):
+        if entity.display_name:
             display_name = str(entity.display_name)
         description = ""
-        if entity.description not in (UNDEFINED, None):
+        if entity.description:
             description = str(entity.description)
         image_url = ""
-        if entity.image_url not in (UNDEFINED, None):
+        if entity.image_url:
             image_url = str(entity.image_url)
 
         kwargs: dict[str, Any] = {
@@ -351,16 +353,16 @@ class ConvertToGrpcVisitor(EntityVisitor):
 
         # Multi-parent: emit the full id list when the entity carried
         # one.  An UNDEFINED placeholder becomes the proto default.
-        if entity.parent_directory_ids not in (UNDEFINED, None):
+        if entity.parent_directory_ids:
             kwargs["parent_dir_ids"] = [
                 str(v) for v in entity.parent_directory_ids if v
             ]
         # Optional child lists.
-        if entity.child_directory_ids not in (UNDEFINED, None):
+        if entity.child_directory_ids:
             kwargs["child_dir_ids"] = [
                 str(v) for v in entity.child_directory_ids if v
             ]
-        if entity.child_note_ids not in (UNDEFINED, None):
+        if entity.child_note_ids:
             kwargs["child_note_ids"] = [
                 str(v) for v in entity.child_note_ids if v
             ]
@@ -378,11 +380,11 @@ class ConvertToGrpcVisitor(EntityVisitor):
         Returns:
             The equivalent gRPC ``User`` message.
         """
-        assert entity.id is not None
-        assert entity.discord_id is not None
-        assert entity.avatar is not None
-        assert entity.username is not None
-        assert entity.email is not None
+        assert entity.id
+        assert entity.discord_id
+        assert entity.avatar
+        assert entity.username
+        assert entity.email
 
         return User(
             id=entity.id,
@@ -429,7 +431,7 @@ class ConvertToGrpcVisitor(EntityVisitor):
         """
         return GrpcAttachment(
             metadata=self._attachment_metadata(entity),
-            content=entity.content,
+            content=entity.content or bytes(),
         )
 
     def visit_attachment_metadata(self, entity: Attachment) -> AttachmentMetadata:
@@ -441,15 +443,15 @@ class ConvertToGrpcVisitor(EntityVisitor):
         Returns:
             The equivalent gRPC ``AttachmentMetadata`` message.
         """
-        if entity.key is UNDEFINED:
+        if not entity.key:
             return AttachmentMetadata()
 
         return AttachmentMetadata(
             key=str(entity.key),
-            filename=entity.filename,
-            filepath=entity.filepath,
-            content_type=entity.content_type,
-            size=entity.size,
+            filename=entity.filename or "",
+            filepath=entity.filepath or "",
+            content_type=entity.content_type or "",
+            size=entity.size or 0,
             created_at=_attachment_timestamp(entity.created_at),
             updated_at=_attachment_timestamp(entity.updated_at),
             sha256=entity.sha256,
@@ -491,7 +493,7 @@ class ConvertToGrpcVisitor(EntityVisitor):
         regular metadata keys without new proto fields.
         """
         assert isinstance(entity, ActivityEntity)
-        assert entity.id is not None
+        assert entity.id
 
         accessed_as_value = self._accessed_as_to_proto(entity.accessed_as)
         at_ts = Timestamp()
@@ -548,7 +550,7 @@ class ConvertToGrpcVisitor(EntityVisitor):
         )
 
     @staticmethod
-    def _accessed_as_to_proto(accessed_as: str) -> int:
+    def _accessed_as_to_proto(accessed_as: UndefinedOr[ActorAs]) -> AccessedAs.ValueType:
         """Translate the ``accessed_as`` literal into the proto enum int."""
         if accessed_as == "system":
             return ACCESSED_AS_SYSTEM
@@ -588,15 +590,15 @@ class ConvertToGrpcVisitor(EntityVisitor):
             try:
                 parsed = json.loads(raw)
                 if isinstance(parsed, dict):
-                    merged.update(parsed)
+                    merged.update(parsed)  # type: ignore
             except (TypeError, ValueError):
                 # Fall through; existing metadata will be dropped.
                 pass
-        if not is_undefined(entity.note_title) and entity.note_title is not None:
+        if not is_undefined(entity.note_title) and entity.note_title:
             merged["note_title"] = entity.note_title
         if (
             not is_undefined(entity.note_stripped_content)
-            and entity.note_stripped_content is not None
+            and entity.note_stripped_content
         ):
             merged["note_stripped_content"] = entity.note_stripped_content
         try:
