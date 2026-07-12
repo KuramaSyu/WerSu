@@ -23,7 +23,7 @@ Wire shape asserted:
   :class:`~src.db.entities.note.metadata.NoteEntity` per page.
 * The book directory, every chapter directory and every page note
   end up under the right parent in the in-memory store.
-* Inserting a note with a ``parent_dir_id`` the user cannot see is
+* Inserting a note with a parent directory the user cannot see is
   rejected with ``ValueError`` -- so the orchestrator must ensure the
   directory is visible to the caller before inserting pages.
 * When ``link_attachment_to_note`` fails for a page, the page is still
@@ -59,11 +59,13 @@ from src.services.thirdparty_migrations.bookstack_html_converter import (
 )
 from src.services.thirdparty_migrations.bookstack_reader import BookstackBookReader
 from tests._fixtures_pkg.fakes import (
+    _FakeCombinedNoteRepo,
     _FakeDatabase,
     _FakeEmbeddingRepo,
     _FakeJwtProvider,
     _FakeNoteContentRepo,
     _FakeNoteRepoFacade,
+    _FakeNoteTagRepo,
     _TestDirectoryRepo,
 )
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService
@@ -168,12 +170,14 @@ def _wire_real_services(
     real_facade = NoteFacade(
         db=fake_db,
         content_repo=content_repo,
+        combined_repo=_FakeCombinedNoteRepo(content_repo=content_repo),
         embedding_repo=embedding_repo,
         logging_provider=lambda *_a, **_k: logging.getLogger(
             "test.fake.note_facade"
         ),
         permission_repo=permission_repo,
         directory_repo=directory_repo,
+        tag_repo=_FakeNoteTagRepo(),
     )
 
     # Bridge: the real ``NoteFacade.insert`` writes to the content
@@ -208,17 +212,20 @@ def _wire_real_services(
         directory_repo=directory_repo,
         activity_logger=activity_logger,
     )
-    directory_service = DirectoryService(
-        directory_repo=directory_repo,
-        note_repo=facade,
-        permission_repo=permission_repo,
-        activity_logger=activity_logger,
-    )
     attachment_facade = AttachmentFacade(
         attachment_repo=InMemoryAttachmentRepo(),
         metadata_repo=InMemoryAttachmentMetadataRepo(),
         permission_repo=permission_repo,
         attachments_note_link_table=_FakeLinkTable(),
+        log=silent_logger,
+    )
+    directory_service = DirectoryService(
+        directory_repo=directory_repo,
+        note_repo=facade,
+        permission_repo=permission_repo,
+        activity_logger=activity_logger,
+        attachment_facade=attachment_facade,
+        note_service=note_service,
         log=silent_logger,
     )
 
@@ -353,13 +360,13 @@ async def test_real_services_create_book_and_chapter_dirs() -> None:
     created = list(directory_repo.created)
     assert len(created) == 2  # book + chapter
 
-    book_dir = next(d for d in created if d.name == "Tiny book")
-    chapter_dir = next(d for d in created if d.name == "Chapter 1")
+    book_dir = next(d for d in created if d.display_name == "Tiny book")
+    chapter_dir = next(d for d in created if d.display_name == "Chapter 1")
 
     # Chapter directory is parented under the book.
-    assert chapter_dir.parent_id == str(book_dir.id)
-    # The book's parent_id is left None for a top-level import.
-    assert book_dir.parent_id is None
+    assert list(chapter_dir.parent_directory_ids or []) == [str(book_dir.id)]
+    # The book's parent set is empty for a top-level import.
+    assert book_dir.parent_directory_ids in (UNDEFINED, None, [])
     # The response carries the book directory id.
     assert result.root_directory_id == str(book_dir.id)
 
@@ -383,8 +390,8 @@ async def test_pages_land_in_the_right_directory() -> None:
     await importer.migrate(_build_zip(_small_book_payload()), user_ctx)
 
     created = list(directory_repo.created)
-    book_dir = next(d for d in created if d.name == "Tiny book")
-    chapter_dir = next(d for d in created if d.name == "Chapter 1")
+    book_dir = next(d for d in created if d.display_name == "Tiny book")
+    chapter_dir = next(d for d in created if d.display_name == "Chapter 1")
 
     page_a = next(
         n

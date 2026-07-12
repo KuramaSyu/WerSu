@@ -48,6 +48,7 @@ from src.services.thirdparty_migrations.bookstack_reader import (
 from src.services.thirdparty_migrations._extract_bsexport import (
     extract_bookstack_attachment_ids,
 )
+from src.utils.extract_attachments import extract_attachment_ids
 
 
 class BookstackBookImport(ThirdpartyMigrationsServiceABC):
@@ -126,13 +127,13 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
             try:
                 chapter_dir = await self._directory_service.create_directory(
                     DirectoryEntity(
-                        name=chapter.name,
+                        slug=chapter.name,
                         display_name=chapter.name,
                         description=self._converter.html_to_markdown(
                             chapter.description_html
                         ),
                         image_url=UNDEFINED,
-                        parent_id=str(book_dir.id),
+                        parent_directory_ids=[str(book_dir.id)],
                     ),
                     user_ctx,
                 )
@@ -258,11 +259,11 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
         description = self._converter.html_to_markdown(book.description_html)
         return await self._directory_service.create_directory(
             DirectoryEntity(
-                name=book.name,
+                slug=book.name,
                 display_name=book.name,
                 description=description,
                 image_url=cover_url,
-                parent_id=None,
+                parent_directory_ids=UNDEFINED,
             ),
             user_ctx,
         )
@@ -301,7 +302,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
                 title=page.name,
                 content=body,
                 author_id=user_ctx.user_id,
-                parent_dir_id=parent_dir_id,
+                directory_ids=[parent_dir_id],
             ),
             user_ctx,
         )
@@ -332,6 +333,16 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
         for source_id in extract_bookstack_attachment_ids(content):
             if source_id in id_index:
                 referenced.add(id_index[source_id])
+
+        # (a.2) Inline refs rewritten to canonical attachment URLs
+        # by the first pass (e.g. `![](pic-a.png)` becomes
+        # `![](https://.../api/attachments/image?key=att-N)`).  These
+        # carry the new attachment key directly, so a project-wide
+        # extractor is enough to find them.
+        file_index_values = set(file_index.values())
+        for key in extract_attachment_ids(content):
+            if key in file_index_values:
+                referenced.add(key)
 
         # (b) Explicit image entries declared on the page.
         for img in page.images:

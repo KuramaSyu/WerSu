@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
+from src.api.note_service import NoteIncludeOptions
 from src.api.types import Pagination
 from src.api.user_context import UserContextABC
 
@@ -124,6 +125,7 @@ class NoteRepoFacadeABC(ABC):
         note_id: str,
         ctx: UserContextABC,
         *,
+        include: Optional[NoteIncludeOptions] = None,
         include_permissions: bool = True,
     ) -> Optional["NoteEntity"]:
         """Resolve a single note by id, with relations attached.
@@ -131,6 +133,12 @@ class NoteRepoFacadeABC(ABC):
         Args:
             note_id: id of the note.
             ctx: caller identity.
+            include: opt-in enrichment flags; see
+                :class:`~src.api.note_service.NoteIncludeOptions`.
+                When omitted (or every flag ``False``) only the row
+                is fetched and `note.directory_ids` /
+                `note.tag_ids` stay at
+                :obj:`~src.api.undefined.UNDEFINED`.
             include_permissions: when `False`, skip the per-note
                 permission lookup and leave `note.permissions = []`.
                 Useful for list / preview endpoints that do not
@@ -147,6 +155,7 @@ class NoteRepoFacadeABC(ABC):
         note_ids: List[str],
         ctx: UserContextABC,
         *,
+        include: Optional[NoteIncludeOptions] = None,
         include_permissions: bool = True,
     ) -> List["NoteEntity"]:
         """Bulk variant of :meth:`select_by_id`.
@@ -156,6 +165,9 @@ class NoteRepoFacadeABC(ABC):
                 preserved in the result.  Empty input is a
                 programming error.
             ctx: caller identity.
+            include: opt-in enrichment flags; see
+                :class:`~src.api.note_service.NoteIncludeOptions`.
+                Defaults to `None` (no enrichment).
             include_permissions: when `False`, skip the per-note
                 permission lookup on every hit.  Defaults to `True`.
 
@@ -165,6 +177,8 @@ class NoteRepoFacadeABC(ABC):
 
         Returns:
             List[NoteEntity]: resolved notes in `note_ids` order.
+            `directory_ids` / `tag_ids` are populated iff their
+            matching `include` flag was set.
         """
 
     @abstractmethod

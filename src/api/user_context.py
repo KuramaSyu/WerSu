@@ -9,7 +9,7 @@ temporary-user predicate.
 """
 
 from abc import ABC, abstractmethod
-from typing import Generic, Literal, TypeVar
+from typing import Literal, TypeVar
 
 from src.api.undefined import UNDEFINED, UndefinedOr
 
@@ -96,7 +96,7 @@ class _SystemUserContext(UserContextABC):
 T = TypeVar("T", bound=UserContextABC)
 
 
-class ContextFactory(ABC, Generic[T]):
+class ContextFactory[T](ABC):
     """Abstract factory that materializes :class:`UserContextABC` instances on demand.
 
     Implementations:

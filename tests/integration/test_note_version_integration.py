@@ -6,8 +6,10 @@ import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
+from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteFacade
+from src.db.repos.note.tag import NoteTagPostgresRepo
 from src.db.repos.note.permission import NotePermissionRepoInMemory
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.table import Table
@@ -49,12 +51,21 @@ async def test_note_versioning_records_snapshots_and_deltas(db, user_repo, test_
         max_deltas_per_snapshot=1,
     )
 
+    note_tags_table = Table(
+        **common_table_kwargs,
+        table_name="note.note_tag",
+        id_fields=["note_id", "tag_id"],
+        error_log=True,
+    )
+
     note_repo = NoteFacade(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
+        combined_repo=CombinedNotePostgresRepo(db=db),
         embedding_repo=_FakeEmbeddingRepo(),
         permission_repo=NotePermissionRepoInMemory(),
         directory_repo=_TestDirectoryRepo(),
+        tag_repo=NoteTagPostgresRepo(tags_table=note_tags_table),
         logging_provider=logging_provider,
         version_repo=version_repo,
     )

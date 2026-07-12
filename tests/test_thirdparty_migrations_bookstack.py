@@ -73,7 +73,7 @@ class _StubNoteService(NoteServiceABC):
             title=note.title,
             content=note.content,
             author_id=note.author_id,
-            parent_dir_id=note.parent_dir_id,
+            directory_ids=list(note.directory_ids or []),
             permissions=[],
         )
         self.inserted.append(inserted)
@@ -227,11 +227,11 @@ def _stub_directory_assigns_ids(stub: _StubDirectoryService) -> None:
         new_id = f"dir-{stub.next_directory_id}"
         created = DirectoryEntity(
             id=new_id,
-            name=entity.name,
+            slug=entity.slug,
             display_name=entity.display_name,
             description=entity.description,
             image_url=entity.image_url,
-            parent_id=entity.parent_id,
+            parent_directory_ids=list(entity.parent_directory_ids or []),
             readme_note_id=UNDEFINED,
             relations=[],
         )
@@ -296,7 +296,7 @@ async def test_book_cover_becomes_image_url_on_book_directory() -> None:
     # The book directory is the first create_directory call.  Find it
     # by inspecting the patched stub's state.
     book_dir = ds.directories_by_id["dir-1"]
-    assert book_dir.name == "Test book"
+    assert book_dir.slug == "Test book"
     # URL builder is the default; format should match build_attachment_url.
     assert "/api/attachments/image?" in (book_dir.image_url or "")
     assert "key=" in (book_dir.image_url or "")
@@ -315,7 +315,7 @@ async def test_chapter_directory_is_linked_to_book() -> None:
 
     book_dir = ds.directories_by_id["dir-1"]
     chapter_dir = ds.directories_by_id["dir-2"]
-    assert chapter_dir.parent_id == str(book_dir.id)
+    assert chapter_dir.parent_directory_ids == [str(book_dir.id)] or str(book_dir.id) in list(chapter_dir.parent_directory_ids or [])
 
 
 @pytest.mark.asyncio
@@ -334,8 +334,8 @@ async def test_direct_child_pages_go_under_book_dir() -> None:
     result = await importer.migrate(_build_zip(payload), user_ctx)
 
     assert result.pages_imported == 2
-    # The note's parent_dir_id should be the book directory id.
-    assert all(n.parent_dir_id == "dir-1" for n in ns.inserted)
+    # The note's first directory id should be the book directory id.
+    assert all("dir-1" in list(n.directory_ids or []) for n in ns.inserted)
 
 
 @pytest.mark.asyncio

@@ -69,6 +69,8 @@ class _StubDirectoryService(DirectoryServiceABC):
         self,
         directory_id: str,
         user_ctx: UserContextABC,
+        *,
+        include=None,
     ) -> Optional[DirectoryEntity]:
         self.last_get_directory_user_id = user_ctx.user_id
         if self.get_directory_deny:
@@ -81,6 +83,8 @@ class _StubDirectoryService(DirectoryServiceABC):
         parent_id: Optional[str] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
+        *,
+        include=None,
     ) -> List[DirectoryEntity]:
         self.last_get_directories_user_id = user_ctx.user_id
         self.get_directories_parent_id = parent_id
@@ -94,8 +98,10 @@ class _StubDirectoryService(DirectoryServiceABC):
             items = [
                 d
                 for d in items
-                if d.parent_id not in (UNDEFINED, None)
-                and str(d.parent_id) == parent_id
+                if d.parent_directory_ids not in (UNDEFINED, None)
+                and parent_id in {
+                    str(p) for p in (d.parent_directory_ids or []) if p
+                }
             ]
         effective_offset = offset if offset is not None else 0
         if limit is not None:
@@ -115,11 +121,11 @@ class _StubDirectoryService(DirectoryServiceABC):
         new_id = f"dir-{self.next_directory_id}"
         created = DirectoryEntity(
             id=new_id,
-            name=entity.name,
+            slug=entity.slug,
             display_name=entity.display_name,
             description=entity.description,
             image_url=entity.image_url,
-            parent_id=entity.parent_id,
+            parent_directory_ids=list(entity.parent_directory_ids or []),
             relations=entity.relations,
         )
         self.directories_by_id[new_id] = created
@@ -142,11 +148,14 @@ class _StubDirectoryService(DirectoryServiceABC):
             return None
         updated = DirectoryEntity(
             id=existing.id,
-            name=existing.name if entity.name is UNDEFINED else entity.name,
+            slug=existing.slug if entity.slug is UNDEFINED else entity.slug,
             display_name=existing.display_name if entity.display_name is UNDEFINED else entity.display_name,
             description=existing.description if entity.description is UNDEFINED else entity.description,
             image_url=existing.image_url if entity.image_url is UNDEFINED else entity.image_url,
-            parent_id=existing.parent_id if entity.parent_id is UNDEFINED else entity.parent_id,
+            parent_directory_ids=(
+                existing.parent_directory_ids if entity.parent_directory_ids is UNDEFINED
+                else list(entity.parent_directory_ids or [])
+            ),
             relations=existing.relations,
         )
         self.directories_by_id[str(entity.id)] = updated

@@ -27,10 +27,18 @@ from .activity_statistics_service import (
 from .note_service import (
     GetNotesOptions,
     GetNotesOptionsBuilder,
+    NoteIncludeOptions,
     NoteResponse,
     NoteServiceABC,
+    resolve_include_options,
 )
 from .note_facade import NoteRepoFacadeABC, SearchType
+from .combined_note_repo import CombinedNoteRepoABC
+from .note_tag_repo import NoteTagRepoABC
 from .directory_service import DirectoryServiceABC
-from .directory_repo import DefaultDirectorySpec, DirectoryRepo
+from .directory_service import (
+    DirectoryIncludeOptions,
+    resolve_directory_include_options,
+)
+from .directory_repo import DefaultDirectorySpec, DirectoryFacade
 from .visitor import AcceptsVisitor, EntityVisitor

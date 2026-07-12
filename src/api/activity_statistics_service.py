@@ -57,9 +57,7 @@ class ActivityStatisticsServiceABC(ABC):
     ) -> List[ActivityEntity]:
         """Return activity history rows the ``actor`` is allowed to see.
 
-        When ``note_id`` is set, ``actor`` must have view permission
-        on that note.  When ``directory_id`` is set, ``actor`` must
-        have view permission on that directory.  When neither is set,
+        When neither note nor directory id is set,
         the service resolves every directory the actor can view and
         expands each into its subtree.
 

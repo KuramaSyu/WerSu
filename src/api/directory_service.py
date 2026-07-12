@@ -12,12 +12,58 @@ permission checks via the permission chain in
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, TypedDict
 
 from src.api.permission_repo import DirectoryChild
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
+
+
+class DirectoryIncludeOptions(TypedDict, total=False):
+    """Per-directory enrichment flags for the directory read paths.
+
+    Every key defaults to `False`.  Each `True` flag costs one
+    dedicated SQL statement (see
+    :meth:`src.api.directory_repo.DirectoryFacade.fetch_directory`)
+    and lands its result on the matching
+    :class:`~src.db.entities.directory.directory.DirectoryEntity`
+    field:
+
+    * `include_parents` -- populates `directory.parent_directory_ids`
+      via ``note.directory_hierarchy`` (every row where
+      ``child_directory_id = directory.id``).
+    * `include_child_dirs` -- populates
+      `directory.child_directory_ids` via the same table
+      (``directory_id = directory.id AND child_directory_id IS NOT NULL``).
+    * `include_child_notes` -- populates
+      `directory.child_note_ids` via the same table
+      (``directory_id = directory.id AND note_id IS NOT NULL``).
+
+    Note:
+        The cheaper "row only" read is what happens with an empty
+        options dict.  Useful when the caller only needs the
+        metadata.  Direct child counts are derived by the caller as
+        ``len(directory.child_directory_ids)`` and
+        ``len(directory.child_note_ids)`` when the lists were
+        fetched.
+    """
+
+    include_parents: bool
+    include_child_dirs: bool
+    include_child_notes: bool
+
+
+def resolve_directory_include_options(
+    options: Optional["DirectoryIncludeOptions"],
+) -> "DirectoryIncludeOptions":
+    """Return `options` filled with `False` for every flag by default."""
+    raw = options or DirectoryIncludeOptions()
+    return DirectoryIncludeOptions(
+        include_parents=bool(raw.get("include_parents", False)),
+        include_child_dirs=bool(raw.get("include_child_dirs", False)),
+        include_child_notes=bool(raw.get("include_child_notes", False)),
+    )
 
 
 class DirectoryServiceABC(ABC):
@@ -63,6 +109,8 @@ class DirectoryServiceABC(ABC):
         self,
         directory_id: str,
         user_ctx: UserContextABC,
+        *,
+        include: Optional[DirectoryIncludeOptions] = None,
     ) -> Optional[DirectoryEntity]:
         """Return a single directory by id.
 
@@ -70,6 +118,8 @@ class DirectoryServiceABC(ABC):
             directory_id: id of the directory to load.
             user_ctx: caller identity used for the directory-level
                 permission check.
+            include: opt-in enrichment flags; see
+                :class:`DirectoryIncludeOptions`.
 
         Raises:
             PermissionError: when `user_ctx` cannot view `directory_id`.
@@ -87,6 +137,8 @@ class DirectoryServiceABC(ABC):
         parent_id: Optional[str] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
+        *,
+        include: Optional[DirectoryIncludeOptions] = None,
     ) -> List[DirectoryEntity]:
         """Return all directories visible to `user_ctx`.
 
@@ -98,6 +150,8 @@ class DirectoryServiceABC(ABC):
             limit: optional maximum number of directories to return.
             offset: optional number of directories to skip before
                 returning results.
+            include: opt-in enrichment flags; see
+                :class:`DirectoryIncludeOptions`.
 
         Returns:
             List[DirectoryEntity]: the directories visible to
@@ -115,7 +169,7 @@ class DirectoryServiceABC(ABC):
 
         The caller is automatically added as an ``admin`` of the
         created directory.  Permission is checked via the chain
-        against the parent directory when the entity specifies one.
+        against every parent the entity specifies.
 
         Args:
             entity: directory payload.  `id` is ignored - the repo
@@ -124,7 +178,8 @@ class DirectoryServiceABC(ABC):
 
         Raises:
             PermissionError: when the caller cannot create a
-                directory under `entity.parent_id`.
+                directory under any id in
+                `entity.parent_directory_ids`.
 
         Returns:
             DirectoryEntity: the persisted directory with its

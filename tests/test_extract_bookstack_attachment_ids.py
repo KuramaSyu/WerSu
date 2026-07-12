@@ -15,12 +15,12 @@ def test_plain_attachment_placeholder() -> None:
 
 def test_html2text_escaped_placeholder() -> None:
     """`html2text` escapes brackets in image-src attributes."""
-    body = "![x](\\[\\\[bsexport:image:67\\]\\])"
+    body = r"![x](\[\[bsexport:image:67\]\])"
     assert extract_bookstack_attachment_ids(body) == [67]
 
 
 def test_mixed_forms_are_deduplicated() -> None:
-    body = "[[bsexport:image:67]] and ![](\\[\\\[bsexport:image:67\\]\\])"
+    body = r"[[bsexport:image:67]] and ![](\[\[bsexport:image:67\]\])"
     assert extract_bookstack_attachment_ids(body) == [67]
 
 

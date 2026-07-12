@@ -9,7 +9,6 @@ new implementation of this ABC.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List
-from warnings import deprecated
 
 from src.api.relationship import ObjectRef, Relationship
 from src.api.user_context import UserContextABC
@@ -61,25 +60,14 @@ class PermissionRepoABC(ABC):
         """
         ...
 
-    @deprecated("lookup() is deprecated, use lookup_relationships() instead")
     @abstractmethod
-    async def lookup(
-        self,
-        relationship: Relationship,
-    ) -> List[ObjectRef]:
-        """Resolve the objects matching ``relationship``.
-
-        .. deprecated::
-            Use :meth:`lookup_relationships` instead.
+    async def lookup_resources(self, relationship: Relationship) -> List[ObjectRef]:
+        """Return every resource for a given subject, permission and resource type.
+        e.g. return all note ids for a given user with permission view.
 
         Args:
-            relationship: filter where ``subject`` and ``relation`` are
-                fully set, ``resource.object_type`` is set, and
-                ``resource.object_id`` is :obj:`~src.api.undefined.UNDEFINED`
-                to match all objects of that type.
-
-        Returns:
-            List[ObjectRef]: the matching objects.
+            relationship: filter describing the relationships to lookup. 
+                resource id should be UNDEFINED as wildcard
         """
         ...
 
@@ -220,6 +208,7 @@ class PermissionRepoABC(ABC):
             ValueError: ``max_depth`` is negative.
         """
         ...
+
 
 
 @dataclass

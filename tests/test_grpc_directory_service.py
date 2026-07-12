@@ -80,9 +80,9 @@ async def test_get_directories_requires_user_id() -> None:
 
 
 async def test_get_directories_returns_only_user_visible_directories() -> None:
-    dir_1 = DirectoryEntity(id="dir-1", name="one", parent_id="parent-a", relations=[])
-    dir_2 = DirectoryEntity(id="dir-2", name="two", parent_id="parent-a", relations=[])
-    dir_3 = DirectoryEntity(id="dir-3", name="three", parent_id="parent-b", relations=[])
+    dir_1 = DirectoryEntity(id="dir-1", slug="one", parent_directory_ids=["parent-a"], relations=[])
+    dir_2 = DirectoryEntity(id="dir-2", slug="two", parent_directory_ids=["parent-a"], relations=[])
+    dir_3 = DirectoryEntity(id="dir-3", slug="three", parent_directory_ids=["parent-b"], relations=[])
 
     impl = _StubDirectoryService()
     impl.directories_for_user["user-1"] = [dir_1, dir_2, dir_3]
@@ -254,9 +254,9 @@ async def test_patch_directory_passes_entity_to_service() -> None:
     impl = _StubDirectoryService()
     impl.patch_result = DirectoryEntity(
         id="dir-1",
-        name="new-name",
+        slug="new-name",
         description="new-description",
-        parent_id="new-parent",
+        parent_directory_ids=["new-parent"],
         relations=[],
     )
     service = _service(impl)
@@ -268,7 +268,7 @@ async def test_patch_directory_passes_entity_to_service() -> None:
             user_id="user-1",
             name="new-name",
             description="new-description",
-            parent_id="new-parent",
+            parent_ids=["new-parent"],
         ),
         cast(ServicerContext, context),
     )
@@ -276,11 +276,11 @@ async def test_patch_directory_passes_entity_to_service() -> None:
     assert context.code is None
     assert impl.last_patch_entity is not None
     assert impl.last_patch_entity.id == "dir-1"
-    assert impl.last_patch_entity.name == "new-name"
+    assert impl.last_patch_entity.slug == "new-name"
     assert impl.last_patch_entity.description == "new-description"
-    assert impl.last_patch_entity.parent_id == "new-parent"
+    assert list(impl.last_patch_entity.parent_directory_ids) == ["new-parent"]
     assert result.id == "dir-1"
-    assert result.name == "new-name"
+    assert result.slug == "new-name"
 
 
 async def test_create_directory_requires_name() -> None:
@@ -318,11 +318,9 @@ async def test_get_notes_of_directory_requires_directory_id() -> None:
     context = _FakeContext()
 
     request = GetNotesOfDirectoryRequest(directory_id="", user_id="user-1")
-    result = [
-        n async for n in service.GetNotesOfDirectory(request, cast(ServicerContext, context))
-    ]
+    result = await service.GetNotesOfDirectory(request, cast(ServicerContext, context))
 
-    assert result == []
+    assert list(result.notes) == []
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
     assert context.details == "directory_id is required"
 
@@ -333,11 +331,9 @@ async def test_get_notes_of_directory_requires_user_id() -> None:
     context = _FakeContext()
 
     request = GetNotesOfDirectoryRequest(directory_id="dir-1", user_id="")
-    result = [
-        n async for n in service.GetNotesOfDirectory(request, cast(ServicerContext, context))
-    ]
+    result = await service.GetNotesOfDirectory(request, cast(ServicerContext, context))
 
-    assert result == []
+    assert list(result.notes) == []
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
     assert context.details == "user_id is required"
 
@@ -351,11 +347,9 @@ async def test_get_notes_of_directory_permission_denied() -> None:
     request = GetNotesOfDirectoryRequest(
         directory_id="dir-1", user_id="user-1", limit=10, offset=0
     )
-    result = [
-        n async for n in service.GetNotesOfDirectory(request, cast(ServicerContext, context))
-    ]
+    result = await service.GetNotesOfDirectory(request, cast(ServicerContext, context))
 
-    assert result == []
+    assert list(result.notes) == []
     assert context.code == grpc.StatusCode.PERMISSION_DENIED
 
 
@@ -373,16 +367,14 @@ async def test_get_notes_of_directory_yields_paginated_notes() -> None:
     request = GetNotesOfDirectoryRequest(
         directory_id="dir-1", user_id="user-1", limit=2, offset=0
     )
-    result = [
-        n async for n in service.GetNotesOfDirectory(request, cast(ServicerContext, context))
-    ]
+    result = await service.GetNotesOfDirectory(request, cast(ServicerContext, context))
 
     assert impl.last_get_notes_args is not None
     assert impl.last_get_notes_args[0] == "dir-1"
     assert impl.last_get_notes_args[1] == "user-1"
     assert impl.last_get_notes_args[2] == 2
     assert impl.last_get_notes_args[3] == 0
-    assert [n.id for n in result] == ["note-0", "note-1"]
+    assert [n.id for n in result.notes] == ["note-0", "note-1"]
 
 
 async def test_get_notes_of_directory_rejects_negative_offset() -> None:
@@ -393,10 +385,8 @@ async def test_get_notes_of_directory_rejects_negative_offset() -> None:
     request = GetNotesOfDirectoryRequest(
         directory_id="dir-1", user_id="user-1", limit=10, offset=-1
     )
-    result = [
-        n async for n in service.GetNotesOfDirectory(request, cast(ServicerContext, context))
-    ]
+    result = await service.GetNotesOfDirectory(request, cast(ServicerContext, context))
 
-    assert result == []
+    assert list(result.notes) == []
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
     assert "offset" in (context.details or "")

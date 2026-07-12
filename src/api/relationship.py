@@ -113,7 +113,7 @@ RelationEnum: TypeAlias = NoteRelationEnum | DirectoryRelationEnum | AttachmentR
 
 
 class ObjectRef:
-    """Reference to a SpiceDB object, identified by type and id."""
+    """Domain object representing a part of a Resource Tuple. Reference to a SpiceDB object, identified by type and id."""
 
     def __init__(
         self,

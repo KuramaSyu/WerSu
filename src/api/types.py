@@ -19,7 +19,7 @@ class LoggingProvider(Protocol):
 
     def __call__(
         self,
-        file_or_class: str,
+        file_or_class: str | object,
         cls_instance: Optional[object] = None,
         *,
         prefix: Optional[str] = None,

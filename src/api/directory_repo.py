@@ -6,17 +6,21 @@ implementation under :mod:`src.db.repos.directory` is hidden behind
 it.
 
 Implementations:
-    * :class:`src.db.repos.directory.directory.DirectoryRepoSpicedbPostgres`
+    * :class:`src.db.repos.directory.directory.DirectoryRepoFacade`
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import ClassVar, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, ClassVar, List, Optional, Sequence, Tuple
 
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
+
+
+if TYPE_CHECKING:
+    from src.api.directory_service import DirectoryIncludeOptions
 
 
 @dataclass(frozen=True)
@@ -34,11 +38,11 @@ class DefaultDirectorySpec:
     description: str
 
 
-class DirectoryRepo(ABC):
+class DirectoryFacade(ABC):
     """Storage contract for directory rows and their SpiceDB relations.
 
     Implementations:
-        * :class:`src.db.repos.directory.directory.DirectoryRepoSpicedbPostgres`
+        * :class:`src.db.repos.directory.directory.DirectoryRepoFacade`
     """
 
     DEFAULT_DIRECTORY_SPECS: ClassVar[Sequence[DefaultDirectorySpec]] = (
@@ -81,12 +85,13 @@ class DirectoryRepo(ABC):
         return self.DEFAULT_DIRECTORY_SPECS
 
     @abstractmethod
-    async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
-        """Create a directory.
+    async def create_directory(self, entity: DirectoryEntity, user_ctx: UserContextABC) -> DirectoryEntity:
+        """Create a directory and ensure that permissions are set.
 
         Args:
             entity: payload carrying the directory's Postgres fields
                 and (optionally) the SpiceDB relations to write.
+            user_ctx: the user to which this directory will be linked as admin.
 
         Returns:
             DirectoryEntity: the created entity with its
@@ -94,18 +99,57 @@ class DirectoryRepo(ABC):
         """
         ...
 
+
     @abstractmethod
-    async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
-        """Fetch a directory by id.
+    async def fetch_directory(
+        self,
+        id: str,
+        *,
+        include: Optional["DirectoryIncludeOptions"] = None,
+    ) -> Optional[DirectoryEntity]:
+        """Fetch a directory by id, optionally hydrated.
 
         Args:
             id: directory id.
+            include: opt-in enrichment flags; see
+                :class:`~src.api.directory_service.DirectoryIncludeOptions`.
+                When omitted (or every flag ``False``) only the row
+                + its SpiceDB relations are returned.
 
         Returns:
             Optional[DirectoryEntity]: the directory plus its
             SpiceDB relations, or ``None`` when no row matches.
+            List / count fields are populated iff their flag was
+            set; everything else stays at
+            :obj:`~src.api.undefined.UNDEFINED`.
         """
         ...
+
+    @abstractmethod
+    async def add_note_to_directory(self, note_id: str, directory_id: str) -> None:
+        """Add a note to a directory.
+
+        Args:
+            note_id: the note to add.
+            directory_id: the directory to add it to.
+
+        Raises:
+            ValueError: ``note_id`` or ``directory_id`` is
+                :obj:`~src.api.undefined.UNDEFINED` or ``None``.
+        """
+        ...
+    
+    @abstractmethod
+    async def remove_note_from_directory(self, note_id: str, directory_id: str) -> None:
+        """Remove a note from a directory.
+
+        Args:
+            note_id: the note to remove.
+            directory_id: the directory to remove it from.
+        Raises:
+            ValueError: ``note_id`` or ``directory_id`` is
+                :obj:`~src.api.undefined.UNDEFINED` or ``None``.
+        """
 
     @abstractmethod
     async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
@@ -225,4 +269,4 @@ class DirectoryRepo(ABC):
         ...
 
 
-__all__ = ["DefaultDirectorySpec", "DirectoryRepo"]
+__all__ = ["DefaultDirectorySpec", "DirectoryFacade"]

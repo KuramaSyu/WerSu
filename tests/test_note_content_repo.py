@@ -1,10 +1,10 @@
 """Regression tests for :class:`src.db.repos.note.content.NoteContentPostgresRepo`.
 
 The repo sits between :class:`src.db.entities.note.metadata.NoteEntity`
-(which carries everything -- `title`, `content`, `parent_dir_id`,
-`embeddings`, `permissions`, ...) and the narrow ``note.content``
-table which only knows about five columns: ``id``, ``title``,
-``content``, ``updated_at``, ``author_id``.
+(which carries everything -- `title`, `content`, `directory_ids`,
+`tag_ids`, `embeddings`, `permissions`, ...) and the narrow
+``note.content`` table which only knows about five columns:
+``id``, ``title``, ``content``, ``updated_at``, ``author_id``.
 
 The legacy code forwarded the whole entity to the underlying
 :class:`Table` insert / update, which translated every dict key
@@ -12,10 +12,10 @@ into a column reference.  The orchestrator-driven import path
 (`BookstackBookImport._rewrite_cross_references`) re-sends a
 fully-populated :class:`NoteEntity` after insert -- if the repo
 forwards the entity as-is, the SQL ends up referencing
-``parent_dir_id`` (and friends) which the ``content`` table does
+``directory_ids`` (and friends) which the ``content`` table does
 not have.  Postgres then rejects the statement with::
 
-    column "parent_dir_id" of relation "content" does not exist
+    column "directory_ids" of relation "content" does not exist
 
 These tests pin the column allow-list at the repo boundary so
 that any future caller passing a wider entity cannot regress the
@@ -41,7 +41,7 @@ from src.utils.logging import logging_provider
 
 # The five columns the `note.content` table actually has.  Tests
 # below assert that the SQL the repo emits references *only* these --
-# even when the entity carries extra fields like `parent_dir_id`,
+# even when the entity carries extra fields like `directory_ids`,
 # `embeddings`, or `permissions`.
 CONTENT_COLUMNS = {"id", "title", "content", "updated_at", "author_id"}
 
@@ -150,7 +150,8 @@ async def test_insert_emits_only_known_columns(
         updated_at=None,
         author_id="u-1",
         # entity-only fields that the content table does not have:
-        parent_dir_id="dir-1",
+        directory_ids=["dir-1"],
+        tag_ids=["tag-1"],
         embeddings=["bogus"],  # type: ignore[list-item]
         permissions=["bogus"],  # type: ignore[list-item]
     )
@@ -160,7 +161,8 @@ async def test_insert_emits_only_known_columns(
     columns = _executed_columns(content_table)
     assert columns, "expected the table to have captured an INSERT"
     assert set(columns) == {"id", "title", "content", "updated_at", "author_id"}
-    assert "parent_dir_id" not in columns
+    assert "directory_ids" not in columns
+    assert "tag_ids" not in columns
     assert "embeddings" not in columns
     assert "permissions" not in columns
 
@@ -221,7 +223,7 @@ async def test_update_emits_only_known_columns(
 ) -> None:
     """An update with extra entity fields still only touches the
     five known columns -- this is the path that produced the
-    ``column "parent_dir_id" of relation "content" does not exist``
+    ``column "directory_ids" of relation "content" does not exist``
     error in the BookStack import when the orchestrator re-sent a
     fully-populated ``NoteEntity`` after the rewrite pass.
 
@@ -245,7 +247,8 @@ async def test_update_emits_only_known_columns(
         title="hello v2",
         content="body v2",
         author_id="u-1",
-        parent_dir_id="dir-1",
+        directory_ids=["dir-1"],
+        tag_ids=["tag-1"],
         embeddings=["bogus"],  # type: ignore[list-item]
         permissions=["bogus"],  # type: ignore[list-item]
     )
@@ -255,7 +258,8 @@ async def test_update_emits_only_known_columns(
         await repo.update(set=note, where=where)
 
     raw_sql = content_table._executed_sql
-    assert "parent_dir_id" not in raw_sql, raw_sql
+    assert "directory_ids" not in raw_sql, raw_sql
+    assert "tag_ids" not in raw_sql, raw_sql
     assert "embeddings" not in raw_sql, raw_sql
     assert "permissions" not in raw_sql, raw_sql
 
@@ -296,7 +300,7 @@ async def test_update_with_undefined_fields_drops_them(
         title=UNDEFINED,         # don't touch existing title
         content="body v2",       # only update content
         author_id=UNDEFINED,     # don't touch existing author
-        parent_dir_id="dir-1",
+        directory_ids=["dir-1"],
     )
     where = NoteEntity(note_id="n-1")
 
@@ -304,7 +308,7 @@ async def test_update_with_undefined_fields_drops_them(
         await repo.update(set=note, where=where)
 
     raw_sql = content_table._executed_sql
-    assert "parent_dir_id" not in raw_sql, raw_sql
+    assert "directory_ids" not in raw_sql, raw_sql
     # title/author_id should be dropped because they are UNDEFINED
     # and so should not appear in the SET clause column list.
     set_clause = raw_sql.split("WHERE")[0]
@@ -321,7 +325,7 @@ async def test_delete_where_clause_only_uses_id(
     content_table: Table,
 ) -> None:
     """``delete()`` forwards only the entity fields that match table
-    columns -- `parent_dir_id`, `embeddings`, `permissions` must
+    columns -- `directory_ids`, `embeddings`, `permissions` must
     never appear in the DELETE's WHERE clause."""
     # Seed a row so the DELETE has something to match.
     seed = NoteEntity(
@@ -335,7 +339,8 @@ async def test_delete_where_clause_only_uses_id(
         note_id="n-1",
         title="t",
         author_id="u-1",
-        parent_dir_id="dir-1",
+        directory_ids=["dir-1"],
+        tag_ids=["tag-1"],
         embeddings=["bogus"],  # type: ignore[list-item]
         permissions=["bogus"],  # type: ignore[list-item]
     )
@@ -343,7 +348,8 @@ async def test_delete_where_clause_only_uses_id(
     await repo.delete(note)
 
     raw_sql = content_table._executed_sql
-    assert "parent_dir_id" not in raw_sql
+    assert "directory_ids" not in raw_sql
+    assert "tag_ids" not in raw_sql
     assert "embeddings" not in raw_sql
     assert "permissions" not in raw_sql
     # the WHERE clause should be a single PK match on `id`

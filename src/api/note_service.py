@@ -40,6 +40,58 @@ class GetNotesOptions(TypedDict, total=False):
     strip_content_at: int
 
 
+class NoteIncludeOptions(TypedDict, total=False):
+    """Per-note enrichment flags for the note read paths.
+
+    Every key defaults to `False`, so callers opt into the extra
+    PostgreSQL round-trips explicitly.  Each `True` flag costs one
+    dedicated SQL statement (see
+    :meth:`NoteRepoFacadeABC.select_by_id`) and lands its result on
+    the matching :class:`~src.db.entities.note.metadata.NoteEntity`
+    field:
+
+    * `include_directory_ids` -- populates `note.directory_ids` from
+      ``note.directory_hierarchy`` (``child_directory_id IS NULL AND
+      note_id = $1``).  Cheap: a single index lookup.
+    * `include_tag_ids` -- populates `note.tag_ids` from
+      ``note.note_tag JOIN note.tag``.  Cheap: covers the
+      ``(note_id, tag_id)`` primary key.
+    * `include_permissions` -- keeps the existing per-note SpiceDB
+      lookup under the same option so callers don't have to
+      special-case it.  Defaults to `True` to match the historic
+      behaviour of :meth:`NoteRepoFacadeABC.select_by_id`.
+
+    Note:
+        Callers that only want metadata should pass `{}` (or omit
+        the kwarg entirely); the basic content/title/author fetch
+        path is the cheapest one and never JOINs the side tables.
+    """
+
+    include_directory_ids: bool
+    include_tag_ids: bool
+    include_permissions: bool
+
+
+def resolve_include_options(
+    options: Optional["NoteIncludeOptions"],
+) -> "NoteIncludeOptions":
+    """Return `options` filled with the default `False` for every flag.
+
+    Args:
+        options: caller-supplied options; `None` or empty is fine.
+
+    Returns:
+        NoteIncludeOptions: a fresh mapping with every key resolved
+        to a `bool`.
+    """
+    raw = options or NoteIncludeOptions()
+    return NoteIncludeOptions(
+        include_directory_ids=bool(raw.get("include_directory_ids", False)),
+        include_tag_ids=bool(raw.get("include_tag_ids", False)),
+        include_permissions=bool(raw.get("include_permissions", True)),
+    )
+
+
 def resolve_options(options: Optional[GetNotesOptions]) -> GetNotesOptions:
     """Resolve `options` (or `None`) into a full options dict.
     """
@@ -130,14 +182,19 @@ class NoteServiceABC(ABC):
         self,
         note_id: str,
         user_ctx: UserContextABC,
+        *,
+        include: Optional["NoteIncludeOptions"] = None,
     ) -> NoteResponse:
-        """Returns a note, it's relationships, embeddings and adds 
+        """Returns a note, its relationships, embeddings and adds
         additional JWTs for temporary users to access attachments.
 
         Args:
             note_id: id of the note to resolve.
             user_ctx: caller identity used for permission checks and
                 to determine whether per-attachment JWTs are minted.
+            include: opt-in enrichment flags; see
+                :class:`NoteIncludeOptions`.  When omitted, only
+                permissions are loaded (legacy behaviour).
 
         Returns:
             NoteResponse: the resolved note plus a `id_token_map` of
@@ -299,6 +356,8 @@ def _normalise_get_notes_options(options: Optional[GetNotesOptions]) -> GetNotes
 __all__ = [
     "GetNotesOptions",
     "GetNotesOptionsBuilder",
+    "NoteIncludeOptions",
     "NoteResponse",
     "NoteServiceABC",
+    "resolve_include_options",
 ]  

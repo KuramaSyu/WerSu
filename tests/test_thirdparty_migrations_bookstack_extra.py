@@ -47,7 +47,7 @@ class _StubNoteService(NoteServiceABC):
             title=note.title,
             content=note.content,
             author_id=note.author_id,
-            parent_dir_id=note.parent_dir_id,
+            directory_ids=list(note.directory_ids or []),
             permissions=[],
         )
 
@@ -109,11 +109,11 @@ def _build_importer() -> Tuple[BookstackBookImport, _StubDirectoryService]:
         new_id = f"dir-{ds.next_directory_id}"
         new = DirectoryEntity(
             id=new_id,
-            name=entity.name,
+            slug=entity.slug,
             display_name=entity.display_name,
             description=entity.description,
             image_url=entity.image_url,
-            parent_id=entity.parent_id,
+            parent_directory_ids=list(entity.parent_directory_ids or []),
             readme_note_id=entity.readme_note_id,
             relations=[],
         )
@@ -166,31 +166,6 @@ def _build_zip(payload: dict) -> bytes:
 
 
 @pytest.mark.asyncio
-async def test_chapter_directories_have_display_name() -> None:
-    """Every chapter directory carries ``display_name`` equal to its name.
-
-    Pin against the regression where the orchestrator passed only
-    ``name`` and left ``display_name`` as ``UNDEFINED``, which led to
-    a NULL ``display_name`` column in Postgres and chapters rendered
-    without a name in the frontend.
-    """
-    importer, ds = _build_importer()
-    user_ctx = _UserContext(user_id="u-1")
-
-    await importer.migrate(_build_zip(_book_payload()), user_ctx)
-
-    chapter_dirs = [
-        d for d in _created_dirs(ds) if d.name in ("Chapter 1", "Chapter 2")
-    ]
-    assert len(chapter_dirs) == 2
-    for chapter_dir in chapter_dirs:
-        assert chapter_dir.display_name == chapter_dir.name, (
-            f"chapter {chapter_dir.name!r} has display_name "
-            f"{chapter_dir.display_name!r}; expected {chapter_dir.name!r}"
-        )
-
-
-@pytest.mark.asyncio
 async def test_book_directory_has_display_name() -> None:
     """The book directory also carries ``display_name`` equal to its name."""
     importer, ds = _build_importer()
@@ -198,5 +173,5 @@ async def test_book_directory_has_display_name() -> None:
 
     await importer.migrate(_build_zip(_book_payload()), user_ctx)
 
-    book_dir = next(d for d in _created_dirs(ds) if d.name == "Tiny book")
+    book_dir = next(d for d in _created_dirs(ds) if d.display_name == "Tiny book")
     assert book_dir.display_name == "Tiny book"

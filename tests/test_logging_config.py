@@ -16,8 +16,8 @@ loggers:
     )
 
     monkeypatch.setenv("LOGGING_CONFIG_PATH", str(config_path))
-    monkeypatch.setattr(logging_utils, "_CONFIG_CACHE", None)
-    monkeypatch.setattr(logging_utils, "_HANDLERS_CONFIGURED", False)
+    monkeypatch.setattr(logging_utils, "_config_cache", None)
+    monkeypatch.setattr(logging_utils, "_handles_configured", False)
 
     logging_utils.logging_provider("src.test_logging_config")
 

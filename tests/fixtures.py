@@ -26,7 +26,9 @@ from src.db.entities.user.user import UserEntity
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos import Database, UserPostgresRepo
+from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
+from src.db.repos.note.tag import NoteTagPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
 from src.db.repos.note.note import NoteFacade
 from src.api.note_facade import NoteRepoFacadeABC
@@ -144,6 +146,12 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
         id_fields=["id"],
         error_log=True,
     )
+    note_tags_table = Table(
+        **common_table_kwargs,
+        table_name="note.note_tag",
+        id_fields=["note_id", "tag_id"],
+        error_log=True,
+    )
     embedding_table = Table(
         **common_table_kwargs,
         table_name="note.embedding",
@@ -171,6 +179,7 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
     return NoteFacade(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
+        combined_repo=CombinedNotePostgresRepo(db=db),
         embedding_repo=NoteEmbeddingPostgresRepo(
             table=embedding_table,
             embedding_generator=EmbeddingGenerator(
@@ -182,6 +191,7 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
         # which does not do any checks.
         permission_repo=NotePermissionRepoInMemory(),
         directory_repo=_TestDirectoryRepo(),
+        tag_repo=NoteTagPostgresRepo(tags_table=note_tags_table),
         logging_provider=logging_provider,
         version_repo=version_repo,
     )

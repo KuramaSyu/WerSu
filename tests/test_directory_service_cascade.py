@@ -47,11 +47,13 @@ from src.services.directory import DirectoryService
 from src.services.note import NoteService
 from src.db.table import TableABC
 from tests._fixtures_pkg.fakes import (
+    _FakeCombinedNoteRepo,
     _FakeDatabase,
     _FakeEmbeddingRepo,
     _FakeJwtProvider,
     _FakeNoteContentRepo,
     _FakeNoteRepoFacade,
+    _FakeNoteTagRepo,
     _TestDirectoryRepo,
 )
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService
@@ -127,12 +129,14 @@ def _wire_service(
     real_facade = NoteFacade(
         db=fake_db,
         content_repo=content_repo,
+        combined_repo=_FakeCombinedNoteRepo(content_repo=content_repo),
         embedding_repo=embedding_repo,
         logging_provider=lambda *_a, **_k: logging.getLogger(
             "test.directory.cascade"
         ),
         permission_repo=permission_repo,
         directory_repo=directory_repo,
+        tag_repo=_FakeNoteTagRepo(),
     )
 
     # Bridge the real facade's insert into the fake facade's store
@@ -291,7 +295,7 @@ async def _build_subtree(
 
 def _seed_directory(directory_repo: _TestDirectoryRepo, id_: str, name: str) -> None:
     directory_repo.directories_by_id[id_] = DirectoryEntity(
-        id=id_, name=name, display_name=name
+        id=id_, slug=name, display_name=name
     )
 
 

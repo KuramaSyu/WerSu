@@ -16,15 +16,22 @@ from src.api.undefined import *
 
 @dataclass
 class NoteEntity(AcceptsVisitor):
-    """Represents one record of note.metadata"""
+    """Represents the domain modal of a NoteEntity. Its database representation
+    looks differently. No 1:1 translation possible here."""
     note_id: UndefinedOr[str] = UNDEFINED
     title: UndefinedNoneOr[str] = UNDEFINED
     updated_at: UndefinedNoneOr[datetime] = UNDEFINED
     author_id: UndefinedNoneOr[str] = UNDEFINED
     content: UndefinedNoneOr[str] = UNDEFINED
+    directory_ids: UndefinedOr[List[str]] = UNDEFINED
+    tag_ids: UndefinedOr[List[str]] = UNDEFINED
+
+    # for internal usage only
     embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED
+
+    # for internal usage only
     permissions: UndefinedOr[List[Relationship]] = UNDEFINED
-    parent_dir_id: UndefinedOr[str] = UNDEFINED
+
 
     def visit(self, visitor: EntityVisitor):
         """Dispatch this note to ``visitor.visit_note``."""
