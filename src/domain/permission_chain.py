@@ -126,7 +126,20 @@ class PermissionCheckChain(ABC):
             subject=SubjectRef(subj_type, subj_id)  # type:ignore
         )
     
+class PermissionCheckChainStart(PermissionCheckChain):
+    """Starting point of the chain, which is a helper which does no perm checks at all 
+    used to start when building a longer chain with a for loop"""
+    def __init__(self, permission_repo: PermissionRepoABC):
+        super().__init__()
+        self._permission_repo = permission_repo
 
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        """This is the starting point of the chain, so it always returns True"""
+        return True
+
+    def _get_error_message(self) -> str:
+        """This is the starting point of the chain, so it never raises an error"""
+        return "PermissionCheckChainStart should never be called directly. Use `.set_next()` to add a chain element."
 
     
 
