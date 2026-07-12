@@ -12,12 +12,12 @@ future caller) can stay free of permission/repo plumbing.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 
 from src.api import (
     ActivityLoggerServiceABC,
+    DirectoryIncludeOptions,
     DirectoryRelationEnum,
     DirectoryServiceABC,
     LoggingProvider,
@@ -34,7 +34,7 @@ from src.api.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
-from src.db.repos.directory.directory import DirectoryRepo
+from src.db.repos.directory.directory import DirectoryFacade
 from src.api.note_facade import NoteRepoFacadeABC
 from src.domain.permission_chain import (
     HasDirectoryDeletePerm,
@@ -48,7 +48,6 @@ from src.utils.readme_parser import ParsedReadme, parse_readme
 
 if TYPE_CHECKING:
     from src.services.attachments import AttachmentFacadeABC
-    from src.services.note import NoteService
 
 
 README_TITLE = "README.md"
@@ -63,17 +62,16 @@ class DirectoryService(DirectoryServiceABC):
     repos.  The README bookkeeping for
     :meth:`get_directory_notes` is also performed exclusively here.
 
-    Recursive delete + :meth:`dry_delete` require an
-    :class:`AttachmentFacadeABC` and a :class:`NoteService` so the
-    service can fan the cascade out to attachment rows and notes.
-    These are optional so existing call sites that only need read /
-    CRUD operations on a single directory keep working without
-    having to wire them.
+    Recursive delete + :meth:`dry_delete` + the README attachment
+    workflow require an :class:`AttachmentFacadeABC` and a
+    :class:`NoteService` so the service can fan the cascade out to
+    attachment rows and notes.  All collaborators are required --
+    pass real instances wired by :func:`src.main.build`.
     """
 
     def __init__(
         self,
-        directory_repo: DirectoryRepo,
+        directory_repo: DirectoryFacade,
         note_repo: NoteRepoFacadeABC,
         permission_repo: PermissionRepoABC,
         activity_logger: ActivityLoggerServiceABC,
@@ -143,6 +141,8 @@ class DirectoryService(DirectoryServiceABC):
         self,
         directory_id: str,
         user_ctx: UserContextABC,
+        *,
+        include: Optional[DirectoryIncludeOptions] = None,
     ) -> Optional[DirectoryEntity]:
         """Return a single directory visible to `user_ctx`.
 
@@ -151,10 +151,15 @@ class DirectoryService(DirectoryServiceABC):
         Note:
             Overlays the parsed README note onto the returned
             :class:`~src.db.entities.directory.directory.DirectoryEntity`
-            when the directory has a `readme_note_id`.
+            when the directory has a `readme_note_id`.  Direct child
+            counts are derived from `len(directory.child_directory_ids)`
+            and `len(directory.child_note_ids)` when those lists
+            are fetched; the entity carries no count fields.
         """
         await self._assert_directory_view(directory_id, user_ctx)
-        directory = await self._directory_repo.fetch_directory(directory_id)
+        directory = await self._directory_repo.fetch_directory(
+            directory_id, include=include,
+        )
         if directory is None:
             return None
         await self._apply_readme_overrides(directory, user_ctx)
@@ -167,6 +172,8 @@ class DirectoryService(DirectoryServiceABC):
         parent_id: Optional[str] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
+        *,
+        include: Optional[DirectoryIncludeOptions] = None,
     ) -> List[DirectoryEntity]:
         """Return all directories visible to `user_ctx`, paginated.
 
@@ -174,34 +181,38 @@ class DirectoryService(DirectoryServiceABC):
 
         Note:
             Overlays each directory's parsed README note before
-            pagination so a linked ``README.md`` drives the displayed
-            `image_url` and `description`.
+            pagination so a linked ``README.md`` drives the
+            displayed `image_url` / `description`.  Direct child
+            counts are derived from `len(directory.child_directory_ids)`
+            and `len(directory.child_note_ids)` when those lists
+            are fetched; the entity carries no count fields.
         """
-        if limit is not None and limit < 0:
+        if limit and limit < 0:
             raise ValueError("limit must be >= 0")
-        if offset is not None and offset < 0:
+        if offset and offset < 0:
             raise ValueError("offset must be >= 0")
 
         directory_ids = await self._directory_repo.list_user_directory_ids(user_ctx)
         directories: List[DirectoryEntity] = []
         for directory_id in directory_ids:
-            directory = await self._directory_repo.fetch_directory(directory_id)
-            if directory is not None:
+            directory = await self._directory_repo.fetch_directory(
+                directory_id, include=include,
+            )
+            if directory:
                 directories.append(directory)
 
-        if parent_id is not None:
+        if parent_id:
             directories = [
                 d
                 for d in directories
-                if d.parent_id not in (UNDEFINED, None)
-                and str(d.parent_id) == parent_id
+                if d.parent_directory_ids not in (UNDEFINED, None)
+                and parent_id in {
+                    str(p) for p in (d.parent_directory_ids or []) if p
+                }
             ]
         for directory in directories:
             await self._apply_readme_overrides(directory, user_ctx)
-            # if directory.id not in (UNDEFINED, None):
-            #     await self._activity_logger.directory_viewed(
-            #         str(directory.id), user_ctx
-            #     )
+
         effective_offset = offset if offset is not None else 0
         if limit is not None:
             return directories[effective_offset : effective_offset + limit]
@@ -218,41 +229,31 @@ class DirectoryService(DirectoryServiceABC):
         """
         # The new directory itself does not exist yet, so a permission
         # check against it would always fail.  When the entity specifies
-        # a parent directory, gate creation on a write check against it
-        # so random callers can't nest directories wherever they want.
-        if entity.parent_id:
-            check = HasDirectoryWritePerm(str(entity.parent_id)).set_permission_repo(
-                self._permission_repo
-            )
-            result = await check.check(user_ctx)
-            if result.error:
-                raise result.error
-
-        admin_relation = Relationship(
-            resource=ObjectRef(
-                object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED
-            ),
-            relation=DirectoryRelationEnum.ADMIN,
-            subject=SubjectRef(
-                object_type=ObjectTypeEnum.USER, object_id=user_ctx.user_id
-            ),
-        )
-
-        existing_relations: list[Relationship] = []
-        if isinstance(entity.relations, list):
-            existing_relations = list(entity.relations)
+        # one or more parent directories, gate creation on a write
+        # check against every parent so random callers can't nest
+        # directories wherever they want.
+        parent_ids = entity.parent_directory_ids
+        if parent_ids:
+            for parent_id in parent_ids:
+                check = HasDirectoryWritePerm(
+                    str(parent_id)
+                ).set_permission_repo(self._permission_repo)
+                result = await check.check(user_ctx)
+                if result.error:
+                    raise result.error
 
         created_dir = await self._directory_repo.create_directory(
             DirectoryEntity(
                 id=entity.id,
-                name=entity.name,
+                slug=entity.slug,
                 display_name=entity.display_name,
                 description=entity.description,
                 image_url=entity.image_url,
-                parent_id=entity.parent_id,
+                parent_directory_ids=entity.parent_directory_ids,
+                tag_ids=entity.tag_ids,
                 readme_note_id=entity.readme_note_id,
-                relations=[admin_relation] + existing_relations,
-            )
+                relations=UNDEFINED,  # dir#admin@user will be created in the facade
+            ), user_ctx
         )
 
         # Create the README.md which contains description and image of directory
@@ -394,12 +395,12 @@ class DirectoryService(DirectoryServiceABC):
             if sub_id == directory_id:
                 continue
             directory = await self._directory_repo.fetch_directory(sub_id)
-            name = (
-                str(directory.name)
-                if directory is not None and directory.name not in (UNDEFINED, None)
+            slug = (
+                str(directory.slug)
+                if directory is not None and directory.slug not in (UNDEFINED, None)
                 else sub_id
             )
-            result.append(DirectoryChild(id=sub_id, kind="directory", name=name))
+            result.append(DirectoryChild(id=sub_id, kind="directory", name=slug))
 
         for note_id in children.note_ids:
             note = await self._note_repo.select_by_id(note_id, user_ctx)
@@ -539,7 +540,7 @@ class DirectoryService(DirectoryServiceABC):
             updated_at=datetime.now(),
             embeddings=[],
             permissions=UNDEFINED,
-            parent_dir_id=directory_id,
+            directory_ids=[directory_id],
         )
         inserted = await self._note_repo.insert(readme, user_ctx)
 
