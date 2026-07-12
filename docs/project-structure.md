@@ -30,3 +30,14 @@ Lastly there are the storage solutions:
 - **Garage**: Garage is the S3 Bucket, used to store note attachments as well as images.
   
 ![img](../wersu-structure.drawio.png)
+
+# How classes interact with each other
+The most top-level class is the gRPC service. The grpc service calls the applications
+service layer.
+**Service classes** are responsible for permission checks, e.g. can a user do with the resource what they intend to do? Next the Service class will call one of them, or both:
+- **Repo class** a repo is in this context a class, which handles one or a group of relations
+from the database. It can also mean, that it handles the connection to another service if its not a database (like the gRPC connection to SpiceDB). 
+- **Facade class** a facade is in this context a class, which groups multiple repos, to ensure,
+that when one is called, the others get called too. For example a note is split up over multiple tables. It needs to insert the actual note, it needs to generate the embedding and insert it, it needs to ensure the note is child of x parents relation gets inserted. This again
+is represented in both SpiceDB for permissions and a hierarchy table in postgres to ensure
+a fast lookup instead of making wildcard requests to SpiceDB -- in short - they can get complex and try to hide it. A Facade class can insert permissions and other relations but is not responsible for checking them. Usually its intended to also insert permissions in the service layer, but in some cases, like when changing a directories parent, then it's favorable to handle both in the facade, so that not one of them gets forgotten, resulting in inconsistency. 
