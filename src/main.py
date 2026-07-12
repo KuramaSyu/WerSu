@@ -16,7 +16,7 @@ from src.db.repos.directory.directory import DirectoryRepoFacade
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
-from src.db.repos import NotePermissionRepoSpicedb
+from src.db.repos import SpicedbPermissionRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.grpc_mod.activity_statistics_service import GrpcActivityStatisticsService
 from src.grpc_mod.proto.activity_pb2_grpc import add_ActivityStatisticsServiceServicer_to_server  # type: ignore[attr-defined]
@@ -273,7 +273,7 @@ async def serve():
     # Factory used by every gRPC service to create user instances
     user_context_factory = RepoContextFactory(user_repo=user_repo)
 
-    permission_repo = NotePermissionRepoSpicedb(
+    permission_repo = SpicedbPermissionRepo(
         client=spicedb_client,
         consistent=True,
         directory_subdirectory_table=directory_subdirectory_table,
