@@ -7,9 +7,16 @@ in the permission repo when SpiceDB visibility matters.
 Tables touched:
 
 * ``note.directory`` -- the directory row itself.
-* ``note.directory_hierarchy`` -- parent / child graph between
-  directories and notes.
+* ``note.directory_subdirectory`` -- parent / child graph between
+  directories (the directory tree).
+* ``note.directory_note`` -- directory / note bindings.
 * ``note.directory_tag`` -- tag association for directories.
+
+The directory tree and the note bindings are kept in two
+single-purpose tables (introduced in
+:mod:`src.db.migrations.20260711-directory-hierarchy`) so every
+row unambiguously describes one relationship; the previous XOR
+table is gone.
 
 Each public fetch method is fully scoped: a dedicated SQL statement
 that targets exactly the row + the optional joins the caller asked
@@ -40,7 +47,12 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
 
     Args:
         directory_table: ``TableABC`` over ``note.directory``.
-        hierarchy_table: ``TableABC`` over ``note.directory_hierarchy``.
+        subdirectory_table: ``TableABC`` over
+            ``note.directory_subdirectory`` -- the parent / child
+            graph between directories.
+        directory_note_table: ``TableABC`` over
+            ``note.directory_note`` -- the directory / note
+            bindings.
         tags_table: ``TableABC`` over ``note.directory_tag``.  The
             directory-repo surface exposes tag CRUD via
             :meth:`tag_ids_of_directory` / :meth:`replace_directory_tags`,
@@ -54,11 +66,13 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
     def __init__(
         self,
         directory_table: TableABC,
-        hierarchy_table: TableABC,
+        subdirectory_table: TableABC,
+        directory_note_table: TableABC,
         tags_table: TableABC,
     ) -> None:
         self._directory_table = directory_table
-        self._hierarchy_table = hierarchy_table
+        self._subdirectory_table = subdirectory_table
+        self._directory_note_table = directory_note_table
         self._tags_table = tags_table
 
     @property
@@ -67,9 +81,14 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         return self._directory_table
 
     @property
-    def hierarchy_table(self) -> TableABC:
-        """Return the ``note.directory_hierarchy`` :class:`TableABC`."""
-        return self._hierarchy_table
+    def subdirectory_table(self) -> TableABC:
+        """Return the ``note.directory_subdirectory`` :class:`TableABC`."""
+        return self._subdirectory_table
+
+    @property
+    def directory_note_table(self) -> TableABC:
+        """Return the ``note.directory_note`` :class:`TableABC`."""
+        return self._directory_note_table
 
     @property
     def tags_table(self) -> TableABC:
@@ -176,13 +195,13 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
             SELECT d.id, d.slug, d.display_name, d.description,
                    d.image_url, d.readme_note_id,
                    COALESCE(
-                       array_agg(h.directory_id)
-                       FILTER (WHERE h.directory_id IS NOT NULL),
+                       array_agg(s.directory_id)
+                       FILTER (WHERE s.directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS parent_directory_ids
             FROM note.directory d
-            LEFT JOIN note.directory_hierarchy h
-                ON h.child_directory_id = d.id
+            LEFT JOIN note.directory_subdirectory s
+                ON s.child_directory_id = d.id
             WHERE d.id = $1
             GROUP BY d.id, d.slug, d.display_name, d.description,
                      d.image_url, d.readme_note_id
@@ -208,14 +227,13 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
             SELECT d.id, d.slug, d.display_name, d.description,
                    d.image_url, d.readme_note_id,
                    COALESCE(
-                       array_agg(h.child_directory_id)
-                       FILTER (WHERE h.child_directory_id IS NOT NULL),
+                       array_agg(s.child_directory_id)
+                       FILTER (WHERE s.child_directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS child_directory_ids
             FROM note.directory d
-            LEFT JOIN note.directory_hierarchy h
-                ON h.directory_id = d.id
-                   AND h.child_directory_id IS NOT NULL
+            LEFT JOIN note.directory_subdirectory s
+                ON s.directory_id = d.id
             WHERE d.id = $1
             GROUP BY d.id, d.slug, d.display_name, d.description,
                      d.image_url, d.readme_note_id
@@ -241,14 +259,13 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
             SELECT d.id, d.slug, d.display_name, d.description,
                    d.image_url, d.readme_note_id,
                    COALESCE(
-                       array_agg(h.note_id)
-                       FILTER (WHERE h.note_id IS NOT NULL),
+                       array_agg(n.note_id)
+                       FILTER (WHERE n.note_id IS NOT NULL),
                        '{}'::text[]
                    ) AS child_note_ids
             FROM note.directory d
-            LEFT JOIN note.directory_hierarchy h
-                ON h.directory_id = d.id
-                   AND h.note_id IS NOT NULL
+            LEFT JOIN note.directory_note n
+                ON n.directory_id = d.id
             WHERE d.id = $1
             GROUP BY d.id, d.slug, d.display_name, d.description,
                      d.image_url, d.readme_note_id
@@ -268,24 +285,26 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
     async def _fetch_directory_with_children(
         self, id: str,
     ) -> Optional[DirectoryEntity]:
-        """Row + child directory ids + child note ids (one JOIN)."""
+        """Row + child directory ids + child note ids (one JOIN each)."""
         records = await self._directory_table.fetch(
             """
             SELECT d.id, d.slug, d.display_name, d.description,
                    d.image_url, d.readme_note_id,
                    COALESCE(
-                       array_agg(h.child_directory_id)
-                       FILTER (WHERE h.child_directory_id IS NOT NULL),
+                       array_agg(s.child_directory_id)
+                       FILTER (WHERE s.child_directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS child_directory_ids,
                    COALESCE(
-                       array_agg(h.note_id)
-                       FILTER (WHERE h.note_id IS NOT NULL),
+                       array_agg(n.note_id)
+                       FILTER (WHERE n.note_id IS NOT NULL),
                        '{}'::text[]
                    ) AS child_note_ids
             FROM note.directory d
-            LEFT JOIN note.directory_hierarchy h
-                ON h.directory_id = d.id
+            LEFT JOIN note.directory_subdirectory s
+                ON s.directory_id = d.id
+            LEFT JOIN note.directory_note n
+                ON n.directory_id = d.id
             WHERE d.id = $1
             GROUP BY d.id, d.slug, d.display_name, d.description,
                      d.image_url, d.readme_note_id
@@ -314,31 +333,41 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         include_child_dirs: bool,
         include_child_notes: bool,
     ) -> Optional[DirectoryEntity]:
-        """Row + every list include in a single pair of joins + GROUP BY."""
+        """Row + every list include via a 3-way LEFT JOIN + GROUP BY.
+
+        Parents + child directories both come from
+        ``note.directory_subdirectory`` (joined twice with
+        different ``ON`` conditions); child notes come from
+        ``note.directory_note``.  The three ``array_agg`` calls
+        with ``FILTER`` collapse the cross-product of rows into
+        the three id lists.
+        """
         records = await self._directory_table.fetch(
             """
             SELECT d.id, d.slug, d.display_name, d.description,
                    d.image_url, d.readme_note_id,
                    COALESCE(
-                       array_agg(parent_h.directory_id)
-                       FILTER (WHERE parent_h.directory_id IS NOT NULL),
+                       array_agg(parent_s.directory_id)
+                       FILTER (WHERE parent_s.directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS parent_directory_ids,
                    COALESCE(
-                       array_agg(child_h.child_directory_id)
-                       FILTER (WHERE child_h.child_directory_id IS NOT NULL),
+                       array_agg(child_s.child_directory_id)
+                       FILTER (WHERE child_s.child_directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS child_directory_ids,
                    COALESCE(
-                       array_agg(child_h.note_id)
-                       FILTER (WHERE child_h.note_id IS NOT NULL),
+                       array_agg(child_n.note_id)
+                       FILTER (WHERE child_n.note_id IS NOT NULL),
                        '{}'::text[]
                    ) AS child_note_ids
             FROM note.directory d
-            LEFT JOIN note.directory_hierarchy parent_h
-                ON parent_h.child_directory_id = d.id
-            LEFT JOIN note.directory_hierarchy child_h
-                ON child_h.directory_id = d.id
+            LEFT JOIN note.directory_subdirectory parent_s
+                ON parent_s.child_directory_id = d.id
+            LEFT JOIN note.directory_subdirectory child_s
+                ON child_s.directory_id = d.id
+            LEFT JOIN note.directory_note child_n
+                ON child_n.directory_id = d.id
             WHERE d.id = $1
             GROUP BY d.id, d.slug, d.display_name, d.description,
                      d.image_url, d.readme_note_id
@@ -450,7 +479,7 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
 
         # Drop parents that are no longer wanted.
         for old in current - desired:
-            await self._hierarchy_table.delete(
+            await self._subdirectory_table.delete(
                 {
                     "directory_id": old,
                     "child_directory_id": str(directory_id),
@@ -459,7 +488,7 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
 
         # Insert the new ones.
         for new_parent in desired:
-            await self._hierarchy_table.insert(
+            await self._subdirectory_table.insert(
                 {
                     "directory_id": new_parent,
                     "child_directory_id": str(directory_id),
@@ -471,7 +500,7 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         self, directory_id: str,
     ) -> List[str]:
         """Return every parent directory id, deduplicated and sorted."""
-        records = await self._hierarchy_table.select(
+        records = await self._subdirectory_table.select(
             where={"child_directory_id": directory_id},
             select="directory_id",
         )
@@ -485,10 +514,10 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
     async def direct_child_directory_ids_of(
         self, directory_id: str,
     ) -> List[str]:
-        records = await self._hierarchy_table.fetch(
+        records = await self._subdirectory_table.fetch(
             f"""
-            SELECT child_directory_id FROM {self._hierarchy_table.name}
-            WHERE directory_id = $1 AND child_directory_id IS NOT NULL
+            SELECT child_directory_id FROM {self._subdirectory_table.name}
+            WHERE directory_id = $1
             """,
             directory_id,
         )
@@ -505,14 +534,14 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
     ) -> List[str]:
         """Direct child note ids of ``directory_id``.
 
-        Sourced from ``note.directory_hierarchy``; empty list when
+        Sourced from ``note.directory_note``; empty list when
         none.  Mirrors :meth:`direct_child_directory_ids_of` on the
-        directory side of the hierarchy.
+        directory side of the tree.
         """
-        records = await self._hierarchy_table.fetch(
+        records = await self._directory_note_table.fetch(
             f"""
-            SELECT note_id FROM {self._hierarchy_table.name}
-            WHERE directory_id = $1 AND note_id IS NOT NULL
+            SELECT note_id FROM {self._directory_note_table.name}
+            WHERE directory_id = $1
             """,
             directory_id,
         )
@@ -530,13 +559,13 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         return len(await self.direct_child_directory_ids_of(directory_id))
 
     async def bind_note(self, directory_id: str, note_id: str) -> None:
-        await self._hierarchy_table.insert(
+        await self._directory_note_table.insert(
             {"directory_id": str(directory_id), "note_id": str(note_id)},
             on_conflict="DO NOTHING",
         )
 
     async def unbind_note(self, directory_id: str, note_id: str) -> None:
-        await self._hierarchy_table.delete(
+        await self._directory_note_table.delete(
             {"directory_id": str(directory_id), "note_id": str(note_id)}
         )
 
