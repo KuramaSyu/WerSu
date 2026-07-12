@@ -1,27 +1,26 @@
 import logging
-from logging import getLogger, basicConfig
 import sys
 import os
 import time
 
 import asyncio
-from typing import Any, Callable, Dict, Optional, cast
-import boto3
-from authzed.api.v1 import AsyncClient
+from typing import Any, Dict
+import boto3  # type: ignore[reportUnknownMemberType]
 import grpc
 
 from src.api.activity_statistics_service import ActivityStatisticsServiceABC
 from src.api.jwt_provider import PyJwtProvider
 from src.api.sharing import ShareAccessServiceABC, SharingRepoABC
 from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
-from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
+from src.db.repos.directory.directory import DirectoryRepoFacade
+from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos import NotePermissionRepoSpicedb
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.grpc_mod.activity_statistics_service import GrpcActivityStatisticsService
-from src.grpc_mod.proto.activity_pb2_grpc import add_ActivityStatisticsServiceServicer_to_server
-from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_server
+from src.grpc_mod.proto.activity_pb2_grpc import add_ActivityStatisticsServiceServicer_to_server  # type: ignore[attr-defined]
+from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.sharing_service import GrpcSharingService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.services import PermissionServiceRepo, UserService, DirectoryActivityService, AttachmentFacade, share_access
@@ -59,8 +58,10 @@ from src.grpc_mod.proto.thirdparty_migrations_pb2_grpc import (
     add_ThirdpartyMigrationsServiceServicer_to_server,  # type: ignore[attr-defined]
 )
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server  # type: ignore[attr-defined]
+from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteFacade
+from src.db.repos.note.tag import NoteTagPostgresRepo
 from src.grpc_mod.attachment_service import GrpcAttachmentService
 from src.grpc_mod.directory_service import GrpcDirectoryService
 from src.grpc_mod.note_service import GrpcNoteService
@@ -203,6 +204,36 @@ async def serve():
         table_name="activity",
         id_fields=["id"],
     )
+    directory_table = Table(
+        **common_table_kwargs,
+        table_name="note.directory",
+        id_fields=["id"],
+    )
+    directory_subdirectory_table = Table(
+        **common_table_kwargs,
+        table_name="note.directory_subdirectory",
+        id_fields=["id"],
+    )
+    directory_note_table = Table(
+        **common_table_kwargs,
+        table_name="note.directory_note",
+        id_fields=["id"],
+    )
+    directory_tags_table = Table(
+        **common_table_kwargs,
+        table_name="note.directory_tag",
+        id_fields=["directory_id", "tag_id"],
+    )
+    tags_table = Table(
+        **common_table_kwargs,
+        table_name="note.tag",
+        id_fields=["id"],
+    )
+    note_tags_table = Table(
+        **common_table_kwargs,
+        table_name="note.note_tag",
+        id_fields=["note_id", "tag_id"],
+    )
 
     # setup S3 connection
     s3_client: Any = boto3.client(  # type: ignore[reportUnknownMemberType]
@@ -242,12 +273,21 @@ async def serve():
     # Factory used by every gRPC service to create user instances
     user_context_factory = RepoContextFactory(user_repo=user_repo)
 
-    permission_repo = NotePermissionRepoSpicedb(client=spicedb_client, consistent=True)
+    permission_repo = NotePermissionRepoSpicedb(
+        client=spicedb_client,
+        consistent=True,
+        directory_subdirectory_table=directory_subdirectory_table,
+    )
 
-    directory_repo = DirectoryRepoSpicedbPostgres(
-        db=db,
+    directory_repo = DirectoryRepoFacade(
+        postgres_repo=PostgresDirectoryRepo(  # this is not indented to be used by other parties
+            directory_table=directory_table,
+            subdirectory_table=directory_subdirectory_table,
+            directory_note_table=directory_note_table,
+            tags_table=directory_tags_table,
+        ),
         permission_repo=permission_repo,
-        spicedb_client=spicedb_client,
+        log=logging_provider,
     )
 
     version_repo = NoteVersionPostgresRepo(
@@ -260,12 +300,14 @@ async def serve():
     note_repo: NoteFacade = NoteFacade(
         db=db,
         content_repo=note_content_repo,
+        combined_repo=CombinedNotePostgresRepo(db=db),
         embedding_repo=NoteEmbeddingPostgresRepo(
             table=embedding_table,
             embedding_generator=embedding_generator
         ),
         permission_repo=permission_repo,
         directory_repo=directory_repo,
+        tag_repo=NoteTagPostgresRepo(tags_table=note_tags_table),
         logging_provider=logging_provider,
         version_repo=version_repo,
     )
@@ -428,7 +470,7 @@ async def serve():
     add_SharingServiceServicer_to_server(grpc_sharing_service, server)
 
     # setup gRPC user service
-    app_user_service = UserService(user_repo=user_repo, directory_repo=directory_repo)
+    app_user_service = UserService(user_repo=user_repo, directory_repo=directory_repo, context_factory=user_context_factory)
     grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider, to_grpc=grpc_visitor)
     add_UserServiceServicer_to_server(grpc_user_service, server)
 
