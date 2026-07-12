@@ -8,7 +8,7 @@ from functools import wraps
 import inspect
 
 from asyncpg import Record
-from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest, ImportBulkRelationshipsRequest
+from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest, ImportBulkRelationshipsRequest, LookupResourcesRequest
 import grpc
 from src.api.permission_repo import PermissionRepoABC
 from src.api.service_unavailable_error import ServiceUnavailableError
@@ -26,7 +26,6 @@ from authzed.api.v1 import (
     AsyncClient,
     Consistency,
     DeleteRelationshipsRequest,
-    LookupResourcesRequest,
     ObjectReference,
     Relationship as SpicedbRelationship,
     RelationshipFilter,
@@ -152,6 +151,7 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         client: AsyncClient,
         permission_candidates_by_object_type: dict[str, list[str]] | None = None,
         consistent: bool = True,
+        directory_subdirectory_table: Optional[TableABC] = None,
     ) -> None:
         """Create a SpiceDB-backed permission repo.
 
@@ -170,6 +170,15 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
             latency, especially across regions. Set to False to fall back to
             SpiceDB's default ``minimize_latency`` semantics for higher
             throughput at the cost of read-your-writes races.
+        directory_subdirectory_table : TableABC, optional
+            Optional Postgres ``Table`` for
+            ``note.directory_subdirectory``.  Kept on the repo so
+            the directory subtree walks in
+            :meth:`DirectoryRepoFacade.resolve_subtree` /
+            :meth:`DirectoryRepoFacade.list_note_directory_ids`
+            can target Postgres directly.  Optional -- the repo
+            still works without it, falling back to
+            :meth:`lookup_relationships` for the same shapes.
         """
         self.client = client
         self._permission_candidates_by_object_type = (
@@ -178,6 +187,7 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
             else self._default_permission_candidates_by_object_type
         )
         self._consistent = consistent
+        self._directory_subdirectory_table = directory_subdirectory_table
 
     def _consistency(self) -> Optional[Consistency]:
         """Build the Consistency message honoring the ``consistent`` flag.
@@ -263,43 +273,6 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         return relationship
 
     @handle_error
-    async def lookup(self, relationship: Relationship) -> List[ObjectRef]:
-        # spicedb does not support bulk lookup, so we need to lookup one by one
-        filter = RelationshipFilter(
-            optional_subject_filter=SubjectFilter(
-                subject_type=relationship.subject.object_type,
-                optional_subject_id=str(relationship.subject.object_id)
-            )
-        )
-        filter.optional_relation = relationship.relation
-        filter.resource_type = relationship.resource.object_type
-        if relationship.resource.object_id != UNDEFINED:
-            filter.optional_resource_id = str(relationship.resource.object_id)
-        if relationship.subject.object_id != UNDEFINED:
-            filter.optional_subject_filter
-        
-        # LookupResources resolves effective permission, not only direct tuples.
-        # Caller-supplied consistency takes precedence; falls back to
-        # minimize_latency when the `consistent` flag is False.
-        consistency = self._consistency() or Consistency(fully_consistent=True)
-        result = self.client.LookupResources(
-            LookupResourcesRequest(
-                resource_object_type=relationship.resource.object_type,
-                permission=relationship.relation,
-                subject=self.converter.convert_subject_ref(relationship.subject),
-                consistency=consistency,
-            )   
-        )
-        objects: List[ObjectRef] = []
-        async for resp in result:
-            objects.append(
-                ObjectRef(
-                    object_type=ObjectTypeEnum(str(relationship.resource.object_type)),
-                    object_id=resp.resource_object_id
-                )
-            )
-        return objects
-
     async def check(self, relationship: Relationship) -> bool:
         converted = self.converter.convert_relationship(relationship)
         response = await self.client.CheckPermission(CheckPermissionRequest(
@@ -314,6 +287,32 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         ))
         return response.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
 
+    @handle_error
+    async def lookup_resources(self, relationship: Relationship) -> List[ObjectRef]:
+        relation = unwrap_undefined(relationship.relation)
+        resource_type = unwrap_undefined(relationship.resource.object_type)
+
+        
+        # LookupResources gets all resources of a given type for a given subject, e.g.
+        # user with a given permission
+        consistency = self._consistency() or Consistency(fully_consistent=True)
+        result = self.client.LookupResources(
+            LookupResourcesRequest(
+                resource_object_type=resource_type,
+                permission=relation,
+                subject=self.converter.convert_subject_ref(relationship.subject),
+                consistency=consistency,
+            )   
+        )
+        objects: List[ObjectRef] = []
+        async for resp in result:
+            objects.append(
+                ObjectRef(
+                    object_type=ObjectTypeEnum(str(relationship.resource.object_type)),
+                    object_id=resp.resource_object_id
+                )
+            )
+        return objects
 
     @handle_error
     async def lookup_relationships(self, relationship: Relationship) -> List[Relationship]:
@@ -371,6 +370,14 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         return relationships
 
     async def lookup_notes(self, user: UserContextABC, permission: str) -> List[ObjectRef]:
+        """Return every note the user has ``permission`` for (direct tuples only).
+
+        Drop-in replacement for the previous ``lookup(...)`` call
+        using :meth:`lookup_relationships`.  Returns one
+        :class:`ObjectRef` per matching ``note#permission@user``
+        tuple; callers that need transitive permission expansion
+        must walk the result list themselves.
+        """
         user_id = user.user_id
         relationship = Relationship(
             resource=ObjectRef(
@@ -383,7 +390,9 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
                 object_id=user_id
             )
         )
-        return await self.lookup(relationship)
+        matched = await self.lookup_resources(relationship)
+        return matched
+
 
     @handle_error
     async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
@@ -696,35 +705,6 @@ class NotePermissionRepoInMemory(PermissionRepoABC):
         self._store = [r for r in self._store if not matches(r)]
         return relationship
 
-    async def lookup(self, relationship: Relationship) -> List[ObjectRef]:
-        # Simulates a direct relationship lookup (equivalent to filtering stored tuples),
-        # not transitive permission expansion.
-        results: List[ObjectRef] = []
-        for stored in self._store:
-            obj_match = (
-                stored.resource.object_type == relationship.resource.object_type
-                and (
-                    relationship.resource.object_id is UNDEFINED
-                    or stored.resource.object_id == relationship.resource.object_id
-                )
-            )
-            rel_match = stored.relation == relationship.relation
-            subj_match = (
-                stored.subject.object_type == relationship.subject.object_type
-                and (
-                    relationship.subject.object_id is UNDEFINED
-                    or stored.subject.object_id == relationship.subject.object_id
-                )
-            )
-            if obj_match and rel_match and subj_match:
-                results.append(
-                    ObjectRef(
-                        object_type=ObjectTypeEnum(str(stored.resource.object_type)),
-                        object_id=stored.resource.object_id
-                    )
-                )
-        return results
-
     async def lookup_relationships(self, relationship: Relationship) -> List[Relationship]:
         relationships: List[Relationship] = []
         for stored in self._store:
@@ -769,6 +749,45 @@ class NotePermissionRepoInMemory(PermissionRepoABC):
                     object_id=stored.resource.object_id,
                 )
 
+        return list(matched.values())
+
+    async def lookup_resources(self, relationship: Relationship) -> List[ObjectRef]:
+        """Return every resource for ``relationship`` matching the user subject.
+
+        Mirror of :meth:`NotePermissionRepoSpicedb.lookup_resources`
+        for the in-memory test double.  Filters stored relations by
+        resource type, subject type+id, and relation (when supplied);
+        then expands the relation to effective permissions via
+        :attr:`_relation_implied_permissions` so callers asking for
+        ``view`` match stored ``owner`` / ``writer`` / ``reader``
+        entries.
+        """
+        resource_type = relationship.resource.object_type
+        subject_type = relationship.subject.object_type
+        subject_id = relationship.subject.object_id
+        requested_relation = relationship.relation
+
+        matched: dict[str, ObjectRef] = {}
+        implied_map = self._relation_implied_permissions.get(resource_type, {})
+
+        for stored in self._store:
+            if stored.resource.object_type != resource_type:
+                continue
+            if stored.subject.object_type != subject_type:
+                continue
+            if subject_id is not UNDEFINED and stored.subject.object_id != subject_id:
+                continue
+            if requested_relation is not UNDEFINED:
+                implied = implied_map.get(stored.relation, {stored.relation})
+                if str(requested_relation) not in implied:
+                    continue
+            resource_id = stored.resource.object_id
+            if not isinstance(resource_id, str):
+                continue
+            matched[resource_id] = ObjectRef(
+                object_type=resource_type,
+                object_id=resource_id,
+            )
         return list(matched.values())
 
     async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
