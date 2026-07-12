@@ -34,7 +34,7 @@ from src.db.entities.activity import (
     FilterActivity,
 )
 from src.db.repos.activity.strategies import get_strategy
-from src.api.directory_repo import DirectoryRepo
+from src.api.directory_repo import DirectoryFacade
 from src.db.sql_builders import SqliteSqlBuilder, WhereClause, WherePair
 from src.db.table import TableABC
 from src.utils import asdict, drop_undefined, logging_provider as default_logging_provider
@@ -48,7 +48,7 @@ class PostgresActivityRepo(ActivityRepoABC):
     def __init__(
         self,
         table: TableABC[List[Record]],
-        directory_repo: Optional[DirectoryRepo] = None,
+        directory_repo: Optional[DirectoryFacade] = None,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         """Initialise the repo.
@@ -119,15 +119,7 @@ class PostgresActivityRepo(ActivityRepoABC):
         strategy = get_strategy(algorithm)
         dialect = "sqlite" if isinstance(self._table.builder, SqliteSqlBuilder) else "postgres"
         strat_sql = strategy.build(filter, None, None, dialect=dialect)
-
-        # add WHERE to the strategy's SQL.  Strategies declare
-        # any non-pair predicates (e.g. ``note_id IS NOT NULL``)
-        # in ``StrategyResult.where``; the staged builder's
-        # ``where_clause`` API only accepts ``WhereClause``, so we
-        # path the strategy's predicate through
-        # ``WhereClause.add_raw``.  ``note_id`` is the primary
-        # offender -- directory/role events leave it NULL and would
-        # otherwise roll into one phantom group.
+        # add WHERE to the strategy's SQL
         where = await self._build_where_clause(filter)
         if strat_sql.where:
             where = where.add_raw(strat_sql.where)
