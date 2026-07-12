@@ -44,15 +44,18 @@ def _make_service() -> tuple[
     NotePermissionRepoInMemory,
     _FakeActivityLoggerService,
 ]:
-    directory_repo = _TestDirectoryRepo()
-    note_repo = _FakeNoteRepoFacade()
     permission_repo = NotePermissionRepoInMemory()
+    directory_repo = _TestDirectoryRepo(permission_repo=permission_repo)
+    note_repo = _FakeNoteRepoFacade()
     activity_logger = _FakeActivityLoggerService()
     service = DirectoryService(
         directory_repo=directory_repo,
         note_repo=note_repo,
         permission_repo=permission_repo,
         activity_logger=activity_logger,
+        note_service=None,  # type: ignore[arg-type]
+        attachment_facade=None,  # type: ignore[arg-type]
+        log=lambda name, instance: None,
     )
     return service, directory_repo, note_repo, permission_repo, activity_logger
 
@@ -100,7 +103,7 @@ async def test_get_directory_notes_creates_readme_when_missing() -> None:
     assert len(note_repo.insert_calls) == 1
     created = note_repo.insert_calls[0]
     assert created.title == README_TITLE
-    assert created.parent_dir_id == "dir-1"
+    assert "dir-1" in list(created.directory_ids or [])
     assert len(notes) == 2
     assert notes[0].title == README_TITLE
 
@@ -208,7 +211,7 @@ async def test_patch_directory_requires_write_permission() -> None:
 
     try:
         await service.patch_directory(
-            DirectoryEntity(id="dir-1", name="x"),
+            DirectoryEntity(id="dir-1", slug="x"),
             _UserContext("user-1"),
         )
     except PermissionError:
@@ -232,7 +235,7 @@ async def test_create_directory_grants_caller_admin_relation() -> None:
     service, directory_repo, _, _, _ = _make_service()
 
     await service.create_directory(
-        DirectoryEntity(name="root"),
+        DirectoryEntity(slug="root"),
         _UserContext("user-1"),
     )
 
@@ -251,7 +254,7 @@ async def test_create_directory_binds_readme_note_when_not_supplied() -> None:
     await _grant_view(permission_repo, "user-1", "root-id")
 
     created = await service.create_directory(
-        DirectoryEntity(name="root"),
+        DirectoryEntity(slug="root"),
         _UserContext("user-1"),
     )
 
@@ -259,7 +262,7 @@ async def test_create_directory_binds_readme_note_when_not_supplied() -> None:
     assert len(note_repo.insert_calls) == 1
     readme = note_repo.insert_calls[0]
     assert readme.title == README_TITLE
-    assert readme.parent_dir_id == created.id
+    assert str(created.id) in list(readme.directory_ids or [])
 
     # the in-memory directory repo received an update with the bound id
     bound = [
@@ -290,7 +293,7 @@ async def test_create_directory_does_not_overwrite_supplied_readme_note_id() -> 
     service, directory_repo, note_repo, permission_repo, _activity_logger = _make_service()
 
     created = await service.create_directory(
-        DirectoryEntity(name="root", readme_note_id="preset-readme"),
+        DirectoryEntity(slug="root", readme_note_id="preset-readme"),
         _UserContext("user-1"),
     )
 
@@ -316,7 +319,7 @@ async def test_get_directory_records_directory_viewed() -> None:
     """`get_directory` records `directory_viewed` after a successful fetch."""
     service, directory_repo, _, permission_repo, activity_logger = _make_service()
     directory_repo.directories_by_id["dir-1"] = DirectoryEntity(
-        id="dir-1", name="root"
+        id="dir-1", slug="root"
     )
     await _grant_view(permission_repo, "user-1", "dir-1")
 
@@ -374,7 +377,7 @@ async def test_create_directory_records_directory_created() -> None:
     service, _, _, _, activity_logger = _make_service()
 
     created = await service.create_directory(
-        DirectoryEntity(name="root"),
+        DirectoryEntity(slug="root"),
         _UserContext("user-1"),
     )
 
@@ -385,7 +388,7 @@ async def test_patch_directory_records_directory_edited() -> None:
     """`patch_directory` records `directory_edited` when the repo updates a row."""
     service, directory_repo, _, permission_repo, activity_logger = _make_service()
     directory_repo.directories_by_id["dir-1"] = DirectoryEntity(
-        id="dir-1", name="root"
+        id="dir-1", slug="root"
     )
     await permission_repo.insert(
         [
@@ -398,7 +401,7 @@ async def test_patch_directory_records_directory_edited() -> None:
     )
 
     await service.patch_directory(
-        DirectoryEntity(id="dir-1", name="renamed"),
+        DirectoryEntity(id="dir-1", slug="renamed"),
         _UserContext("user-1"),
     )
 
@@ -409,7 +412,7 @@ async def test_delete_directory_records_directory_deleted() -> None:
     """`delete_directory` records `directory_deleted` on a successful delete."""
     service, directory_repo, _, permission_repo, activity_logger = _make_service()
     directory_repo.directories_by_id["dir-1"] = DirectoryEntity(
-        id="dir-1", name="root"
+        id="dir-1", slug="root"
     )
     await permission_repo.insert(
         [
@@ -431,7 +434,7 @@ async def test_delete_directory_does_not_record_on_permission_denied() -> None:
     """`delete_directory` records nothing when the actor lacks the admin permission."""
     service, directory_repo, _, _, activity_logger = _make_service()
     directory_repo.directories_by_id["dir-1"] = DirectoryEntity(
-        id="dir-1", name="root"
+        id="dir-1", slug="root"
     )
 
     try:
@@ -440,3 +443,4 @@ async def test_delete_directory_does_not_record_on_permission_denied() -> None:
         pass
 
     assert activity_logger.calls == []
+

@@ -22,9 +22,9 @@ import pytest
 from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
-from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
+from src.db.repos.directory.directory import DirectoryRepoFacade
 from src.db.repos.note.note import NoteFacade
-from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
+from src.db.repos.permissions.permission import SpicedbPermissionRepo
 from src.services.user import UserService
 from tests.integration_helpers import (
     NoteRelationEnum,
@@ -41,7 +41,7 @@ from tests.integration_helpers import (
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
 
 
-EnvT = Tuple[UserService, DirectoryRepoSpicedbPostgres, NoteFacade, NotePermissionRepoSpicedb]  # noqa: F841 -- kept for backward compat imports
+EnvT = Tuple[UserService, DirectoryRepoFacade, NoteFacade, SpicedbPermissionRepo]  # noqa: F841 -- kept for backward compat imports
 
 
 async def test_create_user_bootstraps_default_directories(
@@ -99,14 +99,14 @@ async def test_create_user_bootstraps_default_directories(
             f"of the {len(directory_ids)} directory IDs: {directory_ids!r}"
         )
 
-    by_name = {d.name: d for d in directories}
+    by_slug = {d.slug: d for d in directories}
     for spec in directory_repo.get_default_directory_specs():
-        if spec.name not in by_name:
+        if spec.name not in by_slug:
             pytest.fail(
                 f"missing default directory {spec.name!r}; "
-                f"available names: {sorted(by_name)!r}"
+                f"available slugs: {sorted(by_slug)!r}"
             )
-        directory = by_name[spec.name]
+        directory = by_slug[spec.name]
         if directory.id is None:
             pytest.fail(
                 f"fetched directory {spec.name!r} has no ID: {directory!r}"
@@ -214,7 +214,7 @@ async def test_insert_note_uses_specified_parent_directory_when_provided(
             content="",
             updated_at=datetime.now(),
             author_id=created_user.id,
-            parent_dir_id=str(custom_directory.id),
+            directory_ids=[str(custom_directory.id)],
         ),
         await context_factory.create(str(created_user.id)),
     )
@@ -247,25 +247,25 @@ async def _gather(
 
 
 async def _get_default_directory(
-    directory_repo: DirectoryRepoSpicedbPostgres,
+    directory_repo: DirectoryRepoFacade,
     user_id: str,
     context_factory,
 ) -> DirectoryEntity:
     """Return the user's first default directory (e.g. ``fleeting_notes``)."""
-    default_name = directory_repo.get_default_directory_specs()[0].name
+    default_slug = directory_repo.get_default_directory_specs()[0].name
     ids = await directory_repo.list_user_directory_ids(
         await context_factory.create(user_id)
     )
     for d in await _gather(directory_repo.fetch_directory, ids):
-        if d is not None and d.name == default_name:
+        if d is not None and d.slug == default_slug:
             return d
     pytest.fail(
-        f"default directory {default_name!r} was not created for user {user_id!r}"
+        f"default directory {default_slug!r} was not created for user {user_id!r}"
     )
 
 
 async def _note_has_parent_directory(
-    permission_repo: NotePermissionRepoSpicedb,
+    permission_repo: SpicedbPermissionRepo,
     note_id: str,
     parent_directory_id: str,
 ) -> bool:

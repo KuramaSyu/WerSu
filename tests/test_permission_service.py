@@ -8,7 +8,7 @@ from tests.stubs.user_context import _UserContext as UserContext
 from src.api.types import Pagination
 from src.api.user_context import UserContextABC
 from src.db.entities import DirectoryEntity, NoteEntity
-from src.api.directory_repo import DirectoryRepo
+from src.api.directory_facade import DirectoryFacade
 from src.api.note_facade import NoteRepoFacadeABC, SearchType
 from src.api import (
     DirectoryRelationEnum,
@@ -63,7 +63,7 @@ class _StubNoteRepo(NoteRepoFacadeABC):
         raise NotImplementedError()
 
 
-class _StubDirectoryRepo(DirectoryRepo):
+class _StubDirectoryRepo(DirectoryFacade):
     """Minimal directory repo stub implementing only fetch for existence checks."""
 
     def __init__(self, directory_ids: set[str]) -> None:
@@ -74,7 +74,7 @@ class _StubDirectoryRepo(DirectoryRepo):
 
     async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
         if id in self._directory_ids:
-            return DirectoryEntity(id=id, name="test")
+            return DirectoryEntity(id=id, slug="test")
         return None
 
     async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
@@ -106,6 +106,14 @@ class _StubDirectoryRepo(DirectoryRepo):
         max_depth: int = 10,
     ) -> Tuple[List[str], List[str]]:
         return ([], [directory_id])
+
+    async def add_note_to_directory(self, note_id: str, directory_id: str) -> None:
+        """No-op recording stub."""
+        return None
+
+    async def remove_note_from_directory(self, note_id: str, directory_id: str) -> None:
+        """No-op recording stub."""
+        return None
 
 
 async def test_permission_service_create_and_list_note_relationships() -> None:

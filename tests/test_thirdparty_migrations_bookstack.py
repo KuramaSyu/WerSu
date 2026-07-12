@@ -398,6 +398,90 @@ async def test_cross_refs_get_rewritten_in_second_pass() -> None:
 
 
 @pytest.mark.asyncio
+async def test_non_image_attachment_inline_ref_becomes_link() -> None:
+    """An XML attachment referenced inline is rendered as
+    ``[filename](link-url)`` rather than the inline image URL."""
+    importer, ds, ns, af = _build_importer()
+    _stub_directory_assigns_ids(ds)
+
+    payload = _book_payload(
+        pages=[
+            {
+                "id": 1,
+                "name": "P",
+                "markdown": "import the data: ![x](data.xml)",
+                "priority": 0,
+                "attachments": [{"id": 80, "name": "x", "file": "data.xml"}],
+            }
+        ]
+    )
+    # Add the XML file to the zip; the default zip helper only
+    # ships the cover + a couple of PNGs.
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("data.json", json.dumps(payload))
+        zf.writestr("files/cover.png", b"COVER")
+        zf.writestr("files/data.xml", b"<data/>")
+    user_ctx = _UserContext(user_id="u1")
+
+    await importer.migrate(buf.getvalue(), user_ctx)
+
+    inserted = ns.inserted[0]
+    # The link URL is used; the image URL is not.
+    assert "/api/attachments/?key=" in (inserted.content or "")
+    assert "/api/attachments/image?" not in (inserted.content or "")
+    # The link text is the original filename (with extension).
+    assert "[data.xml](" in (inserted.content or "")
+    # The data.xml attachment is also linked to the note so the
+    # attachment linking pass picks it up.
+    xml_keys = {a.key for a in af.posted if a.filename == "data.xml"}
+    assert xml_keys
+    linked_keys = {key for key, _nid, _uid in af.links}
+    assert xml_keys & linked_keys
+
+
+@pytest.mark.asyncio
+async def test_pdf_attachment_inline_ref_stays_inline_image() -> None:
+    """PDFs are kept as inline image refs because the renderer can
+    embed them; the link format is only for non-image / non-PDF
+    files."""
+    importer, ds, ns, af = _build_importer()
+    _stub_directory_assigns_ids(ds)
+
+    payload = _book_payload(
+        pages=[
+            {
+                "id": 1,
+                "name": "P",
+                "markdown": "see the report: ![r](report.pdf)",
+                "priority": 0,
+                "attachments": [{"id": 90, "name": "r", "file": "report.pdf"}],
+            }
+        ]
+    )
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("data.json", json.dumps(payload))
+        zf.writestr("files/cover.png", b"COVER")
+        zf.writestr("files/report.pdf", b"%PDF-1.4")
+    user_ctx = _UserContext(user_id="u1")
+
+    await importer.migrate(buf.getvalue(), user_ctx)
+
+    inserted = ns.inserted[0]
+    # PDF is treated as an embeddable file -> uses the image URL.
+    assert "/api/attachments/image?" in (inserted.content or "")
+    # The link URL is not used.
+    assert "/api/attachments/?key=" not in (inserted.content or "")
+
+
+@pytest.mark.asyncio
 async def test_invalid_zip_surfaces_as_bookstack_zip_error() -> None:
     importer, ds, ns, af = _build_importer()
     user_ctx = _UserContext(user_id="u1")

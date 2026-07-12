@@ -131,12 +131,15 @@ def test_rewrite_image_cross_ref() -> None:
 
 
 def test_rewrite_attachment_cross_ref() -> None:
+    """`[[bsexport:attachment:N]]` becomes a markdown link so the
+    renderer shows a clickable link instead of a bare URL."""
     body = "report: [[bsexport:attachment:7]]"
     out = _converter().rewrite_cross_references(
         body,
         {"attachment": {7: "key-7"}},
+        attachment_meta={7: "report.xml"},
     )
-    assert out == "report: /u/key-7"
+    assert out == "report: [report.xml](/u/key-7)"
 
 
 def test_unknown_kind_is_left_alone() -> None:
@@ -209,3 +212,108 @@ def test_rewrite_cross_references_partial_escaping() -> None:
         body, {"image": {1: "key-1", 2: "key-2"}}
     )
     assert out == "a /u/key-1 b /u/key-2 c"
+
+
+# Pinned regression: previously the converter always emitted the
+# inline image URL, which made the renderer try to embed a broken
+# icon when the file was an XML / JSON / DOCX attachment.  After
+# the change, every non-image / non-PDF ref becomes a clickable
+# ``[filename](url)`` link.
+
+
+def _converter_with_distinct_link_builder() -> BookstackHtmlConverter:
+    """A converter that uses a different URL for the link builder."""
+    return BookstackHtmlConverter(
+        attachment_url_builder=lambda k: f"/img/{k}",
+        attachment_link_builder=lambda k: f"/dl/{k}",
+    )
+
+
+def test_non_image_inline_html_ref_becomes_link() -> None:
+    body = '<p>before <img src="data.xml" alt="x"/> after</p>'
+    out = _converter_with_distinct_link_builder().rewrite_image_sources(
+        body, {"data.xml": "key-X"}
+    )
+    assert "[data.xml](/dl/key-X)" in out
+    assert "/img/key-X" not in out
+
+
+def test_non_image_inline_markdown_ref_becomes_link() -> None:
+    body = "before ![caption](data.json) after"
+    out = _converter_with_distinct_link_builder().rewrite_image_sources(
+        body, {"data.json": "key-J"}
+    )
+    assert "[data.json](/dl/key-J)" in out
+    assert "![caption]" not in out
+
+
+def test_pdf_inline_ref_stays_as_inline_image() -> None:
+    """PDFs are kept as inline images because the renderer can embed them."""
+    body = '<p>see <img src="report.pdf" alt="r"/></p>'
+    out = _converter_with_distinct_link_builder().rewrite_image_sources(
+        body, {"report.pdf": "key-P"}
+    )
+    assert 'src="/img/key-P"' in out
+    assert "/dl/" not in out
+
+
+def test_image_inline_ref_stays_as_inline_image() -> None:
+    body = '<p>see <img src="photo.png" alt="r"/></p>'
+    out = _converter_with_distinct_link_builder().rewrite_image_sources(
+        body, {"photo.png": "key-I"}
+    )
+    assert 'src="/img/key-I"' in out
+    assert "/dl/" not in out
+
+
+def test_mixed_image_and_non_image_refs() -> None:
+    body = (
+        '<p><img src="photo.png"/><img src="data.xml"/></p>'
+        ' ![one](photo.png) ![two](data.json)'
+    )
+    out = _converter_with_distinct_link_builder().rewrite_image_sources(
+        body, {"photo.png": "key-I", "data.xml": "key-X", "data.json": "key-J"}
+    )
+    # Images use the image URL.
+    assert out.count("/img/key-I") == 2
+    # Non-images use the link URL wrapped in a markdown link.
+    assert "[data.xml](/dl/key-X)" in out
+    assert "[data.json](/dl/key-J)" in out
+
+
+def test_default_link_builder_falls_back_to_image_builder() -> None:
+    """When `attachment_link_builder` is not set, the image builder
+    is reused for the link URL.  This keeps older callers working
+    without changes to the wire format they pin in tests."""
+    body = "see ![caption](data.xml)"
+    out = _converter().rewrite_image_sources(body, {"data.xml": "key-X"})
+    assert "[data.xml](/u/key-X)" in out
+
+
+def test_non_image_attachment_cross_ref_becomes_link() -> None:
+    body = "report: [[bsexport:attachment:7]]"
+    out = _converter_with_distinct_link_builder().rewrite_cross_references(
+        body,
+        {"attachment": {7: "key-7"}},
+        attachment_meta={7: "report.xml"},
+    )
+    assert out == "report: [report.xml](/dl/key-7)"
+
+
+def test_image_cross_ref_still_uses_image_url() -> None:
+    body = "see [[bsexport:image:42]] for details"
+    out = _converter_with_distinct_link_builder().rewrite_cross_references(
+        body, {"image": {42: "key-42"}}
+    )
+    assert out == "see /img/key-42 for details"
+
+
+def test_attachment_cross_ref_without_meta_uses_placeholder() -> None:
+    body = "report: [[bsexport:attachment:7]]"
+    out = _converter_with_distinct_link_builder().rewrite_cross_references(
+        body,
+        {"attachment": {7: "key-7"}},
+    )
+    # The placeholder is the source id so the link still renders
+    # even when the caller forgot to pass attachment_meta.
+    assert out == "report: [attachment-7](/dl/key-7)"

@@ -32,7 +32,7 @@ from src.db.repos.note.tag import NoteTagPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
 from src.db.repos.note.note import NoteFacade
 from src.api.note_facade import NoteRepoFacadeABC
-from src.db.repos.note.permission import NotePermissionRepoInMemory
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.user.user import UserRepoABC
 from src.db.table import Table
@@ -189,7 +189,7 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
         ),
         # TODO: testing with SpiceDB could get hard. Maybe make a Fake
         # which does not do any checks.
-        permission_repo=NotePermissionRepoInMemory(),
+        permission_repo=InMemoryPermissionRepo(),
         directory_repo=_TestDirectoryRepo(),
         tag_repo=NoteTagPostgresRepo(tags_table=note_tags_table),
         logging_provider=logging_provider,

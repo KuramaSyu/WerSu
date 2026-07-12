@@ -20,10 +20,13 @@ from testcontainers_spicedb import SpiceDBContainer
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos import Database
-from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
+from src.db.repos.directory.directory import DirectoryRepoFacade
+from src.db.repos.directory.postgres import PostgresDirectoryRepo
+from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteFacade
-from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
+from src.db.repos.note.tag import NoteTagPostgresRepo
+from src.db.repos.permissions.permission import SpicedbPermissionRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user import RepoContextFactory
@@ -71,8 +74,8 @@ class IntegrationEnv:
 
     db: Database
     spicedb_client: AsyncClient
-    permission_repo: NotePermissionRepoSpicedb
-    directory_repo: DirectoryRepoSpicedbPostgres
+    permission_repo: SpicedbPermissionRepo
+    directory_repo: DirectoryRepoFacade
     note_repo: NoteFacade
     user_repo: UserPostgresRepo
     user_context_factory: RepoContextFactory
@@ -110,14 +113,45 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
         )
         await migration_runner.run_pending_migrations()
 
-        permission_repo = NotePermissionRepoSpicedb(
+        permission_repo = SpicedbPermissionRepo(
             client=spicedb_client,
             consistent=True,
+            directory_subdirectory_table=Table(
+                db=db,
+                table_name="note.directory_subdirectory",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
         )
-        directory_repo = DirectoryRepoSpicedbPostgres(
-            db=db,
+        postgres_directory_repo = PostgresDirectoryRepo(
+            directory_table=Table(
+                db=db,
+                table_name="note.directory",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            subdirectory_table=Table(
+                db=db,
+                table_name="note.directory_subdirectory",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            directory_note_table=Table(
+                db=db,
+                table_name="note.directory_note",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            directory_tags_table=Table(
+                db=db,
+                table_name="note.directory_tag",
+                id_fields=["directory_id", "tag_id"],
+                logging_provider=logging_provider,
+            ),
+        )
+        directory_repo = DirectoryRepoFacade(
+            postgres_repo=postgres_directory_repo,
             permission_repo=permission_repo,
-            spicedb_client=spicedb_client,
         )
         note_repo = NoteFacade(
             db=db,
@@ -129,9 +163,18 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
                     logging_provider=logging_provider,
                 )
             ),
+            combined_repo=CombinedNotePostgresRepo(db=db),
             embedding_repo=_FakeEmbeddingRepo(),
             permission_repo=permission_repo,
             directory_repo=directory_repo,
+            tag_repo=NoteTagPostgresRepo(
+                tags_table=Table(
+                    db=db,
+                    table_name="note.note_tag",
+                    id_fields=["note_id", "tag_id"],
+                    logging_provider=logging_provider,
+                ),
+            ),
             logging_provider=logging_provider,
         )
         user_repo = UserPostgresRepo(

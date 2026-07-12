@@ -8,8 +8,15 @@ import pytest
 from tests.stubs.user_context import _UserContext as UserContext
 from src.api.user_context import UserContextABC
 from src.db.entities.note.versioning import NoteVersionEntry
-from src.api.directory_repo import DirectoryRepo
-from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
+from src.api.directory_facade import DirectoryFacade
+from src.db.repos.directory.directory import DirectoryRepoFacade
+from src.db.repos.directory.postgres import PostgresDirectoryRepo
+from tests._fixtures_pkg.fakes import (
+    _FakeDirectorySubdirectoryTable,
+    _FakeDirectoryNoteTable,
+    _FakeDirectoryTable,
+    _FakeDirectoryTagsTable,
+)
 from tests.stubs import _UserContext
 from src.api import (
     DirectoryRelationEnum,
@@ -26,17 +33,26 @@ from src.utils import logging_provider
 from .fixtures import _FakeVersionRepo
 
 
-class _FakeDirectoryRepo(DirectoryRepo):
+class _FakeDirectoryRepo(DirectoryFacade):
     def __init__(self, note_ids: List[str]) -> None:
         self._note_ids = note_ids
 
-    async def create_directory(self, entity):  # type: ignore[override]
+    async def create_directory(self, entity, user_ctx):  # type: ignore[override]
         raise NotImplementedError()
 
-    async def fetch_directory(self, id: str):  # type: ignore[override]
+    async def fetch_directory(self, id: str, *, include=None):  # type: ignore[override]
         raise NotImplementedError()
 
     async def update_directory(self, entity):  # type: ignore[override]
+        raise NotImplementedError()
+
+    async def delete_directory(self, entity):  # type: ignore[override]
+        raise NotImplementedError()
+
+    async def add_note_to_directory(self, note_id: str, directory_id: str) -> None:
+        raise NotImplementedError()
+
+    async def remove_note_from_directory(self, note_id: str, directory_id: str) -> None:
         raise NotImplementedError()
 
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
@@ -65,6 +81,16 @@ class _FakeDirectoryRepo(DirectoryRepo):
 
 
 async def test_resolve_files_of_directory_depth_and_cycle() -> None:
+    """Depth + cycle correctness against the new hierarchy tables.
+
+    The directory repo walks ``note.directory_subdirectory`` (for
+    the directory tree) and ``note.directory_note`` (for the
+    note bindings) instead of the SpiceDB relationships that
+    used to drive this test, so the setup seeds rows directly.
+    Visibility on the root directory is still routed through
+    the in-memory permission repo so the ``has_permission``
+    branch keeps its existing coverage.
+    """
     permission_repo = NotePermissionRepoInMemory()
     user_id = "alice"
     ctx = _UserContext(user_id)
@@ -76,44 +102,31 @@ async def test_resolve_files_of_directory_depth_and_cycle() -> None:
                 relation=DirectoryRelationEnum.READER,
                 subject=SubjectRef(ObjectTypeEnum.USER, user_id),
             ),
-            Relationship(
-                resource=ObjectRef(ObjectTypeEnum.DIRECTORY, "child"),
-                relation=DirectoryRelationEnum.PARENT,
-                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "root"),
-            ),
-            Relationship(
-                resource=ObjectRef(ObjectTypeEnum.DIRECTORY, "grand"),
-                relation=DirectoryRelationEnum.PARENT,
-                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "child"),
-            ),
-            # cycle: root -> grand
-            Relationship(
-                resource=ObjectRef(ObjectTypeEnum.DIRECTORY, "root"),
-                relation=DirectoryRelationEnum.PARENT,
-                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "grand"),
-            ),
-            Relationship(
-                resource=ObjectRef(ObjectTypeEnum.NOTE, "note-root"),
-                relation=NoteRelationEnum.PARENT_DIRECTORY,
-                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "root"),
-            ),
-            Relationship(
-                resource=ObjectRef(ObjectTypeEnum.NOTE, "note-child"),
-                relation=NoteRelationEnum.PARENT_DIRECTORY,
-                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "child"),
-            ),
-            Relationship(
-                resource=ObjectRef(ObjectTypeEnum.NOTE, "note-grand"),
-                relation=NoteRelationEnum.PARENT_DIRECTORY,
-                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "grand"),
-            ),
         ]
     )
 
-    directory_repo = DirectoryRepoSpicedbPostgres(
-        db=None,  # type: ignore[arg-type]
+    subdirectory_table = _FakeDirectorySubdirectoryTable()
+    # child dirs under root
+    subdirectory_table.add_directory_child("root", "child")
+    subdirectory_table.add_directory_child("child", "grand")
+    # cycle: grand is also a parent of root.  Add but expect it to be
+    # ignored by the visited set.
+    subdirectory_table.add_directory_child("grand", "root")
+    note_table = _FakeDirectoryNoteTable()
+    # notes at every level
+    note_table.add_note_child("root", "note-root")
+    note_table.add_note_child("child", "note-child")
+    note_table.add_note_child("grand", "note-grand")
+
+    directory_repo = DirectoryRepoFacade(
+        postgres_repo=PostgresDirectoryRepo(
+            directory_table=_FakeDirectoryTable(),
+            subdirectory_table=subdirectory_table,
+            directory_note_table=note_table,
+            directory_tags_table=_FakeDirectoryTagsTable(),
+        ),
         permission_repo=permission_repo,
-        spicedb_client=None,  # type: ignore[arg-type]
+        log=logging_provider,
     )
 
     note_ids = await directory_repo.resolve_files_of_directory("root", ctx, max_depth=0)

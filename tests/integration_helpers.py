@@ -39,9 +39,9 @@ from src.api import (
 )
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
-from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
+from src.db.repos.directory.directory import DirectoryRepoFacade
 from src.db.repos.note.note import NoteFacade
-from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
+from src.db.repos.permissions.permission import SpicedbPermissionRepo
 from src.db.repos.user import RepoUserContext
 from tests.stubs.user_context import _UserContext as UserContext
 from src.services.user import UserService
@@ -98,9 +98,9 @@ async def user_service_env(
     spicedb_postgres_env: IntegrationEnv,
 ) -> Tuple[
     UserService,
-    DirectoryRepoSpicedbPostgres,
+    DirectoryRepoFacade,
     NoteFacade,
-    NotePermissionRepoSpicedb,
+    SpicedbPermissionRepo,
 ]:
     """Provision a real Postgres + SpiceDB environment for user service tests.
 
@@ -126,7 +126,7 @@ async def sharing_service_env(
 
 
 async def assert_user_has_admin_on_directory(
-    permission_repo: NotePermissionRepoSpicedb,
+    permission_repo: SpicedbPermissionRepo,
     user_id: str,
     directory_id: str,
     context_factory,

@@ -13,7 +13,7 @@ import pytest
 import uuid
 from tests.stubs.user_context import _UserContext as UserContext
 from src.api import ObjectRef, Relationship, SubjectRef
-from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
+from src.db.repos.permissions.permission import SpicedbPermissionRepo
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
@@ -24,8 +24,8 @@ pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
 # signatures that pre-date the fixture rename.
 @pytest.fixture(scope="function")
 async def note_permissions_repo(
-    spicedb_permission_repo: AsyncIterator[NotePermissionRepoSpicedb],
-) -> AsyncIterator[NotePermissionRepoSpicedb]:
+    spicedb_permission_repo: AsyncIterator[SpicedbPermissionRepo],
+) -> AsyncIterator[SpicedbPermissionRepo]:
     """Alias around the canonical ``spicedb_permission_repo`` fixture.
 
     Kept here so existing test bodies keep using
@@ -36,7 +36,7 @@ async def note_permissions_repo(
         yield repo
 
 
-async def test_note_insert_and_check(spicedb_permission_repo: NotePermissionRepoSpicedb):
+async def test_note_insert_and_check(spicedb_permission_repo: SpicedbPermissionRepo):
     emilia = SubjectRef(object_type="user", object_id="emilia")
     alfred = SubjectRef(object_type="user", object_id="alfred")
 
@@ -63,7 +63,7 @@ async def test_note_insert_and_check(spicedb_permission_repo: NotePermissionRepo
     assert [obj.object_id for obj in alfred_admin_notes] == []
 
 
-async def test_note_missing_permissions(spicedb_permission_repo: NotePermissionRepoSpicedb):
+async def test_note_missing_permissions(spicedb_permission_repo: SpicedbPermissionRepo):
     emilia = SubjectRef(object_type="user", object_id="emilia")
     alfred = SubjectRef(object_type="user", object_id="alfred")
 

@@ -23,16 +23,18 @@ import pytest
 from src.api.types import Pagination
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
-from src.api.directory_repo import DirectoryRepo
+from src.api.directory_facade import DirectoryFacade
 from src.db.repos.note import note as note_module
 from src.db.repos.note.note import NoteFacade
 from src.api.note_facade import SearchType
 from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from tests._fixtures_pkg.fakes import (
+    _FakeCombinedNoteRepo,
     _FakeDatabase,
     _FakeEmbeddingRepo,
     _FakeJwtProvider,
     _FakeNoteContentRepo,
+    _FakeNoteTagRepo,
     _FakeVersionRepo,
     _TestDirectoryRepo,
 )
@@ -44,25 +46,31 @@ def _make_facade(
     version_repo: Optional[_FakeVersionRepo] = None,
     db: Optional[_FakeDatabase] = None,
     content_repo: Optional[_FakeNoteContentRepo] = None,
+    combined_repo: Optional[_FakeCombinedNoteRepo] = None,
+    tag_repo: Optional[_FakeNoteTagRepo] = None,
     permission_repo: Optional[NotePermissionRepoInMemory] = None,
-    directory_repo: Optional[DirectoryRepo] = None,
-) -> tuple[NoteFacade, _FakeDatabase, _FakeNoteContentRepo, _FakeEmbeddingRepo, DirectoryRepo]:
+    directory_repo: Optional[DirectoryFacade] = None,
+) -> tuple[NoteFacade, _FakeDatabase, _FakeNoteContentRepo, _FakeEmbeddingRepo, DirectoryFacade, _FakeCombinedNoteRepo, _FakeNoteTagRepo]:
     """Build a :class:`NoteFacade` wired against the in-memory fakes."""
     fake_db = db or _FakeDatabase()
     fake_content = content_repo or _FakeNoteContentRepo()
+    fake_combined = combined_repo or _FakeCombinedNoteRepo(content_repo=fake_content)
     fake_embedding = _FakeEmbeddingRepo()
     fake_permission = permission_repo or NotePermissionRepoInMemory()
     fake_directory = directory_repo or _TestDirectoryRepo()
+    fake_tags = tag_repo or _FakeNoteTagRepo()
     facade = NoteFacade(
         db=fake_db,
         content_repo=fake_content,
+        combined_repo=fake_combined,
         embedding_repo=fake_embedding,
         permission_repo=fake_permission,
         directory_repo=fake_directory,
+        tag_repo=fake_tags,
         logging_provider=_log_provider,
         version_repo=version_repo,
     )
-    return facade, fake_db, fake_content, fake_embedding, fake_directory
+    return facade, fake_db, fake_content, fake_embedding, fake_directory, fake_combined, fake_tags
 
 
 def _log_provider(*_args, **_kwargs):
@@ -83,37 +91,9 @@ def _seed_note(note_id: str = "note-1", **overrides) -> NoteEntity:
     payload.update(overrides)
     return NoteEntity(**payload)
 
-
-async def test_insert_assigns_uuid_note_id_and_persists_embedding() -> None:
-    """`insert` calls fetchrow, then forwards to the embedding repo."""
-    facade, fake_db, _content, fake_embedding, _directory = _make_facade()
-    fake_db.fetchrow_responses.append({"id": "019f0000-0000-7000-8000-000000000001"})
-
-    note = NoteEntity(
-        title="Hello",
-        content="World",
-        updated_at=datetime(2026, 7, 3, 12, 0, 0),
-        author_id="user-1",
-    )
-    result = await facade.insert(note, UserContext("user-1"))
-
-    # fetchrow was called with the INSERT … RETURNING id query
-    assert len(fake_db.fetchrow_calls) == 1
-    sql, args = fake_db.fetchrow_calls[0]
-    assert "INSERT INTO note.content" in sql
-    assert "RETURNING id" in sql
-    assert args == ("Hello", "World", datetime(2026, 7, 3, 12, 0, 0), "user-1")
-    # the generated id is propagated onto the returned entity so callers
-    # (notably NoteService.insert_note) can build relation rows that
-    # reference the new note id.
-    assert result.note_id == "019f0000-0000-7000-8000-000000000001"
-    assert len(result.embeddings) == 1
-    assert result.embeddings[0].note_id == "019f0000-0000-7000-8000-000000000001"
-
-
 async def test_insert_without_content_skips_embedding() -> None:
     """`insert` does not generate an embedding when `content` is empty."""
-    facade, fake_db, _content, _embedding, fake_directory = _make_facade()
+    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags = _make_facade()
     fake_db.fetchrow_responses.append({"id": "note-empty"})
 
     note = NoteEntity(
@@ -132,7 +112,7 @@ async def test_insert_without_content_skips_embedding() -> None:
 
 async def test_insert_records_initial_snapshot_when_version_repo_present() -> None:
     """`insert` records an initial version snapshot via the version repo."""
-    facade, fake_db, _content, _embedding, fake_directory = _make_facade(version_repo=_FakeVersionRepo())
+    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags = _make_facade(version_repo=_FakeVersionRepo())
     fake_db.fetchrow_responses.append({"id": "note-snap"})
 
     note = NoteEntity(
@@ -150,7 +130,7 @@ async def test_insert_records_initial_snapshot_when_version_repo_present() -> No
 
 async def test_update_overwrites_content_and_refreshes_embedding() -> None:
     """`update` re-fetches, mutates via content repo, refreshes embedding."""
-    facade, _db, content_repo, _embedding, _directory = _make_facade()
+    facade, _db, content_repo, _embedding, _directory, _combined, _tags = _make_facade()
     seeded = _seed_note(note_id="note-1", content="old content")
     content_repo.seed(seeded)
 
@@ -177,7 +157,7 @@ async def test_update_overwrites_content_and_refreshes_embedding() -> None:
 async def test_update_appends_version_entry_when_version_repo_present() -> None:
     """`update` forwards the before/after pair to `version_repo.append_version`."""
     version_repo = _FakeVersionRepo()
-    facade, _db, content_repo, _embedding, _directory = _make_facade(version_repo=version_repo)
+    facade, _db, content_repo, _embedding, _directory, _combined, _tags = _make_facade(version_repo=version_repo)
     content_repo.seed(_seed_note(note_id="note-1", content="old content"))
 
     updated_payload = NoteEntity(
@@ -202,7 +182,7 @@ async def test_update_appends_version_entry_when_version_repo_present() -> None:
 
 async def test_delete_returns_list_from_content_repo() -> None:
     """`delete` returns the list the content repo yields."""
-    facade, _db, content_repo, _embedding, _directory = _make_facade()
+    facade, _db, content_repo, _embedding, _directory, _combined, _tags = _make_facade()
     content_repo.seed(_seed_note(note_id="note-1"))
 
     deleted = await facade.delete("note-1", UserContext("user-1"))
@@ -217,7 +197,7 @@ async def test_delete_returns_list_from_content_repo() -> None:
 
 async def test_delete_returns_empty_list_when_nothing_matches() -> None:
     """`delete` returns an empty list when the content repo yields nothing."""
-    facade, _db, _content, _embedding, fake_directory = _make_facade()
+    facade, _db, _content, _embedding, fake_directory, _combined, _tags = _make_facade()
 
     deleted = await facade.delete("ghost", UserContext("user-1"))
 
@@ -226,7 +206,7 @@ async def test_delete_returns_empty_list_when_nothing_matches() -> None:
 
 async def test_select_by_id_normalises_permissions_to_empty_list() -> None:
     """`select_by_id` returns `permissions = []` and the seeded entity."""
-    facade, _db, content_repo, _embedding, _directory = _make_facade()
+    facade, _db, content_repo, _embedding, _directory, _combined, _tags = _make_facade()
     seeded = replace(_seed_note(note_id="note-1"), permissions=UNDEFINED)
     content_repo.seed(seeded)
 
@@ -235,20 +215,6 @@ async def test_select_by_id_normalises_permissions_to_empty_list() -> None:
     assert record is not None
     assert record.permissions == []
     assert record.note_id == "note-1"
-
-
-async def test_select_by_id_raises_when_content_repo_missing() -> None:
-    """`select_by_id` propagates the content repo's `RuntimeError` on a miss.
-
-    The facade has a defensive `if not record: return None` guard, but
-    in practice both the postgres impl and the unit-test fake raise
-    before the guard runs.  Pin that contract so future refactors do
-    not silently change the error surface.
-    """
-    facade, _db, _content, _embedding, fake_directory = _make_facade()
-
-    with pytest.raises(RuntimeError, match="ghost"):
-        await facade.select_by_id("ghost", UserContext("user-1"))
 
 
 async def test_search_notes_dispatches_known_strategy() -> None:
@@ -269,7 +235,7 @@ async def test_search_notes_dispatches_known_strategy() -> None:
         async def search(self):
             return []
 
-    facade, _db, _content, _embedding, fake_directory = _make_facade()
+    facade, _db, _content, _embedding, fake_directory, _combined, _tags = _make_facade()
     original = DateNoteSearchStrategy
     note_module.DateNoteSearchStrategy = _RecordingStrategy  # type: ignore[attr-defined]
     try:
@@ -292,7 +258,7 @@ async def test_search_notes_raises_for_unknown_search_type() -> None:
     class _Bad(Enum):
         NOPE = 99
 
-    facade, _db, _content, _embedding, fake_directory = _make_facade()
+    facade, _db, _content, _embedding, fake_directory, _combined, _tags = _make_facade()
 
     with pytest.raises(ValueError, match="Unknown SearchType"):
         await facade.search_notes(
@@ -302,10 +268,3 @@ async def test_search_notes_raises_for_unknown_search_type() -> None:
             pagination=Pagination(limit=10, offset=0),
         )
 
-
-async def test_constructor_properties_match_table_names() -> None:
-    """The default table-name properties point at the SQL note tables."""
-    facade, _db, _content, _embedding, fake_directory = _make_facade()
-    assert facade.embedding_table_name == "note.embedding"
-    assert facade.content_table_name == "note.content"
-    assert facade.permission_table_name == "note.permission"

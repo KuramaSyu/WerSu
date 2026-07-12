@@ -3,10 +3,11 @@ from typing import Dict, List, Optional, Tuple
 
 from tests.stubs.user_context import _UserContext as UserContext
 from src.api.undefined import UNDEFINED
-from src.api.user_context import UserContextABC
+from src.api.user_context import ContextFactory, UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
-from src.api.directory_repo import DirectoryRepo
+from src.api.directory_facade import DirectoryFacade
+from src.api.relationship import ObjectRef, Relationship, SubjectRef
 from src.db.repos.note.permission import DirectoryRelationEnum, ObjectTypeEnum
 from src.db.repos.user.user import UserRepoABC
 from src.services.user import UserService
@@ -57,12 +58,33 @@ class _InMemoryUserRepo(UserRepoABC):
         return True
 
 
-class _InMemoryDirectoryRepo(DirectoryRepo):
+class _InMemoryDirectoryRepo(DirectoryFacade):
     def __init__(self) -> None:
         self.created: List[DirectoryEntity] = []
 
-    async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
+    async def create_directory(
+        self,
+        entity: DirectoryEntity,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> DirectoryEntity:
         created = replace(entity, id=f"dir-{len(self.created) + 1}")
+        # Mirror production :class:`DirectoryRepoFacade` behaviour:
+        # always attach a `dir#admin@user` relation for the caller.
+        if user_ctx is not None:
+            admin_rel = Relationship(
+                resource=ObjectRef(
+                    object_type=ObjectTypeEnum.DIRECTORY,
+                    object_id=str(created.id),
+                ),
+                relation=DirectoryRelationEnum.ADMIN,
+                subject=SubjectRef(
+                    object_type=ObjectTypeEnum.USER,
+                    object_id=str(user_ctx.user_id),
+                ),
+            )
+            existing = list(created.relations or [])
+            existing.append(admin_rel)
+            created = replace(created, relations=existing)
         self.created.append(created)
         return created
 
@@ -84,6 +106,14 @@ class _InMemoryDirectoryRepo(DirectoryRepo):
     async def list_note_directory_ids(self, note_id: str) -> List[str]:
         return []
 
+    async def add_note_to_directory(self, note_id: str, directory_id: str) -> None:
+        """No-op recording stub."""
+        return None
+
+    async def remove_note_from_directory(self, note_id: str, directory_id: str) -> None:
+        """No-op recording stub."""
+        return None
+
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         return False
 
@@ -103,6 +133,13 @@ class _InMemoryDirectoryRepo(DirectoryRepo):
         return ([], [directory_id])
 
 
+class _InMemoryContextFactory(ContextFactory[UserContextABC]):
+    """In-memory ContextFactory used by unit tests."""
+
+    async def create(self, user_id: str) -> UserContextABC:
+        return UserContext(user_id=user_id)
+
+
 def _make_test_user() -> UserEntity:
     return UserEntity(
         discord_id=123456789,
@@ -114,17 +151,25 @@ def _make_test_user() -> UserEntity:
     )
 
 
+def _make_service(user_repo, directory_repo) -> UserService:
+    return UserService(
+        user_repo=user_repo,
+        directory_repo=directory_repo,
+        context_factory=_InMemoryContextFactory(),
+    )
+
+
 async def test_create_user_creates_default_zettelkasten_directories() -> None:
     user_repo = _InMemoryUserRepo()
     directory_repo = _InMemoryDirectoryRepo()
-    service = UserService(user_repo=user_repo, directory_repo=directory_repo)
+    service = _make_service(user_repo, directory_repo)
 
     created_user = await service.create_user(_make_test_user())
 
     assert created_user.id is not None
     assert len(directory_repo.created) == 3
 
-    assert [d.name for d in directory_repo.created] == [
+    assert [d.slug for d in directory_repo.created] == [
         "fleeting_notes",
         "literature_notes",
         "permanent_notes",
@@ -140,7 +185,7 @@ async def test_create_user_creates_default_zettelkasten_directories() -> None:
 async def test_create_user_assigns_admin_relation_to_bootstrap_directories() -> None:
     user_repo = _InMemoryUserRepo()
     directory_repo = _InMemoryDirectoryRepo()
-    service = UserService(user_repo=user_repo, directory_repo=directory_repo)
+    service = _make_service(user_repo, directory_repo)
 
     created_user = await service.create_user(_make_test_user())
 
@@ -156,7 +201,7 @@ async def test_create_user_assigns_admin_relation_to_bootstrap_directories() -> 
 async def test_get_user_resolves_by_id_and_discord_id() -> None:
     user_repo = _InMemoryUserRepo()
     directory_repo = _InMemoryDirectoryRepo()
-    service = UserService(user_repo=user_repo, directory_repo=directory_repo)
+    service = _make_service(user_repo, directory_repo)
 
     created_user = await service.create_user(_make_test_user())
 

@@ -6,9 +6,9 @@ denies everything else.  Suitable for tests that need to exercise
 SpiceDB backend.
 
 This stub is intentionally separate from
-``tests.stubs.permission_repo._FakePermissionRepo``: that one grants
-``edit_permissions`` per editable note id, which is the wrong shape
-for the statistics-service permission check.
+:class:`tests.stubs.in_memory_permission_repo.InMemoryPermissionRepo`:
+that one grants ``edit_permissions`` per editable note id, which is
+the wrong shape for the statistics-service permission check.
 """
 
 from __future__ import annotations
@@ -58,18 +58,13 @@ class _FakeViewPermissionRepo(PermissionRepoABC):
     async def delete(self, relationship: Relationship) -> Relationship:
         return relationship
 
-    async def lookup(self, relationship: Relationship) -> List[ObjectRef]:
+    async def lookup(self, relationship: Relationship) -> List[str]:
         return []
 
     async def lookup_relationships(
         self, relationship: Relationship,
     ) -> List[Relationship]:
         return []
-
-    async def lookup_notes(
-        self, user: UserContextABC, permission: str,
-    ) -> List[ObjectRef]:
-        return [ObjectRef(object_type="note", object_id=n) for n in self._notes]
 
     async def list_relationships(self, resource: ObjectRef) -> List[Relationship]:
         return []
@@ -92,7 +87,7 @@ class _FakeViewPermissionRepo(PermissionRepoABC):
         from src.api.permission_repo import ResolvedChildren
 
         # The view-only stub knows no relations.  Tests that need
-        # tree resolution use :class:`NotePermissionRepoInMemory`
+        # tree resolution use :class:`InMemoryPermissionRepo`
         # instead; this stub is only here to keep the ABC
         # instantiable.
         return ResolvedChildren(sub_directory_ids=[], note_ids=[], attachment_ids=[])

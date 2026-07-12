@@ -1,9 +1,10 @@
-"""Integration tests for ``DirectoryRepoSpicedbPostgres.resolve_files_of_directory``.
+"""Integration tests for ``DirectoryRepoFacade.resolve_files_of_directory``.
 
-The ``spicedb_permission_repo`` fixture (from ``tests/fixtures/spicedb.py``)
-spins up a fresh SpiceDB container per test; the test then wires a
-``DirectoryRepoSpicedbPostgres`` against it and exercises the
-graph-walk that resolves transitive parent/child membership.
+The directory repo walks ``note.directory_subdirectory`` and
+``note.directory_note`` instead of SpiceDB; the
+``spicedb_permission_repo`` fixture still supplies the
+``has_permission`` / ``lookup`` plumbing the facade needs for the
+``view`` check on the root directory.
 """
 
 import uuid
@@ -11,9 +12,16 @@ import uuid
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
+from tests._fixtures_pkg.fakes import (
+    _FakeDirectorySubdirectoryTable,
+    _FakeDirectoryNoteTable,
+    _FakeDirectoryTable,
+    _FakeDirectoryTagsTable,
+)
 from src.api import ObjectRef, Relationship, SubjectRef
-from src.db.repos.directory.directory import DirectoryRepoSpicedbPostgres
-from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
+from src.db.repos.directory.directory import DirectoryRepoFacade
+from src.db.repos.directory.postgres import PostgresDirectoryRepo
+from src.db.repos.permissions.permission import SpicedbPermissionRepo
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
@@ -23,14 +31,14 @@ pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
 # ``permission_repo`` itself; route it through the canonical fixture.
 @pytest.fixture(scope="function")
 async def permission_repo(
-    spicedb_permission_repo: NotePermissionRepoSpicedb,
-) -> NotePermissionRepoSpicedb:
+    spicedb_permission_repo: SpicedbPermissionRepo,
+) -> SpicedbPermissionRepo:
     """Alias around the canonical ``spicedb_permission_repo`` fixture."""
     return spicedb_permission_repo
 
 
 async def test_resolve_files_of_directory_spicedb(
-    spicedb_permission_repo: NotePermissionRepoSpicedb,
+    spicedb_permission_repo: SpicedbPermissionRepo,
 ) -> None:
     user_id = "spicedb-user"
     root_id = f"root-{uuid.uuid4().hex}"
@@ -44,28 +52,23 @@ async def test_resolve_files_of_directory_spicedb(
             relation="reader",
             subject=SubjectRef(object_type="user", object_id=user_id),
         ),
-        Relationship(
-            resource=ObjectRef(object_type="directory", object_id=child_id),
-            relation="parent",
-            subject=SubjectRef(object_type="directory", object_id=root_id),
-        ),
-        Relationship(
-            resource=ObjectRef(object_type="note", object_id=note_root),
-            relation="parent_directory",
-            subject=SubjectRef(object_type="directory", object_id=root_id),
-        ),
-        Relationship(
-            resource=ObjectRef(object_type="note", object_id=note_child),
-            relation="parent_directory",
-            subject=SubjectRef(object_type="directory", object_id=child_id),
-        ),
     ]
     await spicedb_permission_repo.insert(relationships)
 
-    directory_repo = DirectoryRepoSpicedbPostgres(
-        db=None,  # type: ignore[arg-type]
+    subdirectory_table = _FakeDirectorySubdirectoryTable()
+    subdirectory_table.add_directory_child(root_id, child_id)
+    note_table = _FakeDirectoryNoteTable()
+    note_table.add_note_child(root_id, note_root)
+    note_table.add_note_child(child_id, note_child)
+
+    directory_repo = DirectoryRepoFacade(
+        postgres_repo=PostgresDirectoryRepo(
+            directory_table=_FakeDirectoryTable(),
+            subdirectory_table=subdirectory_table,
+            directory_note_table=note_table,
+            directory_tags_table=_FakeDirectoryTagsTable(),
+        ),
         permission_repo=spicedb_permission_repo,
-        spicedb_client=spicedb_permission_repo.client,
     )
 
     resolved = await directory_repo.resolve_files_of_directory(

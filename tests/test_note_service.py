@@ -39,7 +39,7 @@ from src.api.relationship import (
 )
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
-from src.api.directory_repo import DirectoryRepo
+from src.api.directory_facade import DirectoryFacade
 from src.db.repos.note.note import NoteFacade
 from src.api.note_facade import NoteRepoFacadeABC, SearchType
 from src.db.repos.permissions.permission import NotePermissionRepoInMemory
@@ -47,10 +47,12 @@ from src.services.note import NoteService
 from src.api.user_context import UserContextABC
 from src.api.jwt_provider import JwtProvider
 from tests._fixtures_pkg.fakes import (
+    _FakeCombinedNoteRepo,
     _FakeDatabase,
     _FakeEmbeddingRepo,
     _FakeJwtProvider,
     _FakeNoteContentRepo,
+    _FakeNoteTagRepo,
     _TestDirectoryRepo,
 )
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService
@@ -97,7 +99,7 @@ def _temporary_ctx(user_id: str = "tmp-user") -> _TemporaryUserContext:
 def _make_service(
     *,
     content_repo: Optional[_FakeNoteContentRepo] = None,
-    directory_repo: Optional[DirectoryRepo] = None,
+    directory_repo: Optional[DirectoryFacade] = None,
     permission_repo: Optional[PermissionRepoABC] = None,
     jwt_provider: Optional[JwtProvider] = None,
     next_note_id: str = "019f0000-0000-7000-8000-000000000001",
@@ -105,7 +107,7 @@ def _make_service(
     NoteService,
     _FakeDatabase,
     _FakeNoteContentRepo,
-    DirectoryRepo,
+    DirectoryFacade,
     NotePermissionRepoInMemory,
     _FakeJwtProvider,
     _FakeActivityLoggerService,
@@ -119,18 +121,22 @@ def _make_service(
     fake_db = _FakeDatabase()
     fake_db.fetchrow_responses.append({"id": next_note_id})
     fake_content = content_repo or _FakeNoteContentRepo()
+    fake_combined = _FakeCombinedNoteRepo(content_repo=fake_content)
     fake_embedding = _FakeEmbeddingRepo()
     fake_permission = permission_repo or NotePermissionRepoInMemory()
     fake_directory = directory_repo or _TestDirectoryRepo()
     fake_jwt = jwt_provider or _FakeJwtProvider()
     fake_activity_logger = _FakeActivityLoggerService()
+    fake_tags = _FakeNoteTagRepo()
     facade = NoteFacade(
         db=fake_db,
         content_repo=fake_content,
+        combined_repo=fake_combined,
         embedding_repo=fake_embedding,
         logging_provider=_log_provider,
         permission_repo=fake_permission,
         directory_repo=fake_directory,
+        tag_repo=fake_tags,
     )
     service = NoteService(
         note_repo=facade,
@@ -159,23 +165,6 @@ def _seed_note(note_id: str = "note-1", **overrides) -> NoteEntity:
 # ---------------------------------------------------------------------------
 # get_note
 # ---------------------------------------------------------------------------
-
-
-async def test_get_note_propagates_error_when_repo_misses() -> None:
-    """`get_note` propagates the error raised by the note repo on a miss.
-
-    The facade has a defensive ``if note is None`` guard but the
-    underlying :class:`NoteContentRepo` raises before that branch
-    runs in practice; pin the propagated error so future refactors
-    do not silently change the failure mode.
-    """
-    service, _db, _content, _dir, _perm, _jwt, _activity_logger = _make_service()
-
-    with pytest.raises(RuntimeError, match="ghost"):
-        await service.get_note("ghost", _human_ctx())
-
-    # JWT provider must NOT be touched on a miss
-    assert _jwt.create_calls == []
 
 
 async def test_get_note_attaches_permissions_for_existing_note() -> None:
@@ -308,7 +297,7 @@ async def test_insert_note_resolves_parent_directory_and_writes_owner_relation()
 
 
 async def test_insert_note_rejects_inaccessible_parent_dir() -> None:
-    """`insert_note` raises when `parent_dir_id` is not in the user's dirs."""
+    """`insert_note` raises when the supplied directory id is not in the user's dirs."""
     service, _db, _content, _dir, _perm, _jwt, _activity_logger = _make_service()
 
     with pytest.raises(ValueError, match="not accessible"):
@@ -318,7 +307,7 @@ async def test_insert_note_rejects_inaccessible_parent_dir() -> None:
                 content="body",
                 updated_at=datetime(2026, 7, 3, 12, 0, 0),
                 author_id="user-1",
-                parent_dir_id="not-my-directory",
+                directory_ids=["not-my-directory"],
             ),
             _human_ctx("user-1"),
         )

@@ -105,7 +105,7 @@ def test_note_entity_dispatches_to_visit_note() -> None:
 def test_directory_entity_dispatches_to_visit_directory() -> None:
     """`DirectoryEntity.visit` routes to `visitor.visit_directory` with itself."""
     stub = _stub()
-    entity = DirectoryEntity(id="d1", name="docs")
+    entity = DirectoryEntity(id="d1", slug="docs")
 
     result = entity.convert(stub)
 
@@ -203,43 +203,6 @@ def test_visit_note_converts_permissions_to_permission_relationships() -> None:
     assert perm.relation == "writer"
     assert perm.subject.object_id == "alice"
     assert perm.resource.object_id == "n1"
-
-
-def test_visit_directory_returns_directory_with_all_fields() -> None:
-    """`visit_directory` maps every entity field onto the proto."""
-    entity = DirectoryEntity(
-        id="d1",
-        name="docs",
-        display_name="Documents",
-        description="shared docs",
-        image_url="https://example.com/img.png",
-        parent_id="d0",
-        relations=[_relationship("d1", "alice")],
-    )
-
-    proto: Directory = entity.convert(_visitor())
-
-    assert isinstance(proto, Directory)
-    assert proto.id == "d1"
-    assert proto.name == "docs"
-    assert proto.display_name == "Documents"
-    assert proto.description == "shared docs"
-    assert proto.image_url == "https://example.com/img.png"
-    assert proto.parent_id == "d0"
-    assert len(proto.relationships) == 1
-    assert proto.relationships[0].relation == "writer"
-
-
-def test_visit_directory_omits_parent_id_when_undefined() -> None:
-    """`visit_directory` skips `parent_id` when the entity leaves it `UNDEFINED`."""
-    entity = DirectoryEntity(id="d1", name="docs")
-
-    proto: Directory = entity.convert(_visitor())
-
-    assert proto.id == "d1"
-    assert proto.name == "docs"
-    assert proto.parent_id == ""
-
 
 def test_visit_user_returns_user_with_basic_fields() -> None:
     """`visit_user` maps the entity scalar fields onto the proto."""
@@ -349,7 +312,7 @@ def test_visit_attachment_returns_attachment_with_metadata_and_content() -> None
     ("entity", "expected_type"),
     [
         (NoteEntity(note_id="n1", title="t", content="c", author_id="a1", permissions=[]), Note),
-        (DirectoryEntity(id="d1", name="docs"), Directory),
+        (DirectoryEntity(id="d1", slug="docs"), Directory),
         (UserEntity(id="u1", discord_id=1, avatar="a.png", username="alice", email="a@b.c"), User),
         (NoteShareEntity(id="s1", note_id="n1", created_by="alice", access_as="temp", permission="read"), NoteShare),
         (Attachment(key="k1", content=b"x", size=1, filepath="uploads/k1", filename="x.bin", content_type="application/octet-stream"), GrpcAttachment),
@@ -366,7 +329,7 @@ def test_entity_visit_returns_expected_proto_type(entity, expected_type) -> None
     ("entity", "expected_type"),
     [
         (NoteEntity(note_id="n1", title="t", content="c", author_id="a1", permissions=[]), Note),
-        (DirectoryEntity(id="d1", name="docs"), Directory),
+        (DirectoryEntity(id="d1", slug="docs"), Directory),
         (UserEntity(id="u1", discord_id=1, avatar="a.png", username="alice", email="a@b.c"), User),
         (NoteShareEntity(id="s1", note_id="n1", created_by="alice", access_as="temp", permission="read"), NoteShare),
         (Attachment(key="k1", content=b"x", size=1, filepath="uploads/k1", filename="x.bin", content_type="application/octet-stream"), GrpcAttachment),

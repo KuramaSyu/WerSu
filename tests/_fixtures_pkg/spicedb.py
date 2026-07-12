@@ -19,7 +19,7 @@ import grpc
 import pytest
 from testcontainers_spicedb import SpiceDBContainer
 
-from src.db.repos.permissions.permission import NotePermissionRepoSpicedb
+from src.db.repos.permissions.permission import SpicedbPermissionRepo
 from tests._fixtures_pkg.spicedb_schema import (
     SPICEDB_IMAGE,
     create_spicedb_client,
@@ -45,7 +45,7 @@ async def spicedb_client() -> AsyncIterator:
 
 
 @pytest.fixture(scope="function")
-async def spicedb_permission_repo() -> AsyncIterator[NotePermissionRepoSpicedb]:
+async def spicedb_permission_repo() -> AsyncIterator[SpicedbPermissionRepo]:
     """Yield a ``NotePermissionRepoSpicedb`` over a fresh SpiceDB container.
 
     Same behaviour the three caller suites used to inline:
@@ -61,7 +61,7 @@ async def spicedb_permission_repo() -> AsyncIterator[NotePermissionRepoSpicedb]:
 
 @pytest.fixture(scope="function")
 async def idempotent_permission_repo(
-) -> AsyncIterator[NotePermissionRepoSpicedb]:
+) -> AsyncIterator[SpicedbPermissionRepo]:
     """Like :func:`spicedb_permission_repo` but with an idempotent ``insert``.
 
     ``AttachmentFacade`` re-inserts the same ``parent_note`` relationship
@@ -77,7 +77,7 @@ async def idempotent_permission_repo(
 async def _spicedb_permission_repo_fixture(
     *,
     idempotent_insert: bool,
-) -> AsyncIterator[NotePermissionRepoSpicedb]:
+) -> AsyncIterator[SpicedbPermissionRepo]:
     """Internal helper used by :func:`spicedb_permission_repo` and friends."""
     with SpiceDBContainer(image=SPICEDB_IMAGE) as spicedb:
         client = create_spicedb_client(
@@ -85,7 +85,7 @@ async def _spicedb_permission_repo_fixture(
             spicedb.get_secret_key(),
         )
         await wait_until_spicedb_ready(client, load_spicedb_schema())
-        repo = NotePermissionRepoSpicedb(client=client, consistent=True)
+        repo = SpicedbPermissionRepo(client=client, consistent=True)
 
         if idempotent_insert:
             _wrap_insert_as_idempotent(repo)
@@ -93,7 +93,7 @@ async def _spicedb_permission_repo_fixture(
         yield repo
 
 
-def _wrap_insert_as_idempotent(repo: NotePermissionRepoSpicedb) -> None:
+def _wrap_insert_as_idempotent(repo: SpicedbPermissionRepo) -> None:
     """Wrap ``repo.insert`` so duplicate writes silently return the input.
 
     Only the ``ALREADY_EXISTS`` grpc error code is swallowed.  Any other
