@@ -34,6 +34,7 @@ from src.api.types import LoggingProvider
 from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined
 from src.api.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
+from src.domain.permission_chain import HasDirectoryViewPerm, PermissionCheckChain, PermissionCheckChainStart
 from src.utils import convert_entity_for_db
 
 
@@ -120,10 +121,11 @@ class DirectoryRepoFacade(DirectoryFacade):
         )
         if not entity:
             return None
-        await self._hydrate_relations(
-            entity,
-            populate_parents=bool(resolved.get("include_parents")),
-        )
+        # deprecated
+        # await self._hydrate_relations(
+        #     entity,
+        #     populate_parents=bool(resolved.get("include_parents")),
+        # )
         return entity
 
     async def add_note_to_directory(
@@ -230,6 +232,7 @@ class DirectoryRepoFacade(DirectoryFacade):
 
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
         """Return every directory id the user has view access to (direct tuples)."""
+        # this is more or less a permission check as well as the source of truth for the directory hierarchy
         matched = await self._permission_repo.lookup_resources(
             Relationship(
                 resource=ObjectRef(
@@ -276,22 +279,20 @@ class DirectoryRepoFacade(DirectoryFacade):
         actor: UserContextABC,
         max_depth: int = 10,
     ) -> List[str]:
-        """Return note ids reachable from ``directory_id`` for ``actor``."""
+        """Return note ids reachable from directory_id for actor."""
         if max_depth < 0:
             raise ValueError("max_depth must be >= 0")
-        if directory_id in (None, ""):
+        if not directory_id:
+            # all dirs the user can view - more expensive through SpiceDB wildcard call
             start_directories = await self.list_user_directory_ids(actor)
         else:
             start_directories = [str(directory_id)]
-            can_view = await self._permission_repo.has_permission(
-                actor,
-                "view",
-                ObjectRef(ObjectTypeEnum.DIRECTORY, str(directory_id)),
-            )
-            if not can_view:
-                raise PermissionError(
-                    "User does not have view access to the directory"
-                )
+
+            # check view for dir
+            view_chain: PermissionCheckChain = HasDirectoryViewPerm(directory_id=str(directory_id)).set_permission_repo(self._permission_repo)
+            can_view = await view_chain.check(actor)
+            if can_view.error:
+                raise can_view.error
 
         note_ids: set[str] = set()
         for start in start_directories:
@@ -335,29 +336,24 @@ class DirectoryRepoFacade(DirectoryFacade):
         if not entities:
             return []
 
-        # Hydrate relations + parent + counts in parallel.
+        # Hydrate parents in parallel.
         async def _hydrate(entity: DirectoryEntity) -> DirectoryEntity:
-            await self._hydrate_relations(entity)
+            await self._hydrate_parents(entity, populate_parents=True)
             return entity
 
         hydrated = await asyncio.gather(*(_hydrate(e) for e in entities))
         return list(hydrated)
 
-    async def _hydrate_relations(
+    async def _hydrate_parents(
         self,
         entity: DirectoryEntity,
         *,
         populate_parents: bool = False,
     ) -> None:
-        """Hydrate ``parent_directory_ids`` + ``relations`` in place.
+        """Hydrate `parent_directory_ids` + ~~`relations`~~ in place.
 
-        ``populate_parents`` decides whether ``parent_directory_ids``
-        is filled from the hierarchy table.  Counts and the child
-        lists are populated earlier by
-        :meth:`PostgresDirectoryRepo.fetch_directory` when the
-        caller asked for them via ``include=...``, so we don't
-        touch them here -- the JOIN-with-GROUP-BY result stays
-        intact.
+        Args:
+            populate_parents: whether or not to fetch the parent directory ids from Postgres
         """
         if not (directory_id := entity.id):
             return
@@ -365,9 +361,10 @@ class DirectoryRepoFacade(DirectoryFacade):
             entity.parent_directory_ids = (
                 await self._postgres.parent_directory_ids_of(directory_id)
             )
-        entity.relations = await self._fetch_user_relations_for_directory(
-            directory_id
-        )
+        # deprecated
+        # entity.relations = await self._fetch_user_relations_for_directory(
+        #     directory_id
+        # )
 
     async def _fetch_user_relations_for_directory(
         self,
