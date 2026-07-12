@@ -20,7 +20,7 @@ from src.api.activity_statistics_service import (
     ActivityStatisticsServiceABC,
     Algorithm,
 )
-from src.api.directory_repo import DirectoryRepo
+from src.api.directory_facade import DirectoryFacade
 from src.api.permission_repo import PermissionRepoABC
 from src.api.relationship import ObjectRef
 from src.api.types import LoggingProvider
@@ -70,7 +70,7 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
         self,
         activity_repo: ActivityRepoABC,
         permission_repo: PermissionRepoABC,
-        directory_repo: DirectoryRepo,
+        directory_repo: DirectoryFacade,
         note_content_repo: NoteContentRepo,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
@@ -151,7 +151,7 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
     ) -> List[ActivityEntity]:
-        """See :meth:`ActivityStatisticsServiceABC.get_history`."""
+        """See :meth:`api.ActivityStatisticsServiceABC.get_history`."""
         if note_id is not None:
             await self._assert_view_on_note(actor, note_id)
         if directory_id is not None:
@@ -173,14 +173,14 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
         if offset is not None:
             builder.set_offset(offset)
 
-        # "everything visible to actor" -> expand visible dirs.
         if note_id is None and directory_id is None:
+            # everything visible to actor -> expand visible dirs.
             for d_id in await self._resolve_visible_directory_ids(actor):
                 builder.set_directory(d_id)
 
         rows = await self._activity_repo.get_activities(builder.build())
 
-        if note_id is not None:
+        if note_id:
             await self._add_title_and_content(rows, note_id)
         return rows
 
@@ -189,21 +189,31 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
         rows: List[ActivityEntity],
         note_id: str,
     ) -> None:
-        """Add ``note_title`` / ``note_stripped_content`` onto each row"""
-        if not rows:
+        """Add ``note_title`` / ``note_stripped_content`` onto each row INPLACE"""
+        # get unique note ids from rows
+        unique_ids: set[str] = set()
+        for r in rows:
+            if r.note_id:
+                unique_ids.add(r.note_id)
+        if not unique_ids:
             return
-        try:
-            notes = await self._note_content_repo.select_by_ids([note_id])
-        except ValueError:
-            return
-        if not notes:
-            return
-        note = notes[0]
-        title = unwrap_undefined_or(note.title, None)
-        content = _strip_content(note.content)
-        for row in rows:
-            row.note_title = title
-            row.note_stripped_content = content 
+        notes = await self._note_content_repo.select_by_ids(list(unique_ids))
+
+        # make a map for easy lookup in for loop below
+        id_to_note: Dict[str, ActivityEntity] = {
+            str(n.note_id): n for n in notes
+        }
+
+        # enrich each row with note contents
+        for r in rows:
+            if not r.note_id:
+                continue
+            note = id_to_note.get(r.note_id)
+            if not note:
+                continue
+            r.note_title = note.title
+            r.note_stripped_content = _strip_content(note.content)
+        
 
     async def _enrich_scores_with_notes(
         self,
