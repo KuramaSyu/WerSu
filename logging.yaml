@@ -4,12 +4,11 @@ loggers:
   __main__: DEBUG
   src: INFO
   src.grpc_mod.service: INFO
-  src.grpc_mod.activity_statistics_service: DEBUG
   src.services: INFO
   src.db.database: INFO
   src.db.table: INFO
   httpcore.http11: ERROR
   httpx: ERROR
   httpcore: ERROR
-  src.services.sharing: DEBUG
-  src.db.repos.sharing.sharing: DEBUG
+  src.services.thirdparty_migrations: DEBUG
+  src.services.user: INFO
