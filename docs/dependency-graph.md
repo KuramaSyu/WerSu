@@ -260,7 +260,7 @@ The order in `serve()` is roughly:
 1. **External clients** — Postgres `Database`, SpiceDB async client,
    S3 client, per-table `Table` objects.
 2. **Repos** — `UserPostgresRepo`, `NotePermissionRepoSpicedb`,
-   `DirectoryRepoSpicedbPostgres`, `NoteVersionPostgresRepo`,
+   `DirectoryRepoFacade`, `NoteVersionPostgresRepo`,
    `NoteRepoFacade`, `AttachmentsS3Repo`,
    `AttachmentsMetadataPostgresRepo`, `SharingPostgresRepo`,
    `UserActionPostgresRepo`.
