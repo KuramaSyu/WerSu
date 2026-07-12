@@ -158,7 +158,7 @@ class AttachmentFacade(AttachmentFacadeABC):
         # permission check
         check = HasAttachmentViewPerm(key).set_permission_repo(self._permission_repo)
         has_permission = await check.check(user_ctx)
-        if not has_permission:
+        if has_permission.error:
             raise has_permission.error
     
         return await self._metadata_repo.get_metadata(key)
@@ -167,7 +167,7 @@ class AttachmentFacade(AttachmentFacadeABC):
         # permission check
         check = HasAttachmentWritePerm(key).set_permission_repo(self._permission_repo)
         has_permission = await check.check(user_ctx)
-        if not has_permission:
+        if has_permission.error:
             raise has_permission.error
 
         # Remove object payload first, then metadata, then permission

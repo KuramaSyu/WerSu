@@ -1,292 +1,274 @@
+"""Facade :class:`DirectoryRepo` composing the Postgres repo + the permission service.
+
+This module replaces the old monolithic
+:class:`DirectoryRepoFacade`.  The persistence machinery
+lives in :class:`src.db.repos.directory.postgres.PostgresDirectoryRepo`
+and the permission / relation logic lives in
+:class:`src.api.permission_repo.PermissionRepoABC`.  The facade here
+composes them so existing consumers
+(:class:`~src.services.directory.DirectoryService` and friends) can
+keep depending on the :class:`src.api.directory_repo.DirectoryRepo`
+ABC without rewiring.
+"""
+
+from __future__ import annotations
+
 import asyncio
 from typing import List, Optional, Tuple
 
-from authzed.api.v1 import (
-    AsyncClient,
-    BulkExportRelationshipsRequest,
-    DeleteRelationshipsRequest,
-    RelationshipFilter,
+from src.api.directory_facade import DirectoryFacade
+from src.api.directory_service import (
+    DirectoryIncludeOptions,
+    resolve_directory_include_options,
 )
-from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest
-
-from src.api.directory_repo import DefaultDirectorySpec, DirectoryRepo
-from src.api.undefined import UNDEFINED
-from src.api.user_context import UserContextABC
-from src.db.database import Database
-from src.db.entities.directory.directory import DirectoryEntity
-from src.utils import convert_entity_for_db
-from src.db.repos import PermissionRepoABC
-from src.api import (
+from src.api.permission_repo import PermissionRepoABC
+from src.api.directory_repo import DirectoryRepoABC
+from src.api.relationship import (
     DirectoryRelationEnum,
-    NoteRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
     Relationship,
     SubjectRef,
 )
+from src.api.types import LoggingProvider
+from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined
+from src.api.user_context import UserContextABC
+from src.db.entities.directory.directory import DirectoryEntity
+from src.utils import convert_entity_for_db
 
 
-class DirectoryRepoSpicedbPostgres(DirectoryRepo):
-    """Directory repository backed by Postgres and SpiceDB."""
+class DirectoryRepoFacade(DirectoryFacade):
+    """Compose a :class:`PostgresDirectoryRepoABC` with the permission repo.
+
+    The facade routes every :class:`DirectoryRepo` call to either the
+    low-level Postgres repo (for storage) or the permission repo
+    (for visibility checks and user-flavoured relation writes).
+    """
 
     def __init__(
         self,
-        db: Database,
+        postgres_repo: DirectoryRepoABC,
         permission_repo: PermissionRepoABC,
-        spicedb_client: AsyncClient,
+        log: LoggingProvider,
     ) -> None:
-        self._db = db
+        self._postgres = postgres_repo
         self._permission_repo = permission_repo
-        self._spicedb_client = spicedb_client
+        self._log = log(self)
 
-    async def create_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
-        """
-        Notes
-        ------
-        - entity.relations are iterated, and resource.object_id is set to the created directory ID before insertion into SpiceDB
-        """
+    # ---- public contract ---------------------------------------------
+
+    async def create_directory(self, entity: DirectoryEntity, user_ctx: UserContextABC) -> DirectoryEntity:
+        """Insert a row and mirror the entity's relations + parent pointers."""
         entity_data = convert_entity_for_db(entity)
-        readme_note_id = (
-            None if entity_data.readme_note_id is UNDEFINED
-            else entity_data.readme_note_id
-        )
-        record = await self._db.fetchrow(
-            """
-            INSERT INTO note.directory(name, display_name, description, image_url, readme_note_id)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, name, display_name, description, image_url, readme_note_id
-            """,
-            entity_data.name,
-            entity_data.display_name,
-            entity_data.description,
-            entity_data.image_url,
-            readme_note_id,
-        )
-        if not record:
-            raise RuntimeError("Failed to create directory")
 
-        directory_id = str(record["id"])
-        relationships: List[Relationship] = []
+        # Insert the directory row.
+        assert entity_data.slug
+        created_entity = await self._postgres.insert_directory(
+            slug=entity_data.slug,
+            display_name=entity_data.display_name,
+            description=entity_data.description,
+            image_url=entity_data.image_url,
+            readme_note_id=entity_data.readme_note_id,
+        )
+        dir_id = unwrap_undefined(created_entity.id)
 
-        if entity_data.parent_id not in (UNDEFINED, None):
-            relationships.append(
-                Relationship(
-                    resource=ObjectRef(object_type="directory", object_id=directory_id),
-                    relation="parent",
-                    subject=SubjectRef(object_type="directory", object_id=entity_data.parent_id),
-                )
+        parent_ids = entity.parent_directory_ids
+        if parent_ids:
+            await self._set_parents(dir_id, list(parent_ids))
+
+        # add user relation; other relations are are kept as they are.
+        admin_relation = await self._create_user_admin_relation(dir_id, user_ctx)
+        created_entity.relations = created_entity.relations or []
+        if created_entity.relations:
+            self._log.warning(
+                f"Unwanted behaviour: create_directory() was called with non-empty relations: {created_entity.relations}. Only the admin relation will be persisted."
+            )
+        created_entity.relations.append(admin_relation)
+
+        # If the entity carried tags, persist them now.  An empty
+        # list is treated as "clear every tag" -- the same semantics
+        # the update path already followed.
+        if entity.tag_ids:
+            await self._postgres.replace_directory_tags(
+                str(dir_id), list(entity.tag_ids)
             )
 
-        if isinstance(entity_data.relations, list):
-            for rel in entity_data.relations:
-                relationships.append(
-                    Relationship(
-                        resource=ObjectRef(object_type="directory", object_id=directory_id),
-                        relation=rel.relation,  # type: ignore
-                        subject=rel.subject,
-                    )
-                )
+        return created_entity
 
-        if relationships:
-            await self._permission_repo.insert(relationships)
+    async def fetch_directory(
+        self,
+        id: str,
+        *,
+        include: Optional[DirectoryIncludeOptions] = None,
+    ) -> Optional[DirectoryEntity]:
+        """Load a directory + its relations + optionally hydrated fields.
 
-        return DirectoryEntity(
-            id=directory_id,
-            name=record["name"],
-            display_name=record["display_name"],
-            description=record["description"],
-            image_url=record["image_url"],
-            parent_id=entity_data.parent_id,
-            readme_note_id=record["readme_note_id"],
-            relations=entity_data.relations if isinstance(entity_data.relations, list) else [],
+        Args:
+            id: directory id to load.
+            include: opt-in enrichment flags; see
+                :class:`~src.api.directory_service.DirectoryIncludeOptions`.
+                When ``None`` (or every flag ``False``) only the row
+                + SpiceDB relations are returned.
+
+        Returns:
+            Optional[DirectoryEntity]: the directory, or ``None``
+            when no row matches ``id``.
+        """
+        resolved = resolve_directory_include_options(include)
+        entity = await self._postgres.fetch_directory(
+            str(id), include=resolved
         )
-
-    async def fetch_directory(self, id: str) -> Optional[DirectoryEntity]:
-        record = await self._db.fetchrow(
-            """
-            SELECT id, name, display_name, description, image_url, readme_note_id
-            FROM note.directory
-            WHERE id = $1
-            """,
-            id,
-        )
-        if not record:
+        if not entity:
             return None
+        await self._hydrate_relations(
+            entity,
+            populate_parents=bool(resolved.get("include_parents")),
+        )
+        return entity
 
-        parent_id, relations = await self._fetch_spicedb_relations(str(record["id"]))
+    async def add_note_to_directory(
+        self,
+        note_id: str,
+        directory_id: str,
+    ) -> None:
+        """Bind ``note_id`` as a direct child of ``directory_id``.
 
-        return DirectoryEntity(
-            id=str(record["id"]),
-            name=record["name"],
-            display_name=record["display_name"],
-            description=record["description"],
-            image_url=record["image_url"],
-            parent_id=parent_id,
-            readme_note_id=record["readme_note_id"],
-            relations=relations,
+        Mirrors the bind on both sides of the contract: writes the
+        Postgres hierarchy row and the SpiceDB ``parent_directory``
+        relation so visibility checks against the directory pick up
+        the new note.
+        """
+        self._assert_note_to_directory_ids(note_id, directory_id)
+        await self._postgres.bind_note(str(directory_id), str(note_id))
+        await self._permission_repo.insert(
+            [
+                Relationship(
+                    resource=ObjectRef(
+                        object_type=ObjectTypeEnum.NOTE,
+                        object_id=str(note_id),
+                    ),
+                    relation="parent_directory",
+                    subject=SubjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY,
+                        object_id=str(directory_id),
+                    ),
+                )
+            ]
         )
 
-    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
-        if entity.id in (UNDEFINED, None):
+    async def remove_note_from_directory(
+        self,
+        note_id: str,
+        directory_id: str,
+    ) -> None:
+        """Unbind ``note_id`` from the direct child of ``directory_id``.
+
+        Drops both the Postgres hierarchy row and the SpiceDB
+        ``parent_directory`` relation so visibility checks no
+        longer surface the note under this directory.
+        """
+        self._assert_note_to_directory_ids(note_id, directory_id)
+        await self._postgres.unbind_note(str(directory_id), str(note_id))
+        await self._permission_repo.delete(
+            Relationship(
+                resource=ObjectRef(
+                    object_type=ObjectTypeEnum.NOTE,
+                    object_id=str(note_id),
+                ),
+                relation="parent_directory",
+                subject=SubjectRef(
+                    object_type=ObjectTypeEnum.DIRECTORY,
+                    object_id=str(directory_id),
+                ),
+            )
+        )
+
+    async def update_directory(
+        self,
+        entity: DirectoryEntity,
+    ) -> Optional[DirectoryEntity]:
+        """Partially update a directory.
+
+        Honours the UNDEFINED / None / value semantics
+        :meth:`PostgresDirectoryRepoABC.update_directory` provides
+        for scalar columns.  When ``entity.parent_directory_ids`` is
+        set the entire parent set is replaced (empty list clears).
+        """
+        if not entity.id:
             raise ValueError("Directory ID is required for update")
 
-        updates: list[str] = []
-        args: list[str | None] = []
+        updated_entity = await self._postgres.update_directory(
+            str(entity.id),
+            slug=entity.slug or UNDEFINED,
+            display_name=entity.display_name,
+            description=entity.description,
+            image_url=entity.image_url,
+            readme_note_id=entity.readme_note_id,
+        )
+        if not updated_entity:
+            return None
 
-        if entity.name is not UNDEFINED:
-            updates.append(f"name = ${len(args) + 1}")
-            args.append(None if entity.name is None else str(entity.name))
-        if entity.display_name is not UNDEFINED:
-            updates.append(f"display_name = ${len(args) + 1}")
-            args.append(None if entity.display_name is None else str(entity.display_name))
-        if entity.description is not UNDEFINED:
-            updates.append(f"description = ${len(args) + 1}")
-            args.append(None if entity.description is None else str(entity.description))
-        if entity.image_url is not UNDEFINED:
-            updates.append(f"image_url = ${len(args) + 1}")
-            args.append(None if entity.image_url is None else str(entity.image_url))
-        if entity.readme_note_id is not UNDEFINED:
-            updates.append(f"readme_note_id = ${len(args) + 1}")
-            args.append(None if entity.readme_note_id is None else str(entity.readme_note_id))
+        if entity.parent_directory_ids is not UNDEFINED:
+            await self._set_parents(
+                str(entity.id), list(entity.parent_directory_ids)
+            )
 
-        if updates:
-            args.append(str(entity.id))
-            query = f"""
-            UPDATE note.directory
-            SET {", ".join(updates)}
-            WHERE id = ${len(args)}
-            """
-            await self._db.execute(query, *args)
-
-        if entity.parent_id is not UNDEFINED:
-            existing = await self.fetch_directory(str(entity.id))
-            if existing is None:
-                return None
-
-            if existing.parent_id not in (UNDEFINED, None):
-                await self._permission_repo.delete(
-                    Relationship(
-                        resource=ObjectRef(object_type="directory", object_id=str(entity.id)),
-                        relation=DirectoryRelationEnum.PARENT,
-                        subject=SubjectRef(object_type="directory", object_id=str(existing.parent_id)),
-                    )
-                )
-
-            if entity.parent_id not in (None, ""):
-                await self._permission_repo.insert(
-                    [
-                        Relationship(
-                            resource=ObjectRef(object_type="directory", object_id=str(entity.id)),
-                            relation=DirectoryRelationEnum.PARENT,
-                            subject=SubjectRef(object_type="directory", object_id=str(entity.parent_id)),
-                        )
-                    ]
-                )
+        if entity.tag_ids:
+            await self._postgres.replace_directory_tags(
+                str(entity.id), list(entity.tag_ids)
+            )
 
         return await self.fetch_directory(str(entity.id))
 
-    async def fetch_directories(self, user: UserContextABC) -> List[DirectoryEntity]:
-        object_refs = await self._permission_repo.lookup(
-            Relationship(
-                resource=ObjectRef(object_type="directory", object_id=UNDEFINED),
-                relation="view",
-                subject=SubjectRef(object_type="user", object_id=user.user_id),
-            )
-        )
-
-        directory_ids = [str(obj.object_id) for obj in object_refs if obj.object_id not in (UNDEFINED, None)]
-        if not directory_ids:
-            return []
-
-        rows = await self._db.fetch(
-            """
-            SELECT id, name, display_name, description, image_url, readme_note_id
-            FROM note.directory
-            WHERE id = ANY($1::text[])
-            """,
-            directory_ids,
-        )
-        if not rows:
-            return []
-
-        parent_and_relations = await asyncio.gather(
-            *(self._fetch_spicedb_relations(str(row["id"])) for row in rows)
-        )
-
-        entities: List[DirectoryEntity] = []
-        for row, rel_data in zip(rows, parent_and_relations):
-            parent_id, relations = rel_data
-            entities.append(
-                DirectoryEntity(
-                    id=str(row["id"]),
-                    name=row["name"],
-                    display_name=row["display_name"],
-                    description=row["description"],
-                    image_url=row["image_url"],
-                    parent_id=parent_id,
-                    readme_note_id=row["readme_note_id"],
-                    relations=relations,
-                )
-            )
-        return entities
+    async def fetch_directories(
+        self, user: UserContextABC
+    ) -> List[DirectoryEntity]:
+        """Return every directory visible to ``user`` (direct tuples)."""
+        # here we need a permission repo call to enforce permissions
+        directory_ids = await self.list_user_directory_ids(user)
+        return await self._fetch_and_hydrate(directory_ids)
 
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
-        object_refs = await self._permission_repo.lookup(
+        """Return every directory id the user has view access to (direct tuples)."""
+        matched = await self._permission_repo.lookup_resources(
             Relationship(
-                resource=ObjectRef(object_type="directory", object_id=UNDEFINED),
+                resource=ObjectRef(
+                    object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED
+                ),
                 relation=DirectoryRelationEnum.VIEW,
-                subject=SubjectRef(object_type="user", object_id=user.user_id),
+                subject=SubjectRef(
+                    object_type=ObjectTypeEnum.USER, object_id=user.user_id
+                ),
             )
         )
-        return [
-            str(obj.object_id)
-            for obj in object_refs
-            if obj.object_id not in (UNDEFINED, None)
-        ]
+        return [str(o.object_id) for o in matched if o.object_id]
 
     async def list_note_directory_ids(self, note_id: str) -> List[str]:
+        """Return the directory ids that directly parent ``note_id``.
 
-        # fetch all Relationships with <note_id>:note#parent_directory@directory
-        response_stream = self._spicedb_client.ExportBulkRelationships(
-            ExportBulkRelationshipsRequest(
-                optional_relationship_filter=RelationshipFilter(
-                    resource_type="note",
-                    optional_resource_id=note_id,
-                    optional_relation=NoteRelationEnum.PARENT_DIRECTORY
-                )
+        Implementation goes through the permission repo (it's a
+        relationship lookup, not a Postgres row) since
+        ``note#parent_directory@directory`` is a SpiceDB-anchored
+        relation that lives next to the hierarchy pointer.
+        """
+        matched = await self._permission_repo.lookup_relationships(
+            Relationship(
+                resource=ObjectRef(ObjectTypeEnum.NOTE, str(note_id)),
+                relation="parent_directory",
+                subject=SubjectRef(
+                    object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED
+                ),
             )
         )
-
-        directory_ids: set[str] = set()
-        async for response in response_stream:
-            for relationship in response.relationships:
-                subject = relationship.subject.object
-                if subject.object_type == ObjectTypeEnum.DIRECTORY and subject.object_id:
-                    directory_ids.add(str(subject.object_id))
-
-        return list(directory_ids)
+        return sorted({
+            str(rel.subject.object_id) for rel in matched if rel.subject.object_id
+        })
 
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
-        if entity.id in (UNDEFINED, None):
+        """Delete the directory row (cleanup is the caller's job)."""
+        if not entity.id:
             raise ValueError("Directory ID is required for deletion")
-
-        result = await self._db.execute(
-            """
-            DELETE FROM note.directory
-            WHERE id = $1
-            """,
-            str(entity.id),
-        )
-
-        await self._spicedb_client.DeleteRelationships(
-            DeleteRelationshipsRequest(
-                relationship_filter=RelationshipFilter(
-                    resource_type="directory",
-                    optional_resource_id=str(entity.id),
-                )
-            )
-        )
-        return result == "DELETE 1"
+        return await self._postgres.delete_directory(str(entity.id))
 
     async def resolve_files_of_directory(
         self,
@@ -294,9 +276,9 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         actor: UserContextABC,
         max_depth: int = 10,
     ) -> List[str]:
+        """Return note ids reachable from ``directory_id`` for ``actor``."""
         if max_depth < 0:
             raise ValueError("max_depth must be >= 0")
-
         if directory_id in (None, ""):
             start_directories = await self.list_user_directory_ids(actor)
         else:
@@ -307,15 +289,17 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
                 ObjectRef(ObjectTypeEnum.DIRECTORY, str(directory_id)),
             )
             if not can_view:
-                raise PermissionError("User does not have view access to the directory")
-
-        if not start_directories:
-            return []
+                raise PermissionError(
+                    "User does not have view access to the directory"
+                )
 
         note_ids: set[str] = set()
         for start in start_directories:
-            sub_notes, _ = await self.resolve_subtree(start, max_depth=max_depth)
-            note_ids.update(sub_notes)
+            note_ids.update(
+                await self._postgres.get_children(
+                    start, "notes", descendants=True, max_depth=max_depth
+                )
+            )
         return sorted(note_ids)
 
     async def resolve_subtree(
@@ -323,95 +307,177 @@ class DirectoryRepoSpicedbPostgres(DirectoryRepo):
         directory_id: str,
         max_depth: int = 10,
     ) -> Tuple[List[str], List[str]]:
-        """Walk a directory subtree via SpiceDB and collect ids.
-
-        No permission check is performed here -- the activity log
-        queries the full subtree and the service layer applies
-        per-row visibility.  The walk matches
-        :meth:`resolve_files_of_directory`'s queue + visited
-        pattern so the two stay in lockstep.
-        """
+        """Walk the hierarchy table and return ``(note_ids, directory_ids)``."""
         if max_depth < 0:
             raise ValueError("max_depth must be >= 0")
+        notes = await self._postgres.get_children(
+            directory_id, "notes", descendants=True, max_depth=max_depth
+        )
+        directories = await self._postgres.get_children(
+            directory_id, "directories", descendants=True, max_depth=max_depth
+        )
+        return notes, directories
 
-        visited: set[str] = set()
-        note_ids: set[str] = set()
-        directory_ids: set[str] = {str(directory_id)}
-        queue: list[tuple[str, int]] = [(str(directory_id), 0)]
+    # ---- counts ------------------------------------------------------
 
-        # tree traversal: pop a directory, collect its notes, enqueue its children.
-        while queue:
-            current_id, depth = queue.pop(0)
-            if current_id in visited:
-                continue
-            visited.add(current_id)
-            if depth > max_depth:
-                continue
+    # NOTE: count helpers are no longer abstract on the ABC --
+    # ``fetch_directory(include_counts=True)`` is the single
+    # canonical fast-path.  In-memory fakes populate the counts
+    # in ``_hydrate_relations`` directly when the kwarg is set.
 
-            note_relations = await self._permission_repo.lookup_relationships(
-                Relationship(
-                    resource=ObjectRef(ObjectTypeEnum.NOTE, UNDEFINED),
-                    relation=NoteRelationEnum.PARENT_DIRECTORY,
-                    subject=SubjectRef(ObjectTypeEnum.DIRECTORY, current_id),
-                )
+    # ---- internal helpers --------------------------------------------
+
+    async def _fetch_and_hydrate(self, ids: List[str]) -> List[DirectoryEntity]:
+        """Fetch a batch of directories and hydrate relations + parent + counts."""
+        if not ids:
+            return []
+        entities = await self._postgres.fetch_directories_by_ids(ids)
+        if not entities:
+            return []
+
+        # Hydrate relations + parent + counts in parallel.
+        async def _hydrate(entity: DirectoryEntity) -> DirectoryEntity:
+            await self._hydrate_relations(entity)
+            return entity
+
+        hydrated = await asyncio.gather(*(_hydrate(e) for e in entities))
+        return list(hydrated)
+
+    async def _hydrate_relations(
+        self,
+        entity: DirectoryEntity,
+        *,
+        populate_parents: bool = False,
+    ) -> None:
+        """Hydrate ``parent_directory_ids`` + ``relations`` in place.
+
+        ``populate_parents`` decides whether ``parent_directory_ids``
+        is filled from the hierarchy table.  Counts and the child
+        lists are populated earlier by
+        :meth:`PostgresDirectoryRepo.fetch_directory` when the
+        caller asked for them via ``include=...``, so we don't
+        touch them here -- the JOIN-with-GROUP-BY result stays
+        intact.
+        """
+        if not (directory_id := entity.id):
+            return
+        if populate_parents:
+            entity.parent_directory_ids = (
+                await self._postgres.parent_directory_ids_of(directory_id)
             )
-            for rel in note_relations:
-                if rel.resource.object_id not in (UNDEFINED, None):
-                    note_ids.add(str(rel.resource.object_id))
-
-            if depth >= max_depth:
-                continue
-
-            child_relations = await self._permission_repo.lookup_relationships(
-                Relationship(
-                    resource=ObjectRef(ObjectTypeEnum.DIRECTORY, UNDEFINED),
-                    relation=DirectoryRelationEnum.PARENT,
-                    subject=SubjectRef(ObjectTypeEnum.DIRECTORY, current_id),
-                )
-            )
-            for rel in child_relations:
-                if rel.resource.object_id in (UNDEFINED, None):
-                    continue
-                child_id = str(rel.resource.object_id)
-                directory_ids.add(child_id)
-                if child_id not in visited:
-                    queue.append((child_id, depth + 1))
-
-        return sorted(note_ids), sorted(directory_ids)
-
-    async def _fetch_spicedb_relations(self, directory_id: str) -> Tuple[Optional[str], List[Relationship]]:
-        """Fetch parent ID and user relations from SpiceDB."""
-        response_stream = self._spicedb_client.ExportBulkRelationships(
-            ExportBulkRelationshipsRequest(
-                optional_relationship_filter=RelationshipFilter(
-                    resource_type="directory",
-                    optional_resource_id=directory_id,
-                )
-            )
+        entity.relations = await self._fetch_user_relations_for_directory(
+            directory_id
         )
 
-        parent_id: Optional[str] = None
-        relations: List[Relationship] = []
+    async def _fetch_user_relations_for_directory(
+        self,
+        directory_id: str,
+    ) -> List[Relationship]:
+        """Return every user-flavoured relation on this directory."""
+        matched: List[Relationship] = await self._permission_repo.lookup_relationships(
+            Relationship(
+                resource=ObjectRef(
+                    object_type=ObjectTypeEnum.DIRECTORY,
+                    object_id=directory_id,
+                ),
+                relation=DirectoryRelationEnum.VIEW,
+                subject=SubjectRef(
+                    object_type=ObjectTypeEnum.USER, object_id=UNDEFINED
+                ),
+            )
+        )
+        return matched
 
-        async for response in response_stream:
-            for relationship in response.relationships:
-                relation_name = relationship.relation
-                subject_ref = SubjectRef(
-                    object_type=relationship.subject.object.object_type,  # type: ignore
-                    object_id=relationship.subject.object.object_id,
+    async def _set_parents(
+        self,
+        directory_id: str,
+        new_parent_ids: List[str],
+    ) -> None:
+        """Replace the full parent set for ``directory_id``.
+
+        Reads the existing parents, drops the SpiceDB ``parent``
+        relations that go away, keeps / inserts the ones that stay,
+        then rewrites the Postgres hierarchy rows in a single call.
+        Empty ``new_parent_ids`` clears the directory of every parent.
+        """
+        existing = set(
+            await self._postgres.parent_directory_ids_of(directory_id)
+        )
+        desired = {str(p) for p in new_parent_ids if p}
+
+        # Drop SpiceDB relations for parents that are no longer wanted.
+        for removed in existing - desired:
+            await self._permission_repo.delete(
+                Relationship(
+                    resource=ObjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY,
+                        object_id=directory_id,
+                    ),
+                    relation=DirectoryRelationEnum.PARENT,
+                    subject=SubjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY,
+                        object_id=removed,
+                    ),
                 )
+            )
 
-                if relation_name == "parent" and subject_ref.object_type == "directory":
-                    parent_id = str(subject_ref.object_id)
-                    continue
-
-                if subject_ref.object_type == "user":
-                    relations.append(
-                        Relationship(
-                            resource=ObjectRef(object_type="directory", object_id=directory_id),
-                            relation=relation_name,  # type: ignore
-                            subject=subject_ref,
-                        )
+        # Insert SpiceDB relations for any new parents.
+        for added in desired - existing:
+            await self._permission_repo.insert(
+                [
+                    Relationship(
+                        resource=ObjectRef(
+                            object_type=ObjectTypeEnum.DIRECTORY,
+                            object_id=directory_id,
+                        ),
+                        relation=DirectoryRelationEnum.PARENT,
+                        subject=SubjectRef(
+                            object_type=ObjectTypeEnum.DIRECTORY,
+                            object_id=added,
+                        ),
                     )
+                ]
+            )
 
-        return parent_id, relations
+        # Mirror the bind in the Postgres hierarchy table.
+        await self._postgres.set_parent_directories(
+            directory_id, sorted(desired)
+        )
+
+    async def _create_user_admin_relation(
+        self,
+        directory_id: str,
+        user_ctx: UserContextABC,
+    ) -> Relationship:
+        """Insert the user-supplied ``relations`` against this directory."""
+
+        admin_relation = Relationship(
+            resource=ObjectRef(
+                object_type=ObjectTypeEnum.DIRECTORY, object_id=directory_id
+            ),
+            relation=DirectoryRelationEnum.ADMIN,
+            subject=SubjectRef(
+                object_type=ObjectTypeEnum.USER, object_id=user_ctx.user_id
+            ),
+        )
+        await self._permission_repo.insert([admin_relation])
+        return admin_relation  # speed tradeoff to not call the permission repo a second time
+
+    @staticmethod
+    def _assert_note_to_directory_ids(
+        note_id: object,
+        directory_id: object,
+    ) -> None:
+        """Reject :obj:`~src.api.undefined.UNDEFINED` or ``None`` ids.
+
+        Shared by :meth:`add_note_to_directory` and
+        :meth:`remove_note_from_directory` so the validation matches
+        the contract on :class:`DirectoryFacade`.
+        """
+        if note_id is None or is_undefined(note_id):  # type: ignore[arg-type]
+            raise ValueError("note_id is required")
+        if directory_id is None or is_undefined(directory_id):  # type: ignore[arg-type]
+            raise ValueError("directory_id is required")
+
+
+__all__ = ["DirectoryRepoFacade"]

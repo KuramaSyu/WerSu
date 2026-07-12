@@ -29,6 +29,8 @@ from __future__ import annotations
 import html2text
 from typing import Callable, Dict, Optional
 
+from src.utils.attachment_url import is_image_or_pdf_attachment
+
 from .bookstack_models import  BookstackPage
 
 AttachmentUrlBuilder = Callable[[str], str]
@@ -111,6 +113,12 @@ class BookstackHtmlConverter:
     Args:
         attachment_url_builder: turns an attachment key into the URL
             that should replace an ``files/<filename>`` reference.
+            Used for images and PDFs (current behaviour).
+        attachment_link_builder: turns an attachment key into the
+            URL used for general file attachments (anything that is
+            not an image or PDF).  Defaults to
+            :data:`attachment_url_builder` so older callers and
+            tests that only configure the image URL still work.
         bodywidth: forwarded to :func:`html2text.html2text`.  ``0``
             disables line wrapping (we want the resulting Markdown to
             match the project's "no auto-wrap" style).
@@ -120,10 +128,31 @@ class BookstackHtmlConverter:
         self,
         attachment_url_builder: AttachmentUrlBuilder,
         *,
+        attachment_link_builder: Optional[AttachmentUrlBuilder] = None,
         bodywidth: int = 0,
     ) -> None:
         self._url_builder = attachment_url_builder
+        self._link_builder = attachment_link_builder or attachment_url_builder
         self._bodywidth = bodywidth
+
+    def _format_reference(
+        self,
+        filename: str,
+        new_key: str,
+        *,
+        link_text: Optional[str] = None,
+    ) -> str:
+        """Render a reference to an attachment as inline image or link.
+
+        Image / PDF files keep the existing inline image URL;
+        everything else is rendered as ``[link_text](url)`` so the
+        markdown viewer shows a clickable link instead of trying to
+        embed a non-image (which would break or render as a broken
+        icon).
+        """
+        if is_image_or_pdf_attachment(filename):
+            return self._url_builder(new_key)
+        return f"[{link_text or filename}]({self._link_builder(new_key)})"
 
     def html_to_markdown(self, html: str) -> str:
         """Convert `html` to Markdown.
@@ -146,6 +175,7 @@ class BookstackHtmlConverter:
         file_index: Dict[str, str],
         *,
         bsexport_index: Optional[Dict[int, str]] = None,
+        attachment_meta: Optional[Dict[int, str]] = None,
     ) -> str:
         """Pick the page's content source and run image-src rewrites.
 
@@ -161,6 +191,14 @@ class BookstackHtmlConverter:
                 the new attachment key (or any string the configured
                 URL builder accepts).  Filenames not present in this
                 map are left untouched.
+            bsexport_index: optional source id -> new attachment key
+                map for inline ``[[bsexport:image:N]]`` /
+                ``[[bsexport:attachment:N]]`` cross-refs that point
+                at a known attachment.
+            attachment_meta: optional source id -> original filename
+                map for ``attachment`` kind cross-refs.  Used as the
+                link text when an attachment is rendered as a
+                markdown link instead of an inline image.
 
         Returns:
             str: the converted markdown body.
@@ -171,7 +209,12 @@ class BookstackHtmlConverter:
             body = self.html_to_markdown(page.html)
         else:
             return ""
-        return self.rewrite_image_sources(body, file_index, bsexport_index=bsexport_index)
+        return self.rewrite_image_sources(
+            body,
+            file_index,
+            bsexport_index=bsexport_index,
+            attachment_meta=attachment_meta,
+        )
 
     def rewrite_image_sources(
         self,
@@ -179,6 +222,7 @@ class BookstackHtmlConverter:
         file_index: Dict[str, str],
         *,
         bsexport_index: Optional[Dict[int, str]] = None,
+        attachment_meta: Optional[Dict[int, str]] = None,
     ) -> str:
         """Replace ``files/<filename>`` references with attachment URLs.
 
@@ -188,40 +232,73 @@ class BookstackHtmlConverter:
         BookStack link-only attachments (no file to fetch) or for
         pages where the inline image was added via the gallery but
         not declared in the page payload.
+
+        Image / PDF filenames keep the existing inline image URL;
+        every other file type is rendered as a markdown link
+        ``[filename](url)`` so the renderer does not try to embed
+        something it cannot display.
+
+        `bsexport_index` is the same shape as before (source id ->
+        new attachment key) and is only consulted for inline
+        ``<img src="[[bsexport:kind:N]]">`` cross-refs.  The
+        `image` kind is always an image (per BookStack's gallery
+        model) so it always uses the inline image URL; the
+        `attachment` kind is looked up in `attachment_meta` to find
+        the original filename and then routed through the same
+        image-vs-link decision.
         """
         def html_sub(match: __import__("re").Match[str]) -> str:
             filename = match.group("filename")
             new_key = self._lookup(file_index, filename)
             if new_key is None:
                 return match.group(0)
-            return f'{match.group("full")}{self._url_builder(new_key)}{match.group(3)}'
+            if is_image_or_pdf_attachment(filename):
+                return f'{match.group("full")}{self._url_builder(new_key)}{match.group(3)}'
+            return f"[{filename}]({self._link_builder(new_key)})"
 
         def md_sub(match: __import__("re").Match[str]) -> str:
             filename = match.group("filename")
             new_key = self._lookup(file_index, filename)
             if new_key is None:
                 return match.group(0)
-            return f'{match.group("full")}{self._url_builder(new_key)}{match.group(3)}'
+            if is_image_or_pdf_attachment(filename):
+                return f'{match.group("full")}{self._url_builder(new_key)}{match.group(3)}'
+            return f"[{filename}]({self._link_builder(new_key)})"
+
+        def bsexport_sub(
+            match: __import__("re").Match[str], trailing: str
+        ) -> str:
+            try:
+                source_id = int(match.group("id"))
+            except ValueError:
+                return match.group(0)
+            new_key = bsexport_index.get(source_id)
+            if new_key is None:
+                return match.group(0)
+            kind = match.group("kind")
+            # `image` kind is always an image (BookStack's gallery
+            # model); route it through the image URL without the
+            # image/PDF check, which would otherwise reject the
+            # placeholder filename we synthesize for unknown ids.
+            if kind == "image":
+                replacement = self._url_builder(new_key)
+                return f'{match.group("full")}{replacement}{trailing}'
+            # `attachment` kind: drop the original `![alt](...)` /
+            # `<img ...>` wrapper and emit a markdown link in its
+            # place, regardless of whether the source was HTML or
+            # markdown (the importer always produces markdown).
+            filename = _resolve_attachment_filename(
+                kind, source_id, attachment_meta
+            )
+            return self._format_reference(
+                filename, new_key, link_text=filename
+            )
 
         def bsexport_html_sub(match: __import__("re").Match[str]) -> str:
-            try:
-                source_id = int(match.group("id"))
-            except ValueError:
-                return match.group(0)
-            new_key = bsexport_index.get(source_id)
-            if new_key is None:
-                return match.group(0)
-            return f'{match.group("full")}{self._url_builder(new_key)}{match.group(4)}'
+            return bsexport_sub(match, match.group(4))
 
         def bsexport_md_sub(match: __import__("re").Match[str]) -> str:
-            try:
-                source_id = int(match.group("id"))
-            except ValueError:
-                return match.group(0)
-            new_key = bsexport_index.get(source_id)
-            if new_key is None:
-                return match.group(0)
-            return f'{match.group("full")}{self._url_builder(new_key)}{match.group(4)}'
+            return bsexport_sub(match, match.group(4))
 
         content = _IMG_HTML_RE.sub(html_sub, content)
         content = _IMG_MD_RE.sub(md_sub, content)
@@ -235,14 +312,18 @@ class BookstackHtmlConverter:
         content: str,
         id_index: Dict[str, Dict[int, str]],
         attachment_url_builder: Optional[AttachmentUrlBuilder] = None,
+        attachment_meta: Optional[Dict[int, str]] = None,
     ) -> str:
         """Rewrite ``[[bsexport:type:id]]`` cross-refs to attachment URLs.
 
         `id_index` maps the cross-ref kind (``"image"`` /
         ``"attachment"`` / ``"page"`` / ...) to a mapping of source id
-        -> new attachment key.  For image / attachment kinds the
-        value is fed through the URL builder (or the one configured
-        on this instance); for the page / chapter / book kinds the
+        -> new attachment key.  For image kinds the value is fed
+        through the URL builder (or the one configured on this
+        instance) and the cross-ref is replaced with just the URL;
+        for attachment kinds the replacement becomes a markdown
+        link ``[filename](url)`` so non-image files render as
+        clickable links.  For the page / chapter / book kinds the
         value is treated as a note / directory id and dropped -- the
         importer does not preserve those relationships today, so the
         cross-ref is stripped.
@@ -263,8 +344,15 @@ class BookstackHtmlConverter:
             if not kind_map or source_id not in kind_map:
                 return match.group(0)
             target = kind_map[source_id]
-            if kind in ("image", "attachment"):
+            if kind == "image":
                 return url_builder(target)
+            if kind == "attachment":
+                filename = _resolve_attachment_filename(
+                    kind, source_id, attachment_meta
+                )
+                return self._format_reference(
+                    filename, target, link_text=filename
+                )
             return ""
 
         content = _BSEXPORT_RE.sub(sub, content)
@@ -279,6 +367,30 @@ class BookstackHtmlConverter:
             return file_index[filename]
         basename = filename.rsplit("/", 1)[-1]
         return file_index.get(basename)
+
+
+def _resolve_attachment_filename(
+    kind: str,
+    source_id: int,
+    attachment_meta: Optional[Dict[int, str]],
+) -> str:
+    """Return the filename to use as a markdown link text for a cross-ref.
+
+    `kind` is the cross-ref kind (``"image"`` or ``"attachment"``).
+    For ``"image"`` we have no filename in `attachment_meta` and
+    just return a stable placeholder so the link still renders; the
+    image path is also handled by :meth:`_format_reference` which
+    short-circuits to the inline image URL for image / PDF
+    filenames, so the placeholder rarely matters in practice.
+    For ``"attachment"`` we look up the original filename from
+    `attachment_meta` and fall back to a generic placeholder when
+    the caller did not pass any metadata.
+    """
+    if attachment_meta is not None and source_id in attachment_meta:
+        return attachment_meta[source_id]
+    if kind == "image":
+        return f"image-{source_id}"
+    return f"attachment-{source_id}"
 
 
 __all__ = ["BookstackHtmlConverter", "AttachmentUrlBuilder"]

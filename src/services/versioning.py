@@ -6,7 +6,7 @@ from typing import List, Optional
 from src.api import LoggingProvider
 from src.api.user_context import UserContextABC
 from src.db.entities.note.versioning import NoteVersionEntry
-from src.db.repos.directory.directory import DirectoryRepo
+from src.db.repos.directory.directory import DirectoryFacade
 from src.db.repos.note.versioning import NoteVersionRepoABC
 
 
@@ -32,7 +32,7 @@ class DirectoryActivityService(DirectoryActivityServiceABC):
     def __init__(
         self,
         version_repo: NoteVersionRepoABC,
-        directory_repo: DirectoryRepo,
+        directory_repo: DirectoryFacade,
         log: LoggingProvider,
     ) -> None:
         self._version_repo = version_repo

@@ -1,17 +1,12 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
 from typing import List, Self
 
-from asyncpg import Record
-from src.api.types import Pagination
-from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
-from src.ai.embedding_generator import EmbeddingGenerator, EmbeddingGeneratorABC, Models
-from src.db.database import Database, DatabaseABC
+from src.ai.embedding_generator import  EmbeddingGeneratorABC, Models
+from src.db.database import  DatabaseABC
 from src.db.entities import NoteEntity
 from src.db.repos.permissions import PermissionRepoABC
-from src.api import NoteRelationEnum, RelationEnum
-from src.db.table import TableABC
+from src.api import NoteRelationEnum
 
 
 class NoteSearchStrategy(ABC):
@@ -110,8 +105,8 @@ class DateNoteSearchStrategy(NoteSearchStrategy):
         OFFSET {self.offset};
         """
         records = await self.db.fetch(query, self.user_context.user_id)
-        if not records:
-            return []
+        # if not records:
+        #     return []
         return [NoteEntity.from_record(record) for record in records]
 
 
@@ -138,8 +133,8 @@ class WebNoteSearchStrategy(NoteSearchStrategy):
         OFFSET {self.offset};
         """
         records = await self.db.fetch(query, self.query, note_ids)
-        if not records:
-            raise RuntimeError("Failed to fetch notes by exact title.")
+        # if not records:
+        #     raise RuntimeError("Failed to fetch notes by exact title.")
         return [NoteEntity.from_record(record) for record in records]
     
 
@@ -157,8 +152,8 @@ class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
         OFFSET {self.offset};
         """
         records = await self.db.fetch(query, self.query, note_ids)
-        if not records:
-            raise RuntimeError("Failed to fetch notes by fuzzy title/content.")
+        # if not records:
+        #     raise RuntimeError("Failed to fetch notes by fuzzy title/content.")
         return [NoteEntity.from_record(record) for record in records]
 
 
@@ -193,12 +188,12 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         """
         query_embedding = self.generator.generate(self.query)
         query_embedding_str = self.generator.tensor_to_str_vec(query_embedding)
-        start = datetime.now()
         records = await self.db.fetch(
             query, query_embedding_str, 
             model.value, note_ids,
         )
 
-        if not records:
-            raise RuntimeError("Failed to fetch notes by context.")
+        # the user can simply have no notes at all
+        # if not records:
+        #     raise RuntimeError("Failed to fetch notes by context.")
         return [NoteEntity.from_record(record) for record in records]

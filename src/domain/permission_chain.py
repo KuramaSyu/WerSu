@@ -65,6 +65,12 @@ class PermissionCheckChain(ABC):
     def set_permission_repo(self, repo: PermissionRepoABC) -> Self:
         self._permission_repo = repo
         return self
+    
+    def _get_permission_repo(self) -> PermissionRepoABC:
+        if not self._permission_repo:
+            raise RuntimeError("`PermissionCheckChain` was called in the wrong order." +
+            "First call on the first element `.set_permission_repo()`, then in subsequent calls it will be passed automatically with `.set_next()`")
+        return self._permission_repo
 
     def set_next(self, next: PermissionCheckChain) -> PermissionCheckChain:
         """Set the next chain element which is executed after this one"""
@@ -157,7 +163,7 @@ class HasAttachmentWritePerm(PermissionCheckChain):
         self._attachment_id = attachment_id
     
     async def _check(self, user_ctx: UserContextABC) -> bool:
-        return await self._permission_repo.has_permission(
+        return await self._get_permission_repo().has_permission(
             user_ctx, 
             permission=self.RELATION_TYPE, 
             resource=ObjectRef(self.OBJECT_TYPE, self._attachment_id)
@@ -177,7 +183,7 @@ class HasAttachmentViewPerm(PermissionCheckChain):
         self._attachment_id = attachment_id
     
     async def _check(self, user_ctx: UserContextABC) -> bool:
-        return await self._permission_repo.has_permission(
+        return await self._get_permission_repo().has_permission(
             user_ctx, 
             permission=self.RELATION_TYPE, 
             resource=ObjectRef(self.OBJECT_TYPE, self._attachment_id)
@@ -200,7 +206,7 @@ class HasNoteDeletePerm(PermissionCheckChain):
     async def _check(self, user_ctx: UserContextABC) -> bool:
         # `delete` is a computed permission in SpiceDB, so check the
         # effective permission instead of expecting a direct relationship tuple.
-        return await self._permission_repo.has_permission(
+        return await self._get_permission_repo().has_permission(
             user_ctx,
             permission=self.RELATION_TYPE,
             resource=ObjectRef(self.OBJECT_TYPE, self._note_id),
@@ -223,7 +229,7 @@ class HasNoteWritePerm(PermissionCheckChain):
     async def _check(self, user_ctx: UserContextABC) -> bool:
         # `write` is a computed permission in SpiceDB, so check the
         # effective permission instead of expecting a direct relationship tuple.
-        return await self._permission_repo.has_permission(
+        return await self._get_permission_repo().has_permission(
             user_ctx,
             permission=self.RELATION_TYPE,
             resource=ObjectRef(self.OBJECT_TYPE, self._note_id),
@@ -246,7 +252,7 @@ class HasNoteEditPermissionsPerm(PermissionCheckChain):
     async def _check(self, user_ctx: UserContextABC) -> bool:
         # `edit_permissions` is a computed permission in SpiceDB, so check the
         # effective permission instead of expecting a direct relationship tuple.
-        return await self._permission_repo.has_permission(
+        return await self._get_permission_repo().has_permission(
             user_ctx,
             permission=self.RELATION_TYPE,
             resource=ObjectRef(self.OBJECT_TYPE, self._note_id),
@@ -267,7 +273,7 @@ class HasDirectoryViewPerm(PermissionCheckChain):
         self._directory_id = directory_id
 
     async def _check(self, user_ctx: UserContextABC) -> bool:
-        return await self._permission_repo.has_permission(
+        return await self._get_permission_repo().has_permission(
             user_ctx,
             permission=self.RELATION_TYPE,
             resource=ObjectRef(self.OBJECT_TYPE, self._directory_id),
@@ -288,7 +294,7 @@ class HasDirectoryWritePerm(PermissionCheckChain):
         self._directory_id = directory_id
 
     async def _check(self, user_ctx: UserContextABC) -> bool:
-        return await self._permission_repo.has_permission(
+        return await self._get_permission_repo().has_permission(
             user_ctx,
             permission=self.RELATION_TYPE,
             resource=ObjectRef(self.OBJECT_TYPE, self._directory_id),
@@ -309,7 +315,7 @@ class HasDirectoryDeletePerm(PermissionCheckChain):
         self._directory_id = directory_id
 
     async def _check(self, user_ctx: UserContextABC) -> bool:
-        return await self._permission_repo.has_permission(
+        return await self._get_permission_repo().has_permission(
             user_ctx,
             permission=self.RELATION_TYPE,
             resource=ObjectRef(self.OBJECT_TYPE, self._directory_id),
@@ -330,7 +336,7 @@ class HasDirectoryEditPermissionsPerm(PermissionCheckChain):
         self._directory_id = directory_id
 
     async def _check(self, user_ctx: UserContextABC) -> bool:
-        return await self._permission_repo.has_permission(
+        return await self._get_permission_repo().has_permission(
             user_ctx,
             permission=self.RELATION_TYPE,
             resource=ObjectRef(self.OBJECT_TYPE, self._directory_id),

@@ -124,7 +124,7 @@ class TableABC(Protocol):
         where: Dict[str, Any],
         order_by: Optional[str] = None,
         select: str = "*",
-        additional_values: Optional[List] = None,
+        additional_values: Optional[List[Any]] = None,
     ) -> Optional[List[Record]]:
         """Select records from the table with filtering and ordering.
 
@@ -165,7 +165,7 @@ class TableABC(Protocol):
         """
         ...
 
-    async def fetch(self, sql: str, *args) -> Optional[List[Record]]:
+    async def fetch(self, sql: str, *args: Any) -> Optional[List[Record]]:
         """Execute a caller-supplied SQL string.
 
         The string passes straight through the active
@@ -174,7 +174,7 @@ class TableABC(Protocol):
         """
         ...
 
-    async def execute(self, sql: str, *args) -> Optional[List[Record]]:
+    async def execute(self, sql: str, *args: Any) -> Optional[List[Record]]:
         """Alias for :meth:`fetch`."""
         return await self.fetch(sql, *args)
 

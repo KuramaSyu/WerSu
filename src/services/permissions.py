@@ -3,7 +3,7 @@ from typing import List, Sequence
 
 from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
-from src.db.repos.directory.directory import DirectoryRepo
+from src.db.repos.directory.directory import DirectoryFacade
 from src.api.note_facade import NoteRepoFacadeABC
 from src.api import (
     DirectoryRelationEnum,
@@ -59,6 +59,11 @@ class PermissionServiceABC(ABC):
         """Create one relationship and return the updated relationship set.
         This has to be a resource: note or resource: directory. Handle others directly with the repo.
 
+        ``note#parent_directory@directory:<id>`` and
+        ``directory#parent@directory:<id>`` writes are routed through
+        the directory repo so the Postgres hierarchy row stays in
+        sync with the SpiceDB relation.
+
         Parameters
         ----------
         relationship : Relationship
@@ -85,6 +90,11 @@ class PermissionServiceABC(ABC):
     @abstractmethod
     async def delete_relationship(self, relationship: Relationship, actor: UserContextABC) -> List[Relationship]:
         """Delete one relationship and return the updated relationship set.
+
+        ``note#parent_directory@directory:<id>`` and
+        ``directory#parent@directory:<id>`` deletes are routed through
+        the directory repo so the Postgres hierarchy row stays in
+        sync with the SpiceDB relation.
 
         Parameters
         ----------
@@ -117,6 +127,11 @@ class PermissionServiceABC(ABC):
         actor: UserContextABC,
     ) -> List[Relationship]:
         """Replace all resource relationships with the provided list.
+
+        ``note#parent_directory@directory`` and
+        ``directory#parent@directory`` writes are routed through
+        the directory repo so the Postgres hierarchy row stays in
+        sync with the SpiceDB relation.
 
         Parameters
         ----------
@@ -166,7 +181,7 @@ class PermissionServiceRepo(PermissionServiceABC):
         self,
         permission_repo: PermissionRepoABC,
         note_repo: NoteRepoFacadeABC,
-        directory_repo: DirectoryRepo,
+        directory_repo: DirectoryFacade,
     ) -> None:
         self._permission_repo = permission_repo
         self._note_repo = note_repo

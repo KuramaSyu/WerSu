@@ -34,7 +34,7 @@ from src.db.entities.activity import (
     FilterActivity,
 )
 from src.db.repos.activity.strategies import get_strategy
-from src.api.directory_repo import DirectoryFacade
+from src.api.directory_facade import DirectoryFacade
 from src.db.sql_builders import SqliteSqlBuilder, WhereClause, WherePair
 from src.db.table import TableABC
 from src.utils import asdict, drop_undefined, logging_provider as default_logging_provider

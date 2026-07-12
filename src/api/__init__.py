@@ -40,5 +40,5 @@ from .directory_service import (
     DirectoryIncludeOptions,
     resolve_directory_include_options,
 )
-from .directory_repo import DefaultDirectorySpec, DirectoryFacade
+from .directory_facade import DefaultDirectorySpec, DirectoryFacade
 from .visitor import AcceptsVisitor, EntityVisitor

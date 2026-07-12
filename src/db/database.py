@@ -116,12 +116,12 @@ class DatabaseABC(ABC):
         ...
     
     @abstractmethod
-    async def fetch(self, query: str, *args: Any) -> List[Dict]:
+    async def fetch(self, query: str, *args: Any) -> List[Dict[str, Any]]:
         """Fetches multiple records from the database."""
         ...
     
     @abstractmethod
-    async def fetchrow(self, query: str, *args: Any) -> Optional[Dict]:
+    async def fetchrow(self, query: str, *args: Any) -> Optional[Dict[str, Any]]:
         """Fetches a single record from the database."""
         ...
     
