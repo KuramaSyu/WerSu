@@ -219,15 +219,15 @@ async def serve():
         table_name="note.directory_note",
         id_fields=["id"],
     )
-    directory_tags_table = Table(
-        **common_table_kwargs,
-        table_name="note.directory_tag",
-        id_fields=["directory_id", "tag_id"],
-    )
     tags_table = Table(
         **common_table_kwargs,
         table_name="note.tag",
         id_fields=["id"],
+    )
+    directory_tags_table = Table(
+        **common_table_kwargs,
+        table_name="note.directory_tag",
+        id_fields=["directory_id", "tag_id"],
     )
     note_tags_table = Table(
         **common_table_kwargs,
@@ -284,7 +284,7 @@ async def serve():
             directory_table=directory_table,
             subdirectory_table=directory_subdirectory_table,
             directory_note_table=directory_note_table,
-            tags_table=directory_tags_table,
+            directory_tags_table=directory_tags_table,
         ),
         permission_repo=permission_repo,
         log=logging_provider,
