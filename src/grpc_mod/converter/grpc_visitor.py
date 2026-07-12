@@ -39,8 +39,11 @@ from src.grpc_mod.proto.attachments_pb2 import Attachment as GrpcAttachment
 from src.grpc_mod.proto.attachments_pb2 import AttachmentMetadata
 from src.grpc_mod.proto.note_pb2 import (
     Directory,
+    MinimalDirectory,
     MinimalNote,
+    MinimalTag,
     Note,
+    NotesReply,
     NoteResponse as GrpcNoteResponse,
     PermissionObjectType,
     PermissionRelationship,
@@ -186,6 +189,18 @@ class ConvertToGrpcVisitor(EntityVisitor):
         basic_args["id"] = basic_args.pop("note_id")
         assert isinstance(entity.permissions, list)
         basic_args["permissions"] = _convert_permissions(entity.permissions)
+        # ``directory_ids`` and ``tag_ids`` land on the proto only when
+        # the entity actually populated them -- otherwise drop the
+        # UNDEFINED placeholder so the proto field stays at its
+        # default (empty list).
+        if entity.directory_ids not in (UNDEFINED, None):
+            basic_args["directory_ids"] = [
+                str(v) for v in entity.directory_ids if v
+            ]
+        if entity.tag_ids not in (UNDEFINED, None):
+            basic_args["tag_ids"] = [
+                str(v) for v in entity.tag_ids if v
+            ]
 
         return Note(
             **basic_args,
@@ -217,7 +232,14 @@ class ConvertToGrpcVisitor(EntityVisitor):
         basic_args["permissions"] = _convert_permissions(perms)
         basic_args["id"] = basic_args.pop("note_id")
         basic_args["stripped_content"] = basic_args.pop("content")
-
+        if entity.directory_ids not in (UNDEFINED, None):
+            basic_args["directory_ids"] = [
+                str(v) for v in entity.directory_ids if v
+            ]
+        if entity.tag_ids not in (UNDEFINED, None):
+            basic_args["tag_ids"] = [
+                str(v) for v in entity.tag_ids if v
+            ]
         return MinimalNote(**basic_args)
 
     def visit_note_response(self, response: NoteResponse) -> GrpcNoteResponse:
@@ -228,6 +250,66 @@ class ConvertToGrpcVisitor(EntityVisitor):
         return GrpcNoteResponse(
             note=proto_note,
             id_token_map=dict(response.id_token_map),
+        )
+
+    # ---- notes reply ---------------------------------------------------
+
+    def visit_notes_reply(
+        self,
+        notes: list[NoteEntity],
+        directories: list[MinimalDirectory] | None = None,
+        tags: list[MinimalTag] | None = None,
+    ) -> NotesReply:
+        """Build a :class:`NotesReply` for the search / directory RPCs.
+
+        Args:
+            notes: note entities to convert.
+            directories: pre-fetched
+                :class:`src.grpc_mod.proto.note_pb2.MinimalDirectory`
+                messages -- one per directory referenced anywhere
+                in `notes`.  Callers fetch these via
+                :meth:`src.db.repos.directory.directory.DirectoryFacade`
+                so the visitor stays free of DB access.
+            tags: pre-fetched
+                :class:`src.grpc_mod.proto.note_pb2.MinimalTag`
+                messages -- one per tag referenced anywhere in
+                `notes`.
+
+        Returns:
+            NotesReply: the proto message with `notes`, `directories`
+            and `tags` populated.
+        """
+        proto_notes = [self.visit_note_minimal(n) for n in notes]
+        return NotesReply(
+            notes=proto_notes,
+            directories=list(directories or []),
+            tags=list(tags or []),
+        )
+
+    @staticmethod
+    def minimal_directory(
+        directory_id: str,
+        slug: str = "",
+        display_name: str = "",
+    ) -> MinimalDirectory:
+        """Build a single :class:`MinimalDirectory` proto message."""
+        return MinimalDirectory(
+            id=str(directory_id),
+            slug=str(slug or ""),
+            display_name=str(display_name or ""),
+        )
+
+    @staticmethod
+    def minimal_tag(
+        tag_id: str,
+        slug: str = "",
+        display_name: str = "",
+    ) -> MinimalTag:
+        """Build a single :class:`MinimalTag` proto message."""
+        return MinimalTag(
+            id=str(tag_id),
+            slug=str(slug or ""),
+            display_name=str(display_name or ""),
         )
 
     # ---- directory -----------------------------------------------------
@@ -245,17 +327,43 @@ class ConvertToGrpcVisitor(EntityVisitor):
         if isinstance(entity.relations, list):
             relationships = _convert_permissions(entity.relations)
 
+        slug_value = ""
+        if entity.slug not in (UNDEFINED, None):
+            slug_value = str(entity.slug)
+        display_name = ""
+        if entity.display_name not in (UNDEFINED, None):
+            display_name = str(entity.display_name)
+        description = ""
+        if entity.description not in (UNDEFINED, None):
+            description = str(entity.description)
+        image_url = ""
+        if entity.image_url not in (UNDEFINED, None):
+            image_url = str(entity.image_url)
+
         kwargs: dict[str, Any] = {
             "id": "" if entity.id in (UNDEFINED, None) else str(entity.id),
-            "name": "" if entity.name in (UNDEFINED, None) else str(entity.name),
-            "display_name": "" if entity.display_name in (UNDEFINED, None) else str(entity.display_name),
-            "description": "" if entity.description in (UNDEFINED, None) else str(entity.description),
-            "image_url": "" if entity.image_url in (UNDEFINED, None) else str(entity.image_url),
+            "slug": slug_value,
+            "display_name": display_name,
+            "description": description,
+            "image_url": image_url,
             "relationships": relationships,
         }
 
-        if entity.parent_id not in (UNDEFINED, None):
-            kwargs["parent_id"] = str(entity.parent_id)
+        # Multi-parent: emit the full id list when the entity carried
+        # one.  An UNDEFINED placeholder becomes the proto default.
+        if entity.parent_directory_ids not in (UNDEFINED, None):
+            kwargs["parent_dir_ids"] = [
+                str(v) for v in entity.parent_directory_ids if v
+            ]
+        # Optional child lists.
+        if entity.child_directory_ids not in (UNDEFINED, None):
+            kwargs["child_dir_ids"] = [
+                str(v) for v in entity.child_directory_ids if v
+            ]
+        if entity.child_note_ids not in (UNDEFINED, None):
+            kwargs["child_note_ids"] = [
+                str(v) for v in entity.child_note_ids if v
+            ]
 
         return Directory(**kwargs)
 
