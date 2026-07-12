@@ -75,7 +75,7 @@ class DirectoryRepoFacade(DirectoryFacade):
 
         parent_ids = entity.parent_directory_ids
         if parent_ids:
-            await self._set_parents(dir_id, list(parent_ids))
+            await self._replace_parents(dir_id, list(parent_ids))
 
         # add user relation; other relations are are kept as they are.
         admin_relation = await self._create_user_admin_relation(dir_id, user_ctx)
@@ -211,7 +211,7 @@ class DirectoryRepoFacade(DirectoryFacade):
             return None
 
         if entity.parent_directory_ids is not UNDEFINED:
-            await self._set_parents(
+            await self._replace_parents(
                 str(entity.id), list(entity.parent_directory_ids)
             )
 
@@ -233,7 +233,7 @@ class DirectoryRepoFacade(DirectoryFacade):
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
         """Return every directory id the user has view access to (direct tuples)."""
         # this is more or less a permission check as well as the source of truth for the directory hierarchy
-        matched = await self._permission_repo.lookup_resources(
+        return await self._permission_repo.lookup(
             Relationship(
                 resource=ObjectRef(
                     object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED
@@ -244,7 +244,6 @@ class DirectoryRepoFacade(DirectoryFacade):
                 ),
             )
         )
-        return [str(o.object_id) for o in matched if o.object_id]
 
     async def list_note_directory_ids(self, note_id: str) -> List[str]:
         """Return the directory ids that directly parent ``note_id``.
@@ -385,7 +384,7 @@ class DirectoryRepoFacade(DirectoryFacade):
         )
         return matched
 
-    async def _set_parents(
+    async def _replace_parents(
         self,
         directory_id: str,
         new_parent_ids: List[str],
