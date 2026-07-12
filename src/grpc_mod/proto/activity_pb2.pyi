@@ -31,7 +31,7 @@ class _AccessedAsEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_AccessedAs
     ACCESSED_AS_SYSTEM: _AccessedAs.ValueType  # 2
 
 class AccessedAs(_AccessedAs, metaclass=_AccessedAsEnumTypeWrapper):
-    """How the actor was acting when the event happened."""
+    """Discriminator for who was acting when an event happened."""
 
 ACCESSED_AS_UNSPECIFIED: AccessedAs.ValueType  # 0
 ACCESSED_AS_USER: AccessedAs.ValueType  # 1
@@ -49,7 +49,7 @@ class _MostUsedAlgorithmEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Mos
     MOST_USED_ALGORITHM_LOG_COUNT: _MostUsedAlgorithm.ValueType  # 2
 
 class MostUsedAlgorithm(_MostUsedAlgorithm, metaclass=_MostUsedAlgorithmEnumTypeWrapper):
-    """Which scoring algorithm produced the score in an ActivityScore."""
+    """Discriminator for the scoring strategy used in an ActivityScore."""
 
 MOST_USED_ALGORITHM_UNSPECIFIED: MostUsedAlgorithm.ValueType  # 0
 MOST_USED_ALGORITHM_COUNT: MostUsedAlgorithm.ValueType  # 1
@@ -104,23 +104,29 @@ Global___Activity: _TypeAlias = Activity  # noqa: Y015
 
 @_typing.final
 class ActivityScore(_message.Message):
-    """Aggregate score for a single note from a ``most_used`` query."""
+    """Aggregate score for one note plus its title and stripped content."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
     NOTE_ID_FIELD_NUMBER: _builtins.int
     SCORE_FIELD_NUMBER: _builtins.int
+    TITLE_FIELD_NUMBER: _builtins.int
+    STRIPPED_CONTENT_FIELD_NUMBER: _builtins.int
     note_id: _builtins.str
     score: _builtins.float
+    title: _builtins.str
+    stripped_content: _builtins.str
     def __init__(
         self,
         *,
         note_id: _builtins.str = ...,
         score: _builtins.float = ...,
+        title: _builtins.str = ...,
+        stripped_content: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["note_id", b"note_id", "score", b"score"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["note_id", b"note_id", "score", b"score", "stripped_content", b"stripped_content", "title", b"title"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -128,10 +134,7 @@ Global___ActivityScore: _TypeAlias = ActivityScore  # noqa: Y015
 
 @_typing.final
 class ActivityFilter(_message.Message):
-    """History filter. Empty fields mean "do not filter on this column".
-    ``unique_per_day`` collapses repeats to one count per (actor, day)
-    pair before aggregating; it composes with any algorithm.
-    """
+    """History filter for both RPCs."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -195,9 +198,7 @@ Global___ActivityFilter: _TypeAlias = ActivityFilter  # noqa: Y015
 
 @_typing.final
 class GetActivityHistoryRequest(_message.Message):
-    """Request for ``GetActivityHistory``. The requester user_id is used
-    for permission checks and to scope "all visible directories".
-    """
+    """Request for GetActivityHistory."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -222,9 +223,7 @@ Global___GetActivityHistoryRequest: _TypeAlias = GetActivityHistoryRequest  # no
 
 @_typing.final
 class GetMostUsedActivityRequest(_message.Message):
-    """Request for ``GetMostUsedActivity``. Same permission semantics as
-    ``GetActivityHistory``; ``algorithm`` defaults to ``count``.
-    """
+    """Request for GetMostUsedActivity."""
 
     DESCRIPTOR: _descriptor.Descriptor
 

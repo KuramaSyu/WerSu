@@ -13,7 +13,7 @@ message GetNoteRequest {
 message GetSearchNotesRequest {
     enum SearchType {
         Undefined = 0;      // default
-        NoSearch = 1;       // just
+        NoSearch = 1;       // latest notes
         FullTextTitle = 2;  // exact match search
         Fuzzy = 3;          // typo tolerant search
         Context = 4;        // semantic search using embeddings
@@ -30,6 +30,16 @@ message GetSearchNotesRequest {
     string user_id = 5;
 }
 
+message NotesReply {
+    repeated MinimalNote notes = 1;
+
+    // the directories which appear in the note results
+    repeated MinimalDirectory directories = 2;
+
+    // the tags which appear in the note results
+    repeated MinimalTag tags = 3;
+}
+
 // Response: represents a minimal Note for search results
 message MinimalNote {
     string id = 1; // Note ID (UUIDv7 string)
@@ -38,6 +48,20 @@ message MinimalNote {
     google.protobuf.Timestamp updated_at = 4;
     string stripped_content = 5;
     repeated PermissionRelationship permissions = 6;
+    repeated string directory_ids = 7;
+    repeated string tag_ids = 8;
+}
+
+message MinimalDirectory {
+    string id = 1; 
+    string slug = 2;
+    string display_name = 3;
+}
+
+message MinimalTag {
+    string id = 1;
+    string slug = 2;
+    string display_name = 3;
 }
 
 // Response: represents a Note
@@ -50,6 +74,8 @@ message Note {
     string author_id = 5;
     //repeated NoteEmbedding embeddings = 6;
     repeated PermissionRelationship permissions = 7;
+    repeated string directory_ids = 8;
+    repeated string tag_ids = 9;
 }
 
 message NoteResponse {
@@ -67,41 +93,61 @@ message PostNoteRequest {
     string title = 1;
     optional string content = 2;
     string author_id = 3;
+
+    // the id of the user making the request - used for permission checking
+    string user_id = 4;
 }
 
 // Request to delete a note
 message DeleteNoteRequest {
     string id = 1;
-    string author_id = 2;
+
+    // the id of the user making the request - used for permission checking
+    string user_id = 2;
 }
 
+// Request to alter a note. Any omitted fields will be left unchanged, and any repeated fields will be replaced with the new values.
 message AlterNoteRequest {
     string id = 1;
     optional string title = 2;
     optional string content = 3;
     optional string author_id = 4;
+    repeated string directory_ids = 5;
+    repeated string tag_ids = 6;
+    // the user_id of the user making the request, used for permission checking
+    string user_id = 7;
 }
 
 message Directory {
     string id = 1;
-    string name = 2;
+    string slug = 2;
     string display_name = 3;
     string description = 4;
     string image_url = 5;
-    optional string parent_id = 6;
+    repeated string parent_dir_ids = 6;
     repeated PermissionRelationship relationships = 7;
+    repeated string child_dir_ids = 8;
+    repeated string child_note_ids = 9;
 }
 
 message GetDirectoryRequest {
     string id = 1;
     string user_id = 2;
+    bool include_parents = 3;
+    bool include_child_dirs = 4;
+    bool include_child_notes = 5;
 }
 
+// list all directory contents of a given directory <parent_id>
 message GetDirectoriesRequest {
+    // the requesting user's id, used for permission checking
     string user_id = 1;
     optional string parent_id = 2;
     optional int32 limit = 3;
     optional int32 offset = 4;
+    bool include_parents = 5;
+    bool include_child_dirs = 6;
+    bool include_child_notes = 7;
 }
 
 message CreateDirectoryRequest {
@@ -109,17 +155,21 @@ message CreateDirectoryRequest {
     optional string display_name = 2;
     optional string description = 3;
     optional string image_url = 4;
-    optional string parent_id = 5;
+    repeated string parent_ids = 5;
+    // the user_id of the user making the request, used for permission checking
+    // its also the author of the directory
     string user_id = 6;
 }
 
+// any ommited fields will be left unchanged 
+// and any repeated fields will be replaced with the new values. 
 message AlterDirectoryRequest {
     string id = 1;
     optional string name = 2;
     optional string display_name = 3;
     optional string description = 4;
     optional string image_url = 5;
-    optional string parent_id = 6;
+    repeated string parent_ids = 6;
     string user_id = 7;
 }
 
@@ -248,7 +298,7 @@ service NoteService {
     rpc PostNote(PostNoteRequest) returns (Note);
     rpc PatchNote(AlterNoteRequest) returns (Note);
     rpc DeleteNote(DeleteNoteRequest) returns (Note);
-    rpc SearchNotes(GetSearchNotesRequest) returns (stream MinimalNote);
+    rpc SearchNotes(GetSearchNotesRequest) returns (NotesReply);
 }
 
 service DirectoryService {
@@ -257,7 +307,7 @@ service DirectoryService {
     rpc CreateDirectory(CreateDirectoryRequest) returns (Directory);
     rpc PatchDirectory(AlterDirectoryRequest) returns (Directory);
     rpc DeleteDirectory(DeleteDirectoryRequest) returns (Directory);
-    rpc GetNotesOfDirectory(GetNotesOfDirectoryRequest) returns (stream MinimalNote);
+    rpc GetNotesOfDirectory(GetNotesOfDirectoryRequest) returns (NotesReply);
 }
 
 service PermissionService {

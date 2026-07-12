@@ -13,8 +13,6 @@ from __future__ import annotations
 import logging
 import traceback
 from datetime import datetime
-from pprint import pformat
-from typing import AsyncIterator
 
 import asyncpg
 import grpc
@@ -32,9 +30,9 @@ from src.grpc_mod.proto.note_pb2 import (
     DeleteNoteRequest,
     GetNoteRequest,
     GetSearchNotesRequest,
-    MinimalNote,
     Note,
     NoteResponse,
+    NotesReply,
     PostNoteRequest,
 )
 from src.grpc_mod.proto.note_pb2_grpc import NoteServiceServicer
@@ -110,6 +108,16 @@ class GrpcNoteService(NoteServiceServicer):
     async def PatchNote(self, request: AlterNoteRequest, context: ServicerContext) -> Note:
         try:
             user_ctx = await self._context.create(request.author_id)
+            directory_ids = (
+                list(request.directory_ids)
+                if len(request.directory_ids) > 0
+                else UNDEFINED
+            )
+            tag_ids = (
+                list(request.tag_ids)
+                if len(request.tag_ids) > 0
+                else UNDEFINED
+            )
             note_entity = await self._note_service.update_note(
                 NoteEntity(
                     note_id=request.id,
@@ -119,6 +127,8 @@ class GrpcNoteService(NoteServiceServicer):
                     permissions=UNDEFINED,
                     title=request.title,
                     updated_at=datetime.now(),
+                    directory_ids=directory_ids,
+                    tag_ids=tag_ids,
                 ),
                 user_ctx,
             )
@@ -153,7 +163,7 @@ class GrpcNoteService(NoteServiceServicer):
     @log_service_call()
     async def SearchNotes(
         self, request: GetSearchNotesRequest, context: ServicerContext
-    ) -> AsyncIterator[MinimalNote]:
+    ):
         user_ctx = await self._context.create(request.user_id)
         notes = await self._note_service.search_notes(
             to_search_type(request.search_type).name,
@@ -162,7 +172,4 @@ class GrpcNoteService(NoteServiceServicer):
             limit=request.limit,
             offset=request.offset,
         )
-        for note in notes:
-            grpc_note = self._to_grpc.visit_note_minimal(note)
-            self.log.debug(f"[SearchNotes] yielding note: {pformat(grpc_note)}")
-            yield grpc_note
+        return self._to_grpc.visit_notes_reply(notes)

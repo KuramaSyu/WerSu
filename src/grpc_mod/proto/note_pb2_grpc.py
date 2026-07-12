@@ -55,10 +55,10 @@ class NoteServiceStub:
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteNoteRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
                 _registered_method=True)
-        self.SearchNotes = channel.unary_stream(
+        self.SearchNotes = channel.unary_unary(
                 '/proto.NoteService/SearchNotes',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.FromString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NotesReply.FromString,
                 _registered_method=True)
 
 
@@ -122,10 +122,10 @@ def add_NoteServiceServicer_to_server(servicer, server):
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteNoteRequest.FromString,
                     response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.SerializeToString,
             ),
-            'SearchNotes': grpc.unary_stream_rpc_method_handler(
+            'SearchNotes': grpc.unary_unary_rpc_method_handler(
                     servicer.SearchNotes,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.SerializeToString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NotesReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -258,12 +258,12 @@ class NoteService:
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_stream(
+        return grpc.experimental.unary_unary(
             request,
             target,
             '/proto.NoteService/SearchNotes',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.FromString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.NotesReply.FromString,
             options,
             channel_credentials,
             insecure,
@@ -309,10 +309,10 @@ class DirectoryServiceStub:
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteDirectoryRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
                 _registered_method=True)
-        self.GetNotesOfDirectory = channel.unary_stream(
+        self.GetNotesOfDirectory = channel.unary_unary(
                 '/proto.DirectoryService/GetNotesOfDirectory',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNotesOfDirectoryRequest.SerializeToString,
-                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.FromString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NotesReply.FromString,
                 _registered_method=True)
 
 
@@ -383,10 +383,10 @@ def add_DirectoryServiceServicer_to_server(servicer, server):
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteDirectoryRequest.FromString,
                     response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.SerializeToString,
             ),
-            'GetNotesOfDirectory': grpc.unary_stream_rpc_method_handler(
+            'GetNotesOfDirectory': grpc.unary_unary_rpc_method_handler(
                     servicer.GetNotesOfDirectory,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNotesOfDirectoryRequest.FromString,
-                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.SerializeToString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NotesReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -545,12 +545,12 @@ class DirectoryService:
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_stream(
+        return grpc.experimental.unary_unary(
             request,
             target,
             '/proto.DirectoryService/GetNotesOfDirectory',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNotesOfDirectoryRequest.SerializeToString,
-            src_dot_grpc__mod_dot_proto_dot_note__pb2.MinimalNote.FromString,
+            src_dot_grpc__mod_dot_proto_dot_note__pb2.NotesReply.FromString,
             options,
             channel_credentials,
             insecure,

@@ -56,7 +56,6 @@ class GrpcUserService(UserServiceServicer):
             context.set_details("Internal server error while fetching user")
             return User()
 
-    @log_service_call()
     async def _GetUser(self, request: GetUserRequest, context: ServicerContext[GetUserRequest, User]) -> User:
         if request.HasField("id"):
             user_entity = await self.user_service.get_user(user_id=request.id)
@@ -99,7 +98,7 @@ class GrpcUserService(UserServiceServicer):
                     type='human'  # otherwise they dont get default directories
                 )
             )
-            self.log.debug(f"Created user entity: {user_entity}")
+            self.log.info(f"Created user entity: {user_entity}")
             return user_entity.convert(self._to_grpc)
         except asyncpg.UniqueViolationError:
             context.set_code(grpc.StatusCode.ALREADY_EXISTS)

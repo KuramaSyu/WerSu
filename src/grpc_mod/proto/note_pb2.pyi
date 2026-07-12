@@ -78,7 +78,7 @@ class GetSearchNotesRequest(_message.Message):
         Undefined: GetSearchNotesRequest._SearchType.ValueType  # 0
         """default"""
         NoSearch: GetSearchNotesRequest._SearchType.ValueType  # 1
-        """just"""
+        """latest notes"""
         FullTextTitle: GetSearchNotesRequest._SearchType.ValueType  # 2
         """exact match search"""
         Fuzzy: GetSearchNotesRequest._SearchType.ValueType  # 3
@@ -90,7 +90,7 @@ class GetSearchNotesRequest(_message.Message):
     Undefined: GetSearchNotesRequest.SearchType.ValueType  # 0
     """default"""
     NoSearch: GetSearchNotesRequest.SearchType.ValueType  # 1
-    """just"""
+    """latest notes"""
     FullTextTitle: GetSearchNotesRequest.SearchType.ValueType  # 2
     """exact match search"""
     Fuzzy: GetSearchNotesRequest.SearchType.ValueType  # 3
@@ -129,6 +129,38 @@ class GetSearchNotesRequest(_message.Message):
 Global___GetSearchNotesRequest: _TypeAlias = GetSearchNotesRequest  # noqa: Y015
 
 @_typing.final
+class NotesReply(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    NOTES_FIELD_NUMBER: _builtins.int
+    DIRECTORIES_FIELD_NUMBER: _builtins.int
+    TAGS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def notes(self) -> _containers.RepeatedCompositeFieldContainer[Global___MinimalNote]: ...
+    @_builtins.property
+    def directories(self) -> _containers.RepeatedCompositeFieldContainer[Global___MinimalDirectory]:
+        """the directories which appear in the note results"""
+
+    @_builtins.property
+    def tags(self) -> _containers.RepeatedCompositeFieldContainer[Global___MinimalTag]:
+        """the tags which appear in the note results"""
+
+    def __init__(
+        self,
+        *,
+        notes: _abc.Iterable[Global___MinimalNote] | None = ...,
+        directories: _abc.Iterable[Global___MinimalDirectory] | None = ...,
+        tags: _abc.Iterable[Global___MinimalTag] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["directories", b"directories", "notes", b"notes", "tags", b"tags"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___NotesReply: _TypeAlias = NotesReply  # noqa: Y015
+
+@_typing.final
 class MinimalNote(_message.Message):
     """Response: represents a minimal Note for search results"""
 
@@ -140,6 +172,8 @@ class MinimalNote(_message.Message):
     UPDATED_AT_FIELD_NUMBER: _builtins.int
     STRIPPED_CONTENT_FIELD_NUMBER: _builtins.int
     PERMISSIONS_FIELD_NUMBER: _builtins.int
+    DIRECTORY_IDS_FIELD_NUMBER: _builtins.int
+    TAG_IDS_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     """Note ID (UUIDv7 string)"""
     title: _builtins.str
@@ -149,6 +183,10 @@ class MinimalNote(_message.Message):
     def updated_at(self) -> _timestamp_pb2.Timestamp: ...
     @_builtins.property
     def permissions(self) -> _containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
+    @_builtins.property
+    def directory_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def tag_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     def __init__(
         self,
         *,
@@ -158,14 +196,66 @@ class MinimalNote(_message.Message):
         updated_at: _timestamp_pb2.Timestamp | None = ...,
         stripped_content: _builtins.str = ...,
         permissions: _abc.Iterable[Global___PermissionRelationship] | None = ...,
+        directory_ids: _abc.Iterable[_builtins.str] | None = ...,
+        tag_ids: _abc.Iterable[_builtins.str] | None = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["updated_at", b"updated_at"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "id", b"id", "permissions", b"permissions", "stripped_content", b"stripped_content", "title", b"title", "updated_at", b"updated_at"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "directory_ids", b"directory_ids", "id", b"id", "permissions", b"permissions", "stripped_content", b"stripped_content", "tag_ids", b"tag_ids", "title", b"title", "updated_at", b"updated_at"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___MinimalNote: _TypeAlias = MinimalNote  # noqa: Y015
+
+@_typing.final
+class MinimalDirectory(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    ID_FIELD_NUMBER: _builtins.int
+    SLUG_FIELD_NUMBER: _builtins.int
+    DISPLAY_NAME_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    slug: _builtins.str
+    display_name: _builtins.str
+    def __init__(
+        self,
+        *,
+        id: _builtins.str = ...,
+        slug: _builtins.str = ...,
+        display_name: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["display_name", b"display_name", "id", b"id", "slug", b"slug"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MinimalDirectory: _TypeAlias = MinimalDirectory  # noqa: Y015
+
+@_typing.final
+class MinimalTag(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    ID_FIELD_NUMBER: _builtins.int
+    SLUG_FIELD_NUMBER: _builtins.int
+    DISPLAY_NAME_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    slug: _builtins.str
+    display_name: _builtins.str
+    def __init__(
+        self,
+        *,
+        id: _builtins.str = ...,
+        slug: _builtins.str = ...,
+        display_name: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["display_name", b"display_name", "id", b"id", "slug", b"slug"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MinimalTag: _TypeAlias = MinimalTag  # noqa: Y015
 
 @_typing.final
 class Note(_message.Message):
@@ -179,6 +269,8 @@ class Note(_message.Message):
     UPDATED_AT_FIELD_NUMBER: _builtins.int
     AUTHOR_ID_FIELD_NUMBER: _builtins.int
     PERMISSIONS_FIELD_NUMBER: _builtins.int
+    DIRECTORY_IDS_FIELD_NUMBER: _builtins.int
+    TAG_IDS_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     title: _builtins.str
     content: _builtins.str
@@ -189,6 +281,10 @@ class Note(_message.Message):
     def permissions(self) -> _containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]:
         """repeated NoteEmbedding embeddings = 6;"""
 
+    @_builtins.property
+    def directory_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def tag_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     def __init__(
         self,
         *,
@@ -198,10 +294,12 @@ class Note(_message.Message):
         updated_at: _timestamp_pb2.Timestamp | None = ...,
         author_id: _builtins.str = ...,
         permissions: _abc.Iterable[Global___PermissionRelationship] | None = ...,
+        directory_ids: _abc.Iterable[_builtins.str] | None = ...,
+        tag_ids: _abc.Iterable[_builtins.str] | None = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["updated_at", b"updated_at"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "content", b"content", "id", b"id", "permissions", b"permissions", "title", b"title", "updated_at", b"updated_at"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "content", b"content", "directory_ids", b"directory_ids", "id", b"id", "permissions", b"permissions", "tag_ids", b"tag_ids", "title", b"title", "updated_at", b"updated_at"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -283,19 +381,23 @@ class PostNoteRequest(_message.Message):
     TITLE_FIELD_NUMBER: _builtins.int
     CONTENT_FIELD_NUMBER: _builtins.int
     AUTHOR_ID_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     title: _builtins.str
     content: _builtins.str
     author_id: _builtins.str
+    user_id: _builtins.str
+    """the id of the user making the request - used for permission checking"""
     def __init__(
         self,
         *,
         title: _builtins.str = ...,
         content: _builtins.str | None = ...,
         author_id: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["_content", b"_content", "content", b"content"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_content", b"_content", "author_id", b"author_id", "content", b"content", "title", b"title"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_content", b"_content", "author_id", b"author_id", "content", b"content", "title", b"title", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType__content: _TypeAlias = _typing.Literal["content"]  # noqa: Y015
     _WhichOneofArgType__content: _TypeAlias = _typing.Literal["_content", b"_content"]  # noqa: Y015
@@ -310,18 +412,19 @@ class DeleteNoteRequest(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
     ID_FIELD_NUMBER: _builtins.int
-    AUTHOR_ID_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     id: _builtins.str
-    author_id: _builtins.str
+    user_id: _builtins.str
+    """the id of the user making the request - used for permission checking"""
     def __init__(
         self,
         *,
         id: _builtins.str = ...,
-        author_id: _builtins.str = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "id", b"id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -329,16 +432,27 @@ Global___DeleteNoteRequest: _TypeAlias = DeleteNoteRequest  # noqa: Y015
 
 @_typing.final
 class AlterNoteRequest(_message.Message):
+    """Request to alter a note. Any omitted fields will be left unchanged, and any repeated fields will be replaced with the new values."""
+
     DESCRIPTOR: _descriptor.Descriptor
 
     ID_FIELD_NUMBER: _builtins.int
     TITLE_FIELD_NUMBER: _builtins.int
     CONTENT_FIELD_NUMBER: _builtins.int
     AUTHOR_ID_FIELD_NUMBER: _builtins.int
+    DIRECTORY_IDS_FIELD_NUMBER: _builtins.int
+    TAG_IDS_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     title: _builtins.str
     content: _builtins.str
     author_id: _builtins.str
+    user_id: _builtins.str
+    """the user_id of the user making the request, used for permission checking"""
+    @_builtins.property
+    def directory_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def tag_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     def __init__(
         self,
         *,
@@ -346,10 +460,13 @@ class AlterNoteRequest(_message.Message):
         title: _builtins.str | None = ...,
         content: _builtins.str | None = ...,
         author_id: _builtins.str | None = ...,
+        directory_ids: _abc.Iterable[_builtins.str] | None = ...,
+        tag_ids: _abc.Iterable[_builtins.str] | None = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "title", b"title"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "id", b"id", "title", b"title"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "directory_ids", b"directory_ids", "id", b"id", "tag_ids", b"tag_ids", "title", b"title", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType__author_id: _TypeAlias = _typing.Literal["author_id"]  # noqa: Y015
     _WhichOneofArgType__author_id: _TypeAlias = _typing.Literal["_author_id", b"_author_id"]  # noqa: Y015
@@ -371,38 +488,45 @@ class Directory(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
     ID_FIELD_NUMBER: _builtins.int
-    NAME_FIELD_NUMBER: _builtins.int
+    SLUG_FIELD_NUMBER: _builtins.int
     DISPLAY_NAME_FIELD_NUMBER: _builtins.int
     DESCRIPTION_FIELD_NUMBER: _builtins.int
     IMAGE_URL_FIELD_NUMBER: _builtins.int
-    PARENT_ID_FIELD_NUMBER: _builtins.int
+    PARENT_DIR_IDS_FIELD_NUMBER: _builtins.int
     RELATIONSHIPS_FIELD_NUMBER: _builtins.int
+    CHILD_DIR_IDS_FIELD_NUMBER: _builtins.int
+    CHILD_NOTE_IDS_FIELD_NUMBER: _builtins.int
     id: _builtins.str
-    name: _builtins.str
+    slug: _builtins.str
     display_name: _builtins.str
     description: _builtins.str
     image_url: _builtins.str
-    parent_id: _builtins.str
+    @_builtins.property
+    def parent_dir_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     @_builtins.property
     def relationships(self) -> _containers.RepeatedCompositeFieldContainer[Global___PermissionRelationship]: ...
+    @_builtins.property
+    def child_dir_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def child_note_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     def __init__(
         self,
         *,
         id: _builtins.str = ...,
-        name: _builtins.str = ...,
+        slug: _builtins.str = ...,
         display_name: _builtins.str = ...,
         description: _builtins.str = ...,
         image_url: _builtins.str = ...,
-        parent_id: _builtins.str | None = ...,
+        parent_dir_ids: _abc.Iterable[_builtins.str] | None = ...,
         relationships: _abc.Iterable[Global___PermissionRelationship] | None = ...,
+        child_dir_ids: _abc.Iterable[_builtins.str] | None = ...,
+        child_note_ids: _abc.Iterable[_builtins.str] | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id", "parent_id", b"parent_id"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "relationships", b"relationships"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["child_dir_ids", b"child_dir_ids", "child_note_ids", b"child_note_ids", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "parent_dir_ids", b"parent_dir_ids", "relationships", b"relationships", "slug", b"slug"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    _WhichOneofReturnType__parent_id: _TypeAlias = _typing.Literal["parent_id"]  # noqa: Y015
-    _WhichOneofArgType__parent_id: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id"]  # noqa: Y015
-    def WhichOneof(self, oneof_group: _WhichOneofArgType__parent_id) -> _WhichOneofReturnType__parent_id | None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___Directory: _TypeAlias = Directory  # noqa: Y015
 
@@ -412,17 +536,26 @@ class GetDirectoryRequest(_message.Message):
 
     ID_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
+    INCLUDE_PARENTS_FIELD_NUMBER: _builtins.int
+    INCLUDE_CHILD_DIRS_FIELD_NUMBER: _builtins.int
+    INCLUDE_CHILD_NOTES_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     user_id: _builtins.str
+    include_parents: _builtins.bool
+    include_child_dirs: _builtins.bool
+    include_child_notes: _builtins.bool
     def __init__(
         self,
         *,
         id: _builtins.str = ...,
         user_id: _builtins.str = ...,
+        include_parents: _builtins.bool = ...,
+        include_child_dirs: _builtins.bool = ...,
+        include_child_notes: _builtins.bool = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "include_child_dirs", b"include_child_dirs", "include_child_notes", b"include_child_notes", "include_parents", b"include_parents", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -430,16 +563,25 @@ Global___GetDirectoryRequest: _TypeAlias = GetDirectoryRequest  # noqa: Y015
 
 @_typing.final
 class GetDirectoriesRequest(_message.Message):
+    """list all directory contents of a given directory <parent_id>"""
+
     DESCRIPTOR: _descriptor.Descriptor
 
     USER_ID_FIELD_NUMBER: _builtins.int
     PARENT_ID_FIELD_NUMBER: _builtins.int
     LIMIT_FIELD_NUMBER: _builtins.int
     OFFSET_FIELD_NUMBER: _builtins.int
+    INCLUDE_PARENTS_FIELD_NUMBER: _builtins.int
+    INCLUDE_CHILD_DIRS_FIELD_NUMBER: _builtins.int
+    INCLUDE_CHILD_NOTES_FIELD_NUMBER: _builtins.int
     user_id: _builtins.str
+    """the requesting user's id, used for permission checking"""
     parent_id: _builtins.str
     limit: _builtins.int
     offset: _builtins.int
+    include_parents: _builtins.bool
+    include_child_dirs: _builtins.bool
+    include_child_notes: _builtins.bool
     def __init__(
         self,
         *,
@@ -447,10 +589,13 @@ class GetDirectoriesRequest(_message.Message):
         parent_id: _builtins.str | None = ...,
         limit: _builtins.int | None = ...,
         offset: _builtins.int | None = ...,
+        include_parents: _builtins.bool = ...,
+        include_child_dirs: _builtins.bool = ...,
+        include_child_notes: _builtins.bool = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "include_child_dirs", b"include_child_dirs", "include_child_notes", b"include_child_notes", "include_parents", b"include_parents", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType__limit: _TypeAlias = _typing.Literal["limit"]  # noqa: Y015
     _WhichOneofArgType__limit: _TypeAlias = _typing.Literal["_limit", b"_limit"]  # noqa: Y015
@@ -475,14 +620,18 @@ class CreateDirectoryRequest(_message.Message):
     DISPLAY_NAME_FIELD_NUMBER: _builtins.int
     DESCRIPTION_FIELD_NUMBER: _builtins.int
     IMAGE_URL_FIELD_NUMBER: _builtins.int
-    PARENT_ID_FIELD_NUMBER: _builtins.int
+    PARENT_IDS_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
     name: _builtins.str
     display_name: _builtins.str
     description: _builtins.str
     image_url: _builtins.str
-    parent_id: _builtins.str
     user_id: _builtins.str
+    """the user_id of the user making the request, used for permission checking
+    its also the author of the directory
+    """
+    @_builtins.property
+    def parent_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     def __init__(
         self,
         *,
@@ -490,12 +639,12 @@ class CreateDirectoryRequest(_message.Message):
         display_name: _builtins.str | None = ...,
         description: _builtins.str | None = ...,
         image_url: _builtins.str | None = ...,
-        parent_id: _builtins.str | None = ...,
+        parent_ids: _abc.Iterable[_builtins.str] | None = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "parent_id", b"parent_id"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "description", b"description", "display_name", b"display_name", "image_url", b"image_url"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_ids", b"parent_ids", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType__description: _TypeAlias = _typing.Literal["description"]  # noqa: Y015
     _WhichOneofArgType__description: _TypeAlias = _typing.Literal["_description", b"_description"]  # noqa: Y015
@@ -503,21 +652,21 @@ class CreateDirectoryRequest(_message.Message):
     _WhichOneofArgType__display_name: _TypeAlias = _typing.Literal["_display_name", b"_display_name"]  # noqa: Y015
     _WhichOneofReturnType__image_url: _TypeAlias = _typing.Literal["image_url"]  # noqa: Y015
     _WhichOneofArgType__image_url: _TypeAlias = _typing.Literal["_image_url", b"_image_url"]  # noqa: Y015
-    _WhichOneofReturnType__parent_id: _TypeAlias = _typing.Literal["parent_id"]  # noqa: Y015
-    _WhichOneofArgType__parent_id: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id"]  # noqa: Y015
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__description) -> _WhichOneofReturnType__description | None: ...
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__display_name) -> _WhichOneofReturnType__display_name | None: ...
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__image_url) -> _WhichOneofReturnType__image_url | None: ...
-    @_typing.overload
-    def WhichOneof(self, oneof_group: _WhichOneofArgType__parent_id) -> _WhichOneofReturnType__parent_id | None: ...
 
 Global___CreateDirectoryRequest: _TypeAlias = CreateDirectoryRequest  # noqa: Y015
 
 @_typing.final
 class AlterDirectoryRequest(_message.Message):
+    """any ommited fields will be left unchanged 
+    and any repeated fields will be replaced with the new values.
+    """
+
     DESCRIPTOR: _descriptor.Descriptor
 
     ID_FIELD_NUMBER: _builtins.int
@@ -525,15 +674,16 @@ class AlterDirectoryRequest(_message.Message):
     DISPLAY_NAME_FIELD_NUMBER: _builtins.int
     DESCRIPTION_FIELD_NUMBER: _builtins.int
     IMAGE_URL_FIELD_NUMBER: _builtins.int
-    PARENT_ID_FIELD_NUMBER: _builtins.int
+    PARENT_IDS_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     name: _builtins.str
     display_name: _builtins.str
     description: _builtins.str
     image_url: _builtins.str
-    parent_id: _builtins.str
     user_id: _builtins.str
+    @_builtins.property
+    def parent_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     def __init__(
         self,
         *,
@@ -542,12 +692,12 @@ class AlterDirectoryRequest(_message.Message):
         display_name: _builtins.str | None = ...,
         description: _builtins.str | None = ...,
         image_url: _builtins.str | None = ...,
-        parent_id: _builtins.str | None = ...,
+        parent_ids: _abc.Iterable[_builtins.str] | None = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "_parent_id", b"_parent_id", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_id", b"parent_id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_ids", b"parent_ids", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType__description: _TypeAlias = _typing.Literal["description"]  # noqa: Y015
     _WhichOneofArgType__description: _TypeAlias = _typing.Literal["_description", b"_description"]  # noqa: Y015
@@ -557,8 +707,6 @@ class AlterDirectoryRequest(_message.Message):
     _WhichOneofArgType__image_url: _TypeAlias = _typing.Literal["_image_url", b"_image_url"]  # noqa: Y015
     _WhichOneofReturnType__name: _TypeAlias = _typing.Literal["name"]  # noqa: Y015
     _WhichOneofArgType__name: _TypeAlias = _typing.Literal["_name", b"_name"]  # noqa: Y015
-    _WhichOneofReturnType__parent_id: _TypeAlias = _typing.Literal["parent_id"]  # noqa: Y015
-    _WhichOneofArgType__parent_id: _TypeAlias = _typing.Literal["_parent_id", b"_parent_id"]  # noqa: Y015
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__description) -> _WhichOneofReturnType__description | None: ...
     @_typing.overload
@@ -567,8 +715,6 @@ class AlterDirectoryRequest(_message.Message):
     def WhichOneof(self, oneof_group: _WhichOneofArgType__image_url) -> _WhichOneofReturnType__image_url | None: ...
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__name) -> _WhichOneofReturnType__name | None: ...
-    @_typing.overload
-    def WhichOneof(self, oneof_group: _WhichOneofArgType__parent_id) -> _WhichOneofReturnType__parent_id | None: ...
 
 Global___AlterDirectoryRequest: _TypeAlias = AlterDirectoryRequest  # noqa: Y015
 
