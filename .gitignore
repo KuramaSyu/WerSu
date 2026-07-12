@@ -183,3 +183,4 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 README.pdf
+src/.claude/memory/repo.md
