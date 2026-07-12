@@ -8,7 +8,7 @@ from functools import wraps
 import inspect
 
 from asyncpg import Record
-from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest, ImportBulkRelationshipsRequest, LookupResourcesRequest
+from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest, ImportBulkRelationshipsRequest, LookupResourcesRequest, LookupSubjectsRequest
 import grpc
 from src.api.permission_repo import PermissionRepoABC
 from src.api.service_unavailable_error import ServiceUnavailableError
@@ -139,7 +139,7 @@ def handle_error(func):
     return _sync_wrapper
 
 
-class NotePermissionRepoSpicedb(PermissionRepoABC):
+class SpicedbPermissionRepo(PermissionRepoABC):
     converter = SpicedbPermissionConverter()
     _default_permission_candidates_by_object_type = {
         "note": ["view", "write", "delete"],
@@ -288,13 +288,39 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         return response.permissionship == CheckPermissionResponse.PERMISSIONSHIP_HAS_PERMISSION
 
     @handle_error
-    async def lookup_resources(self, relationship: Relationship) -> List[ObjectRef]:
+    async def lookup(self, relationship: Relationship) -> List[str]:
+        """Dispatch to the matching lookup and return just the ids.
+
+        Exactly one of ``relationship.resource.object_id`` and
+        ``relationship.subject.object_id`` must be
+        :obj:`~src.api.undefined.UNDEFINED`; the other side must be a
+        concrete id.  Anything else raises :exc:`ValueError`.
+        """
+        resource_id_undefined = is_undefined(relationship.resource.object_id)
+        subject_id_undefined = is_undefined(relationship.subject.object_id)
+        if resource_id_undefined == subject_id_undefined:
+            raise ValueError(
+                "lookup() requires exactly one of "
+                "relationship.resource.object_id / "
+                "relationship.subject.object_id to be UNDEFINED"
+            )
+
+        if resource_id_undefined:
+            refs = await self._lookup_resources(relationship)
+            return [str(ref.object_id) for ref in refs]
+        refs = await self._lookup_subjects(relationship)
+        return [str(ref.object_id) for ref in refs]
+
+    async def _lookup_resources(self, relationship: Relationship) -> List[ObjectRef]:
+        """SpiceDB ``LookupResources`` adapter.
+
+        ``relationship.resource.object_id`` must be
+        :obj:`~src.api.undefined.UNDEFINED`; the rest of the triple
+        narrows the result set.
+        """
         relation = unwrap_undefined(relationship.relation)
         resource_type = unwrap_undefined(relationship.resource.object_type)
 
-        
-        # LookupResources gets all resources of a given type for a given subject, e.g.
-        # user with a given permission
         consistency = self._consistency() or Consistency(fully_consistent=True)
         result = self.client.LookupResources(
             LookupResourcesRequest(
@@ -302,7 +328,7 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
                 permission=relation,
                 subject=self.converter.convert_subject_ref(relationship.subject),
                 consistency=consistency,
-            )   
+            )
         )
         objects: List[ObjectRef] = []
         async for resp in result:
@@ -310,6 +336,39 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
                 ObjectRef(
                     object_type=ObjectTypeEnum(str(relationship.resource.object_type)),
                     object_id=resp.resource_object_id
+                )
+            )
+        return objects
+
+    async def _lookup_subjects(self, relationship: Relationship) -> List[ObjectRef]:
+        """SpiceDB ``LookupSubjects`` adapter.
+
+        ``relationship.subject.object_id`` must be
+        :obj:`~src.api.undefined.UNDEFINED`; the resource side and
+        ``relation`` narrow the result set.
+        """
+        relation = unwrap_undefined(relationship.relation)
+        if is_undefined(relationship.resource.object_id):
+            raise ValueError(
+                "_lookup_subjects() requires a concrete "
+                "relationship.resource.object_id"
+            )
+
+        consistency = self._consistency() or Consistency(fully_consistent=True)
+        result = self.client.LookupSubjects(
+            LookupSubjectsRequest(
+                resource=self.converter.convert_object_ref(relationship.resource),
+                permission=relation,
+                subject_object_type=unwrap_undefined(relationship.subject.object_type),
+                consistency=consistency,
+            )
+        )
+        objects: List[ObjectRef] = []
+        async for resp in result:
+            objects.append(
+                ObjectRef(
+                    object_type=ObjectTypeEnum(str(relationship.subject.object_type)),
+                    object_id=resp.subject.object.object_id,
                 )
             )
         return objects
@@ -390,8 +449,11 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
                 object_id=user_id
             )
         )
-        matched = await self.lookup_resources(relationship)
-        return matched
+        ids = await self.lookup(relationship)
+        return [
+            ObjectRef(object_type=ObjectTypeEnum.NOTE, object_id=note_id)
+            for note_id in ids
+        ]
 
 
     @handle_error
@@ -509,7 +571,7 @@ class NotePermissionRepoSpicedb(PermissionRepoABC):
         if self._consistent:
             consistency_kwargs["consistency"] = Consistency(fully_consistent=True)
 
-        # 1. Walk ``directory#parent@directory`` to collect every
+        # 1. Walk directory#parent@directory to collect every
         #    reachable directory id (root included).
         sub_directory_ids: set[str] = {root}
         queue: list[tuple[str, int]] = [(root, 0)]
@@ -751,10 +813,33 @@ class NotePermissionRepoInMemory(PermissionRepoABC):
 
         return list(matched.values())
 
-    async def lookup_resources(self, relationship: Relationship) -> List[ObjectRef]:
+    async def lookup(self, relationship: Relationship) -> List[str]:
+        """Dispatch to the matching lookup and return just the ids.
+
+        Exactly one of ``relationship.resource.object_id`` and
+        ``relationship.subject.object_id`` must be
+        :obj:`~src.api.undefined.UNDEFINED`; the other side must be
+        a concrete id.  Anything else raises :exc:`ValueError`.
+        """
+        resource_id_undefined = is_undefined(relationship.resource.object_id)
+        subject_id_undefined = is_undefined(relationship.subject.object_id)
+        if resource_id_undefined == subject_id_undefined:
+            raise ValueError(
+                "lookup() requires exactly one of "
+                "relationship.resource.object_id / "
+                "relationship.subject.object_id to be UNDEFINED"
+            )
+
+        if resource_id_undefined:
+            refs = await self._lookup_resources(relationship)
+            return [str(ref.object_id) for ref in refs]
+        refs = await self._lookup_subjects(relationship)
+        return [str(ref.object_id) for ref in refs]
+
+    async def _lookup_resources(self, relationship: Relationship) -> List[ObjectRef]:
         """Return every resource for ``relationship`` matching the user subject.
 
-        Mirror of :meth:`NotePermissionRepoSpicedb.lookup_resources`
+        Mirror of :meth:`NotePermissionRepoSpicedb._lookup_resources`
         for the in-memory test double.  Filters stored relations by
         resource type, subject type+id, and relation (when supplied);
         then expands the relation to effective permissions via
@@ -787,6 +872,45 @@ class NotePermissionRepoInMemory(PermissionRepoABC):
             matched[resource_id] = ObjectRef(
                 object_type=resource_type,
                 object_id=resource_id,
+            )
+        return list(matched.values())
+
+    async def _lookup_subjects(self, relationship: Relationship) -> List[ObjectRef]:
+        """Return every subject id holding ``relation`` on ``relationship.resource``.
+
+        Mirror of :meth:`NotePermissionRepoSpicedb._lookup_subjects`
+        for the in-memory test double.  Filters stored relations by
+        resource type+id, subject type, and relation (when
+        supplied); then expands the relation to effective permissions
+        via :attr:`_relation_implied_permissions` so callers asking
+        for ``view`` match stored ``owner`` / ``writer`` / ``reader``
+        entries.
+        """
+        resource_type = relationship.resource.object_type
+        resource_id = relationship.resource.object_id
+        subject_type = relationship.subject.object_type
+        requested_relation = relationship.relation
+
+        matched: dict[str, ObjectRef] = {}
+        implied_map = self._relation_implied_permissions.get(resource_type, {})
+
+        for stored in self._store:
+            if stored.resource.object_type != resource_type:
+                continue
+            if resource_id is not UNDEFINED and stored.resource.object_id != resource_id:
+                continue
+            if stored.subject.object_type != subject_type:
+                continue
+            if requested_relation is not UNDEFINED:
+                implied = implied_map.get(stored.relation, {stored.relation})
+                if str(requested_relation) not in implied:
+                    continue
+            subject_id = stored.subject.object_id
+            if not isinstance(subject_id, str):
+                continue
+            matched[subject_id] = ObjectRef(
+                object_type=subject_type,
+                object_id=subject_id,
             )
         return list(matched.values())
 
