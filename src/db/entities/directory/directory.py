@@ -25,13 +25,13 @@ class DirectoryEntity(AcceptsVisitor):
             fetch the note and overlay the parsed `image_url` and
             `description` onto the result.
         parent_directory_ids: every directory this one is parented
-            under.  Sourced from `note.directory_hierarchy`; empty
-            when the directory is a root.
+            under.  Sourced from `note.directory_subdirectory`;
+            empty when the directory is a root.
         child_directory_ids: direct child directories contained in
             this directory.  Sourced from
-            `note.directory_hierarchy`; empty when none.
+            `note.directory_subdirectory`; empty when none.
         child_note_ids: direct child notes contained in this
-            directory.  Sourced from `note.directory_hierarchy`;
+            directory.  Sourced from `note.directory_note`;
             empty when none.  To get the direct child directory
             / note counts, callers derive them as
             `len(child_directory_ids)` /

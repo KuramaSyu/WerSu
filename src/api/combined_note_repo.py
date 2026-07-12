@@ -1,29 +1,3 @@
-"""Storage contract for note reads that JOIN side tables.
-
-The :class:`CombinedNoteRepo` owns every SQL statement against
-``note.content`` *combined* with at least one side table
-(``note.directory_hierarchy`` or ``note.note_tag`).  Multi-table
-reads are deliberately pulled out of the facade so the SQL stays
-in one place and so the per-option SQL count stays bounded (one
-dedicated query per combination of include flags -- no
-string-built statements).
-
-Implementations:
-* :class:`src.db.repos.note.combined.CombinedNotePostgresRepo`
-
-Why a dedicated repo (vs. `NoteContentRepo`)?
------------------------------------------
-``note.content`` SELECT does not need ``note.directory_hierarchy``
-or ``note.note_tag`` when the caller only wants the row.  Putting
-the joins on `NoteContentRepo` would force every reader (search
-strategies, tests, etc.) to think about tags and parents even when
-they don't ask for them.  Keeping the joins in a sibling repo lets
-the cheap read stay cheap.
-
-Note:
-    Permission lookups stay on ``PermissionRepoABC``.  This repo
-    handles only the storage-side joins.
-"""
 
 from __future__ import annotations
 

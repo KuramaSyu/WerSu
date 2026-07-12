@@ -51,8 +51,8 @@ class NoteIncludeOptions(TypedDict, total=False):
     field:
 
     * `include_directory_ids` -- populates `note.directory_ids` from
-      ``note.directory_hierarchy`` (``child_directory_id IS NULL AND
-      note_id = $1``).  Cheap: a single index lookup.
+      ``note.directory_note`` (``note_id = $1``).  Cheap: a
+      single index lookup.
     * `include_tag_ids` -- populates `note.tag_ids` from
       ``note.note_tag JOIN note.tag``.  Cheap: covers the
       ``(note_id, tag_id)`` primary key.
@@ -163,7 +163,7 @@ class NoteResponse(AcceptsVisitor):
     """
 
     note: Optional[NoteEntity] = None
-    id_token_map: dict[str, str] = field(default_factory=dict)
+    id_token_map: dict[str, str] = field(default_factory=dict)  # type: ignore
 
     def visit(self, visitor: EntityVisitor) -> Any:
         """Dispatch this response to ``visitor.visit_note_response``"""
@@ -335,22 +335,6 @@ class NoteServiceABC(ABC):
             :class:`GetNotesOptions`.
         """
 
-
-def _normalise_get_notes_options(options: Optional[GetNotesOptions]) -> GetNotesOptions:
-    """Resolve `options` (or `None`) into a full options dict.
-    """
-    if options is None:
-        options = GetNotesOptions()
-    if not isinstance(options, dict):
-        raise TypeError(
-            f"options must be a GetNotesOptions mapping, got {type(options).__name__}"
-        )
-    include_content = options.get("include_content", True)
-    strip_content_at = options.get("strip_content_at", _DEFAULT_STRIP_CONTENT_AT)
-    return GetNotesOptions(
-        include_content=bool(include_content),
-        strip_content_at=int(strip_content_at),
-    )
 
 
 __all__ = [

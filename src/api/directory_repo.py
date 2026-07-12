@@ -1,37 +1,3 @@
-"""Storage contract for the Postgres-only directory repository.
-
-The :class:`PostgresDirectoryRepoABC` is the low-level counterpart of
-:class:`~src.api.directory_repo.DirectoryFacade`: it owns every SQL
-statement against ``note.directory``, ``note.directory_hierarchy``
-and ``note.directory_tag`` without consulting SpiceDB.
-
-Implementations:
-
-* :class:`src.db.repos.directory.postgres.PostgresDirectoryRepo`
-  -- Postgres + asyncpg, used by production.
-* in-memory fakes in :mod:`tests._fixtures_pkg.fakes` for unit
-  tests that don't need a real database.
-
-Contract rules
---------------
-* Returns are always a domain entity (e.g.
-  :class:`~src.db.entities.directory.directory.DirectoryEntity`) --
-  never a raw :class:`asyncpg.Record`.  Callers must not have to
-  know which driver produced the row.
-* Update methods honour the
-  :class:`~src.api.undefined` sentinel semantics:
-
-  - ``UNDEFINED`` means "do not touch the column";
-  - ``None`` (only valid on ``UndefinedNoneOr`` fields) means
-    "set the column to SQL NULL".
-
-Field-shape notes
------------------
-The directory row carries ``slug`` (renamed from ``name``).  Parent
-relationships are expressed exclusively through the
-``note.directory_hierarchy`` table; a directory may have many
-parents, so consumers always read them as a list.
-"""
 
 from __future__ import annotations
 

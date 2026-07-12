@@ -1,14 +1,3 @@
-"""Abstract application service for directory reads and writes.
-
-The :class:`DirectoryServiceABC` is the contract every directory
-service implementation must satisfy.  It sits between the gRPC
-adapter and the lower-level repositories
-(:class:`~src.db.repos.directory.directory.DirectoryRepo` and
-:class:`~src.db.repos.note.note.NoteFacade`), and centralises
-permission checks via the permission chain in
-:mod:`src.domain.permission_chain`.
-"""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -31,14 +20,15 @@ class DirectoryIncludeOptions(TypedDict, total=False):
     field:
 
     * `include_parents` -- populates `directory.parent_directory_ids`
-      via ``note.directory_hierarchy`` (every row where
+      via ``note.directory_subdirectory`` (every row where
       ``child_directory_id = directory.id``).
     * `include_child_dirs` -- populates
-      `directory.child_directory_ids` via the same table
-      (``directory_id = directory.id AND child_directory_id IS NOT NULL``).
+      `directory.child_directory_ids` via
+      ``note.directory_subdirectory``
+      (``directory_id = directory.id``).
     * `include_child_notes` -- populates
-      `directory.child_note_ids` via the same table
-      (``directory_id = directory.id AND note_id IS NOT NULL``).
+      `directory.child_note_ids` via ``note.directory_note``
+      (``directory_id = directory.id``).
 
     Note:
         The cheaper "row only" read is what happens with an empty
