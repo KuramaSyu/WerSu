@@ -68,12 +68,12 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         directory_table: TableABC,
         subdirectory_table: TableABC,
         directory_note_table: TableABC,
-        tags_table: TableABC,
+        directory_tags_table: TableABC,
     ) -> None:
         self._directory_table = directory_table
         self._subdirectory_table = subdirectory_table
         self._directory_note_table = directory_note_table
-        self._tags_table = tags_table
+        self._tags_table = directory_tags_table
 
     @property
     def directory_table(self) -> TableABC:
