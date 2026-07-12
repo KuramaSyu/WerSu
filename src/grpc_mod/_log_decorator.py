@@ -12,85 +12,135 @@ import functools
 import inspect
 import logging
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any, ParamSpec, TypeVar, overload
 
 
-def _log_service_call_factory(logger_name: str = "src.services", measure_time: bool = True):
-    """Decorator factory for logging service method entry/exit and timing.
+P = ParamSpec("P")
+R = TypeVar("R")
+T = TypeVar("T")
 
-    Logs at INFO level for entry/exit summary, DEBUG level for detailed args/timing.
-    Handles both async coroutine methods and async generator methods (streaming).
-    The decorator will prefer a `self.log` logger on the instance if present;
-    otherwise it will use `logging.getLogger(logger_name)`.
+
+class _LogServiceCall:
+    """Decorator returned by `log_service_call` with the configured logger + timing.
+
+    The `__call__` overloads preserve the wrapped function's `ParamSpec`
+    and return type so call sites keep their original signature for
+    both coroutine methods (`Awaitable[R]`) and async generator
+    methods (`AsyncIterator[T]`).
     """
 
-    def decorator(func):
+    __slots__ = ("_logger_name", "_measure_time")
+
+    def __init__(self, logger_name: str, measure_time: bool) -> None:
+        self._logger_name = logger_name
+        self._measure_time = measure_time
+
+    @overload
+    def __call__(
+        self, func: Callable[P, Awaitable[R]]
+    ) -> Callable[P, Awaitable[R]]: ...
+    @overload
+    def __call__(
+        self, func: Callable[P, AsyncIterator[T]]
+    ) -> Callable[P, AsyncIterator[T]]: ...
+    def __call__(self, func: Callable[..., Any]) -> Callable[..., Any]:
+        """Wrap `func` with entry/exit logging, optional timing, and exception capture.
+
+        Logs at INFO level for entry/exit summary, DEBUG level for detailed args/timing.
+        Handles both async coroutine methods and async generator methods (streaming).
+        The wrapper will prefer a `self.log` logger on the instance if present;
+        otherwise it will use `logging.getLogger(logger_name)`.
+        """
+        logger_name = self._logger_name
+        measure_time = self._measure_time
         is_generator = inspect.isasyncgenfunction(func)
 
         if is_generator:
             @functools.wraps(func)
-            async def generator_wrapper(*args, **kwargs):
-                self = args[0] if args else None
-                logger = getattr(self, "log", None) or logging.getLogger(logger_name)
-                class_name = self.__class__.__name__ if self else ""
+            async def generator_wrapper(
+                *args: Any, **kwargs: Any
+            ) -> AsyncIterator[Any]:
+                self_obj: Any = args[0] if args else None
+                logger: logging.Logger = (
+                    getattr(self_obj, "log", None)
+                    or getattr(self_obj, "_log", None)
+                    or logging.getLogger(logger_name)
+                )
 
-                logger.info("Calling %s.%s", class_name, func.__name__)
+                logger.debug("Calling %s", func.__name__)
                 try:
-                    logger.debug("  args=%s kwargs=%s", args[1:] if self else args, kwargs)
+                    logger.debug(
+                        "  args=%s kwargs=%s",
+                        args[1:] if self_obj else args,
+                        kwargs,
+                    )
                 except Exception:
                     pass
 
-                start = time.perf_counter() if measure_time else None
+                start: float | None = time.perf_counter() if measure_time else None
                 try:
                     async for item in func(*args, **kwargs):
                         yield item
                 except Exception:
                     try:
-                        logger.exception("Exception in %s.%s", class_name, func.__name__)
+                        logger.exception("Exception in %s", func.__name__)
                     except Exception:
                         pass
                     raise
-                finally:
+                else:
                     if measure_time and start is not None:
-                        elapsed = time.perf_counter() - start
-                        logger.info("Completed %s.%s in %.3fs", class_name, func.__name__, elapsed)
+                        elapsed: float = time.perf_counter() - start
+                        logger.info(f"[{elapsed*1000:.0f}ms] {func.__name__}")
 
             return generator_wrapper
-        else:
-            @functools.wraps(func)
-            async def coroutine_wrapper(*args, **kwargs):
-                self = args[0] if args else None
-                logger = getattr(self, "log", None) or logging.getLogger(logger_name)
-                class_name = self.__class__.__name__ if self else ""
 
-                logger.info("Calling %s.%s", class_name, func.__name__)
+        @functools.wraps(func)
+        async def coroutine_wrapper(*args: Any, **kwargs: Any) -> Any:
+            self_obj: Any = args[0] if args else None
+            logger: logging.Logger = (
+                getattr(self_obj, "log", None)
+                or getattr(self_obj, "_log", None)
+                or logging.getLogger(logger_name)
+            )
+
+            logger.debug("Calling %s", func.__name__)
+            try:
+                logger.debug(
+                    "  args=%s kwargs=%s",
+                    args[1:] if self_obj else args,
+                    kwargs,
+                )
+            except Exception:
+                pass
+
+            start: float | None = time.perf_counter() if measure_time else None
+            try:
+                result = await func(*args, **kwargs)
+                return result
+            except Exception:
                 try:
-                    logger.debug("  args=%s kwargs=%s", args[1:] if self else args, kwargs)
+                    logger.exception("Exception in %s", func.__name__)
                 except Exception:
                     pass
+                raise
+            finally:
+                if measure_time and start is not None:
+                    elapsed: float = time.perf_counter() - start
+                    logger.info(f"[{elapsed*1000:.0f}ms] {func.__name__}")
 
-                start = time.perf_counter() if measure_time else None
-                try:
-                    result = await func(*args, **kwargs)
-                    return result
-                except Exception:
-                    try:
-                        logger.exception("Exception in %s.%s", class_name, func.__name__)
-                    except Exception:
-                        pass
-                    raise
-                finally:
-                    if measure_time and start is not None:
-                        elapsed = time.perf_counter() - start
-                        logger.info("Completed %s.%s in %.3fs", class_name, func.__name__, elapsed)
-
-            return coroutine_wrapper
-
-    return decorator
+        return coroutine_wrapper
 
 
-def log_service_call(logger_name: str = "src.services", measure_time: bool = True):
+def log_service_call(
+    logger_name: str = "src.services",
+    measure_time: bool = True,
+) -> _LogServiceCall:
     """Convenience factory used as `@log_service_call()` or `@log_service_call("my.logger")`.
 
-    Returns the actual decorator produced by `_log_service_call_factory`.
+    Returns a decorator that wraps an async coroutine or async generator
+    service method with entry/exit logging, optional timing, and
+    exception capture. See :class:`_LogServiceCall` for the typing
+    contract.
     """
-    return _log_service_call_factory(logger_name=logger_name, measure_time=measure_time)
+    return _LogServiceCall(logger_name=logger_name, measure_time=measure_time)
