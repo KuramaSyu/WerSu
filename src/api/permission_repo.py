@@ -9,6 +9,7 @@ new implementation of this ABC.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List
+from warnings import deprecated
 
 from src.api.relationship import ObjectRef, Relationship
 from src.api.user_context import UserContextABC
@@ -18,8 +19,8 @@ class PermissionRepoABC(ABC):
     """Persistence contract for permissions and direct relationships.
 
     Implementations:
-    * :class:`src.db.repos.permissions.permission.NotePermissionRepoSpicedb`
-    * :class:`src.db.repos.permissions.permission.NotePermissionRepoInMemory`
+    * :class:`src.db.repos.permissions.spicedb_repo.SpicedbPermissionRepo`
+    * :class:`tests.stubs.in_memory_permission_repo.InMemoryPermissionRepo`
     """
 
     @abstractmethod
@@ -61,13 +62,32 @@ class PermissionRepoABC(ABC):
         ...
 
     @abstractmethod
-    async def lookup_resources(self, relationship: Relationship) -> List[ObjectRef]:
-        """Return every resource for a given subject, permission and resource type.
-        e.g. return all note ids for a given user with permission view.
+    async def lookup(self, relationship: Relationship) -> List[str]:
+        """Return ids of every resource or subject matching ``relationship``.
+
+        Exactly one of ``relationship.resource.object_id`` and
+        ``relationship.subject.object_id`` must be
+        :obj:`~src.api.undefined.UNDEFINED`; the other id must be
+        concrete.  When ``resource.object_id`` is :obj:`~src.api.undefined.UNDEFINED`
+        every resource id of the matching type and permission is
+        returned; when ``subject.object_id`` is :obj:`~src.api.undefined.UNDEFINED`
+        every subject id of the matching type is returned.
 
         Args:
-            relationship: filter describing the relationships to lookup. 
-                resource id should be UNDEFINED as wildcard
+            relationship: filter describing the relationships to
+                resolve.  ``resource.object_type``, ``relation``, and
+                ``subject.object_type`` must all be set; exactly one
+                of ``resource.object_id`` / ``subject.object_id`` must
+                be :obj:`~src.api.undefined.UNDEFINED`.
+
+        Returns:
+            List[str]: the matching ids (resource or subject,
+            depending on which side was :obj:`~src.api.undefined.UNDEFINED`).
+
+        Raises:
+            ValueError: zero or both id slots are
+                :obj:`~src.api.undefined.UNDEFINED`, or any other
+                required field is :obj:`~src.api.undefined.UNDEFINED`.
         """
         ...
 
@@ -85,23 +105,6 @@ class PermissionRepoABC(ABC):
 
         Returns:
             List[Relationship]: the matching stored relationships.
-        """
-        ...
-
-    @abstractmethod
-    async def lookup_notes(
-        self,
-        user: UserContextABC,
-        permission: str,
-    ) -> List[ObjectRef]:
-        """Return every note where ``user`` has ``permission``.
-
-        Args:
-            user: caller whose permissions should be evaluated.
-            permission: permission name to look up (e.g. ``"view"``).
-
-        Returns:
-            List[ObjectRef]: the matching notes.
         """
         ...
 
@@ -171,6 +174,7 @@ class PermissionRepoABC(ABC):
         """
         ...
 
+    @deprecated("Use hierarchy repo for directory resolution instead")
     @abstractmethod
     async def resolve_children(
         self,
@@ -210,6 +214,9 @@ class PermissionRepoABC(ABC):
         ...
 
 
+def str_list() -> List[str]:
+    return []
+
 
 @dataclass
 class ResolvedChildren:
@@ -226,9 +233,9 @@ class ResolvedChildren:
             points into ``note_ids`` (when ``exclusive=True``).
     """
 
-    sub_directory_ids: List[str] = field(default_factory=list)
-    note_ids: List[str] = field(default_factory=list)
-    attachment_ids: List[str] = field(default_factory=list)
+    sub_directory_ids: List[str] = field(default_factory=str_list)
+    note_ids: List[str] = field(default_factory=str_list)
+    attachment_ids: List[str] = field(default_factory=str_list)
 
 
 @dataclass
