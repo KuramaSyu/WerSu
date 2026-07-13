@@ -24,12 +24,16 @@ Logger names use the most specific match, so `src.db.database` wins over `src`.
 ### Compile Protobufs (`.proto` files):
 1. install requirements:
     ```bash
+    uv sync
+    ``` 
+    or (old version)
+    ```bash
     pip install -r requirements.txt
     ```
 2. [install protobuf compiler on the system](https://github.com/protocolbuffers/protobuf#protobuf-compiler-installation)
 3. compile the `src/grpc_mod/note.proto` and `src/grpc_mod/user.proto`file:
     ```bash
-    python -m grpc_tools.protoc \
+    uv run python -m grpc_tools.protoc \
         -I . \
         --python_out=. \
         --grpc_python_out=. \
@@ -55,7 +59,7 @@ docker compose down; rm -r data; docker compose up --build -d; env PYTHONTRACEMA
 
 - Run the integration tests against real Postgres / SpiceDB / Garage (requires Docker; containers are started automatically via testcontainers).  These live under `tests/integration/` and carry the `integration` marker:
     ```bash
-    uv run pytest tests/integration/
+    uv run pytest tests/integration/ -m integration
     ```
 
 - Optional: run the full suite including both integration tests and POCs:
