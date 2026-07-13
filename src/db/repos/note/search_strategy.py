@@ -1,12 +1,13 @@
 from abc import ABC, abstractmethod
 from typing import List, Self
 
+from src.api.undefined import UNDEFINED
 from src.api.user_context import UserContextABC
 from src.ai.embedding_generator import  EmbeddingGeneratorABC, Models
 from src.db.database import  DatabaseABC
 from src.db.entities import NoteEntity
 from src.db.repos.permissions import PermissionRepoABC
-from src.api import NoteRelationEnum
+from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 
 
 class NoteSearchStrategy(ABC):
@@ -63,13 +64,21 @@ class NoteSearchStrategy(ABC):
         return self
 
     async def _get_user_note_ids(self) -> List[str]:
-        """Helper method which provides a list of note ids 
+        """Helper method which provides a list of note ids
         that the user has access to based on their permissions."""
-        note_objs = await self.note_permissions.lookup_notes(
-            self.user_context, 
-            NoteRelationEnum.VIEW
+        return await self.note_permissions.lookup(
+            Relationship(
+                resource=ObjectRef(
+                    object_type=ObjectTypeEnum.NOTE,
+                    object_id=UNDEFINED,
+                ),
+                relation=NoteRelationEnum.VIEW,
+                subject=SubjectRef(
+                    object_type=ObjectTypeEnum.USER,
+                    object_id=self.user_context.user_id,
+                ),
+            )
         )
-        return [o.object_id for o in note_objs if isinstance(o.object_id, str)]
     
     @abstractmethod
     async def search(self) -> list["NoteEntity"]:
