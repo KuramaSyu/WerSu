@@ -1,1 +1,1 @@
-from .permission import *
+from .spicedb_repo import *

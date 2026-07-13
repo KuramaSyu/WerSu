@@ -253,18 +253,17 @@ class DirectoryRepoFacade(DirectoryFacade):
         ``note#parent_directory@directory`` is a SpiceDB-anchored
         relation that lives next to the hierarchy pointer.
         """
-        matched = await self._permission_repo.lookup_relationships(
-            Relationship(
-                resource=ObjectRef(ObjectTypeEnum.NOTE, str(note_id)),
-                relation="parent_directory",
-                subject=SubjectRef(
-                    object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED
-                ),
+        return sorted(
+            await self._permission_repo.lookup(
+                Relationship(
+                    resource=ObjectRef(ObjectTypeEnum.NOTE, str(note_id)),
+                    relation="parent_directory",
+                    subject=SubjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED
+                    ),
+                )
             )
         )
-        return sorted({
-            str(rel.subject.object_id) for rel in matched if rel.subject.object_id
-        })
 
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         """Delete the directory row (cleanup is the caller's job)."""

@@ -40,7 +40,7 @@ from src.api.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryFacade
-from src.domain.permission_chain import HasDirectoryWritePerm, HasNoteDeletePerm, HasNoteWritePerm
+from src.domain.permission_chain import  HasNoteDeletePerm, HasNoteWritePerm
 from src.utils.extract_attachments import extract_attachment_ids
 
 
@@ -314,16 +314,15 @@ class NoteService(NoteServiceABC):
         user_directory_ids = await self._directory_repo.list_user_directory_ids(user_ctx)
         for directory_id in user_directory_ids:
             # fetch note:???#PARENT_DIRECTORY@direcory:id
-            relationships = await self._permission_repo.lookup_relationships(
+            note_ids = await self._permission_repo.lookup(
                 Relationship(
                     resource=ObjectRef(ObjectTypeEnum.NOTE, UNDEFINED),
                     relation=NoteRelationEnum.PARENT_DIRECTORY,
                     subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directory_id),
                 )
             )
-            # check if the found relationships belong to any note contained in notes.
-            for rel in relationships:
-                note_id = unwrap_undefined(rel.resource.object_id)
+            # check if the found note ids belong to any note contained in notes.
+            for note_id in note_ids:
                 target_note = notes_by_id.get(note_id)
 
                 if not target_note:
@@ -332,7 +331,7 @@ class NoteService(NoteServiceABC):
 
                 if not target_note.permissions:
                     target_note.permissions = []
-                
+
                 target_note.permissions.append(
                     Relationship(
                         resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),

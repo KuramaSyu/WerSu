@@ -6,12 +6,11 @@ working without duplicating permission logic.
 """
 
 from src.api.relationship import DirectoryRelationEnum, NoteRelationEnum, ObjectTypeEnum
-from src.db.repos.permissions.permission import NotePermissionRepoInMemory, NotePermissionRepoSpicedb
+from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 
 __all__ = [
     "DirectoryRelationEnum",
-    "NotePermissionRepoInMemory",
-    "NotePermissionRepoSpicedb",
+    "SpicedbPermissionRepo",
     "NoteRelationEnum",
     "ObjectTypeEnum",
 ]

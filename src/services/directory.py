@@ -105,18 +105,13 @@ class DirectoryService(DirectoryServiceABC):
 
         await self._assert_directory_view(directory_id, user_ctx)
 
-        rels = await self._permission_repo.lookup_relationships(
+        note_ids = await self._permission_repo.lookup(
             Relationship(
                 resource=ObjectRef(ObjectTypeEnum.NOTE, UNDEFINED),
                 relation=NoteRelationEnum.PARENT_DIRECTORY,
                 subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directory_id),
             )
         )
-        note_ids = [
-            str(rel.resource.object_id)
-            for rel in rels
-            if rel.resource.object_id not in (UNDEFINED, None)
-        ]
 
         notes: List[NoteEntity] = []
         readme: Optional[NoteEntity] = None
