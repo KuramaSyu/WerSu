@@ -208,7 +208,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
             # if the given dirs reoslved nothing, then get default dirs
             if not resolved_dirs:
                 resolved_dirs = await self._resolve_directory_ids(None, user)
-        
+
         for directory_id in resolved_dirs:
             await self._directory_repo.add_note_to_directory(
                 note_id, directory_id,
@@ -221,40 +221,14 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
                 note_id, [str(t) for t in tag_ids if t],
             )
 
-        # 5) permissions: owner + parent_directory for each parent
+        # 5) note#owner@user permission
         owner_relation = Relationship(
             resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
             relation=NoteRelationEnum.OWNER,
             subject=SubjectRef(ObjectTypeEnum.USER, user.user_id),
         )
-        log = logging_provider(__name__)
-        log.info(f"resolved_dirs={resolved_dirs}")
-        parent_dir_relations: List[Relationship] = [
-            Relationship(
-                resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
-                relation=NoteRelationEnum.PARENT_DIRECTORY,
-                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, parent_id),
-            )
-            for parent_id in set(resolved_dirs)
-        ]
-        await self._permission_repo.insert(
-            [owner_relation, *parent_dir_relations]
-        )
+        await self._permission_repo.insert([owner_relation])
         note.permissions = await self._fetch_note_permissions(note_id=note_id)
-
-        seen_parents = {
-            (str(rel.relation), str(rel.subject.object_id))
-            for rel in note.permissions
-        }
-        for rel in parent_dir_relations:
-            key = (str(rel.relation), str(rel.subject.object_id))
-            if key not in seen_parents:
-                self.log.warning(
-                    "Parent directory relation missing in fetched permissions; "
-                    "appending to response"
-                )
-                note.permissions.append(rel)
-                seen_parents.add(key)
 
         # 6) version snapshot
         title_value: Optional[str] = unwrap_undefined_or(note.title)
@@ -303,30 +277,29 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         if note.permissions is UNDEFINED:
             updated.permissions = []
 
-        if self._version_repo is not None:
-            new_title: str = unwrap_undefined_or(
-                note.title, str(current.title),
-            )
-            new_content: str = unwrap_undefined_or(
-                note.content, str(current.content),
-            )
-            new_author_id: str = (
-                str(note.author_id) if note.author_id is not UNDEFINED
-                else str(current.author_id)
-            )
-            new_updated_at: datetime = unwrap_undefined_or(
-                note.updated_at, datetime.now(),
-            )
+        new_title: str = unwrap_undefined_or(
+            note.title, str(current.title),
+        )
+        new_content: str = unwrap_undefined_or(
+            note.content, str(current.content),
+        )
+        new_author_id: str = (
+            str(note.author_id) if note.author_id is not UNDEFINED
+            else str(current.author_id)
+        )
+        new_updated_at: datetime = unwrap_undefined_or(
+            note.updated_at, datetime.now(),
+        )
 
-            await self._version_repo.append_version(
-                note_id=str(note.note_id),
-                old_title=unwrap_undefined_or(current.title),
-                old_content=unwrap_undefined_or(current.content),
-                new_title=new_title,
-                new_content=new_content,
-                author_id=new_author_id,
-                created_at=new_updated_at,
-            )
+        await self._version_repo.append_version(
+            note_id=str(note.note_id),
+            old_title=unwrap_undefined_or(current.title),
+            old_content=unwrap_undefined_or(current.content),
+            new_title=new_title,
+            new_content=new_content,
+            author_id=new_author_id,
+            created_at=new_updated_at,
+        )
 
         return updated
 
