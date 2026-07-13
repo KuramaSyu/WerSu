@@ -47,15 +47,13 @@ from src.db.repos.permissions import PermissionRepoABC
 class NoteFacadeImpl(NoteRepoFacadeABC):
     """Compose the note repos without issuing raw SQL.
 
-    The facade is intentionally SQL-free: every storage call is
-    routed through the repos passed in.  Search strategies are
-    configured with the same ``note_permissions`` they always
-    were; that is the strategy layer's own contract, not the
-    facade's.
+    NoteFacadeImpl orchestrates the content, embedding, permission (insertion only), directory and tag repos.
+    Each returned :class:`~src.db.entities.note.metadata.NoteEntity` should have:
+    - `directory_ids` 
+    - `tag_ids`
+    - ~`permissions`~ (this is replaced with directory ids and tag ids)
 
-    The `db` argument is the only raw handle the facade holds,
-    and it is used exclusively to forward to the search
-    strategies.
+    The `db` argument is required, since the serach strategies execute direct SQL
     """
 
     # TODO: constructor overinjection here
@@ -175,7 +173,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
             NoteEntity: the persisted note with id and permissions
             populated.
         """
-        # 1) row
+        # insert main content
         inserted = await self._content_repo.insert(note)
         note_id = inserted.note_id
         if not note_id:
@@ -184,7 +182,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         self.log.debug(f"Inserted note with ID: {note_id}")
         note.note_id = note_id
 
-        # 2) embedding
+        # insert embedding
         note.embeddings = []
         if note.content:
             embedding = await self._embedding_repo.insert(
@@ -194,7 +192,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
             )
             note.embeddings.append(embedding)
 
-        # 3) parent directories (multi)
+        # resolve parent directories
         if note.directory_ids is UNDEFINED:
             resolved_dirs = await self._resolve_directory_ids(None, user)
         else:
@@ -205,12 +203,17 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
             if not resolved_dirs:
                 resolved_dirs = await self._resolve_directory_ids(None, user)
 
+        # assign the resolved directory ids. reset note.directory_ids and
+        # repopulate it to ensure consistency if one call would fail
+        note.directory_ids = []
         for directory_id in resolved_dirs:
             await self._directory_repo.add_note_to_directory(
                 note_id, directory_id,
             )
+            note.directory_ids.append(directory_id)
 
-        # 4) tags
+
+        # insert tags
         if note.tag_ids is not UNDEFINED:
             tag_ids = note.tag_ids or []
             await self._tag_repo.replace_note_tags(
