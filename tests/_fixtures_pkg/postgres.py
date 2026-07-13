@@ -26,7 +26,7 @@ from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note import NoteFacade
 from src.db.repos.note.tag import NoteTagPostgresRepo
-from src.db.repos.permissions.permission import SpicedbPermissionRepo
+from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user import RepoContextFactory

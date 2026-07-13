@@ -48,8 +48,8 @@ from src.api.relationship import (
     Relationship,
 )
 from src.api.undefined import UNDEFINED
-from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from src.db.table import TableABC
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.services.attachments import AttachmentFacade
 from src.services.directory import DirectoryService
 from src.services.note import NoteService
@@ -159,7 +159,7 @@ def _wire_real_services(
     # ``_resolve_parent_directory_id`` flow in the loop.
     fake_facade = _FakeNoteRepoFacade()
     embedding_repo = _FakeEmbeddingRepo()
-    permission_repo: PermissionRepoABC = NotePermissionRepoInMemory()
+    permission_repo: PermissionRepoABC = InMemoryPermissionRepo()
     directory_repo = _TestDirectoryRepo(permission_repo=permission_repo)
     content_repo = _FakeNoteContentRepo(facade=fake_facade)
     jwt_provider = _FakeJwtProvider()

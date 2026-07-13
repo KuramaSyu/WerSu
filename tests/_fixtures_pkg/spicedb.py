@@ -19,7 +19,7 @@ import grpc
 import pytest
 from testcontainers_spicedb import SpiceDBContainer
 
-from src.db.repos.permissions.permission import SpicedbPermissionRepo
+from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from tests._fixtures_pkg.spicedb_schema import (
     SPICEDB_IMAGE,
     create_spicedb_client,

@@ -303,7 +303,7 @@ class _TestDirectoryRepo(DirectoryFacade):
         # ``reader`` and ``owner`` relations on a directory all imply
         # ``view`` (see :data:`docs.spicedb-schema`), so any directory
         # the user has one of those relations on is visible to them.
-        # The in-memory :class:`NotePermissionRepoInMemory` does not
+        # The in-memory :class:`InMemoryPermissionRepo` does not
         # expand transitive implications, so this fallback lives on
         # the directory repo instead.
         if self._permission_repo is not None:
@@ -360,18 +360,19 @@ class _TestDirectoryRepo(DirectoryFacade):
         """Internal helper: count direct child directories via the in-memory store."""
         if self._permission_repo is None:
             return 0
-        matched = await self._permission_repo.lookup_relationships(
-            Relationship(
-                resource=ObjectRef(
-                    object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED
-                ),
-                relation=DirectoryRelationEnum.PARENT,
-                subject=SubjectRef(
-                    object_type=ObjectTypeEnum.DIRECTORY, object_id=str(directory_id)
-                ),
+        return len(
+            await self._permission_repo.lookup(
+                Relationship(
+                    resource=ObjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED
+                    ),
+                    relation=DirectoryRelationEnum.PARENT,
+                    subject=SubjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY, object_id=str(directory_id)
+                    ),
+                )
             )
         )
-        return len(matched)
 
     async def _count_direct_child_notes_for(
         self, directory_id: str,
@@ -379,18 +380,19 @@ class _TestDirectoryRepo(DirectoryFacade):
         """Internal helper: count direct child notes via the in-memory store."""
         if self._permission_repo is None:
             return 0
-        matched = await self._permission_repo.lookup_relationships(
-            Relationship(
-                resource=ObjectRef(
-                    object_type=ObjectTypeEnum.NOTE, object_id=UNDEFINED
-                ),
-                relation=NoteRelationEnum.PARENT_DIRECTORY,
-                subject=SubjectRef(
-                    object_type=ObjectTypeEnum.DIRECTORY, object_id=str(directory_id)
-                ),
+        return len(
+            await self._permission_repo.lookup(
+                Relationship(
+                    resource=ObjectRef(
+                        object_type=ObjectTypeEnum.NOTE, object_id=UNDEFINED
+                    ),
+                    relation=NoteRelationEnum.PARENT_DIRECTORY,
+                    subject=SubjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY, object_id=str(directory_id)
+                    ),
+                )
             )
         )
-        return len(matched)
 
     async def resolve_subtree(
         self, directory_id: str, *, max_depth: int = 10,

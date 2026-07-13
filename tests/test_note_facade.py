@@ -27,7 +27,6 @@ from src.api.directory_facade import DirectoryFacade
 from src.db.repos.note import note as note_module
 from src.db.repos.note.note import NoteFacade
 from src.api.note_facade import SearchType
-from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from tests._fixtures_pkg.fakes import (
     _FakeCombinedNoteRepo,
     _FakeDatabase,
@@ -38,6 +37,7 @@ from tests._fixtures_pkg.fakes import (
     _FakeVersionRepo,
     _TestDirectoryRepo,
 )
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.user_context import _UserContext as UserContext
 
 
@@ -48,7 +48,7 @@ def _make_facade(
     content_repo: Optional[_FakeNoteContentRepo] = None,
     combined_repo: Optional[_FakeCombinedNoteRepo] = None,
     tag_repo: Optional[_FakeNoteTagRepo] = None,
-    permission_repo: Optional[NotePermissionRepoInMemory] = None,
+    permission_repo: Optional[InMemoryPermissionRepo] = None,
     directory_repo: Optional[DirectoryFacade] = None,
 ) -> tuple[NoteFacade, _FakeDatabase, _FakeNoteContentRepo, _FakeEmbeddingRepo, DirectoryFacade, _FakeCombinedNoteRepo, _FakeNoteTagRepo]:
     """Build a :class:`NoteFacade` wired against the in-memory fakes."""
@@ -56,7 +56,7 @@ def _make_facade(
     fake_content = content_repo or _FakeNoteContentRepo()
     fake_combined = combined_repo or _FakeCombinedNoteRepo(content_repo=fake_content)
     fake_embedding = _FakeEmbeddingRepo()
-    fake_permission = permission_repo or NotePermissionRepoInMemory()
+    fake_permission = permission_repo or InMemoryPermissionRepo()
     fake_directory = directory_repo or _TestDirectoryRepo()
     fake_tags = tag_repo or _FakeNoteTagRepo()
     facade = NoteFacade(

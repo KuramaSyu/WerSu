@@ -41,8 +41,8 @@ from src.api.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
-from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from src.services.attachments import AttachmentFacade
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.services.directory import DirectoryService
 from src.services.note import NoteService
 from src.db.table import TableABC
@@ -106,7 +106,7 @@ def _wire_service(
     _FakeNoteRepoFacade,
     InMemoryAttachmentRepo,
     InMemoryAttachmentMetadataRepo,
-    NotePermissionRepoInMemory,
+    InMemoryPermissionRepo,
 ]:
     """Build a :class:`DirectoryService` with the real ``NoteService`` + ``AttachmentFacade``."""
     fake_db = _FakeDatabase()
@@ -118,7 +118,7 @@ def _wire_service(
 
     fake_facade = _FakeNoteRepoFacade()
     embedding_repo = _FakeEmbeddingRepo()
-    permission_repo: PermissionRepoABC = NotePermissionRepoInMemory()
+    permission_repo: PermissionRepoABC = InMemoryPermissionRepo()
     directory_repo = _TestDirectoryRepo(permission_repo=permission_repo)
     content_repo = _FakeNoteContentRepo(facade=fake_facade)
     jwt_provider = _FakeJwtProvider()

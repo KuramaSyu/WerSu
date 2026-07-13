@@ -59,10 +59,12 @@ class PermissionServiceABC(ABC):
         """Create one relationship and return the updated relationship set.
         This has to be a resource: note or resource: directory. Handle others directly with the repo.
 
-        ``note#parent_directory@directory:<id>`` and
-        ``directory#parent@directory:<id>`` writes are routed through
-        the directory repo so the Postgres hierarchy row stays in
-        sync with the SpiceDB relation.
+        Structural hierarchy tuples
+        (``note#parent_directory@directory:<id>`` and
+        ``directory#parent@directory:<id>``) are rejected: they are
+        managed by the note / directory patch endpoints so the
+        Postgres hierarchy row stays in sync with the SpiceDB
+        relation.
 
         Parameters
         ----------
@@ -79,7 +81,8 @@ class PermissionServiceABC(ABC):
         Raises
         ------
         ValueError
-            If relationship data is invalid.
+            If relationship data is invalid, including any structural
+            (hierarchy) tuple.
         LookupError
             If the resource does not exist.
         PermissionError
@@ -91,10 +94,12 @@ class PermissionServiceABC(ABC):
     async def delete_relationship(self, relationship: Relationship, actor: UserContextABC) -> List[Relationship]:
         """Delete one relationship and return the updated relationship set.
 
-        ``note#parent_directory@directory:<id>`` and
-        ``directory#parent@directory:<id>`` deletes are routed through
-        the directory repo so the Postgres hierarchy row stays in
-        sync with the SpiceDB relation.
+        Structural hierarchy tuples
+        (``note#parent_directory@directory:<id>`` and
+        ``directory#parent@directory:<id>``) are rejected: they are
+        managed by the note / directory patch endpoints so the
+        Postgres hierarchy row stays in sync with the SpiceDB
+        relation.
 
         Parameters
         ----------
@@ -111,7 +116,8 @@ class PermissionServiceABC(ABC):
         Raises
         ------
         ValueError
-            If relationship data is invalid.
+            If relationship data is invalid, including any structural
+            (hierarchy) tuple.
         LookupError
             If the resource does not exist.
         PermissionError
@@ -128,10 +134,13 @@ class PermissionServiceABC(ABC):
     ) -> List[Relationship]:
         """Replace all resource relationships with the provided list.
 
-        ``note#parent_directory@directory`` and
-        ``directory#parent@directory`` writes are routed through
-        the directory repo so the Postgres hierarchy row stays in
-        sync with the SpiceDB relation.
+        Structural hierarchy tuples
+        (``note#parent_directory@directory`` and
+        ``directory#parent@directory``) are rejected: the call fails
+        if either the desired set or the resource's existing
+        relations contain such a tuple.  Hierarchy writes go through
+        the note / directory patch endpoints so the Postgres
+        hierarchy row stays in sync with the SpiceDB relation.
 
         Parameters
         ----------
@@ -150,7 +159,9 @@ class PermissionServiceABC(ABC):
         Raises
         ------
         ValueError
-            If resource or relationship data is invalid.
+            If resource or relationship data is invalid, including
+            any structural (hierarchy) tuple in either the desired
+            set or the resource's existing storage.
         LookupError
             If the resource does not exist.
         PermissionError
@@ -176,6 +187,32 @@ class PermissionServiceRepo(PermissionServiceABC):
         DirectoryRelationEnum.READER,
     }
     _directory_directory_relations = {DirectoryRelationEnum.PARENT}
+
+    _structural_message = (
+        "parent relations must be changed via directory or note patch, "
+        "not the permission service"
+    )
+
+    @classmethod
+    def _is_structural_relation(cls, relationship: Relationship) -> bool:
+        """Return True when ``relationship`` is a structural (hierarchy) tuple.
+
+        Structural tuples pin a note or directory into the resource
+        tree (``note#parent_directory@directory`` and
+        ``directory#parent@directory``).  They are managed by the
+        note / directory patch endpoints, not by the permission
+        service.
+        """
+        subject_type = str(relationship.subject.object_type)
+        if subject_type != str(ObjectTypeEnum.DIRECTORY):
+            return False
+        resource_type = str(relationship.resource.object_type)
+        relation = str(relationship.relation)
+        if resource_type == str(ObjectTypeEnum.NOTE):
+            return relation in {str(r) for r in cls._note_directory_relations}
+        if resource_type == str(ObjectTypeEnum.DIRECTORY):
+            return relation in {str(r) for r in cls._directory_directory_relations}
+        return False
 
     def __init__(
         self,
@@ -226,6 +263,14 @@ class PermissionServiceRepo(PermissionServiceABC):
         ]
 
         current = await self._permission_repo.list_relationships(resource)
+        # Structural tuples live next to the resource row in Postgres
+        # and are managed by note/directory patch.  Even when they're
+        # already stored on the resource, treat their presence here
+        # as a usage error so callers cannot accidentally rewrite or
+        # drop them via the permission service.
+        for rel in (*current, *normalized_desired):
+            if self._is_structural_relation(rel):
+                raise ValueError(self._structural_message)
         # Use stable tuple keys to diff relationships without nested comparisons.
         desired_keys = {self._relationship_key(rel) for rel in normalized_desired}
         current_keys = {self._relationship_key(rel) for rel in current}
@@ -322,6 +367,9 @@ class PermissionServiceRepo(PermissionServiceABC):
         ValueError
             If relation, resource, or subject values are invalid.
         """
+        if self._is_structural_relation(relationship):
+            raise ValueError(self._structural_message)
+
         resource = self._validate_resource(relationship.resource)
         if expected_resource and (
             str(resource.object_type) != str(expected_resource.object_type)

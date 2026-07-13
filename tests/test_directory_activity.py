@@ -26,8 +26,8 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from src.services.versioning import DirectoryActivityService
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.utils import logging_provider
 
 from .fixtures import _FakeVersionRepo
@@ -91,7 +91,7 @@ async def test_resolve_files_of_directory_depth_and_cycle() -> None:
     the in-memory permission repo so the ``has_permission``
     branch keeps its existing coverage.
     """
-    permission_repo = NotePermissionRepoInMemory()
+    permission_repo = InMemoryPermissionRepo()
     user_id = "alice"
     ctx = _UserContext(user_id)
 

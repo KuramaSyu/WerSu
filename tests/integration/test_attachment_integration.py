@@ -81,7 +81,7 @@ async def test_attachment_facade_with_postgres_and_garage(
     user_ctx = UserContext(user_id=user.id)
 
     # create note row directly via SQL — sidesteps the broken
-    # `NotePermissionRepoInMemory` in shared fixtures.
+    # `InMemoryPermissionRepo` in shared fixtures.
     await db.execute(
         "INSERT INTO note.content (id, title, content, author_id) "
         "VALUES ($1, $2, $3, $4)",

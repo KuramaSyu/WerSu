@@ -2,7 +2,7 @@
 
 These tests use the in-memory fakes from
 :mod:`tests._fixtures_pkg.fakes` and
-:class:`src.db.repos.permissions.permission.NotePermissionRepoInMemory`
+:class:`tests.stubs.in_memory_permission_repo.InMemoryPermissionRepo`
 so they do not require Postgres or SpiceDB.  They pin the
 service-layer behaviour the gRPC adapters rely on:
 
@@ -42,8 +42,8 @@ from src.db.entities.note.metadata import NoteEntity
 from src.api.directory_facade import DirectoryFacade
 from src.db.repos.note.note import NoteFacade
 from src.api.note_facade import NoteRepoFacadeABC, SearchType
-from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from src.services.note import NoteService
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.api.user_context import UserContextABC
 from src.api.jwt_provider import JwtProvider
 from tests._fixtures_pkg.fakes import (
@@ -108,7 +108,7 @@ def _make_service(
     _FakeDatabase,
     _FakeNoteContentRepo,
     DirectoryFacade,
-    NotePermissionRepoInMemory,
+    InMemoryPermissionRepo,
     _FakeJwtProvider,
     _FakeActivityLoggerService,
 ]:
@@ -123,7 +123,7 @@ def _make_service(
     fake_content = content_repo or _FakeNoteContentRepo()
     fake_combined = _FakeCombinedNoteRepo(content_repo=fake_content)
     fake_embedding = _FakeEmbeddingRepo()
-    fake_permission = permission_repo or NotePermissionRepoInMemory()
+    fake_permission = permission_repo or InMemoryPermissionRepo()
     fake_directory = directory_repo or _TestDirectoryRepo()
     fake_jwt = jwt_provider or _FakeJwtProvider()
     fake_activity_logger = _FakeActivityLoggerService()

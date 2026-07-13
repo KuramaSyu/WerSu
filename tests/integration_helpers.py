@@ -41,7 +41,7 @@ from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
 from src.db.repos.directory.directory import DirectoryRepoFacade
 from src.db.repos.note.note import NoteFacade
-from src.db.repos.permissions.permission import SpicedbPermissionRepo
+from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.db.repos.user import RepoUserContext
 from tests.stubs.user_context import _UserContext as UserContext
 from src.services.user import UserService

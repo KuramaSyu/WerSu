@@ -3,7 +3,13 @@ from datetime import datetime
 from typing import List, Literal
 
 from src.api import PermissionRepoABC, ActivityLoggerServiceABC
-from src.api.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
+from src.api.relationship import (
+    DirectoryRelationEnum,
+    NoteRelationEnum,
+    ObjectRef,
+    Relationship,
+    SubjectRef,
+)
 from src.api.sharing import SharingServiceABC
 from src.api.types import LoggingProvider
 from src.api.undefined import UNDEFINED, UndefinedOr, unwrap_undefined, unwrap_undefined_or
@@ -264,8 +270,19 @@ class DefaultSharingService(SharingServiceABC):
                 and str(rel.subject.object_id) == access_as
                 and str(rel.relation) in {str(NoteRelationEnum.READER), str(NoteRelationEnum.WRITER)}
             )
-            if not is_access_user_share:
-                keep.append(rel)
+            # Structural (hierarchy) tuples are managed by note/directory
+            # patch and are explicitly rejected by the permission
+            # service, so drop them from the keep-set before delegating.
+            is_structural = (
+                str(rel.subject.object_type) == "directory"
+                and str(rel.relation) in {
+                    str(NoteRelationEnum.PARENT_DIRECTORY),
+                    str(DirectoryRelationEnum.PARENT),
+                }
+            )
+            if is_access_user_share or is_structural:
+                continue
+            keep.append(rel)
         keep.append(new_relationship)
 
         await self._permission_service.replace_relationships(

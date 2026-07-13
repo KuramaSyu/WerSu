@@ -21,13 +21,13 @@ from src.api.relationship import (
     Relationship,
     SubjectRef,
 )
-from src.db.repos.permissions.permission import NotePermissionRepoInMemory
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 
 
 @pytest.mark.asyncio
 async def test_resolve_children_walks_subdirectories_recursively() -> None:
     """``directory#parent`` is followed recursively."""
-    repo = NotePermissionRepoInMemory()
+    repo = InMemoryPermissionRepo()
     # root -> child -> grandchild
     await repo.insert(
         [
@@ -53,7 +53,7 @@ async def test_resolve_children_walks_subdirectories_recursively() -> None:
 @pytest.mark.asyncio
 async def test_resolve_children_collects_notes_per_directory() -> None:
     """Notes linked via ``note#parent_directory`` are returned."""
-    repo = NotePermissionRepoInMemory()
+    repo = InMemoryPermissionRepo()
     await repo.insert(
         [
             Relationship(
@@ -86,7 +86,7 @@ async def test_resolve_children_collects_notes_per_directory() -> None:
 @pytest.mark.asyncio
 async def test_resolve_children_collects_attachments_via_notes() -> None:
     """Attachments under any note in the subtree are returned."""
-    repo = NotePermissionRepoInMemory()
+    repo = InMemoryPermissionRepo()
     await repo.insert(
         [
             Relationship(
@@ -112,7 +112,7 @@ async def test_resolve_children_collects_attachments_via_notes() -> None:
 async def test_resolve_children_exclusive_drops_notes_with_parents_outside() -> None:
     """A note parented under both the subtree and an outside directory
     is dropped because it is not exclusively in this subtree."""
-    repo = NotePermissionRepoInMemory()
+    repo = InMemoryPermissionRepo()
     await repo.insert(
         [
             Relationship(
@@ -144,7 +144,7 @@ async def test_resolve_children_exclusive_drops_notes_with_parents_outside() -> 
 async def test_resolve_children_exclusive_drops_attachments_with_parents_outside() -> None:
     """An attachment parented under both an in-subtree note and an
     outside note is dropped."""
-    repo = NotePermissionRepoInMemory()
+    repo = InMemoryPermissionRepo()
     await repo.insert(
         [
             Relationship(
@@ -180,7 +180,7 @@ async def test_resolve_children_exclusive_drops_attachments_with_parents_outside
 @pytest.mark.asyncio
 async def test_resolve_children_max_depth_caps_walk() -> None:
     """``max_depth=0`` returns only the root directory."""
-    repo = NotePermissionRepoInMemory()
+    repo = InMemoryPermissionRepo()
     await repo.insert(
         [
             Relationship(
@@ -199,6 +199,6 @@ async def test_resolve_children_max_depth_caps_walk() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_children_negative_depth_raises() -> None:
-    repo = NotePermissionRepoInMemory()
+    repo = InMemoryPermissionRepo()
     with pytest.raises(ValueError, match="max_depth"):
         await repo.resolve_children("dir-1", max_depth=-1)

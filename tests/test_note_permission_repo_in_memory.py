@@ -4,11 +4,11 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-from src.db.repos.permissions.permission import NotePermissionRepoInMemory
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 
 
 async def test_in_memory_has_permission_with_implied_permissions() -> None:
-    repo = NotePermissionRepoInMemory()
+    repo = InMemoryPermissionRepo()
     user = UserContext("emilia")
     note = ObjectRef(object_type="note", object_id="note-1")
 
@@ -29,7 +29,7 @@ async def test_in_memory_has_permission_with_implied_permissions() -> None:
 
 
 async def test_in_memory_get_permissions_returns_unique_union() -> None:
-    repo = NotePermissionRepoInMemory()
+    repo = InMemoryPermissionRepo()
     user = UserContext("alfred")
     note = ObjectRef(object_type="note", object_id="note-2")
 

@@ -27,8 +27,8 @@ from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_action import UserActionEntity
 from src.services.share_access import ShareAccessService
 from src.db.repos.user import RepoContextFactory, UnimplementedUserContext
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.logging import silent_logger
-from tests.stubs.permission_repo import _FakePermissionRepo
 from tests.stubs.sharing_repo import _FakeSharingRepo
 from tests.stubs.user_action_repo import _FakeUserActionRepo
 from tests.stubs.user_repo import _FakeUserRepo
@@ -57,19 +57,29 @@ def _share(
     )
 
 
-def _build_service(
+async def _build_service(
     *,
     sharing_repo: _FakeSharingRepo,
     user_repo: _FakeUserRepo,
     user_action_repo: _FakeUserActionRepo,
-    permissions: Optional[_FakePermissionRepo] = None,
+    permissions: Optional[InMemoryPermissionRepo] = None,
 ) -> ShareAccessService:
+    repo = permissions or InMemoryPermissionRepo()
+    # Default access-user -> note-1 reader relation so the share
+    # resolves as readable; tests can override by passing a
+    # pre-seeded repo.
+    if permissions is None:
+        from src.api import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
+        await repo.insert([
+            Relationship(
+                resource=ObjectRef("note", "note-1"),
+                relation=NoteRelationEnum.READER,
+                subject=SubjectRef("user", "access-user"),
+            )
+        ])
     return ShareAccessService(
         sharing_repo=sharing_repo,
-        permission_repo=permissions or _FakePermissionRepo(
-            editable_note_ids=set(),
-            permissions_by_access_user={("note-1", "access-user"): ["reader"]},
-        ),
+        permission_repo=repo,
         user_repo=user_repo,
         user_action_repo=user_action_repo,
         logger=silent_logger,
@@ -87,7 +97,7 @@ async def test_access_share_returns_share_with_permission() -> None:
     share = _share()
     user_repo = _FakeUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
     action_repo = _FakeUserActionRepo()
-    service = _build_service(
+    service = await _build_service(
         sharing_repo=_FakeSharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=action_repo,
@@ -115,7 +125,7 @@ async def test_access_share_rejects_disabled_user() -> None:
             ),
         ]
     )
-    service = _build_service(
+    service = await _build_service(
         sharing_repo=_FakeSharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=action_repo,
@@ -142,7 +152,7 @@ async def test_get_share_user_returns_access_as_and_online_until() -> None:
         online_until=expires_at,
     )
     user_repo = _FakeUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
-    service = _build_service(
+    service = await _build_service(
         sharing_repo=_FakeSharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=_FakeUserActionRepo(),
@@ -165,7 +175,7 @@ async def test_get_share_user_returns_none_when_share_never_expires() -> None:
         online_until=None,
     )
     user_repo = _FakeUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
-    service = _build_service(
+    service = await _build_service(
         sharing_repo=_FakeSharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=_FakeUserActionRepo(),
@@ -178,7 +188,7 @@ async def test_get_share_user_returns_none_when_share_never_expires() -> None:
 
 
 async def test_get_share_user_raises_when_share_not_found() -> None:
-    service = _build_service(
+    service = await _build_service(
         sharing_repo=_FakeSharingRepo([]),
         user_repo=_FakeUserRepo(),
         user_action_repo=_FakeUserActionRepo(),
@@ -191,7 +201,7 @@ async def test_get_share_user_raises_when_share_not_found() -> None:
 async def test_get_share_user_raises_when_access_user_missing() -> None:
     """A dangling ``access_as`` (user removed) must surface as ValueError."""
     share = _share(access_as="ghost")
-    service = _build_service(
+    service = await _build_service(
         sharing_repo=_FakeSharingRepo([share]),
         user_repo=_FakeUserRepo([]),  # no users
         user_action_repo=_FakeUserActionRepo(),
@@ -217,7 +227,7 @@ async def test_get_share_user_raises_when_access_user_disabled() -> None:
             ),
         ]
     )
-    service = _build_service(
+    service = await _build_service(
         sharing_repo=_FakeSharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=action_repo,
@@ -249,7 +259,7 @@ async def test_get_share_user_treats_reenabled_user_as_enabled() -> None:
             ),
         ]
     )
-    service = _build_service(
+    service = await _build_service(
         sharing_repo=_FakeSharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=action_repo,
@@ -275,7 +285,7 @@ async def test_get_share_user_ignores_pending_disable() -> None:
             ),
         ]
     )
-    service = _build_service(
+    service = await _build_service(
         sharing_repo=_FakeSharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=action_repo,

@@ -5,7 +5,7 @@ These tests reuse the shared test doubles from
 so the suite does not need Postgres or SpiceDB.  The
 :class:`~tests._fixtures_pkg.fakes._FakeNoteRepoFacade` covers the
 note-repo surface and the canonical in-memory
-:class:`~src.db.repos.permissions.permission.NotePermissionRepoInMemory`
+:class:`~tests.stubs.in_memory_permission_repo.InMemoryPermissionRepo`
 covers permissions.
 
 Coverage:
@@ -31,8 +31,8 @@ from src.api.relationship import (
 from src.api.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryEntity
-from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from src.services.directory import DirectoryService, README_TITLE
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests._fixtures_pkg.fakes import _FakeNoteRepoFacade, _TestDirectoryRepo
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService
 
@@ -41,10 +41,10 @@ def _make_service() -> tuple[
     DirectoryService,
     _TestDirectoryRepo,
     _FakeNoteRepoFacade,
-    NotePermissionRepoInMemory,
+    InMemoryPermissionRepo,
     _FakeActivityLoggerService,
 ]:
-    permission_repo = NotePermissionRepoInMemory()
+    permission_repo = InMemoryPermissionRepo()
     directory_repo = _TestDirectoryRepo(permission_repo=permission_repo)
     note_repo = _FakeNoteRepoFacade()
     activity_logger = _FakeActivityLoggerService()
@@ -60,7 +60,7 @@ def _make_service() -> tuple[
     return service, directory_repo, note_repo, permission_repo, activity_logger
 
 
-async def _grant_view(permission_repo: NotePermissionRepoInMemory, user_id: str, directory_id: str) -> None:
+async def _grant_view(permission_repo: InMemoryPermissionRepo, user_id: str, directory_id: str) -> None:
     """Grant the user `view` on `directory_id` via the in-memory permission repo."""
     await permission_repo.insert(
         [

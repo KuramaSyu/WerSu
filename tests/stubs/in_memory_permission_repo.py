@@ -1,6 +1,6 @@
 """In-memory :class:`PermissionRepoABC` implementation for unit tests.
 
-Drop-in replacement for the previous ``NotePermissionRepoInMemory``
+Drop-in replacement for the previous ``NotePermissionRepoInMemory`` (now moved here from ``src``)
 in ``src/db.repos.permissions.permission``: stores explicit
 relationships as written and resolves implied permissions from a
 small, deterministic implication map (e.g. ``owner -> view``).
@@ -73,7 +73,10 @@ class InMemoryPermissionRepo(PermissionRepoABC):
                     or stored.resource.object_id == relationship.resource.object_id
                 )
             )
-            rel_match = stored.relation == relationship.relation
+            rel_match = (
+                relationship.relation is UNDEFINED
+                or stored.relation == relationship.relation
+            )
             subj_match = (
                 stored.subject.object_type == relationship.subject.object_type
                 and (

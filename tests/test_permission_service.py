@@ -18,8 +18,8 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-from src.db.repos.permissions.permission import NotePermissionRepoInMemory
 from src.services.permissions import PermissionServiceRepo
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 
 
 class _StubNoteRepo(NoteRepoFacadeABC):
@@ -119,7 +119,7 @@ class _StubDirectoryRepo(DirectoryFacade):
 async def test_permission_service_create_and_list_note_relationships() -> None:
     """Creates a note relation and verifies listing returns all stored relations."""
 
-    permission_repo = NotePermissionRepoInMemory()
+    permission_repo = InMemoryPermissionRepo()
     service = PermissionServiceRepo(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids={"note-1"}),
@@ -168,7 +168,7 @@ async def test_permission_service_create_and_list_note_relationships() -> None:
 async def test_permission_service_denies_actor_without_manage_permission() -> None:
     """Rejects relation changes when actor has only read-level access."""
 
-    permission_repo = NotePermissionRepoInMemory()
+    permission_repo = InMemoryPermissionRepo()
     service = PermissionServiceRepo(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids={"note-2"}),
@@ -203,7 +203,7 @@ async def test_permission_service_denies_actor_without_manage_permission() -> No
 async def test_permission_service_replace_directory_relationships() -> None:
     """Replaces directory relations by removing stale entries and adding new ones."""
 
-    permission_repo = NotePermissionRepoInMemory()
+    permission_repo = InMemoryPermissionRepo()
     service = PermissionServiceRepo(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids=set()),
@@ -248,3 +248,219 @@ async def test_permission_service_replace_directory_relationships() -> None:
         ("admin", "user", "dir-admin"),
         ("writer", "user", "member"),
     }
+
+
+async def test_create_relationship_rejects_note_parent_directory_tuple() -> None:
+    """``note#parent_directory@directory`` is a hierarchy write, not a permission."""
+    permission_repo = InMemoryPermissionRepo()
+    service = PermissionServiceRepo(
+        permission_repo=permission_repo,
+        note_repo=_StubNoteRepo(note_ids={"note-1"}),
+        directory_repo=_StubDirectoryRepo(directory_ids={"dir-1"}),
+    )
+
+    actor = UserContext("admin")
+    await permission_repo.insert([
+        Relationship(
+            resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+            relation=NoteRelationEnum.ADMIN,
+            subject=SubjectRef(ObjectTypeEnum.USER, actor.user_id),
+        )
+    ])
+
+    with pytest.raises(ValueError, match="directory or note patch"):
+        await service.create_relationship(
+            relationship=Relationship(
+                resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+                relation=NoteRelationEnum.PARENT_DIRECTORY,
+                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "dir-1"),
+            ),
+            actor=actor,
+        )
+
+
+async def test_create_relationship_rejects_directory_parent_tuple() -> None:
+    """``directory#parent@directory`` is a hierarchy write, not a permission."""
+    permission_repo = InMemoryPermissionRepo()
+    service = PermissionServiceRepo(
+        permission_repo=permission_repo,
+        note_repo=_StubNoteRepo(note_ids=set()),
+        directory_repo=_StubDirectoryRepo(directory_ids={"dir-2"}),
+    )
+
+    actor = UserContext("admin")
+    await permission_repo.insert([
+        Relationship(
+            resource=ObjectRef(ObjectTypeEnum.DIRECTORY, "dir-2"),
+            relation=DirectoryRelationEnum.ADMIN,
+            subject=SubjectRef(ObjectTypeEnum.USER, actor.user_id),
+        )
+    ])
+
+    with pytest.raises(ValueError, match="directory or note patch"):
+        await service.create_relationship(
+            relationship=Relationship(
+                resource=ObjectRef(ObjectTypeEnum.DIRECTORY, "dir-2"),
+                relation=DirectoryRelationEnum.PARENT,
+                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "dir-1"),
+            ),
+            actor=actor,
+        )
+
+
+async def test_delete_relationship_rejects_structural_tuples() -> None:
+    """``delete_relationship`` also rejects structural tuples."""
+    permission_repo = InMemoryPermissionRepo()
+    service = PermissionServiceRepo(
+        permission_repo=permission_repo,
+        note_repo=_StubNoteRepo(note_ids={"note-1"}),
+        directory_repo=_StubDirectoryRepo(directory_ids={"dir-1"}),
+    )
+
+    actor = UserContext("admin")
+    await permission_repo.insert([
+        Relationship(
+            resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+            relation=NoteRelationEnum.ADMIN,
+            subject=SubjectRef(ObjectTypeEnum.USER, actor.user_id),
+        )
+    ])
+
+    with pytest.raises(ValueError, match="directory or note patch"):
+        await service.delete_relationship(
+            relationship=Relationship(
+                resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+                relation=NoteRelationEnum.PARENT_DIRECTORY,
+                subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "dir-1"),
+            ),
+            actor=actor,
+        )
+
+
+async def test_replace_relationships_rejects_structural_tuple_in_desired_set() -> None:
+    """Forbidden tuple in the desired set fails the whole replace."""
+    permission_repo = InMemoryPermissionRepo()
+    service = PermissionServiceRepo(
+        permission_repo=permission_repo,
+        note_repo=_StubNoteRepo(note_ids={"note-1"}),
+        directory_repo=_StubDirectoryRepo(directory_ids={"dir-1"}),
+    )
+
+    actor = UserContext("admin")
+    admin_rel = Relationship(
+        resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+        relation=NoteRelationEnum.ADMIN,
+        subject=SubjectRef(ObjectTypeEnum.USER, actor.user_id),
+    )
+    await permission_repo.insert([admin_rel])
+
+    forbidden = Relationship(
+        resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+        relation=NoteRelationEnum.PARENT_DIRECTORY,
+        subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "dir-1"),
+    )
+
+    with pytest.raises(ValueError, match="directory or note patch"):
+        await service.replace_relationships(
+            resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+            relationships=[admin_rel, forbidden],
+            actor=actor,
+        )
+
+
+async def test_replace_relationships_rejects_structural_tuple_already_stored() -> None:
+    """Forbidden tuple already on the resource also fails the whole replace.
+
+    Even when the desired set doesn't contain the structural tuple,
+    its presence in storage should make the call fail.  Otherwise a
+    caller could silently drop it via a diff.
+    """
+    permission_repo = InMemoryPermissionRepo()
+    service = PermissionServiceRepo(
+        permission_repo=permission_repo,
+        note_repo=_StubNoteRepo(note_ids={"note-1"}),
+        directory_repo=_StubDirectoryRepo(directory_ids={"dir-1"}),
+    )
+
+    actor = UserContext("admin")
+    admin_rel = Relationship(
+        resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+        relation=NoteRelationEnum.ADMIN,
+        subject=SubjectRef(ObjectTypeEnum.USER, actor.user_id),
+    )
+    structural = Relationship(
+        resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+        relation=NoteRelationEnum.PARENT_DIRECTORY,
+        subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "dir-1"),
+    )
+    await permission_repo.insert([admin_rel, structural])
+
+    with pytest.raises(ValueError, match="directory or note patch"):
+        await service.replace_relationships(
+            resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+            relationships=[admin_rel],
+            actor=actor,
+        )
+
+
+async def test_replace_relationships_directory_parent_rejected() -> None:
+    """``directory#parent@directory`` is rejected in replace too."""
+    permission_repo = InMemoryPermissionRepo()
+    service = PermissionServiceRepo(
+        permission_repo=permission_repo,
+        note_repo=_StubNoteRepo(note_ids=set()),
+        directory_repo=_StubDirectoryRepo(directory_ids={"dir-2"}),
+    )
+
+    actor = UserContext("admin")
+    admin_rel = Relationship(
+        resource=ObjectRef(ObjectTypeEnum.DIRECTORY, "dir-2"),
+        relation=DirectoryRelationEnum.ADMIN,
+        subject=SubjectRef(ObjectTypeEnum.USER, actor.user_id),
+    )
+    forbidden = Relationship(
+        resource=ObjectRef(ObjectTypeEnum.DIRECTORY, "dir-2"),
+        relation=DirectoryRelationEnum.PARENT,
+        subject=SubjectRef(ObjectTypeEnum.DIRECTORY, "dir-1"),
+    )
+    await permission_repo.insert([admin_rel])
+
+    with pytest.raises(ValueError, match="directory or note patch"):
+        await service.replace_relationships(
+            resource=ObjectRef(ObjectTypeEnum.DIRECTORY, "dir-2"),
+            relationships=[admin_rel, forbidden],
+            actor=actor,
+        )
+
+
+async def test_create_relationship_still_allows_user_roles() -> None:
+    """Sanity: the regular permission tuples (admin/reader/writer/owner) still pass."""
+    permission_repo = InMemoryPermissionRepo()
+    service = PermissionServiceRepo(
+        permission_repo=permission_repo,
+        note_repo=_StubNoteRepo(note_ids={"note-1"}),
+        directory_repo=_StubDirectoryRepo(directory_ids=set()),
+    )
+
+    actor = UserContext("admin")
+    await permission_repo.insert([
+        Relationship(
+            resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+            relation=NoteRelationEnum.ADMIN,
+            subject=SubjectRef(ObjectTypeEnum.USER, actor.user_id),
+        )
+    ])
+
+    created = await service.create_relationship(
+        relationship=Relationship(
+            resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+            relation=NoteRelationEnum.READER,
+            subject=SubjectRef(ObjectTypeEnum.USER, "alice"),
+        ),
+        actor=actor,
+    )
+
+    assert any(
+        str(rel.relation) == "reader" and str(rel.subject.object_id) == "alice"
+        for rel in created
+    )
