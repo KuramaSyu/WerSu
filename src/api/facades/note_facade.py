@@ -43,8 +43,7 @@ class NoteRepoFacadeABC(ABC):
     Every method is a thin DB wrapper; permission enforcement lives in
     :class:`src.api.note_service.NoteServiceABC`.  Implementations are
     expected to enrich each returned :class:`~src.db.entities.note.metadata.NoteEntity`
-    with its direct + attachment relations via
-    :meth:`NoteRepoFacadeABC._fetch_note_permissions`.
+    with its parent directories and tags and write them to the `directory_ids` and `tag_ids` fields, respectively.
 
     Implementations:
     * :class:`src.db.repos.note.note.NoteFacadeImpl`
