@@ -16,9 +16,9 @@ time and otherwise ignores it.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from warnings import deprecated
 
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.api.repos.combined_note_repo import CombinedNoteRepoABC
@@ -27,7 +27,7 @@ from src.api.services.note_service import NoteIncludeOptions, resolve_include_op
 from src.api.repos.note_tag_repo import NoteTagRepoABC
 from src.api.other.relationship import AttachmentRelationEnum
 from src.api.other.types import LoggingProvider, Pagination
-from src.api.other.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
+from src.api.other.undefined import UNDEFINED, unwrap_undefined_or
 from src.api.other.user_context import UserContextABC
 from src.db import Database
 from src.db.entities import NoteEntity
@@ -42,7 +42,6 @@ from src.db.repos.note.search_strategy import (
 )
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.db.repos.permissions import PermissionRepoABC
-from src.utils.logging import logging_provider
 
 
 class NoteFacadeImpl(NoteRepoFacadeABC):
@@ -59,6 +58,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
     strategies.
     """
 
+    # TODO: constructor overinjection here
     def __init__(
         self,
         db: Database,
@@ -83,6 +83,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
 
     # ---- private helpers ---------------------------------------------
 
+    @deprecated("dont populate note.permissions anymore")
     async def _fetch_note_permissions(
         self,
         note_id: str,
@@ -124,13 +125,8 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         requested_ids: Optional[List[str]],
         user: UserContextABC,
     ) -> List[str]:
-        """Pick the directory ids for a freshly-inserted note.
-
-        Behaviour:
-        * ``requested_ids`` empty / UNDEFINED -> fall back to the
-          user's default zettelkasten directory.
-        * non-empty -> validate the caller has access to every id,
-          return them as the resolved parent set.
+        """Get the directory ids for a freshly-inserted note. Either
+        use the user-supplied list of directories or fall back to the default directory.
         """
         user_directory_ids = await self._directory_repo.list_user_directory_ids(
             user
@@ -216,7 +212,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
 
         # 4) tags
         if note.tag_ids is not UNDEFINED:
-            tag_ids = unwrap_undefined_or(note.tag_ids, [])
+            tag_ids = note.tag_ids or []
             await self._tag_repo.replace_note_tags(
                 note_id, [str(t) for t in tag_ids if t],
             )
@@ -228,7 +224,9 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
             subject=SubjectRef(ObjectTypeEnum.USER, user.user_id),
         )
         await self._permission_repo.insert([owner_relation])
-        note.permissions = await self._fetch_note_permissions(note_id=note_id)
+
+        # deprecated: dont populate note.permissions
+        # note.permissions = await self._fetch_note_permissions(note_id=note_id)
 
         # 6) version snapshot
         title_value: Optional[str] = unwrap_undefined_or(note.title)
@@ -269,7 +267,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
 
         # replace tags when given
         if note.tag_ids is not UNDEFINED:
-            tag_ids = unwrap_undefined_or(note.tag_ids, [])
+            tag_ids = note.tag_ids or []
             await self._tag_repo.replace_note_tags(
                 str(note.note_id), [str(t) for t in tag_ids if t],
             )
@@ -331,10 +329,11 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         )
         if not entity:
             return None
-        if include_permissions:
-            entity.permissions = await self._fetch_note_permissions(
-                note_id=note_id,
-            )
+        # deprecated: dont populate note.permissions
+        # if include_permissions:
+        #     entity.permissions = await self._fetch_note_permissions(
+        #         note_id=note_id,
+        #     )
         return entity
 
     async def select_by_ids(
@@ -352,10 +351,13 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         )
         if not include_permissions:
             return entities
-        for note in entities:
-            note.permissions = await self._fetch_note_permissions(
-                note_id=str(note.note_id),
-            )
+        
+        # deprecated: dont assign relations
+        # for note in entities:
+        #     note.permissions = await self._fetch_note_permissions(
+        #         note_id=str(note.note_id),
+        #     )
+
         return entities
 
     # ---- search ------------------------------------------------------
@@ -390,7 +392,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
             ctx: caller identity used to scope the result set.
             pagination: offset / limit window for the search.
         """
-        common_init_parameters = {
+        common_init_parameters: Dict[str, Any] = {
             "db": self._db,
             "query": query,
             "limit": pagination.limit,
@@ -409,14 +411,16 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
             if note.tag_ids is UNDEFINED:
                 note.tag_ids = []
 
-        note_entities_dict: Dict[str, NoteEntity] = {
-            str(note.note_id): note
-            for note in note_entities
-            if note.note_id is not UNDEFINED
-        }
-        await self._enrich_with_parent_directory_permissions(
-            ctx, note_entities_dict,
-        )
+        # note_entities_dict: Dict[str, NoteEntity] = {
+        #     str(note.note_id): note
+        #     for note in note_entities
+        #     if note.note_id is not UNDEFINED
+        # }
+
+        # deprecated: dont assign relations
+        # await self._enrich_with_parent_directory_permissions(
+        #     ctx, note_entities_dict,
+        # )
         return note_entities
 
     def _strategy_for(
@@ -443,6 +447,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
             )
         raise ValueError(f"Unknown SearchType: {search_type}")
 
+    @deprecated("dont populate note.permissions anymore")
     async def _enrich_with_parent_directory_permissions(
         self,
         ctx: UserContextABC,
