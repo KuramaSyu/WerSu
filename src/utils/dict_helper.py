@@ -14,7 +14,13 @@ def drop_undefined(data: Dict[str, Any] | Any) -> Dict[str, Any]:
     return data 
 
 def drop_except_keys(data: Dict[str, Any], keys_to_keep: set[str]) -> Dict[str, Any]:
-    """Drops all fields except those specified in keys_to_keep."""
+    """Drops all fields except those specified in keys_to_keep.
+
+    Non-dict leaf values are passed through unchanged; only dict
+    values are recursed into.
+    """
+    if not isinstance(data, dict):
+        return data
     return {
         key: drop_except_keys(value, keys_to_keep)
         for key, value in data.items()
