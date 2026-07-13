@@ -68,7 +68,7 @@ class NoteFacade(NoteRepoFacadeABC):
         directory_repo: DirectoryFacade,
         tag_repo: NoteTagRepoABC,
         logging_provider: LoggingProvider,
-        version_repo: NoteVersionRepoABC | None = None,
+        version_repo: NoteVersionRepoABC,
     ):
         self._db = db
         self._content_repo = content_repo
@@ -181,7 +181,7 @@ class NoteFacade(NoteRepoFacadeABC):
         # 1) row
         inserted = await self._content_repo.insert(note)
         note_id = inserted.note_id
-        if note_id is UNDEFINED or note_id is None:
+        if not note_id:
             raise RuntimeError("content repo returned no note id")
         note_id = str(note_id)
         self.log.debug(f"Inserted note with ID: {note_id}")
@@ -202,14 +202,12 @@ class NoteFacade(NoteRepoFacadeABC):
             resolved_dirs = await self._resolve_directory_ids(None, user)
         else:
             resolved_dirs = await self._resolve_directory_ids(
-                list(unwrap_undefined_or(note.directory_ids, [])), user,
+                list(unwrap_undefined_or(note.directory_ids, [])), user,  # type: ignore
             )
-        # When the caller explicitly passed [] we still resolve to a
-        # real parent set -- a note with no parents is not allowed
-        # in this codebase.
-        if not resolved_dirs:
-            resolved_dirs = await self._resolve_directory_ids(None, user)
-
+            # if the given dirs reoslved nothing, then get default dirs
+            if not resolved_dirs:
+                resolved_dirs = await self._resolve_directory_ids(None, user)
+        
         for directory_id in resolved_dirs:
             await self._directory_repo.add_note_to_directory(
                 note_id, directory_id,
@@ -256,23 +254,22 @@ class NoteFacade(NoteRepoFacadeABC):
                 seen_parents.add(key)
 
         # 6) version snapshot
-        if self._version_repo is not None:
-            title_value: Optional[str] = unwrap_undefined_or(note.title)
-            content_value: Optional[str] = unwrap_undefined_or(note.content)
-            author_value: str = (
-                str(note.author_id) if note.author_id is not UNDEFINED
-                else str(user.user_id)
-            )
-            created_at: datetime = unwrap_undefined_or(
-                note.updated_at, datetime.now(),
-            )
-            await self._version_repo.record_initial_snapshot(
-                note_id=note_id,
-                title=title_value,
-                content=content_value,
-                author_id=author_value,
-                created_at=created_at,
-            )
+        title_value: Optional[str] = unwrap_undefined_or(note.title)
+        content_value: Optional[str] = unwrap_undefined_or(note.content)
+        author_value: str = (
+            str(note.author_id) if note.author_id is not UNDEFINED
+            else str(user.user_id)
+        )
+        created_at: datetime = unwrap_undefined_or(
+            note.updated_at, datetime.now(),
+        )
+        await self._version_repo.record_initial_snapshot(
+            note_id=note_id,
+            title=title_value,
+            content=content_value,
+            author_id=author_value,
+            created_at=created_at,
+        )
         return note
 
     async def update(self, note: NoteEntity, ctx: UserContextABC) -> NoteEntity:
@@ -293,7 +290,7 @@ class NoteFacade(NoteRepoFacadeABC):
             )
             updated.embeddings = [embedding]
 
-        # Tags: only when the caller explicitly passed the field.
+        # replace tags when given
         if note.tag_ids is not UNDEFINED:
             tag_ids = unwrap_undefined_or(note.tag_ids, [])
             await self._tag_repo.replace_note_tags(
@@ -486,7 +483,7 @@ class NoteFacade(NoteRepoFacadeABC):
             return
         user_directory_ids = await self._directory_repo.list_user_directory_ids(ctx)
         for directory_id in user_directory_ids:
-            matched = await self._permission_repo.lookup_relationships(
+            note_ids = await self._permission_repo.lookup(
                 Relationship(
                     resource=ObjectRef(ObjectTypeEnum.NOTE, UNDEFINED),
                     relation=NoteRelationEnum.PARENT_DIRECTORY,
@@ -496,8 +493,7 @@ class NoteFacade(NoteRepoFacadeABC):
                     ),
                 )
             )
-            for rel in matched:
-                note_id = rel.resource.object_id
+            for note_id in note_ids:
                 if note_id and note_entities_dict.get(note_id):
                     note_entities_dict[note_id].permissions.append(  # type: ignore
                         Relationship(
