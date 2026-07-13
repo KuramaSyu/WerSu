@@ -36,22 +36,22 @@ class UserServiceStub:
             channel: A grpc.Channel.
         """
         self.GetUser = channel.unary_unary(
-                '/proto.UserServiceImpl/GetUser',
+                '/proto.UserService/GetUser',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.GetUserRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.User.FromString,
                 _registered_method=True)
         self.PostUser = channel.unary_unary(
-                '/proto.UserServiceImpl/PostUser',
+                '/proto.UserService/PostUser',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.PostUserRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.User.FromString,
                 _registered_method=True)
         self.AlterUser = channel.unary_unary(
-                '/proto.UserServiceImpl/AlterUser',
+                '/proto.UserService/AlterUser',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.AlterUserRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.User.FromString,
                 _registered_method=True)
         self.DeleteUser = channel.unary_unary(
-                '/proto.UserServiceImpl/DeleteUser',
+                '/proto.UserService/DeleteUser',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.DeleteUserRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.DeleteUserResponse.FromString,
                 _registered_method=True)
@@ -110,13 +110,13 @@ def add_UserServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'proto.UserServiceImpl', rpc_method_handlers)
+            'proto.UserService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('proto.UserServiceImpl', rpc_method_handlers)
+    server.add_registered_method_handlers('proto.UserService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class UserServiceImpl:
+class UserService:
     """User Service
     """
 
@@ -134,7 +134,7 @@ class UserServiceImpl:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.UserServiceImpl/GetUser',
+            '/proto.UserService/GetUser',
             src_dot_grpc__mod_dot_proto_dot_user__pb2.GetUserRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_user__pb2.User.FromString,
             options,
@@ -161,7 +161,7 @@ class UserServiceImpl:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.UserServiceImpl/PostUser',
+            '/proto.UserService/PostUser',
             src_dot_grpc__mod_dot_proto_dot_user__pb2.PostUserRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_user__pb2.User.FromString,
             options,
@@ -188,7 +188,7 @@ class UserServiceImpl:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.UserServiceImpl/AlterUser',
+            '/proto.UserService/AlterUser',
             src_dot_grpc__mod_dot_proto_dot_user__pb2.AlterUserRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_user__pb2.User.FromString,
             options,
@@ -215,7 +215,7 @@ class UserServiceImpl:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.UserServiceImpl/DeleteUser',
+            '/proto.UserService/DeleteUser',
             src_dot_grpc__mod_dot_proto_dot_user__pb2.DeleteUserRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_user__pb2.DeleteUserResponse.FromString,
             options,

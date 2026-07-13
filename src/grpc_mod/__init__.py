@@ -8,10 +8,10 @@ from .proto.note_pb2_grpc import (
     add_DirectoryServiceServicer_to_server,
     add_NoteServiceServicer_to_server,
     add_PermissionServiceServicer_to_server,
-    DirectoryServiceImpl,
+    DirectoryService,
     DirectoryServiceServicer,
     DirectoryServiceStub,
-    NoteServiceImpl,
+    NoteService,
     NoteServiceServicer,
     NoteServiceStub,
     PermissionService,
@@ -51,6 +51,6 @@ from .proto.note_pb2 import (
     PostNoteRequest,
     ReplacePermissionsRequest,
 )
-from .proto.user_pb2_grpc import add_UserServiceServicer_to_server, UserServiceImpl, UserServiceServicer, UserServiceStub
+from .proto.user_pb2_grpc import add_UserServiceServicer_to_server, UserService, UserServiceServicer, UserServiceStub
 from .proto.user_pb2 import User, GetUserRequest, AlterUserRequest, DeleteUserRequest, DeleteUserResponse, PostUserRequest
 from .service import *
