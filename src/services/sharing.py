@@ -262,31 +262,19 @@ class SharingServiceImpl(SharingServiceABC):
         subject = SubjectRef("user", access_as)
         new_relationship = Relationship(resource=resource, relation=new_relation, subject=subject)
 
-        # keep every existing relation except the access user's reader/writer entry
-        keep: list[Relationship] = []
-        for rel in await self._permission_repo.list_relationships(resource):
-            is_access_user_share = (
-                str(rel.subject.object_type) == "user"
-                and str(rel.subject.object_id) == access_as
-                and str(rel.relation) in {str(NoteRelationEnum.READER), str(NoteRelationEnum.WRITER)}
+        # Drop the access user's existing reader/writer relation (if
+        # any) and insert the new one.  Going through
+        # `replace_relationships` would also touch every other relation
+        # on the note (owner, parent_directory, ...) and is rejected
+        # by the permission service whenever a structural (hierarchy)
+        # tuple is part of the picture -- neither is what we want for
+        # a share-permission swap.
+        for old_relation in (NoteRelationEnum.READER, NoteRelationEnum.WRITER):
+            await self._permission_repo.delete(
+                Relationship(
+                    resource=resource,
+                    relation=old_relation,
+                    subject=subject,
+                )
             )
-            # Structural (hierarchy) tuples are managed by note/directory
-            # patch and are explicitly rejected by the permission
-            # service, so drop them from the keep-set before delegating.
-            is_structural = (
-                str(rel.subject.object_type) == "directory"
-                and str(rel.relation) in {
-                    str(NoteRelationEnum.PARENT_DIRECTORY),
-                    str(DirectoryRelationEnum.PARENT),
-                }
-            )
-            if is_access_user_share or is_structural:
-                continue
-            keep.append(rel)
-        keep.append(new_relationship)
-
-        await self._permission_service.replace_relationships(
-            resource=resource,
-            relationships=keep,
-            actor=ctx,
-        )
+        await self._permission_repo.insert([new_relationship])
