@@ -134,7 +134,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
         # 3. Create chapter directories under the book directory.
         self.log.debug(f"Creating {len(book.chapters)} chapter directories for {book.name}")
         chapter_dirs: Dict[int, str] = {}
-        chapters: List[ImportedChapter] = []
+        chapters: Dict[int, ImportedChapter] = {}
         for chapter in book.chapters:
             try:
                 chapter_dir = await self._directory_service.create_directory(
@@ -155,12 +155,10 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
                 )
                 continue
             chapter_dirs[chapter.id] = str(chapter_dir.id)
-            chapters.append(
-                ImportedChapter(
-                    directory_id=str(chapter_dir.id),
-                    chapter_name=chapter.name,
-                    pages_imported=0,
-                )
+            chapters[chapter.id] = ImportedChapter(
+                directory_id=str(chapter_dir.id),
+                chapter_name=chapter.name,
+                pages_imported=0,
             )
 
         # 4. Two passes over pages so we can rewrite [[bsexport:...]]
@@ -185,6 +183,9 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
                 continue
             first_pass[page.id] = note
             pages_imported += 1
+            chapter = chapters.get(page.chapter_id or -1)
+            if chapter:
+                chapter.pages_imported += 1
 
         # Second pass: link attachments referenced in each note's
         # content + handle page.images[] explicit entries.
@@ -211,7 +212,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
             root_directory_id=str(book_dir.id),
             pages_imported=pages_imported,
             attachments_uploaded=attachments_uploaded,
-            chapters=chapters,
+            chapters=list(chapters.values()),
         )
 
     async def _upload_attachments(
@@ -315,14 +316,8 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
         user_ctx: UserContextABC,
     ) -> NoteEntity:
         parent_dir_id = chapter_dirs.get(page.chapter_id or -1) or str(book_dir.id)
-        # Inline image-src refs in the page body may use the
-        # `[[bsexport:image:N]]` cross-ref form (either raw HTML or
-        # the html2text escaped variant).  Resolve them through the
-        # flat source-id -> new-key map so the first-pass note
-        # already carries the new attachment URL; the second-pass
-        # `rewrite_cross_references` then cleans up any plain-prose
-        # placeholders that survived (anchor hrefs, page/chapter
-        # cross-refs, etc).
+        # parse `[[bsexport:image:N]]` and resolve them to their new attachment key;
+        # the second-pass `rewrite_cross_references` then cleans up any placeholders that survived 
         valid_bsexport_index_to_uuid: Dict[int, str] = {}
         for img in page.images:
             if not img.id:
@@ -358,20 +353,11 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
         note_id = str(note.note_id)
         content = note.content or ""
 
-        # (a) Inline refs inside the note body.  After the two-pass
-        # rewrite every remaining `[[bsexport:image:N]]` /
-        # `[[bsexport:attachment:N]]` placeholder (in either the
-        # plain or the html2text-escaped form) refers to an entry in
-        # the per-kind `id_index` map built during upload.  We use
-        # the BookStack-specific extractor instead of the project-wide
-        # `extract_attachment_ids` helper because (i) the placeholder
-        # text is not a real URL, so it never appears in the renderer,
-        # and (ii) the helper scans for the BookStack cross-ref shape
-        # only -- plain prose like `key=123` (which the renderer
-        # helper now ignores) cannot leak through here.
+        # get all references from html
         referenced: set[str] = set()
         for source_id in extract_bookstack_attachment_ids(content):
             if source_id in id_index:
+                # add, if there is a translation for it
                 referenced.add(id_index[source_id])
 
         # (a.2) Inline refs rewritten to canonical attachment URLs
