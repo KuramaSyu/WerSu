@@ -18,13 +18,13 @@ the service relies on.
 
 from __future__ import annotations
 
-from src.api.relationship import (
+from src.api.other.relationship import (
     NoteRelationEnum,
     ObjectRef,
     Relationship,
     SubjectRef,
 )
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 
 
 # ---------------------------------------------------------------------------

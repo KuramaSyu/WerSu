@@ -10,7 +10,7 @@ keeps the lightweight fixtures the rest of the test suite shares:
 * :func:`test_user`      a reusable :class:`UserEntity` payload
 * :func:`user_repo`      the ``UserRepoABC`` wired against ``db``
 * :func:`note_repo_facade`
-                         in-memory :class:`NoteFacade` for unit
+                         in-memory :class:`NoteFacadeImpl` for unit
                          tests of the note code paths
 * The in-memory test doubles (re-exported from
   :mod:`tests.fixtures.fakes`).
@@ -30,8 +30,8 @@ from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.tag import NoteTagPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
-from src.db.repos.note.note import NoteFacade
-from src.api.note_facade import NoteRepoFacadeABC
+from src.db.repos.note.note import NoteFacadeImpl
+from src.api.facades.note_facade import NoteRepoFacadeABC
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.user.user import UserRepoABC
@@ -134,7 +134,7 @@ async def db(dsn):
 
 @pytest.fixture(scope="function")
 def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
-    """Return an in-memory :class:`NoteFacade` for unit tests.
+    """Return an in-memory :class:`NoteFacadeImpl` for unit tests.
 
     Uses the in-memory permission repo + directory repo to avoid the
     SpiceDB container dependency.
@@ -176,7 +176,7 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
         max_deltas_per_snapshot=2,
     )
 
-    return NoteFacade(
+    return NoteFacadeImpl(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
         combined_repo=CombinedNotePostgresRepo(db=db),

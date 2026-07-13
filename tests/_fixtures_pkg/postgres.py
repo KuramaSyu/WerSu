@@ -20,11 +20,11 @@ from testcontainers_spicedb import SpiceDBContainer
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos import Database
-from src.db.repos.directory.directory import DirectoryRepoFacade
+from src.db.repos.directory.directory import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.note import NoteFacade
+from src.db.repos.note.note import NoteFacadeImpl
 from src.db.repos.note.tag import NoteTagPostgresRepo
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
@@ -33,11 +33,11 @@ from src.db.repos.user import RepoContextFactory
 from src.db.repos.user.user_action import UserActionPostgresRepo
 from src.db.repos.activity.postgres import PostgresActivityRepo
 from src.db.table import Table
-from src.services.activity_logger_service import DefaultActivityLoggerService
-from src.services.permissions import PermissionServiceRepo
-from src.services.sharing import DefaultSharingService
+from src.services.activity_logger_service import ActivityLoggerServiceImpl
+from src.services.permissions import PermissionServiceImpl
+from src.services.sharing import SharingServiceImpl
 from src.facades.share_action_facade import ShareActionFacade
-from src.services.user import UserService
+from src.services.user_service import UserServiceImpl
 from src.utils import logging_provider
 from tests._fixtures_pkg.fakes import _FakeEmbeddingRepo
 from tests._fixtures_pkg.spicedb_schema import (
@@ -75,14 +75,14 @@ class IntegrationEnv:
     db: Database
     spicedb_client: AsyncClient
     permission_repo: SpicedbPermissionRepo
-    directory_repo: DirectoryRepoFacade
-    note_repo: NoteFacade
+    directory_repo: DirectoryFacadeImpl
+    note_repo: NoteFacadeImpl
     user_repo: UserPostgresRepo
     user_context_factory: RepoContextFactory
-    user_service: UserService
-    permission_service: PermissionServiceRepo
+    user_service: UserServiceImpl
+    permission_service: PermissionServiceImpl
     sharing_repo: SharingPostgresRepo
-    sharing_service: DefaultSharingService
+    sharing_service: SharingServiceImpl
 
 
 @pytest.fixture(scope="function")
@@ -149,11 +149,11 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
                 logging_provider=logging_provider,
             ),
         )
-        directory_repo = DirectoryRepoFacade(
+        directory_repo = DirectoryFacadeImpl(
             postgres_repo=postgres_directory_repo,
             permission_repo=permission_repo,
         )
-        note_repo = NoteFacade(
+        note_repo = NoteFacadeImpl(
             db=db,
             content_repo=NoteContentPostgresRepo(
                 Table(
@@ -187,8 +187,8 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             logging_provider=logging_provider,
         )
         user_context_factory = RepoContextFactory(user_repo=user_repo)
-        user_service = UserService(user_repo=user_repo, directory_repo=directory_repo)
-        permission_service = PermissionServiceRepo(
+        user_service = UserServiceImpl(user_repo=user_repo, directory_repo=directory_repo)
+        permission_service = PermissionServiceImpl(
             permission_repo=permission_repo,
             note_repo=note_repo,
             directory_repo=directory_repo,
@@ -221,7 +221,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             ),
             logging_provider=logging_provider,
         )
-        sharing_service = DefaultSharingService(
+        sharing_service = SharingServiceImpl(
             share_facade=ShareActionFacade(
                 sharing_repo=sharing_repo,
                 user_repo=user_repo,
@@ -232,7 +232,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             permission_service=permission_service,
             logging_provider=logging_provider,
             user_repo=user_repo,
-            activity_logger=DefaultActivityLoggerService(
+            activity_logger=ActivityLoggerServiceImpl(
                 activity_repo=activity_repo,
                 logging_provider=logging_provider,
             ),

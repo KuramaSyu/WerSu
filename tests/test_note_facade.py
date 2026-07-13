@@ -1,9 +1,9 @@
-"""Fast unit tests for :class:`src.db.repos.note.note.NoteFacade`.
+"""Fast unit tests for :class:`src.db.repos.note.note.NoteFacadeImpl`.
 
 These tests use the in-memory fakes from
 :mod:`tests._fixtures_pkg.fakes` so they do not require a Postgres
 container.  They cover the CRUD surface that
-:class:`src.services.note.NoteService` and the gRPC adapters call.
+:class:`src.services.note.NoteServiceImpl` and the gRPC adapters call.
 
 The behaviours pinned here were the ones that previously had to be
 exercised by integration tests with a real Postgres container.  The
@@ -20,13 +20,13 @@ from uuid import UUID
 
 import pytest
 
-from src.api.types import Pagination
-from src.api.undefined import UNDEFINED
+from src.api.other.types import Pagination
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
-from src.api.directory_facade import DirectoryFacade
+from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.db.repos.note import note as note_module
-from src.db.repos.note.note import NoteFacade
-from src.api.note_facade import SearchType
+from src.db.repos.note.note import NoteFacadeImpl
+from src.api.facades.note_facade import SearchType
 from tests._fixtures_pkg.fakes import (
     _FakeCombinedNoteRepo,
     _FakeDatabase,
@@ -49,9 +49,9 @@ def _make_facade(
     combined_repo: Optional[_FakeCombinedNoteRepo] = None,
     tag_repo: Optional[_FakeNoteTagRepo] = None,
     permission_repo: Optional[InMemoryPermissionRepo] = None,
-    directory_repo: Optional[DirectoryFacade] = None,
-) -> tuple[NoteFacade, _FakeDatabase, _FakeNoteContentRepo, _FakeEmbeddingRepo, DirectoryFacade, _FakeCombinedNoteRepo, _FakeNoteTagRepo]:
-    """Build a :class:`NoteFacade` wired against the in-memory fakes."""
+    directory_repo: Optional[DirectoryFacadeABC] = None,
+) -> tuple[NoteFacadeImpl, _FakeDatabase, _FakeNoteContentRepo, _FakeEmbeddingRepo, DirectoryFacadeABC, _FakeCombinedNoteRepo, _FakeNoteTagRepo]:
+    """Build a :class:`NoteFacadeImpl` wired against the in-memory fakes."""
     fake_db = db or _FakeDatabase()
     fake_content = content_repo or _FakeNoteContentRepo()
     fake_combined = combined_repo or _FakeCombinedNoteRepo(content_repo=fake_content)
@@ -59,7 +59,7 @@ def _make_facade(
     fake_permission = permission_repo or InMemoryPermissionRepo()
     fake_directory = directory_repo or _TestDirectoryRepo()
     fake_tags = tag_repo or _FakeNoteTagRepo()
-    facade = NoteFacade(
+    facade = NoteFacadeImpl(
         db=fake_db,
         content_repo=fake_content,
         combined_repo=fake_combined,

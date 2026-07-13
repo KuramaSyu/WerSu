@@ -3,8 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional, TypedDict
 
-from src.api.permission_repo import DirectoryChild
-from src.api.user_context import UserContextABC
+from src.api.other.user_context import UserContextABC
+from src.api.repos.permission_repo import DirectoryChild
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 
@@ -14,7 +14,7 @@ class DirectoryIncludeOptions(TypedDict, total=False):
 
     Every key defaults to `False`.  Each `True` flag costs one
     dedicated SQL statement (see
-    :meth:`src.api.directory_repo.DirectoryFacade.fetch_directory`)
+    :meth:`src.api.directory_repo.DirectoryFacadeABC.fetch_directory`)
     and lands its result on the matching
     :class:`~src.db.entities.directory.directory.DirectoryEntity`
     field:
@@ -60,7 +60,7 @@ class DirectoryServiceABC(ABC):
     """Abstract application service for directory operations.
 
     Implementations:
-    * :class:`~src.services.directory.DirectoryService`
+    * :class:`~src.services.directory.DirectoryServiceImpl`
     """
 
     @abstractmethod

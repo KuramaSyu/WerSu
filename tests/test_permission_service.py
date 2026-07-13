@@ -5,11 +5,11 @@ from typing import List, Optional, Tuple
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api.types import Pagination
-from src.api.user_context import UserContextABC
+from src.api.other.types import Pagination
+from src.api.other.user_context import UserContextABC
 from src.db.entities import DirectoryEntity, NoteEntity
-from src.api.directory_facade import DirectoryFacade
-from src.api.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
 from src.api import (
     DirectoryRelationEnum,
     NoteRelationEnum,
@@ -18,7 +18,7 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-from src.services.permissions import PermissionServiceRepo
+from src.services.permissions import PermissionServiceImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 
 
@@ -63,7 +63,7 @@ class _StubNoteRepo(NoteRepoFacadeABC):
         raise NotImplementedError()
 
 
-class _StubDirectoryRepo(DirectoryFacade):
+class _StubDirectoryRepo(DirectoryFacadeABC):
     """Minimal directory repo stub implementing only fetch for existence checks."""
 
     def __init__(self, directory_ids: set[str]) -> None:
@@ -120,7 +120,7 @@ async def test_permission_service_create_and_list_note_relationships() -> None:
     """Creates a note relation and verifies listing returns all stored relations."""
 
     permission_repo = InMemoryPermissionRepo()
-    service = PermissionServiceRepo(
+    service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids={"note-1"}),
         directory_repo=_StubDirectoryRepo(directory_ids=set()),
@@ -169,7 +169,7 @@ async def test_permission_service_denies_actor_without_manage_permission() -> No
     """Rejects relation changes when actor has only read-level access."""
 
     permission_repo = InMemoryPermissionRepo()
-    service = PermissionServiceRepo(
+    service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids={"note-2"}),
         directory_repo=_StubDirectoryRepo(directory_ids=set()),
@@ -204,7 +204,7 @@ async def test_permission_service_replace_directory_relationships() -> None:
     """Replaces directory relations by removing stale entries and adding new ones."""
 
     permission_repo = InMemoryPermissionRepo()
-    service = PermissionServiceRepo(
+    service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids=set()),
         directory_repo=_StubDirectoryRepo(directory_ids={"dir-1"}),
@@ -253,7 +253,7 @@ async def test_permission_service_replace_directory_relationships() -> None:
 async def test_create_relationship_rejects_note_parent_directory_tuple() -> None:
     """``note#parent_directory@directory`` is a hierarchy write, not a permission."""
     permission_repo = InMemoryPermissionRepo()
-    service = PermissionServiceRepo(
+    service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids={"note-1"}),
         directory_repo=_StubDirectoryRepo(directory_ids={"dir-1"}),
@@ -282,7 +282,7 @@ async def test_create_relationship_rejects_note_parent_directory_tuple() -> None
 async def test_create_relationship_rejects_directory_parent_tuple() -> None:
     """``directory#parent@directory`` is a hierarchy write, not a permission."""
     permission_repo = InMemoryPermissionRepo()
-    service = PermissionServiceRepo(
+    service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids=set()),
         directory_repo=_StubDirectoryRepo(directory_ids={"dir-2"}),
@@ -311,7 +311,7 @@ async def test_create_relationship_rejects_directory_parent_tuple() -> None:
 async def test_delete_relationship_rejects_structural_tuples() -> None:
     """``delete_relationship`` also rejects structural tuples."""
     permission_repo = InMemoryPermissionRepo()
-    service = PermissionServiceRepo(
+    service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids={"note-1"}),
         directory_repo=_StubDirectoryRepo(directory_ids={"dir-1"}),
@@ -340,7 +340,7 @@ async def test_delete_relationship_rejects_structural_tuples() -> None:
 async def test_replace_relationships_rejects_structural_tuple_in_desired_set() -> None:
     """Forbidden tuple in the desired set fails the whole replace."""
     permission_repo = InMemoryPermissionRepo()
-    service = PermissionServiceRepo(
+    service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids={"note-1"}),
         directory_repo=_StubDirectoryRepo(directory_ids={"dir-1"}),
@@ -376,7 +376,7 @@ async def test_replace_relationships_rejects_structural_tuple_already_stored() -
     caller could silently drop it via a diff.
     """
     permission_repo = InMemoryPermissionRepo()
-    service = PermissionServiceRepo(
+    service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids={"note-1"}),
         directory_repo=_StubDirectoryRepo(directory_ids={"dir-1"}),
@@ -406,7 +406,7 @@ async def test_replace_relationships_rejects_structural_tuple_already_stored() -
 async def test_replace_relationships_directory_parent_rejected() -> None:
     """``directory#parent@directory`` is rejected in replace too."""
     permission_repo = InMemoryPermissionRepo()
-    service = PermissionServiceRepo(
+    service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids=set()),
         directory_repo=_StubDirectoryRepo(directory_ids={"dir-2"}),
@@ -436,7 +436,7 @@ async def test_replace_relationships_directory_parent_rejected() -> None:
 async def test_create_relationship_still_allows_user_roles() -> None:
     """Sanity: the regular permission tuples (admin/reader/writer/owner) still pass."""
     permission_repo = InMemoryPermissionRepo()
-    service = PermissionServiceRepo(
+    service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=_StubNoteRepo(note_ids={"note-1"}),
         directory_repo=_StubDirectoryRepo(directory_ids=set()),

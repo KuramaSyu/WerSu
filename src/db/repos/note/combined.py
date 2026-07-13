@@ -1,6 +1,6 @@
 """Postgres implementation of :class:`CombinedNoteRepoABC`.
 
-Owns the three SQL shapes used by :class:`NoteFacade` when a
+Owns the three SQL shapes used by :class:`NoteFacadeImpl` when a
 caller asks for tags / parent directory enrichment.  Each
 shape is a dedicated statement so a cheap basic read stays
 cheap when the caller doesn't ask for enrichment.
@@ -23,9 +23,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from src.api.combined_note_repo import CombinedNoteRepoABC
-from src.api.note_service import NoteIncludeOptions, resolve_include_options
-from src.api.undefined import UNDEFINED
+from src.api.repos.combined_note_repo import CombinedNoteRepoABC
+from src.api.services.note_service import NoteIncludeOptions, resolve_include_options
+from src.api.other.undefined import UNDEFINED
 from src.db.database import Database
 from src.db.entities import NoteEntity
 

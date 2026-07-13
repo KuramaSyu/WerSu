@@ -6,10 +6,10 @@ import grpc
 from grpc.aio import ServicerContext
 
 from tests.stubs.user_context import _UserContext as UserContext, _UserContextFactory
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.versioning import NoteVersionContent, NoteVersionEntry
-from src.api.note_facade import NoteRepoFacadeABC
+from src.api.facades.note_facade import NoteRepoFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.grpc_mod.proto.note_pb2 import (
     GetNoteVersionContentRequest,
@@ -18,7 +18,7 @@ from src.grpc_mod.proto.note_pb2 import (
 )
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.service import GrpcNoteVersionService
-from src.services.versioning import DirectoryActivityServiceABC
+from src.services.directory_activity_service import DirectoryActivityServiceABC
 
 
 def _to_grpc() -> ConvertToGrpcVisitor:

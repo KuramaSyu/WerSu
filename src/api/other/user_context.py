@@ -11,7 +11,7 @@ temporary-user predicate.
 from abc import ABC, abstractmethod
 from typing import Literal, TypeVar
 
-from src.api.undefined import UNDEFINED, UndefinedOr
+from src.api.other.undefined import UNDEFINED, UndefinedOr
 
 
 UserTypeT = Literal["human", "temporary", "system"]

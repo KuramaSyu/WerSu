@@ -1,4 +1,4 @@
-"""Unit tests for :class:`DefaultSharingService`.
+"""Unit tests for :class:`SharingServiceImpl`.
 
 Pins the policy the service applies on top of the
 :class:`ShareActionFacade`: it owns the permission-relation writes
@@ -21,12 +21,12 @@ from typing import Optional
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
-from src.api.undefined import UNDEFINED
+from src.api.other.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.user_action import UserActionEntity
 from src.facades.share_action_facade import ShareActionFacade
-from src.services.sharing import DefaultSharingService
+from src.services.sharing import SharingServiceImpl
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.logging import silent_logger
@@ -71,10 +71,10 @@ async def _build_service(
     user_repo: Optional[_FakeUserRepo] = None,
     user_action_repo: Optional[_FakeUserActionRepo] = None,
     activity_logger: Optional[_FakeActivityLoggerService] = None,
-) -> tuple[DefaultSharingService, _FakeActivityLoggerService]:
-    """Assemble a :class:`DefaultSharingService` with fakes for every dep."""
+) -> tuple[SharingServiceImpl, _FakeActivityLoggerService]:
+    """Assemble a :class:`SharingServiceImpl` with fakes for every dep."""
     activity_logger = activity_logger or _FakeActivityLoggerService()
-    service = DefaultSharingService(
+    service = SharingServiceImpl(
         share_facade=ShareActionFacade(
             sharing_repo=sharing_repo or _FakeSharingRepo(),
             user_repo=user_repo or _FakeUserRepo(),

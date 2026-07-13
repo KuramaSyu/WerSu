@@ -29,9 +29,9 @@ from typing import List, Optional
 
 import asyncpg  # type: ignore[import]
 
-from src.api.directory_service import DirectoryIncludeOptions
-from src.api.directory_repo import DirectoryRepoABC
-from src.api.undefined import (
+from src.api.services.directory_service import DirectoryIncludeOptions
+from src.api.repos.directory_repo import DirectoryRepoABC
+from src.api.other.undefined import (
     UNDEFINED,
     UndefinedNoneOr,
     UndefinedOr,

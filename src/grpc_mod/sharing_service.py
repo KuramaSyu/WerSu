@@ -16,8 +16,8 @@ from google.protobuf.empty_pb2 import Empty
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
-from src.api.sharing import ShareAccessServiceABC, SharingServiceABC as SharingServiceABC
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.services.sharing import ShareAccessServiceABC, SharingServiceABC as SharingServiceABC
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities.note.sharing import FilterShareNote
 from src.db.repos.user import UnimplementedUserContext
 from src.grpc_mod.converter.from_proto import (

@@ -25,16 +25,16 @@ from typing import List, Optional
 
 from asyncpg import Record
 
-from src.api.activity import ActivityRepoABC
-from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED, is_undefined
+from src.api.repos.activity_repo import ActivityRepoABC
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED, is_undefined
 from src.db.entities.activity import (
     ActivityEntity,
     ActivityScore,
     FilterActivity,
 )
 from src.db.repos.activity.strategies import get_strategy
-from src.api.directory_facade import DirectoryFacade
+from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.db.sql_builders import SqliteSqlBuilder, WhereClause, WherePair
 from src.db.table import TableABC
 from src.utils import asdict, drop_undefined, logging_provider as default_logging_provider
@@ -48,7 +48,7 @@ class PostgresActivityRepo(ActivityRepoABC):
     def __init__(
         self,
         table: TableABC[List[Record]],
-        directory_repo: Optional[DirectoryFacade] = None,
+        directory_repo: Optional[DirectoryFacadeABC] = None,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         """Initialise the repo.

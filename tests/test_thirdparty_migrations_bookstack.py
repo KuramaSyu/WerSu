@@ -30,14 +30,14 @@ from typing import Dict, List, Optional, Tuple
 
 import pytest
 
-from src.api.directory_service import DirectoryServiceABC
-from src.api.note_service import NoteServiceABC
-from src.api.undefined import UNDEFINED
-from src.api.user_context import UserContextABC
+from src.api.services.directory_service import DirectoryServiceABC
+from src.api.services.note_service import NoteServiceABC
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
-from src.services.attachments import AttachmentFacadeABC
+from src.services.attachment_facade import AttachmentFacadeABC
 from src.services.thirdparty_migrations import MigrationResult
 from src.services.thirdparty_migrations.bookstack import BookstackBookImport
 from src.services.thirdparty_migrations.bookstack_reader import BookstackZipError

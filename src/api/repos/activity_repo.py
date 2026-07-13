@@ -18,14 +18,38 @@ implementation detail and is intentionally not re-exported here.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import TYPE_CHECKING, List, Any
 
-from src.db.entities.activity import (
-    ActivityEntity,
-    ActivityFilterBuilder,
-    ActivityScore,
-    FilterActivity,
-)
+# `ActivityFilterBuilder` is a runtime value (callable builder), so
+# importing it eagerly here would loop back into `src.db` and break
+# module init.  We expose it via `__getattr__` so the symbol
+# resolves on first access, after this module has finished loading.
+if TYPE_CHECKING:
+    from src.db.entities.activity import (
+        ActivityEntity,
+        ActivityFilterBuilder,
+        ActivityScore,
+        FilterActivity,
+    )
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve `ActivityFilterBuilder` lazily on first access.
+
+    Args:
+        name: attribute being requested.
+
+    Returns:
+        Any: the resolved attribute.
+
+    Raises:
+        AttributeError: when `name` is not the lazy-loaded name.
+    """
+    if name == "ActivityFilterBuilder":
+        from src.db.entities.activity import ActivityFilterBuilder
+
+        return ActivityFilterBuilder
+    raise AttributeError(f"module 'src.api.repos.activity_repo' has no attribute {name!r}")
 
 
 class ActivityRepoABC(ABC):

@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import List
 
-from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
+from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.api import Relationship
-from src.api.visitor import AcceptsVisitor, EntityVisitor
+from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 
 
 @dataclass
@@ -20,8 +20,8 @@ class DirectoryEntity(AcceptsVisitor):
         image_url: optional image URL for the directory.
         readme_note_id: optional id of the `README.md` note pinned
             to this directory.  When set,
-            :meth:`src.services.directory.DirectoryService.get_directory`
-            and :meth:`~src.services.directory.DirectoryService.get_directories`
+            :meth:`src.services.directory.DirectoryServiceImpl.get_directory`
+            and :meth:`~src.services.directory.DirectoryServiceImpl.get_directories`
             fetch the note and overlay the parsed `image_url` and
             `description` onto the result.
         parent_directory_ids: every directory this one is parented

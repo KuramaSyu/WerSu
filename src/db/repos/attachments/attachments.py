@@ -11,9 +11,9 @@ from asyncpg import Record
 from sympy import Q
 
 
-from src.api.undefined import UNDEFINED, UndefinedOr, is_undefined
+from src.api.other.undefined import UNDEFINED, UndefinedOr, is_undefined
 from src.api import UserContextABC
-from src.api.visitor import AcceptsVisitor, EntityVisitor
+from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 from src.db.table import TableABC
 from src.utils import convert_entity_for_db, asdict
 
@@ -62,7 +62,7 @@ class Attachment:
         return self.visit(visitor)
 
 
-class AttachmentsRepoABC(ABC):
+class AttachmentRepoABC(ABC):
     @abstractmethod
     async def post_attachment(self, attachment: Attachment) -> str:
         """Upload an attachment and return its key."""
@@ -85,7 +85,7 @@ class AttachmentsRepoABC(ABC):
         """Delete an attachment by key."""
         ...
 
-class AttachmentsMetadataRepoABC(ABC):
+class AttachmentMetadataRepoABC(ABC):
     @abstractmethod
     async def post_metadata(self, attachment: Attachment, user_ctx: UserContextABC) -> None:
         """Save attachment metadata to the database."""
@@ -106,7 +106,7 @@ class AttachmentsMetadataRepoABC(ABC):
         ...
 
 
-class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepoABC):
+class AttachmentMetadataPostgresRepo(AttachmentMetadataRepoABC):
     """Postgres-backed metadata repository for attachments."""
 
     def __init__(self, table: TableABC[List[Record]]):
@@ -187,7 +187,7 @@ class AttachmentsMetadataPostgresRepo(AttachmentsMetadataRepoABC):
         await self._table.delete(where={"key": key}, returning="key")
 
 
-class AttachmentsS3Repo(AttachmentsRepoABC):
+class AttachmentS3Repo(AttachmentRepoABC):
     """S3-compatible attachment repository using a sync boto3 client.
 
     Notes
@@ -250,7 +250,7 @@ class AttachmentsS3Repo(AttachmentsRepoABC):
 
 
 class S3ClientProtocol(Protocol):
-    """Subset of boto3 S3 client used by ``AttachmentsS3Repo``."""
+    """Subset of boto3 S3 client used by ``AttachmentS3Repo``."""
 
     def put_object(self, **kwargs) -> dict:  # pragma: no cover - protocol definition
         ...

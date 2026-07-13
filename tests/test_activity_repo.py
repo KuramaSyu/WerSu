@@ -27,7 +27,7 @@ import uuid
 
 import pytest
 
-from src.api.activity import ActivityFilterBuilder
+from src.api.repos.activity_repo import ActivityFilterBuilder
 from src.db.entities.activity import (
     ActivityEntity,
     ActivityKind,

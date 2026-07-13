@@ -14,13 +14,13 @@ from __future__ import annotations
 
 from typing import List, Mapping, Optional, Tuple
 
-from src.api.activity_logger_service import (
+from src.api.services.activity_logger_service import (
     ActivityLoggerServiceABC,
     RoleChangeMetadata,
     RoleGrantMetadata,
     RoleRevokeMetadata,
 )
-from src.api.user_context import UserContextABC
+from src.api.other.user_context import UserContextABC
 
 
 class _FakeActivityLoggerService(ActivityLoggerServiceABC):

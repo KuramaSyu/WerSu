@@ -64,7 +64,7 @@ async def idempotent_permission_repo(
 ) -> AsyncIterator[SpicedbPermissionRepo]:
     """Like :func:`spicedb_permission_repo` but with an idempotent ``insert``.
 
-    ``AttachmentFacade`` re-inserts the same ``parent_note`` relationship
+    ``AttachmentFacadeImpl`` re-inserts the same ``parent_note`` relationship
     that the test code has already pre-written.  Without the swallow,
     the second insert would raise ``ALREADY_EXISTS``.  This fixture
     wraps :py:meth:`NotePermissionRepoSpicedb.insert` to silence that

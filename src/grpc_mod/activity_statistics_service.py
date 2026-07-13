@@ -19,8 +19,8 @@ import grpc
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
-from src.api.activity_statistics_service import ActivityStatisticsServiceABC
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.services.activity_statistics_service import ActivityStatisticsServiceABC
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.proto.activity_pb2 import (
     ACCESSED_AS_SYSTEM,

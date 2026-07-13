@@ -4,8 +4,8 @@ from typing import Awaitable, Callable, Coroutine, Dict, Optional, List, Any
 import asyncpg
 from asyncpg import Pool, Connection, Record
 
-from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED
 from src.utils.singleton import SingletonMeta
 
 

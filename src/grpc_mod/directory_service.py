@@ -1,7 +1,7 @@
 """gRPC adapter for :class:`src.api.DirectoryServiceABC`.
 
 Implements the directory endpoints from ``grpc/proto/note.proto``
-(``DirectoryService``): CRUD plus the paginated
+(``DirectoryServiceImpl``): CRUD plus the paginated
 ``GetNotesOfDirectory`` stream.  Translates proto payloads into
 :class:`~src.db.entities.directory.directory.DirectoryEntity`
 arguments, delegates to the service layer, and maps results back
@@ -17,9 +17,9 @@ import grpc
 from grpc.aio import ServicerContext
 
 from src.api import DirectoryServiceABC, LoggingProvider
-from src.api.directory_service import DirectoryIncludeOptions
-from src.api.undefined import UNDEFINED
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.services.directory_service import DirectoryIncludeOptions
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.grpc_mod._log_decorator import log_service_call
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor

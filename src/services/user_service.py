@@ -1,37 +1,36 @@
-from abc import ABC, abstractmethod
+"""Concrete :class:`~src.api.services.user_service.UserServiceABC` implementation."""
+
+from __future__ import annotations
+
 from typing import Optional
 
-from src.api.undefined import is_undefined, unwrap_undefined
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.other.undefined import is_undefined, unwrap_undefined
+from src.api.other.user_context import ContextFactory, UserContextABC
+from src.api.services.user_service import UserServiceABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
-from src.db.repos.directory.directory import DirectoryFacade
-
+from src.db.repos.directory.directory import DirectoryFacadeABC
 from src.db.repos.user.user import UserRepoABC
 
 
-class UserServiceABC(ABC):
-    @abstractmethod
-    async def get_user(self, user_id: Optional[str] = None, discord_id: Optional[int] = None) -> Optional[UserEntity]:
-        """
-        Creates a user and, in case that user is of type "human", also creates the default directories with admin relation for that user.
-        """
-        ...
-
-    @abstractmethod
-    async def create_user(self, user: UserEntity) -> UserEntity:
-        ...
-
-
-class UserService(UserServiceABC):
+class UserServiceImpl(UserServiceABC):
     """Application service for user lifecycle and bootstrap directories."""
 
-    def __init__(self, user_repo: UserRepoABC, directory_repo: DirectoryFacade, context_factory: ContextFactory[UserContextABC]) -> None:
+    def __init__(
+        self,
+        user_repo: UserRepoABC,
+        directory_repo: DirectoryFacadeABC,
+        context_factory: ContextFactory[UserContextABC],
+    ) -> None:
         self._user_repo = user_repo
         self._directory_repo = directory_repo
         self._context_factory = context_factory
 
-    async def get_user(self, user_id: Optional[str] = None, discord_id: Optional[int] = None) -> Optional[UserEntity]:
+    async def get_user(
+        self,
+        user_id: Optional[str] = None,
+        discord_id: Optional[int] = None,
+    ) -> Optional[UserEntity]:
         if user_id is not None:
             return await self._user_repo.select(user_id=user_id)
         if discord_id is not None:
@@ -55,7 +54,10 @@ class UserService(UserServiceABC):
                     description=spec.description,
                     relations=[],
                 ),
-                user_ctx
+                user_ctx,
             )
 
         return created_user
+
+
+__all__ = ["UserServiceImpl"]

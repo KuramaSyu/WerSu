@@ -4,8 +4,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Literal, Optional
 
-from src.api.directory_service import DirectoryIncludeOptions
-from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
+from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
+from src.api.services.directory_service import DirectoryIncludeOptions
 from src.db.entities.directory.directory import DirectoryEntity
 
 

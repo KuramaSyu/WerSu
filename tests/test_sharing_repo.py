@@ -1,8 +1,8 @@
 from datetime import datetime
 
 from tests.stubs.user_context import _UserContext
-from src.api.undefined import UNDEFINED
-from src.api.user_context import UserContextABC
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 

@@ -3,7 +3,7 @@
 The repo is a thin wrapper over the ``users`` table created by the
 ``initial-schema`` migration.  It deliberately performs no
 permission or business validation: user lifecycle concerns belong to
-the service layer (:class:`src.services.user.UserService`).
+the service layer (:class:`src.services.user_service.UserServiceImpl`).
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import List, Optional
 
 from asyncpg import Record
 
-from src.api.types import LoggingProvider
+from src.api.other.types import LoggingProvider
 from src.db.entities import UserEntity
 from src.db.table import TableABC
 from src.utils import asdict, drop_undefined

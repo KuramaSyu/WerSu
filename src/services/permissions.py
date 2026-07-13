@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import List, Sequence
 
-from src.api.undefined import UNDEFINED
-from src.api.user_context import UserContextABC
-from src.db.repos.directory.directory import DirectoryFacade
-from src.api.note_facade import NoteRepoFacadeABC
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import UserContextABC
+from src.db.repos.directory.directory import DirectoryFacadeABC
+from src.api.facades.note_facade import NoteRepoFacadeABC
 from src.api import (
     DirectoryRelationEnum,
     PermissionRepoABC,
@@ -170,7 +170,7 @@ class PermissionServiceABC(ABC):
         ...
 
 
-class PermissionServiceRepo(PermissionServiceABC):
+class PermissionServiceImpl(PermissionServiceABC):
     """Repository-backed permission service with authorization checks."""
 
     _note_user_relations = {
@@ -218,7 +218,7 @@ class PermissionServiceRepo(PermissionServiceABC):
         self,
         permission_repo: PermissionRepoABC,
         note_repo: NoteRepoFacadeABC,
-        directory_repo: DirectoryFacade,
+        directory_repo: DirectoryFacadeABC,
     ) -> None:
         self._permission_repo = permission_repo
         self._note_repo = note_repo

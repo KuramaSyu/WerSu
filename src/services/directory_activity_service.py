@@ -1,38 +1,24 @@
+"""Concrete :class:`~src.api.services.directory_activity_service.DirectoryActivityServiceABC` implementation."""
+
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from src.api import LoggingProvider
-from src.api.user_context import UserContextABC
+from src.api.other.user_context import UserContextABC
+from src.api.services.directory_activity_service import DirectoryActivityServiceABC
 from src.db.entities.note.versioning import NoteVersionEntry
-from src.db.repos.directory.directory import DirectoryFacade
+from src.db.repos.directory.directory import DirectoryFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 
 
-class DirectoryActivityServiceABC(ABC):
-    """Facade for directory-based note version activity."""
-
-    @abstractmethod
-    async def list_directory_activity(
-        self,
-        directory_id: Optional[str],
-        actor: UserContextABC,
-        max_depth: int = 10,
-        limit: int = 25,
-        offset: int = 0,
-    ) -> List[NoteVersionEntry]:
-        """Return the most recent version entry per note in a directory tree."""
-        ...
-
-
-class DirectoryActivityService(DirectoryActivityServiceABC):
+class DirectoryActivityServiceImpl(DirectoryActivityServiceABC):
     """Resolve directory-scoped activity using note version history."""
 
     def __init__(
         self,
         version_repo: NoteVersionRepoABC,
-        directory_repo: DirectoryFacade,
+        directory_repo: DirectoryFacadeABC,
         log: LoggingProvider,
     ) -> None:
         self._version_repo = version_repo
@@ -62,7 +48,9 @@ class DirectoryActivityService(DirectoryActivityServiceABC):
 
         entries: List[NoteVersionEntry] = []
         for note_id in note_ids:
-            versions = await self._version_repo.list_versions(note_id, limit=1, offset=0)
+            versions = await self._version_repo.list_versions(
+                note_id, limit=1, offset=0
+            )
             if versions:
                 entries.append(versions[0])
 
@@ -70,3 +58,6 @@ class DirectoryActivityService(DirectoryActivityServiceABC):
         if offset >= len(entries):
             return []
         return entries[offset : offset + limit]
+
+
+__all__ = ["DirectoryActivityServiceImpl"]

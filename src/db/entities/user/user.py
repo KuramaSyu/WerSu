@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from src.api.undefined import UNDEFINED, UndefinedOr
-from src.api.user_context import UserTypeT
-from src.api.visitor import AcceptsVisitor, EntityVisitor
+from src.api.other.undefined import UNDEFINED, UndefinedOr
+from src.api.other.user_context import UserTypeT
+from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 
 
 @dataclass

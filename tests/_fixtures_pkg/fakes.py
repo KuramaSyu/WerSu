@@ -13,20 +13,20 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.api.combined_note_repo import CombinedNoteRepoABC
-from src.api.directory_service import DirectoryIncludeOptions
-from src.api.note_service import NoteIncludeOptions
-from src.api.note_tag_repo import NoteTagRepoABC
-from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
-from src.api.user_context import UserContextABC
+from src.api.repos.combined_note_repo import CombinedNoteRepoABC
+from src.api.services.directory_service import DirectoryIncludeOptions
+from src.api.services.note_service import NoteIncludeOptions
+from src.api.repos.note_tag_repo import NoteTagRepoABC
+from src.api.other.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
+from src.api.other.user_context import UserContextABC
 from src.db.database import DatabaseABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.embedding import NoteEmbeddingEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.versioning import NoteVersionEntry
-from src.api.directory_facade import DirectoryFacade
-from src.api.permission_repo import PermissionRepoABC
-from src.api.relationship import (
+from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.repos.permission_repo import PermissionRepoABC
+from src.api.other.relationship import (
     DirectoryRelationEnum,
     NoteRelationEnum,
     ObjectRef,
@@ -37,9 +37,9 @@ from src.api.relationship import (
 from src.db.repos.note.content import NoteContentRepo
 from src.db.table import TableABC
 from src.db.repos.note.embedding import NoteEmbeddingRepo
-from src.api.note_facade import NoteRepoFacadeABC, SearchType
-from src.api.note_service import NoteResponse, NoteServiceABC
-from src.services.attachments import Attachment, AttachmentFacadeABC
+from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.services.note_service import NoteResponse, NoteServiceABC
+from src.services.attachment_facade import Attachment, AttachmentFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 
 
@@ -113,7 +113,7 @@ class _FakeVersionRepo(NoteVersionRepoABC):
         raise NotImplementedError()
 
 
-class _TestDirectoryRepo(DirectoryFacade):
+class _TestDirectoryRepo(DirectoryFacadeABC):
     """In-memory directory repo used by unit tests.
 
     The default behaviour (used by every existing test that just wants
@@ -147,8 +147,8 @@ class _TestDirectoryRepo(DirectoryFacade):
         # Optional permission repo reference so that ``create_directory``
         # can mirror the production behaviour of writing the relations
         # the entity carries.  Without this, tests that use the real
-        # :class:`DirectoryService` would fail every visibility check
-        # inside :class:`NoteService` / :class:`NoteFacade`.
+        # :class:`DirectoryServiceImpl` would fail every visibility check
+        # inside :class:`NoteServiceImpl` / :class:`NoteFacadeImpl`.
         self._permission_repo = permission_repo
 
     @property
@@ -181,7 +181,7 @@ class _TestDirectoryRepo(DirectoryFacade):
         self.directories_by_id[str(new_id)] = created
         self.created.append(created)
 
-        # Mirror the production :class:`DirectoryRepoFacade`
+        # Mirror the production :class:`DirectoryFacadeImpl`
         # behaviour: write the entity's relations through the permission
         # repo so that subsequent reads see the new directory as
         # visible to the caller.
@@ -200,7 +200,7 @@ class _TestDirectoryRepo(DirectoryFacade):
                 )
             await self._permission_repo.insert(resolved)
 
-        # Mirror the production :class:`DirectoryRepoFacade` behaviour
+        # Mirror the production :class:`DirectoryFacadeImpl` behaviour
         # of always attaching a ``dir#admin@user`` relation for the
         # caller.  Production writes it to the permission repo and
         # returns it on ``created.relations``; do the same here so
@@ -497,7 +497,7 @@ class _TestSpiceDbClient:
 class _FakeDatabase(DatabaseABC):
     """In-memory :class:`DatabaseABC` used by pure unit tests.
 
-    Only the methods :class:`src.db.repos.note.note.NoteFacade`
+    Only the methods :class:`src.db.repos.note.note.NoteFacadeImpl`
     and the search strategies call are implemented; the rest raise
     to make accidental use loud.  Tests queue the responses they
     expect to see.
@@ -1031,7 +1031,7 @@ class _StubNoteService(NoteServiceABC):
     """In-memory :class:`NoteServiceABC` used by directory-service tests.
 
     Records every call for assertions, implements the small subset
-    :class:`DirectoryService` actually uses (``delete_note``,
+    :class:`DirectoryServiceImpl` actually uses (``delete_note``,
     ``update_note``), and turns every other call into a clear
     ``NotImplementedError`` so accidental fallthroughs surface
     immediately.

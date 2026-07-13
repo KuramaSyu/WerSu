@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from src.api.undefined import UNDEFINED, UndefinedOr
-from src.api.user_context import ActorAs, ContextFactory, UserContextABC, UserTypeT
+from src.api.other.undefined import UNDEFINED, UndefinedOr
+from src.api.other.user_context import ActorAs, ContextFactory, UserContextABC, UserTypeT
 
 
 class _UserContext(UserContextABC):

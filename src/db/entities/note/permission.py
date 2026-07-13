@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from src.api.undefined import UndefinedOr
+from src.api.other.undefined import UndefinedOr
 
 @dataclass
 class NotePermissionEntity:

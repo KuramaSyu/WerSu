@@ -6,10 +6,10 @@ from typing import List, Optional, Tuple
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api.user_context import UserContextABC
+from src.api.other.user_context import UserContextABC
 from src.db.entities.note.versioning import NoteVersionEntry
-from src.api.directory_facade import DirectoryFacade
-from src.db.repos.directory.directory import DirectoryRepoFacade
+from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.db.repos.directory.directory import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from tests._fixtures_pkg.fakes import (
     _FakeDirectorySubdirectoryTable,
@@ -26,14 +26,14 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-from src.services.versioning import DirectoryActivityService
+from src.services.directory_activity_service import DirectoryActivityServiceImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.utils import logging_provider
 
 from .fixtures import _FakeVersionRepo
 
 
-class _FakeDirectoryRepo(DirectoryFacade):
+class _FakeDirectoryRepo(DirectoryFacadeABC):
     def __init__(self, note_ids: List[str]) -> None:
         self._note_ids = note_ids
 
@@ -118,7 +118,7 @@ async def test_resolve_files_of_directory_depth_and_cycle() -> None:
     note_table.add_note_child("child", "note-child")
     note_table.add_note_child("grand", "note-grand")
 
-    directory_repo = DirectoryRepoFacade(
+    directory_repo = DirectoryFacadeImpl(
         postgres_repo=PostgresDirectoryRepo(
             directory_table=_FakeDirectoryTable(),
             subdirectory_table=subdirectory_table,
@@ -167,7 +167,7 @@ async def test_directory_activity_orders_latest_changes() -> None:
 
     version_repo = _FakeVersionRepo(entries)
     directory_repo = _FakeDirectoryRepo(["note-1", "note-2"])
-    service = DirectoryActivityService(
+    service = DirectoryActivityServiceImpl(
         version_repo=version_repo,
         directory_repo=directory_repo,
         log=logging_provider,

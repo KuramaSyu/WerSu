@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from src.api.undefined import UNDEFINED, UndefinedOr
-from src.api.user_context import ActorAs, ContextFactory, UserContextABC, UserTypeT
+from src.api.other.undefined import UNDEFINED, UndefinedOr
+from src.api.other.user_context import ActorAs, ContextFactory, UserContextABC, UserTypeT
 from src.db.entities.user.user import UserEntity
 from src.utils.async_ttl import AsyncTtlCacheInfo, async_ttl
 

@@ -21,17 +21,17 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
-from src.api.combined_note_repo import CombinedNoteRepoABC
-from src.api.note_facade import NoteRepoFacadeABC, SearchType
-from src.api.note_service import NoteIncludeOptions, resolve_include_options
-from src.api.note_tag_repo import NoteTagRepoABC
-from src.api.relationship import AttachmentRelationEnum
-from src.api.types import LoggingProvider, Pagination
-from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
-from src.api.user_context import UserContextABC
+from src.api.repos.combined_note_repo import CombinedNoteRepoABC
+from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.services.note_service import NoteIncludeOptions, resolve_include_options
+from src.api.repos.note_tag_repo import NoteTagRepoABC
+from src.api.other.relationship import AttachmentRelationEnum
+from src.api.other.types import LoggingProvider, Pagination
+from src.api.other.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
+from src.api.other.user_context import UserContextABC
 from src.db import Database
 from src.db.entities import NoteEntity
-from src.db.repos.directory.directory import DirectoryFacade
+from src.db.repos.directory.directory import DirectoryFacadeABC
 from src.db.repos.note.content import NoteContentRepo
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.db.repos.note.search_strategy import (
@@ -42,9 +42,10 @@ from src.db.repos.note.search_strategy import (
 )
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.db.repos.permissions import PermissionRepoABC
+from src.utils.logging import logging_provider
 
 
-class NoteFacade(NoteRepoFacadeABC):
+class NoteFacadeImpl(NoteRepoFacadeABC):
     """Compose the note repos without issuing raw SQL.
 
     The facade is intentionally SQL-free: every storage call is
@@ -65,7 +66,7 @@ class NoteFacade(NoteRepoFacadeABC):
         combined_repo: CombinedNoteRepoABC,
         embedding_repo: NoteEmbeddingRepo,
         permission_repo: PermissionRepoABC,
-        directory_repo: DirectoryFacade,
+        directory_repo: DirectoryFacadeABC,
         tag_repo: NoteTagRepoABC,
         logging_provider: LoggingProvider,
         version_repo: NoteVersionRepoABC,
@@ -226,13 +227,15 @@ class NoteFacade(NoteRepoFacadeABC):
             relation=NoteRelationEnum.OWNER,
             subject=SubjectRef(ObjectTypeEnum.USER, user.user_id),
         )
+        log = logging_provider(__name__)
+        log.info(f"resolved_dirs={resolved_dirs}")
         parent_dir_relations: List[Relationship] = [
             Relationship(
                 resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
                 relation=NoteRelationEnum.PARENT_DIRECTORY,
                 subject=SubjectRef(ObjectTypeEnum.DIRECTORY, parent_id),
             )
-            for parent_id in resolved_dirs
+            for parent_id in set(resolved_dirs)
         ]
         await self._permission_repo.insert(
             [owner_relation, *parent_dir_relations]
@@ -475,7 +478,7 @@ class NoteFacade(NoteRepoFacadeABC):
         """Augment each note with the user's ``parent_directory`` relations.
 
         Mirrors the per-id behaviour of
-        :meth:`NoteService.get_note` -- search callers see the same
+        :meth:`NoteServiceImpl.get_note` -- search callers see the same
         parent-directory relations the per-id view would have
         returned.
         """

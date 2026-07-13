@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from src.api.types import LoggingProvider
+from src.api.other.types import LoggingProvider
 from src.db.migrations.context import MigrationContext
 
 

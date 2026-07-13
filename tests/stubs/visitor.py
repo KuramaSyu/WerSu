@@ -11,14 +11,14 @@ from __future__ import annotations
 from typing import Any, List
 
 from src.api import Relationship
-from src.api.note_service import NoteResponse
-from src.api.relationship import ObjectRef, SubjectRef
+from src.api.services.note_service import NoteResponse
+from src.api.other.relationship import ObjectRef, SubjectRef
 from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
-from src.api.visitor import EntityVisitor
+from src.api.other.visitor import EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
 
 

@@ -4,7 +4,7 @@ from typing import Sequence
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
+from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.utils.convert import convert_entity_for_db
 
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import List
 
-from src.api.activity import ActivityRepoABC
+from src.api.repos.activity_repo import ActivityRepoABC
 from src.db.entities.activity import ActivityEntity, ActivityScore, FilterActivity
 
 

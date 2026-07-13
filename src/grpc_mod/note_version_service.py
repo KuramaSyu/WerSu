@@ -20,9 +20,9 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
-from src.api.note_facade import NoteRepoFacadeABC
-from src.api.undefined import UNDEFINED
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.facades.note_facade import NoteRepoFacadeABC
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities import NoteEntity
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.grpc_mod._log_decorator import log_service_call
@@ -37,7 +37,7 @@ from src.grpc_mod.proto.note_pb2 import (
     RestoreNoteVersionRequest,
 )
 from src.grpc_mod.proto.note_pb2_grpc import NoteVersionServiceServicer
-from src.services.versioning import DirectoryActivityServiceABC
+from src.services.directory_activity_service import DirectoryActivityServiceABC
 
 
 class GrpcNoteVersionService(NoteVersionServiceServicer):

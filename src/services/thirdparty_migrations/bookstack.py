@@ -24,11 +24,11 @@ import mimetypes
 from typing import Callable, Dict, List
 
 from src.api import DirectoryServiceABC, LoggingProvider, NoteServiceABC, UserContextABC
-from src.api.undefined import UNDEFINED, unwrap_undefined
+from src.api.other.undefined import UNDEFINED, unwrap_undefined
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
-from src.services.attachments import AttachmentFacadeABC
+from src.services.attachment_facade import AttachmentFacadeABC
 from src.services.thirdparty_migrations import (
     ImportedChapter,
     MigrationResult,

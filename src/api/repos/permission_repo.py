@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 from typing import List
 from warnings import deprecated
 
-from src.api.relationship import ObjectRef, Relationship
-from src.api.user_context import UserContextABC
+from src.api.other.relationship import ObjectRef, Relationship
+from src.api.other.user_context import UserContextABC
 
 
 class PermissionRepoABC(ABC):
@@ -240,7 +240,7 @@ class ResolvedChildren:
 
 @dataclass
 class DirectoryChild:
-    """One entry returned by :meth:`DirectoryService.dry_delete`.
+    """One entry returned by :meth:`DirectoryServiceImpl.dry_delete`.
 
     Attributes:
         id: id of the child resource.

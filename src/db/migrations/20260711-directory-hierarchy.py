@@ -15,7 +15,7 @@ class Migration(MigrationABC):
     * ``note.directory_note`` -- directory -> note (the notes
       contained in a directory).
 
-    :class:`src.services.directory.DirectoryService` reads both
+    :class:`src.services.directory.DirectoryServiceImpl` reads both
     tables to compute immediate-child counts (``subdirectories``
     and ``pages``) without hitting SpiceDB on every read.
 

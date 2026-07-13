@@ -13,7 +13,7 @@ the SpiceDB path is exercised end-to-end by the integration suite.
 import pytest
 
 from src.api import ObjectRef, Relationship, SubjectRef
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.user_context import _UserContext as UserContext
 

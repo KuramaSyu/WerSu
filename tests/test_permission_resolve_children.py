@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.api.relationship import (
+from src.api.other.relationship import (
     AttachmentRelationEnum,
     DirectoryRelationEnum,
     NoteRelationEnum,

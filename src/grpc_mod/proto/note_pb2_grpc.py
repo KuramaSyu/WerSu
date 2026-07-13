@@ -36,27 +36,27 @@ class NoteServiceStub:
             channel: A grpc.Channel.
         """
         self.GetNote = channel.unary_unary(
-                '/proto.NoteService/GetNote',
+                '/proto.NoteServiceImpl/GetNote',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteResponse.FromString,
                 _registered_method=True)
         self.PostNote = channel.unary_unary(
-                '/proto.NoteService/PostNote',
+                '/proto.NoteServiceImpl/PostNote',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
                 _registered_method=True)
         self.PatchNote = channel.unary_unary(
-                '/proto.NoteService/PatchNote',
+                '/proto.NoteServiceImpl/PatchNote',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterNoteRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
                 _registered_method=True)
         self.DeleteNote = channel.unary_unary(
-                '/proto.NoteService/DeleteNote',
+                '/proto.NoteServiceImpl/DeleteNote',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteNoteRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
                 _registered_method=True)
         self.SearchNotes = channel.unary_unary(
-                '/proto.NoteService/SearchNotes',
+                '/proto.NoteServiceImpl/SearchNotes',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NotesReply.FromString,
                 _registered_method=True)
@@ -129,13 +129,13 @@ def add_NoteServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'proto.NoteService', rpc_method_handlers)
+            'proto.NoteServiceImpl', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('proto.NoteService', rpc_method_handlers)
+    server.add_registered_method_handlers('proto.NoteServiceImpl', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class NoteService:
+class NoteServiceImpl:
     """Note Service
     """
 
@@ -153,7 +153,7 @@ class NoteService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.NoteService/GetNote',
+            '/proto.NoteServiceImpl/GetNote',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNoteRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.NoteResponse.FromString,
             options,
@@ -180,7 +180,7 @@ class NoteService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.NoteService/PostNote',
+            '/proto.NoteServiceImpl/PostNote',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.PostNoteRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
             options,
@@ -207,7 +207,7 @@ class NoteService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.NoteService/PatchNote',
+            '/proto.NoteServiceImpl/PatchNote',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterNoteRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
             options,
@@ -234,7 +234,7 @@ class NoteService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.NoteService/DeleteNote',
+            '/proto.NoteServiceImpl/DeleteNote',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteNoteRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Note.FromString,
             options,
@@ -261,7 +261,7 @@ class NoteService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.NoteService/SearchNotes',
+            '/proto.NoteServiceImpl/SearchNotes',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetSearchNotesRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.NotesReply.FromString,
             options,
@@ -285,32 +285,32 @@ class DirectoryServiceStub:
             channel: A grpc.Channel.
         """
         self.GetDirectory = channel.unary_unary(
-                '/proto.DirectoryService/GetDirectory',
+                '/proto.DirectoryServiceImpl/GetDirectory',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
                 _registered_method=True)
         self.GetDirectories = channel.unary_stream(
-                '/proto.DirectoryService/GetDirectories',
+                '/proto.DirectoryServiceImpl/GetDirectories',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoriesRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
                 _registered_method=True)
         self.CreateDirectory = channel.unary_unary(
-                '/proto.DirectoryService/CreateDirectory',
+                '/proto.DirectoryServiceImpl/CreateDirectory',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.CreateDirectoryRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
                 _registered_method=True)
         self.PatchDirectory = channel.unary_unary(
-                '/proto.DirectoryService/PatchDirectory',
+                '/proto.DirectoryServiceImpl/PatchDirectory',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterDirectoryRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
                 _registered_method=True)
         self.DeleteDirectory = channel.unary_unary(
-                '/proto.DirectoryService/DeleteDirectory',
+                '/proto.DirectoryServiceImpl/DeleteDirectory',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteDirectoryRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
                 _registered_method=True)
         self.GetNotesOfDirectory = channel.unary_unary(
-                '/proto.DirectoryService/GetNotesOfDirectory',
+                '/proto.DirectoryServiceImpl/GetNotesOfDirectory',
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNotesOfDirectoryRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_note__pb2.NotesReply.FromString,
                 _registered_method=True)
@@ -390,13 +390,13 @@ def add_DirectoryServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'proto.DirectoryService', rpc_method_handlers)
+            'proto.DirectoryServiceImpl', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('proto.DirectoryService', rpc_method_handlers)
+    server.add_registered_method_handlers('proto.DirectoryServiceImpl', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class DirectoryService:
+class DirectoryServiceImpl:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -413,7 +413,7 @@ class DirectoryService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.DirectoryService/GetDirectory',
+            '/proto.DirectoryServiceImpl/GetDirectory',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoryRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
             options,
@@ -440,7 +440,7 @@ class DirectoryService:
         return grpc.experimental.unary_stream(
             request,
             target,
-            '/proto.DirectoryService/GetDirectories',
+            '/proto.DirectoryServiceImpl/GetDirectories',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetDirectoriesRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
             options,
@@ -467,7 +467,7 @@ class DirectoryService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.DirectoryService/CreateDirectory',
+            '/proto.DirectoryServiceImpl/CreateDirectory',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.CreateDirectoryRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
             options,
@@ -494,7 +494,7 @@ class DirectoryService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.DirectoryService/PatchDirectory',
+            '/proto.DirectoryServiceImpl/PatchDirectory',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.AlterDirectoryRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
             options,
@@ -521,7 +521,7 @@ class DirectoryService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.DirectoryService/DeleteDirectory',
+            '/proto.DirectoryServiceImpl/DeleteDirectory',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.DeleteDirectoryRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.Directory.FromString,
             options,
@@ -548,7 +548,7 @@ class DirectoryService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/proto.DirectoryService/GetNotesOfDirectory',
+            '/proto.DirectoryServiceImpl/GetNotesOfDirectory',
             src_dot_grpc__mod_dot_proto_dot_note__pb2.GetNotesOfDirectoryRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_note__pb2.NotesReply.FromString,
             options,

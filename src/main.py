@@ -8,11 +8,11 @@ from typing import Any, Dict
 import boto3  # type: ignore[reportUnknownMemberType]
 import grpc
 
-from src.api.activity_statistics_service import ActivityStatisticsServiceABC
-from src.api.jwt_provider import PyJwtProvider
-from src.api.sharing import ShareAccessServiceABC, SharingRepoABC
-from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedType
-from src.db.repos.directory.directory import DirectoryRepoFacade
+from src.api.services.activity_statistics_service import ActivityStatisticsServiceABC
+from src.api.services.jwt_provider import JwtProvider
+from src.api.services.sharing import ShareAccessServiceABC, SharingRepoABC
+from src.api.other.undefined import UNDEFINED, UndefinedOr, UndefinedType
+from src.db.repos.directory.directory import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
@@ -23,12 +23,12 @@ from src.grpc_mod.proto.activity_pb2_grpc import add_ActivityStatisticsServiceSe
 from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.sharing_service import GrpcSharingService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
-from src.services import PermissionServiceRepo, UserService, DirectoryActivityService, AttachmentFacade, share_access
-from src.services.activity_logger_service import DefaultActivityLoggerService
-from src.services.activity_statistics_service import DefaultActivityStatisticsService
-from src.services.sharing import DefaultSharingService
-from src.services.note import NoteService
-from src.services.directory import DirectoryService
+from src.services import PermissionServiceImpl, UserServiceImpl, DirectoryActivityServiceImpl, AttachmentFacadeImpl, share_access
+from src.services.activity_logger_service import ActivityLoggerServiceImpl
+from src.services.activity_statistics_service import ActivityStatisticsServiceImpl
+from src.services.sharing import SharingServiceImpl
+from src.services.note import NoteServiceImpl
+from src.services.directory import DirectoryServiceImpl
 from src.services.thirdparty_migrations import (
     ThirdpartyMigrationsServiceABC,
 )
@@ -37,10 +37,10 @@ from src.facades.share_action_facade import ShareActionFacade
 from src.utils import logging_provider
 from src.db import Database, NoteEmbeddingPostgresRepo, NoteVersionPostgresRepo
 from src.db.repos.attachments.attachments import (
-    AttachmentsMetadataPostgresRepo,
-    AttachmentsMetadataRepoABC,
-    AttachmentsRepoABC,
-    AttachmentsS3Repo,
+    AttachmentMetadataPostgresRepo,
+    AttachmentMetadataRepoABC,
+    AttachmentRepoABC,
+    AttachmentS3Repo,
 )
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user import RepoContextFactory
@@ -60,7 +60,7 @@ from src.grpc_mod.proto.thirdparty_migrations_pb2_grpc import (
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server  # type: ignore[attr-defined]
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.note import NoteFacade
+from src.db.repos.note.note import NoteFacadeImpl
 from src.db.repos.note.tag import NoteTagPostgresRepo
 from src.grpc_mod.attachment_service import GrpcAttachmentService
 from src.grpc_mod.directory_service import GrpcDirectoryService
@@ -70,6 +70,7 @@ from src.grpc_mod.permission_service import GrpcPermissionService
 from src.grpc_mod.thirdparty_migrations_service import GrpcThirdpartyMigrationsService
 from src.grpc_mod.user_service import GrpcUserService
 from src.ai.embedding_generator import EmbeddingGenerator, Models
+from src.services.auth import PyJwtProvider
 from src.utils.spicedb_client import create_spicedb_async_client
 
 
@@ -279,7 +280,7 @@ async def serve():
         directory_subdirectory_table=directory_subdirectory_table,
     )
 
-    directory_repo = DirectoryRepoFacade(
+    directory_repo = DirectoryFacadeImpl(
         postgres_repo=PostgresDirectoryRepo(  # this is not indented to be used by other parties
             directory_table=directory_table,
             subdirectory_table=directory_subdirectory_table,
@@ -297,7 +298,7 @@ async def serve():
     )
 
     note_content_repo = NoteContentPostgresRepo(content_table)
-    note_repo: NoteFacade = NoteFacade(
+    note_repo: NoteFacadeImpl = NoteFacadeImpl(
         db=db,
         content_repo=note_content_repo,
         combined_repo=CombinedNotePostgresRepo(db=db),
@@ -311,11 +312,11 @@ async def serve():
         logging_provider=logging_provider,
         version_repo=version_repo,
     )
-    attachments_repo: AttachmentsRepoABC = AttachmentsS3Repo(
+    attachments_repo: AttachmentRepoABC = AttachmentS3Repo(
         client=s3_client,  # type:ignore
         bucket=s3_bucket,
     )
-    metadata_repo: AttachmentsMetadataRepoABC = AttachmentsMetadataPostgresRepo(
+    metadata_repo: AttachmentMetadataRepoABC = AttachmentMetadataPostgresRepo(
         table=attachments_table
     )
     sharing_repo: SharingRepoABC = SharingPostgresRepo(
@@ -333,7 +334,7 @@ async def serve():
     )
 
     ### Setup services and inject repos ###
-    attachment_service = AttachmentFacade(
+    attachment_service = AttachmentFacadeImpl(
         attachment_repo=attachments_repo,
         metadata_repo=metadata_repo,
         permission_repo=permission_repo,
@@ -341,13 +342,13 @@ async def serve():
         log=logging_provider,
     )
 
-    permission_service = PermissionServiceRepo(
+    permission_service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=note_repo,
         directory_repo=directory_repo,
     )
 
-    directory_activity_service = DirectoryActivityService(
+    directory_activity_service = DirectoryActivityServiceImpl(
         version_repo=version_repo,
         directory_repo=directory_repo,
         log=logging_provider,
@@ -366,20 +367,21 @@ async def serve():
         context_factory=user_context_factory,
     )
 
-    activity_logger_service = DefaultActivityLoggerService(
+    activity_logger_service = ActivityLoggerServiceImpl(
         activity_repo=activity_repo,
         logging_provider=logging_provider,
     )
 
-    app_note_service = NoteService(
+    app_note_service = NoteServiceImpl(
         note_repo=note_repo,
         permission_repo=permission_repo,
         jwt_provider=jwt_provider,
         directory_repo=directory_repo,
         activity_logger=activity_logger_service,
+        logging_provider=logging_provider,
     )
 
-    sharing_service = DefaultSharingService(
+    sharing_service = SharingServiceImpl(
         share_facade=ShareActionFacade(
             sharing_repo=sharing_repo,
             user_repo=user_repo,
@@ -400,7 +402,7 @@ async def serve():
         logger=logging_provider,
         context_factory=user_context_factory,
     )
-    activity_statistics_service: ActivityStatisticsServiceABC = DefaultActivityStatisticsService(
+    activity_statistics_service: ActivityStatisticsServiceABC = ActivityStatisticsServiceImpl(
         activity_repo=activity_repo,
         permission_repo=permission_repo,
         directory_repo=directory_repo,
@@ -419,7 +421,7 @@ async def serve():
 
     add_NoteVersionServiceServicer_to_server(note_version_service, server)
 
-    directory_app_service = DirectoryService(
+    directory_app_service = DirectoryServiceImpl(
         directory_repo=directory_repo,
         note_repo=note_repo,
         permission_repo=permission_repo,
@@ -470,7 +472,7 @@ async def serve():
     add_SharingServiceServicer_to_server(grpc_sharing_service, server)
 
     # setup gRPC user service
-    app_user_service = UserService(user_repo=user_repo, directory_repo=directory_repo, context_factory=user_context_factory)
+    app_user_service = UserServiceImpl(user_repo=user_repo, directory_repo=directory_repo, context_factory=user_context_factory)
     grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider, to_grpc=grpc_visitor)
     add_UserServiceServicer_to_server(grpc_user_service, server)
 

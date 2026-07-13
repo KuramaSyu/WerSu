@@ -16,8 +16,8 @@ import json
 from dataclasses import asdict
 from typing import Mapping, Optional
 
-from src.api.activity import ActivityRepoABC
-from src.api.activity_logger_service import (
+from src.api.repos.activity_repo import ActivityRepoABC
+from src.api.services.activity_logger_service import (
     ActivityLoggerError,
     ActivityLoggerServiceABC,
     RoleChangeMetadata,
@@ -25,14 +25,14 @@ from src.api.activity_logger_service import (
     RoleRevokeMetadata,
     _validate_zanzibar_relations,
 )
-from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED
-from src.api.user_context import UserContextABC
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import UserContextABC
 from src.db.entities.activity import ActivityEntity
 from src.utils import logging_provider as default_logging_provider
 
 
-class DefaultActivityLoggerService(ActivityLoggerServiceABC):
+class ActivityLoggerServiceImpl(ActivityLoggerServiceABC):
     """Postgres-backed activity logger.
 
     Args:
@@ -332,4 +332,4 @@ class DefaultActivityLoggerService(ActivityLoggerServiceABC):
         )
 
 
-__all__ = ["DefaultActivityLoggerService"]
+__all__ = ["ActivityLoggerServiceImpl"]

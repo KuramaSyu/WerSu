@@ -6,13 +6,13 @@ import pytest
 from testcontainers.postgres import PostgresContainer
 from torch import embedding
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api.types import Pagination
-from src.api.undefined import UNDEFINED
+from src.api.other.types import Pagination
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.permission import NoteRelationEnum, ObjectTypeEnum
 from src.db.repos.note.content import NoteContentPostgresRepo, NoteContentRepo
-from src.db.repos.note.note import NoteFacade
-from src.api.note_facade import NoteRepoFacadeABC, SearchType
+from src.db.repos.note.note import NoteFacadeImpl
+from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
 from src.db.table import Table
 from src.db.entities.user.user import UserEntity
 from src.db.repos.user.user import UserRepoABC

@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from src.api.undefined import UNDEFINED
-from src.api.user_action import UserActionRepoABC
+from src.api.other.undefined import UNDEFINED
+from src.api.repos.user_action_repo import UserActionRepoABC
 from src.db.entities.user.user_action import FilterUserAction, UserActionEntity
 
 

@@ -13,9 +13,9 @@ from typing import List, Optional
 
 from asyncpg import Record
 
-from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED, UndefinedNoneOr, is_undefined
-from src.api.user_action import UserActionRepoABC
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, is_undefined
+from src.api.repos.user_action_repo import UserActionRepoABC
 from src.db.entities.user.user_action import (
     FilterUserAction,
     UserActionEntity,

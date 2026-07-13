@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from src.api.user_context import UserContextABC
+from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 
 

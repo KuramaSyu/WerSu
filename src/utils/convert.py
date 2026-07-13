@@ -1,7 +1,7 @@
 from collections.abc import Sequence as AbcSequence
 from dataclasses import fields, is_dataclass, replace, MISSING
 from typing import Any, Dict, Tuple, TypeVar, get_args, get_origin, get_type_hints
-from src.api.undefined import UNDEFINED, UndefinedType, UndefinedOr, UndefinedNoneOr
+from src.api.other.undefined import UNDEFINED, UndefinedType, UndefinedOr, UndefinedNoneOr
 
 
 T = TypeVar("T")

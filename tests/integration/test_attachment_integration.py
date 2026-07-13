@@ -7,7 +7,7 @@ Boilerplate (Garage container, SpiceDB container, idempotent
 * :mod:`tests.fixtures.spicedb` -> ``idempotent_permission_repo``
 
 The test body focuses on round-tripping a single attachment through
-``AttachmentFacade`` and verifying state is gone after the delete
+``AttachmentFacadeImpl`` and verifying state is gone after the delete
 flow.
 """
 
@@ -23,14 +23,14 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.repos.attachments.attachments import (
     Attachment,
-    AttachmentsMetadataPostgresRepo,
-    AttachmentsS3Repo,
+    AttachmentMetadataPostgresRepo,
+    AttachmentS3Repo,
 )
 from src.db.table import Table
-from src.services.attachments import AttachmentFacade
+from src.services.attachment_facade import AttachmentFacadeImpl
 from src.utils import logging_provider
 
 
@@ -66,9 +66,9 @@ async def test_attachment_facade_with_postgres_and_garage(
         error_log=True,
     )
 
-    metadata_repo = AttachmentsMetadataPostgresRepo(attachment_table)
-    object_repo = AttachmentsS3Repo(client=s3_client, bucket=garage_config["bucket"])
-    facade = AttachmentFacade(
+    metadata_repo = AttachmentMetadataPostgresRepo(attachment_table)
+    object_repo = AttachmentS3Repo(client=s3_client, bucket=garage_config["bucket"])
+    facade = AttachmentFacadeImpl(
         attachment_repo=object_repo,
         metadata_repo=metadata_repo,
         permission_repo=permission_repo,

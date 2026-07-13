@@ -30,7 +30,7 @@ from typing import AsyncGenerator, List
 
 import pytest
 
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.sql_builders import SqlBuilderFactory

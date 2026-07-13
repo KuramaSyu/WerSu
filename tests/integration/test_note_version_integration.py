@@ -8,7 +8,7 @@ from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.note import NoteFacade
+from src.db.repos.note.note import NoteFacadeImpl
 from src.db.repos.note.tag import NoteTagPostgresRepo
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
@@ -58,7 +58,7 @@ async def test_note_versioning_records_snapshots_and_deltas(db, user_repo, test_
         error_log=True,
     )
 
-    note_repo = NoteFacade(
+    note_repo = NoteFacadeImpl(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
         combined_repo=CombinedNotePostgresRepo(db=db),

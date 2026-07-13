@@ -7,7 +7,7 @@ content is usable:
 1. **Image refs.**  BookStack stores images as flat filenames under
    ``files/`` and references them as ``<img src="filename">`` in HTML
    or ``![alt](filename)`` in Markdown.  After we have uploaded each
-   file via :class:`~src.services.attachments.AttachmentFacade`, we
+   file via :class:`~src.services.attachment_facade.AttachmentFacadeImpl`, we
    get back a fresh attachment key.  This module rewrites both the
    HTML and the Markdown forms so the references point at the new
    attachment URL produced by :func:`build_attachment_url`.

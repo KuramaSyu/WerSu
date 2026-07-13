@@ -9,7 +9,7 @@ import typing
 import asyncpg
 from asyncpg import Record
 
-from src.api.types import LoggingProvider
+from src.api.other.types import LoggingProvider
 from src.db.database import Database
 from src.db.sql_builders import (
     DeleteStmtABC,

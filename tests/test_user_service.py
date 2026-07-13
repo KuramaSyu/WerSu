@@ -2,15 +2,15 @@ from dataclasses import replace
 from typing import Dict, List, Optional, Tuple
 
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api.undefined import UNDEFINED
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
-from src.api.directory_facade import DirectoryFacade
-from src.api.relationship import ObjectRef, Relationship, SubjectRef
+from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.other.relationship import ObjectRef, Relationship, SubjectRef
 from src.db.repos.note.permission import DirectoryRelationEnum, ObjectTypeEnum
 from src.db.repos.user.user import UserRepoABC
-from src.services.user import UserService
+from src.services.user_service import UserServiceImpl
 
 
 class _InMemoryUserRepo(UserRepoABC):
@@ -58,7 +58,7 @@ class _InMemoryUserRepo(UserRepoABC):
         return True
 
 
-class _InMemoryDirectoryRepo(DirectoryFacade):
+class _InMemoryDirectoryRepo(DirectoryFacadeABC):
     def __init__(self) -> None:
         self.created: List[DirectoryEntity] = []
 
@@ -68,7 +68,7 @@ class _InMemoryDirectoryRepo(DirectoryFacade):
         user_ctx: Optional[UserContextABC] = None,
     ) -> DirectoryEntity:
         created = replace(entity, id=f"dir-{len(self.created) + 1}")
-        # Mirror production :class:`DirectoryRepoFacade` behaviour:
+        # Mirror production :class:`DirectoryFacadeImpl` behaviour:
         # always attach a `dir#admin@user` relation for the caller.
         if user_ctx is not None:
             admin_rel = Relationship(
@@ -151,8 +151,8 @@ def _make_test_user() -> UserEntity:
     )
 
 
-def _make_service(user_repo, directory_repo) -> UserService:
-    return UserService(
+def _make_service(user_repo, directory_repo) -> UserServiceImpl:
+    return UserServiceImpl(
         user_repo=user_repo,
         directory_repo=directory_repo,
         context_factory=_InMemoryContextFactory(),

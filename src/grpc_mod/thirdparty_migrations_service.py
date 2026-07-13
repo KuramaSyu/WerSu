@@ -22,7 +22,7 @@ import grpc
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.grpc_mod._log_decorator import log_service_call
 from src.grpc_mod.proto.thirdparty_migrations_pb2 import (
     BookstackBookImportChunk,

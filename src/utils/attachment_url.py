@@ -21,7 +21,7 @@ def build_attachment_url(
 
     Args:
         key: the attachment key returned by
-            :class:`~src.services.attachments.AttachmentFacade.post_attachment`.
+            :class:`~src.services.attachment_facade.AttachmentFacadeImpl.post_attachment`.
         base: the URL path before the query string.
         width: image width passed to the renderer.
         fmt: image format passed to the renderer.
@@ -48,7 +48,7 @@ def build_attachment_link_url(
 
     Args:
         key: the attachment key returned by
-            :class:`~src.services.attachments.AttachmentFacade.post_attachment`.
+            :class:`~src.services.attachment_facade.AttachmentFacadeImpl.post_attachment`.
         base: the URL path before the query string.
 
     Returns:

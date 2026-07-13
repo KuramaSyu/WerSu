@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import urllib
 
 from src import utils
-from src.api.relationship import *
+from src.api.other.relationship import *
 from src.api import Relationship, UserContextABC, PermissionRepoABC
 
 # i am sorry, I don't want to inject it into each chain element. This is more for debugging

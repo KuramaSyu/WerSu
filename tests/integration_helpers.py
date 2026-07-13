@@ -28,7 +28,7 @@ from typing import AsyncIterator, Tuple
 
 import pytest
 
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.api import (
     DirectoryRelationEnum,
     NoteRelationEnum,
@@ -39,12 +39,12 @@ from src.api import (
 )
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
-from src.db.repos.directory.directory import DirectoryRepoFacade
-from src.db.repos.note.note import NoteFacade
+from src.db.repos.directory.directory import DirectoryFacadeImpl
+from src.db.repos.note.note import NoteFacadeImpl
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.db.repos.user import RepoUserContext
 from tests.stubs.user_context import _UserContext as UserContext
-from src.services.user import UserService
+from src.services.user_service import UserServiceImpl
 
 # Sub-module exports (re-exported for legacy callers).
 from tests._fixtures_pkg.spicedb_schema import (  # noqa: F401
@@ -97,9 +97,9 @@ async def wait_until(
 async def user_service_env(
     spicedb_postgres_env: IntegrationEnv,
 ) -> Tuple[
-    UserService,
-    DirectoryRepoFacade,
-    NoteFacade,
+    UserServiceImpl,
+    DirectoryFacadeImpl,
+    NoteFacadeImpl,
     SpicedbPermissionRepo,
 ]:
     """Provision a real Postgres + SpiceDB environment for user service tests.
@@ -159,7 +159,7 @@ def make_user_entity(
 
     Sets ``type='human'`` explicitly so the matching DB column
     isn't emitted as ``UNDEFINED`` (which would defer directory
-    bootstrap in :func:`UserService.create_user`).
+    bootstrap in :func:`UserServiceImpl.create_user`).
     """
     return UserEntity(
         discord_id=discord_id,

@@ -1,4 +1,4 @@
-"""Integration test coverage for ``UserService`` with real infrastructure.
+"""Integration test coverage for ``UserServiceImpl`` with real infrastructure.
 
 These tests exercise the full user-bootstrap path against real Postgres
 and SpiceDB containers to validate that:
@@ -22,10 +22,10 @@ import pytest
 from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
-from src.db.repos.directory.directory import DirectoryRepoFacade
-from src.db.repos.note.note import NoteFacade
+from src.db.repos.directory.directory import DirectoryFacadeImpl
+from src.db.repos.note.note import NoteFacadeImpl
 from src.db.repos.permissions.permission import SpicedbPermissionRepo
-from src.services.user import UserService
+from src.services.user_service import UserServiceImpl
 from tests.integration_helpers import (
     NoteRelationEnum,
     ObjectRef,
@@ -41,7 +41,7 @@ from tests.integration_helpers import (
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
 
 
-EnvT = Tuple[UserService, DirectoryRepoFacade, NoteFacade, SpicedbPermissionRepo]  # noqa: F841 -- kept for backward compat imports
+EnvT = Tuple[UserServiceImpl, DirectoryFacadeImpl, NoteFacadeImpl, SpicedbPermissionRepo]  # noqa: F841 -- kept for backward compat imports
 
 
 async def test_create_user_bootstraps_default_directories(
@@ -247,7 +247,7 @@ async def _gather(
 
 
 async def _get_default_directory(
-    directory_repo: DirectoryRepoFacade,
+    directory_repo: DirectoryFacadeImpl,
     user_id: str,
     context_factory,
 ) -> DirectoryEntity:

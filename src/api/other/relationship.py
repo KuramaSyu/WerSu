@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from enum import StrEnum
 from typing import Any, Literal, TypeAlias
 
-from src.api import UNDEFINED, UndefinedOr
+from src.api.other.undefined import UNDEFINED, UndefinedOr
 
 
 class ObjectTypeEnum(StrEnum):

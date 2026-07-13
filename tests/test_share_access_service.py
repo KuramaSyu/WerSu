@@ -21,7 +21,7 @@ from typing import List, Optional
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api.relationship import ObjectRef, Relationship, SubjectRef
+from src.api.other.relationship import ObjectRef, Relationship, SubjectRef
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_action import UserActionEntity

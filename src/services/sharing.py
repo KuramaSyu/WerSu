@@ -3,17 +3,17 @@ from datetime import datetime
 from typing import List, Literal
 
 from src.api import PermissionRepoABC, ActivityLoggerServiceABC
-from src.api.relationship import (
+from src.api.other.relationship import (
     DirectoryRelationEnum,
     NoteRelationEnum,
     ObjectRef,
     Relationship,
     SubjectRef,
 )
-from src.api.sharing import SharingServiceABC
-from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED, UndefinedOr, unwrap_undefined, unwrap_undefined_or
-from src.api.user_context import UserContextABC
+from src.api.services.sharing import SharingServiceABC
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED, UndefinedOr, unwrap_undefined, unwrap_undefined_or
+from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.repos.user import RepoUserContext
 from src.db.repos.user.user import UserRepoABC
@@ -22,7 +22,7 @@ from src.services.permissions import PermissionServiceABC
 from src.facades.share_action_facade import ShareActionFacade
 
 
-class DefaultSharingService(SharingServiceABC):
+class SharingServiceImpl(SharingServiceABC):
     """Service layer for note shares with note permission checks."""
 
     def __init__(

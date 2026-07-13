@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import List, Self
 
-from src.api.undefined import UNDEFINED
-from src.api.user_context import UserContextABC
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import UserContextABC
 from src.ai.embedding_generator import  EmbeddingGeneratorABC, Models
 from src.db.database import  DatabaseABC
 from src.db.entities import NoteEntity

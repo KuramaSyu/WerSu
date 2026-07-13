@@ -1,4 +1,4 @@
-"""Tests for :class:`DefaultActivityStatisticsService`.
+"""Tests for :class:`ActivityStatisticsServiceImpl`.
 
 The activity repo is wired against an in-memory SQLite database (same
 fixture as :mod:`tests.test_activity_repo`).  Permission checks and
@@ -12,7 +12,7 @@ from typing import AsyncGenerator, List, Optional
 
 import pytest
 
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.activity.postgres import PostgresActivityRepo
@@ -20,7 +20,7 @@ from src.db.sql_builders import SqlBuilderFactory
 from src.db.sqlite_database import SqliteDatabase
 from src.db.table import Table
 from src.services.activity_statistics_service import (
-    DefaultActivityStatisticsService,
+    ActivityStatisticsServiceImpl,
 )
 from src.utils.logging import logging_provider
 from tests._fixtures_pkg.fakes import _FakeNoteContentRepo, _TestDirectoryRepo
@@ -144,7 +144,7 @@ async def _insert(
     directory_id: Optional[str] = None,
     actor_id: str = "alice",
 ) -> None:
-    from src.api.undefined import UNDEFINED
+    from src.api.other.undefined import UNDEFINED
     from src.db.entities.activity import ActivityEntity
     import uuid
     await repo.add_activity(
@@ -174,7 +174,7 @@ class TestPermissionGating:
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=[])  # alice can't view any
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -191,7 +191,7 @@ class TestPermissionGating:
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_directory_ids=[])
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -208,7 +208,7 @@ class TestPermissionGating:
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=[])
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -229,7 +229,7 @@ class TestGetHistory:
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1"])
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -253,7 +253,7 @@ class TestGetHistory:
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1", "n-2"])
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -276,7 +276,7 @@ class TestGetHistory:
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1"])
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -302,7 +302,7 @@ class TestGetHistory:
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1"])
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -341,7 +341,7 @@ class TestVisibleDirectoryResolution:
         directory_repo.subtree_by_root["d-b"] = (["n-2"], ["d-b"])
 
         perms = _FakePermissionRepo()
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -376,7 +376,7 @@ class TestGetMostUsed:
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1", "n-2"])
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -408,7 +408,7 @@ class TestGetMostUsed:
     ) -> None:
         import math
         perms = _FakePermissionRepo(viewable_note_ids=["n-1", "n-2"])
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -443,7 +443,7 @@ class TestGetMostUsed:
         )
         note_content_repo._store[str(override.note_id)] = override
         perms = _FakePermissionRepo(viewable_note_ids=["n-1"])
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,
@@ -463,7 +463,7 @@ class TestGetMostUsed:
         alice: _FakeUserContext,
     ) -> None:
         perms = _FakePermissionRepo(viewable_note_ids=["n-1"])
-        svc = DefaultActivityStatisticsService(
+        svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,
             permission_repo=perms,
             directory_repo=directory_repo,

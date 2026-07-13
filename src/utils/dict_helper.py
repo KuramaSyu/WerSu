@@ -1,5 +1,5 @@
 from typing import Any, Dict, cast
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 
 
 def drop_undefined(data: Dict[str, Any] | Any) -> Dict[str, Any]:

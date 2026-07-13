@@ -1,4 +1,4 @@
-"""Tests for :class:`DefaultActivityLoggerService`.
+"""Tests for :class:`ActivityLoggerServiceImpl`.
 
 Uses an in-memory :class:`ActivityRepoABC` fake so each call lands on a
 record-and-verify path -- no database, no asyncpg, fast feedback.
@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import pytest
 
-from src.api.activity import ActivityRepoABC
-from src.api.activity_logger_service import (
+from src.api.repos.activity_repo import ActivityRepoABC
+from src.api.services.activity_logger_service import (
     ActivityLoggerError,
     RoleChangeMetadata,
     RoleGrantMetadata,
     RoleRevokeMetadata,
 )
 from src.db.entities.activity import ActivityEntity
-from src.services.activity_logger_service import DefaultActivityLoggerService
+from src.services.activity_logger_service import ActivityLoggerServiceImpl
 from tests.stubs.activity_repo import _FakeActivityRepo
 from tests.stubs.user_context import _UserContext as _FakeUserContext
 
@@ -32,8 +32,8 @@ def repo() -> _FakeActivityRepo:
 
 
 @pytest.fixture
-def logger(repo: _FakeActivityRepo) -> DefaultActivityLoggerService:
-    return DefaultActivityLoggerService(activity_repo=repo)
+def logger(repo: _FakeActivityRepo) -> ActivityLoggerServiceImpl:
+    return ActivityLoggerServiceImpl(activity_repo=repo)
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_viewed(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_viewed("n-1", alice)
@@ -64,7 +64,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_created(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_created("n-1", alice)
@@ -73,7 +73,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_edited(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_edited("n-1", alice, metadata={"from": "v1"})
@@ -82,7 +82,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_deleted(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_deleted("n-1", alice)
@@ -90,7 +90,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_published(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_published("n-1", alice)
@@ -98,7 +98,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_shared(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_shared("n-1", alice)
@@ -106,7 +106,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_unshared(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_unshared("n-1", alice)
@@ -115,7 +115,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_restored(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_restored("n-1", alice)
@@ -123,7 +123,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_archived(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_archived("n-1", alice)
@@ -131,7 +131,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_version_restored_carries_version(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_version_restored("n-1", alice, version=7)
@@ -141,7 +141,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_version_restored_merges_extra_metadata(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_version_restored(
@@ -151,7 +151,7 @@ class TestNoteMethods:
 
     @pytest.mark.asyncio
     async def test_note_attachment_added_carries_attachment_id(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_attachment_added("n-1", alice, attachment_id="a-1")
@@ -168,7 +168,7 @@ class TestDirectoryMethods:
 
     @pytest.mark.asyncio
     async def test_directory_created(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.directory_created("d-1", alice)
@@ -180,7 +180,7 @@ class TestDirectoryMethods:
 
     @pytest.mark.asyncio
     async def test_directory_viewed(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.directory_viewed("d-1", alice)
@@ -188,7 +188,7 @@ class TestDirectoryMethods:
 
     @pytest.mark.asyncio
     async def test_directory_edited(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.directory_edited("d-1", alice)
@@ -196,7 +196,7 @@ class TestDirectoryMethods:
 
     @pytest.mark.asyncio
     async def test_directory_deleted(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.directory_deleted("d-1", alice)
@@ -211,7 +211,7 @@ class TestRoleMethods:
 
     @pytest.mark.asyncio
     async def test_role_granted_records_dataclass_as_dict(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.role_granted(
@@ -228,7 +228,7 @@ class TestRoleMethods:
 
     @pytest.mark.asyncio
     async def test_role_revoked(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.role_revoked(
@@ -243,7 +243,7 @@ class TestRoleMethods:
 
     @pytest.mark.asyncio
     async def test_role_changed_records_zanzibar_lists(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.role_changed(
@@ -264,7 +264,7 @@ class TestRoleMethods:
 
     @pytest.mark.asyncio
     async def test_role_changed_rejects_malformed_added(
-        self, logger: DefaultActivityLoggerService, alice: _FakeUserContext,
+        self, logger: ActivityLoggerServiceImpl, alice: _FakeUserContext,
     ) -> None:
         with pytest.raises(ActivityLoggerError, match="added"):
             await logger.role_changed(
@@ -278,7 +278,7 @@ class TestRoleMethods:
 
     @pytest.mark.asyncio
     async def test_role_changed_rejects_malformed_removed(
-        self, logger: DefaultActivityLoggerService, alice: _FakeUserContext,
+        self, logger: ActivityLoggerServiceImpl, alice: _FakeUserContext,
     ) -> None:
         with pytest.raises(ActivityLoggerError, match="removed"):
             await logger.role_changed(
@@ -292,7 +292,7 @@ class TestRoleMethods:
 
     @pytest.mark.asyncio
     async def test_role_granted_requires_role_id(
-        self, logger: DefaultActivityLoggerService, alice: _FakeUserContext,
+        self, logger: ActivityLoggerServiceImpl, alice: _FakeUserContext,
     ) -> None:
         with pytest.raises(ActivityLoggerError, match="role_id is required"):
             await logger.role_granted(
@@ -303,7 +303,7 @@ class TestRoleMethods:
 
     @pytest.mark.asyncio
     async def test_role_revoked_requires_role_id(
-        self, logger: DefaultActivityLoggerService, alice: _FakeUserContext,
+        self, logger: ActivityLoggerServiceImpl, alice: _FakeUserContext,
     ) -> None:
         with pytest.raises(ActivityLoggerError, match="role_id is required"):
             await logger.role_revoked(
@@ -314,7 +314,7 @@ class TestRoleMethods:
 
     @pytest.mark.asyncio
     async def test_role_changed_requires_role_id(
-        self, logger: DefaultActivityLoggerService, alice: _FakeUserContext,
+        self, logger: ActivityLoggerServiceImpl, alice: _FakeUserContext,
     ) -> None:
         with pytest.raises(ActivityLoggerError, match="role_id is required"):
             await logger.role_changed(
@@ -332,7 +332,7 @@ class TestActorSemantics:
 
     @pytest.mark.asyncio
     async def test_system_actor_sets_accessed_as_system(
-        self, logger: DefaultActivityLoggerService, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
     ) -> None:
         sys_ctx = _FakeUserContext(user_id="system-bot", accessed_as="system")
         await logger.note_viewed("n-1", sys_ctx)
@@ -367,6 +367,6 @@ class TestErrorWrapping:
             async def edit_activity(self, activity):
                 raise ValueError("kaboom")
 
-        logger = DefaultActivityLoggerService(activity_repo=_BoomRepo())
+        logger = ActivityLoggerServiceImpl(activity_repo=_BoomRepo())
         with pytest.raises(ActivityLoggerError, match="failed to record"):
             await logger.note_viewed("n-1", alice)

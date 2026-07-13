@@ -1,4 +1,4 @@
-"""gRPC adapter for :class:`src.services.attachments.AttachmentFacadeABC`.
+"""gRPC adapter for :class:`src.services.attachment_facade.AttachmentFacadeABC`.
 
 Implements ``AttachmentService`` from ``grpc/proto/attachments.proto``:
 upload, fetch, fetch metadata, update metadata, delete, plus the
@@ -18,8 +18,8 @@ from google.protobuf.empty_pb2 import Empty
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
-from src.api.undefined import UNDEFINED
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.repos.attachments.attachments import Attachment as AttachmentEntity
 from src.grpc_mod._log_decorator import log_service_call
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
@@ -36,7 +36,7 @@ from src.grpc_mod.proto.attachments_pb2 import (
     UpdateAttachmentMetadataRequest,
 )
 from src.grpc_mod.proto.attachments_pb2_grpc import AttachmentServiceServicer
-from src.services.attachments import AttachmentFacadeABC
+from src.services.attachment_facade import AttachmentFacadeABC
 
 
 class GrpcAttachmentService(AttachmentServiceServicer):

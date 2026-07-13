@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, List, Protocol, Sequence
 
 from asyncpg import Record
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.entities import NoteEmbeddingEntity
 from src.db.table import TableABC
 

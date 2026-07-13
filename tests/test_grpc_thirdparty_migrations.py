@@ -23,7 +23,7 @@ import grpc
 import pytest
 from grpc.aio import ServicerContext
 
-from src.api.user_context import UserContextABC
+from src.api.other.user_context import UserContextABC
 from src.grpc_mod.proto.thirdparty_migrations_pb2 import BookstackBookImportChunk
 from src.grpc_mod.thirdparty_migrations_service import (
     GrpcThirdpartyMigrationsService,

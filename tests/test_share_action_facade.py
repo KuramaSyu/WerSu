@@ -28,7 +28,7 @@ from typing import Optional
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_action import FilterUserAction, UserActionEntity

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Sequence
 
-from src.api.undefined import *
+from src.api.other.undefined import *
 
 
 def _str_vec_to_list(vec_str: str) -> List[float]:

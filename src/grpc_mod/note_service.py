@@ -10,7 +10,6 @@ messages via the injected :class:`ConvertToGrpcVisitor`.
 
 from __future__ import annotations
 
-import logging
 import traceback
 from datetime import datetime
 
@@ -19,8 +18,8 @@ import grpc
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider, NoteServiceABC
-from src.api.undefined import UNDEFINED
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities import NoteEntity
 from src.grpc_mod._log_decorator import log_service_call
 from src.grpc_mod.converter.from_proto import to_search_type
@@ -52,7 +51,6 @@ class GrpcNoteService(NoteServiceServicer):
     ):
         self._note_service = note_service
         self.log = log(__name__, self)
-        self._svc_logger = logging.getLogger("src.services")
 
         # visitor pattern -> note entiy calls .visit(visitor)
         # -> visitor calls the correct visit_note() method. you

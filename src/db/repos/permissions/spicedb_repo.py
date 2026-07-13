@@ -10,11 +10,11 @@ import inspect
 from asyncpg import Record
 from authzed.api.v1.permission_service_pb2 import ExportBulkRelationshipsRequest, ImportBulkRelationshipsRequest, LookupResourcesRequest, LookupSubjectsRequest
 import grpc
-from src.api.permission_repo import PermissionRepoABC
-from src.api.service_unavailable_error import ServiceUnavailableError
+from src.api.repos.permission_repo import PermissionRepoABC
+from src.api.other.service_unavailable_error import ServiceUnavailableError
 from src.api import PermissionConverterABC, ObjectRef, SubjectRef, RelationEnum, Relationship, UserContextABC, ObjectTypeEnum, RelationName, NoteRelationEnum
-from src.api.relationship import AttachmentRelationEnum, DirectoryRelationEnum
-from src.api.undefined import is_undefined, unwrap_undefined
+from src.api.other.relationship import AttachmentRelationEnum, DirectoryRelationEnum
+from src.api.other.undefined import is_undefined, unwrap_undefined
 from src.db.table import TableABC
 from src.utils import asdict
 
@@ -174,8 +174,8 @@ class SpicedbPermissionRepo(PermissionRepoABC):
             Optional Postgres ``Table`` for
             ``note.directory_subdirectory``.  Kept on the repo so
             the directory subtree walks in
-            :meth:`DirectoryRepoFacade.resolve_subtree` /
-            :meth:`DirectoryRepoFacade.list_note_directory_ids`
+            :meth:`DirectoryFacadeImpl.resolve_subtree` /
+            :meth:`DirectoryFacadeImpl.list_note_directory_ids`
             can target Postgres directly.  Optional -- the repo
             still works without it, falling back to
             :meth:`lookup_relationships` for the same shapes.
@@ -534,7 +534,7 @@ class SpicedbPermissionRepo(PermissionRepoABC):
         ``ExportBulkRelationships`` instead of scanning ``self._store``.
         """
 
-        from src.api.permission_repo import ResolvedChildren
+        from src.api.repos.permission_repo import ResolvedChildren
 
         if max_depth < 0:
             raise ValueError("max_depth must be >= 0")

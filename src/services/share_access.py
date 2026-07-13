@@ -1,13 +1,13 @@
 from datetime import datetime
 from typing import Optional, Tuple
 
-from src.api.permission_repo import PermissionRepoABC
-from src.api.relationship import ObjectRef
-from src.api.sharing import ShareAccessServiceABC, SharingRepoABC
-from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED, UndefinedNoneOr, unwrap_undefined
-from src.api.user_action import UserActionRepoABC
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.repos.permission_repo import PermissionRepoABC
+from src.api.other.relationship import ObjectRef
+from src.api.services.sharing import ShareAccessServiceABC, SharingRepoABC
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, unwrap_undefined
+from src.api.repos.user_action_repo import UserActionRepoABC
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.repos.user import UnimplementedUserContext
 from src.db.repos.user.user import UserRepoABC

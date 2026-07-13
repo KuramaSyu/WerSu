@@ -5,7 +5,7 @@ This module keeps the historical `src.db.repos.note.permission` import path
 working without duplicating permission logic.
 """
 
-from src.api.relationship import DirectoryRelationEnum, NoteRelationEnum, ObjectTypeEnum
+from src.api.other.relationship import DirectoryRelationEnum, NoteRelationEnum, ObjectTypeEnum
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 
 __all__ = [

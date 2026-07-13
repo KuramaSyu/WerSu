@@ -4,16 +4,16 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Dict
 
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.repos.attachments.attachments import (
     Attachment,
-    AttachmentsMetadataRepoABC,
-    AttachmentsRepoABC,
+    AttachmentMetadataRepoABC,
+    AttachmentRepoABC,
 )
 from src.db.table import TableABC
 
 
-class InMemoryAttachmentRepo(AttachmentsRepoABC):
+class InMemoryAttachmentRepo(AttachmentRepoABC):
     """In-memory attachment storage for unit tests."""
 
     def __init__(self) -> None:
@@ -47,7 +47,7 @@ class InMemoryAttachmentRepo(AttachmentsRepoABC):
         self._store.pop(key, None)
 
 
-class InMemoryAttachmentMetadataRepo(AttachmentsMetadataRepoABC):
+class InMemoryAttachmentMetadataRepo(AttachmentMetadataRepoABC):
     """In-memory metadata store for unit tests."""
 
     def __init__(self) -> None:

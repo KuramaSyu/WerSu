@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from src.api.directory_service import DirectoryServiceABC
-from src.api.permission_repo import DirectoryChild
-from src.api.undefined import UNDEFINED
-from src.api.user_context import UserContextABC
+from src.api.services.directory_service import DirectoryServiceABC
+from src.api.repos.permission_repo import DirectoryChild
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 
@@ -185,7 +185,7 @@ class _StubDirectoryService(DirectoryServiceABC):
             raise PermissionError("not allowed")
         # The stub has no resolver; tests that exercise the real
         # recursive-delete behaviour wire the production
-        # ``DirectoryService`` directly.
+        # ``DirectoryServiceImpl`` directly.
         return []
 
 

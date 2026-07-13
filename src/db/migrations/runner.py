@@ -6,7 +6,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Set
 
-from src.api.types import LoggingProvider
+from src.api.other.types import LoggingProvider
 from src.db.migrations.base import MigrationABC
 from src.db.migrations.context import MigrationContext
 

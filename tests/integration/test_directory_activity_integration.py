@@ -1,4 +1,4 @@
-"""Integration tests for ``DirectoryRepoFacade.resolve_files_of_directory``.
+"""Integration tests for ``DirectoryFacadeImpl.resolve_files_of_directory``.
 
 The directory repo walks ``note.directory_subdirectory`` and
 ``note.directory_note`` instead of SpiceDB; the
@@ -19,7 +19,7 @@ from tests._fixtures_pkg.fakes import (
     _FakeDirectoryTagsTable,
 )
 from src.api import ObjectRef, Relationship, SubjectRef
-from src.db.repos.directory.directory import DirectoryRepoFacade
+from src.db.repos.directory.directory import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from src.db.repos.permissions.permission import SpicedbPermissionRepo
 
@@ -61,7 +61,7 @@ async def test_resolve_files_of_directory_spicedb(
     note_table.add_note_child(root_id, note_root)
     note_table.add_note_child(child_id, note_child)
 
-    directory_repo = DirectoryRepoFacade(
+    directory_repo = DirectoryFacadeImpl(
         postgres_repo=PostgresDirectoryRepo(
             directory_table=_FakeDirectoryTable(),
             subdirectory_table=subdirectory_table,

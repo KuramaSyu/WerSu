@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.activity import (
     ActivityEntity,
     ActivityFilterBuilder,

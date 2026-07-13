@@ -15,7 +15,7 @@ talks to one collaborator for share persistence.
 The class is intentionally concrete: every dependency it composes is
 itself an ABC, so tests can swap the underlying repos in
 ``__init__`` instead of subclassing the facade.  This mirrors how
-:class:`DefaultSharingService` already accepts its collaborators.
+:class:`SharingServiceImpl` already accepts its collaborators.
 
 Collaborators composed by this facade:
 
@@ -35,15 +35,15 @@ from datetime import datetime
 from typing import List, cast
 from uuid import uuid7
 
-from src.api.sharing import SharingRepoABC
-from src.api.types import LoggingProvider
-from src.api.undefined import (
+from src.api.services.sharing import SharingRepoABC
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import (
     UNDEFINED,
     UndefinedNoneOr,
     unwrap_undefined,
 )
-from src.api.user_action import UserActionRepoABC
-from src.api.user_context import UserContextABC
+from src.api.repos.user_action_repo import UserActionRepoABC
+from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_action import (
@@ -56,7 +56,7 @@ from src.db.repos.user.user import UserRepoABC
 
 class ShareActionFacade(SharingRepoABC):
     """Facade to reduce complexity, e.g. constructor overinjection, in
-    :class:`DefaultSharingService`. 
+    :class:`SharingServiceImpl`. 
     When applying a CRUD operation to a share, then also
     update temporary users and schedule their future actions 
     (e.g. disable, or never disable). 

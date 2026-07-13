@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from src.api.note_service import NoteResponse
+    from src.api.services.note_service import NoteResponse
     from src.db.entities.activity import ActivityEntity, ActivityScore
     from src.db.entities.directory.directory import DirectoryEntity
     from src.db.entities.note.metadata import NoteEntity

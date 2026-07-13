@@ -3,8 +3,8 @@ from datetime import datetime
 from typing import Literal
 
 
-from src.api.undefined import UNDEFINED, UndefinedOr, UndefinedNoneOr
-from src.api.visitor import AcceptsVisitor, EntityVisitor
+from src.api.other.undefined import UNDEFINED, UndefinedOr, UndefinedNoneOr
+from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 
 
 @dataclass

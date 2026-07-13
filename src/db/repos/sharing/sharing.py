@@ -3,10 +3,10 @@ from typing import List, Optional
 
 from asyncpg import Record
 
-from src.api.sharing import SharingRepoABC
-from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED
-from src.api.user_context import UserContextABC
+from src.api.services.sharing import SharingRepoABC
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.table import TableABC
 from src.utils import asdict, logging_provider as default_logging_provider

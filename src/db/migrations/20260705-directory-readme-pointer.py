@@ -7,7 +7,7 @@ class Migration(MigrationABC):
 
     Notes
     -----
-    The :class:`~src.services.directory.DirectoryService` already
+    The :class:`~src.services.directory.DirectoryServiceImpl` already
     pins a ``README.md`` note per directory via the
     ``note#parent_directory@directory`` SpiceDB relation.  This
     migration adds a Postgres pointer so that ``get_directory`` and

@@ -1,7 +1,7 @@
 """Postgres implementation of :class:`NoteTagRepoABC`.
 
 Every SQL statement against ``note.note_tag`` lives here so the
-:class:`~src.db.repos.note.note.NoteFacade` stays free of raw SQL.
+:class:`~src.db.repos.note.note.NoteFacadeImpl` stays free of raw SQL.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from typing import List, Optional
 
 import asyncpg  # type: ignore[import]
 
-from src.api.note_tag_repo import NoteTagRepoABC
+from src.api.repos.note_tag_repo import NoteTagRepoABC
 from src.db.table import TableABC
 
 

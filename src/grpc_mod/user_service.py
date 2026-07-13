@@ -1,6 +1,6 @@
-"""gRPC adapter for :class:`src.services.user.UserServiceABC`.
+"""gRPC adapter for :class:`src.services.user_service.UserServiceABC`.
 
-Implements ``UserService`` from ``grpc/proto/user.proto``: get /
+Implements ``UserServiceImpl`` from ``grpc/proto/user.proto``: get /
 create / alter / delete users.  Only ``GetUser`` and ``PostUser``
 are wired up to the service layer so far; ``AlterUser`` and
 ``DeleteUser`` are stubs reserved for future work.
@@ -15,7 +15,7 @@ import grpc
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod._log_decorator import log_service_call
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
@@ -28,7 +28,7 @@ from src.grpc_mod.proto.user_pb2 import (
     User,
 )
 from src.grpc_mod.proto.user_pb2_grpc import UserServiceServicer
-from src.services.user import UserServiceABC
+from src.services.user_service import UserServiceABC
 
 
 class GrpcUserService(UserServiceServicer):

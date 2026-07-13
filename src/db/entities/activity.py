@@ -38,8 +38,8 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, List, Literal, Mapping
 
-from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
-from src.api.visitor import AcceptsVisitor, EntityVisitor
+from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
+from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 
 
 ActivityKind = Literal[

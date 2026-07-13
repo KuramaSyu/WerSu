@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from src.api.relationship import ObjectRef, Relationship
-from src.api.user_context import UserContextABC
+from src.api.other.relationship import ObjectRef, Relationship
+from src.api.other.user_context import UserContextABC
 from src.services.permissions import PermissionServiceABC
 
 

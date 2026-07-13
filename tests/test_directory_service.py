@@ -1,4 +1,4 @@
-"""Unit tests for :class:`src.services.directory.DirectoryService`.
+"""Unit tests for :class:`src.services.directory.DirectoryServiceImpl`.
 
 These tests reuse the shared test doubles from
 :mod:`tests._fixtures_pkg.fakes` and :mod:`tests.db.repos.permissions`
@@ -11,7 +11,7 @@ covers permissions.
 Coverage:
 
 * Permission chain wiring for every public method.
-* :meth:`DirectoryService.get_directory_notes` -- README pinning at
+* :meth:`DirectoryServiceImpl.get_directory_notes` -- README pinning at
   offset 0, README auto-creation, and pagination.
 """
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from tests.stubs.user_context import _UserContext
-from src.api.relationship import (
+from src.api.other.relationship import (
     DirectoryRelationEnum,
     NoteRelationEnum,
     ObjectRef,
@@ -28,17 +28,17 @@ from src.api.relationship import (
     Relationship,
     SubjectRef,
 )
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryEntity
-from src.services.directory import DirectoryService, README_TITLE
+from src.services.directory import DirectoryServiceImpl, README_TITLE
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests._fixtures_pkg.fakes import _FakeNoteRepoFacade, _TestDirectoryRepo
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService
 
 
 def _make_service() -> tuple[
-    DirectoryService,
+    DirectoryServiceImpl,
     _TestDirectoryRepo,
     _FakeNoteRepoFacade,
     InMemoryPermissionRepo,
@@ -48,7 +48,7 @@ def _make_service() -> tuple[
     directory_repo = _TestDirectoryRepo(permission_repo=permission_repo)
     note_repo = _FakeNoteRepoFacade()
     activity_logger = _FakeActivityLoggerService()
-    service = DirectoryService(
+    service = DirectoryServiceImpl(
         directory_repo=directory_repo,
         note_repo=note_repo,
         permission_repo=permission_repo,

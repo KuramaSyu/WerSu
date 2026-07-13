@@ -18,7 +18,7 @@ enforce view permissions on the requested targets and resolve "all"
 without the caller having to thread permissions through itself.
 
 Implementations:
-* :class:`src.services.activity_statistics_service.PostgresActivityStatisticsService`
+* :class:`src.services.activity_statistics_service.ActivityStatisticsServiceImpl`
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Literal, Optional, Sequence
 
-from src.api.user_context import UserContextABC
+from src.api.other.user_context import UserContextABC
 from src.db.entities.activity import ActivityEntity, ActivityScore
 
 
@@ -37,7 +37,7 @@ class ActivityStatisticsServiceABC(ABC):
     """Read-side facade over the activity log.
 
     Implementations:
-    * :class:`~src.services.activity_statistics_service.DefaultActivityStatisticsService`
+    * :class:`~src.services.activity_statistics_service.ActivityStatisticsServiceImpl`
     """
 
     @abstractmethod

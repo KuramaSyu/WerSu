@@ -4,7 +4,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from src.api.note_service import NoteIncludeOptions
+from src.api.services.note_service import NoteIncludeOptions
 from src.db.entities.note.metadata import NoteEntity
 
 
@@ -34,7 +34,7 @@ class CombinedNoteRepoABC(ABC):
             when no row matches ``note_id``.  ``directory_ids`` /
             ``tag_ids`` are populated iff their flag was set;
             ``embeddings`` / ``permissions`` are never populated
-            -- call ``NoteFacade.select_by_id`` (or the service)
+            -- call ``NoteFacadeImpl.select_by_id`` (or the service)
             for permission enrichment.
         """
         ...

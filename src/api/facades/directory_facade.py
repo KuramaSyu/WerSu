@@ -6,7 +6,7 @@ implementation under :mod:`src.db.repos.directory` is hidden behind
 it.
 
 Implementations:
-    * :class:`src.db.repos.directory.directory.DirectoryRepoFacade`
+    * :class:`src.db.repos.directory.directory.DirectoryFacadeImpl`
 """
 
 from __future__ import annotations
@@ -15,12 +15,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar, List, Optional, Sequence, Tuple
 
-from src.api.user_context import UserContextABC
+from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 
 
 if TYPE_CHECKING:
-    from src.api.directory_service import DirectoryIncludeOptions
+    from src.api.services.directory_service import DirectoryIncludeOptions
 
 
 @dataclass(frozen=True)
@@ -38,11 +38,11 @@ class DefaultDirectorySpec:
     description: str
 
 
-class DirectoryFacade(ABC):
+class DirectoryFacadeABC(ABC):
     """Storage contract for directory rows and their SpiceDB relations.
 
     Implementations:
-        * :class:`src.db.repos.directory.directory.DirectoryRepoFacade`
+        * :class:`src.db.repos.directory.directory.DirectoryFacadeImpl`
     """
 
     DEFAULT_DIRECTORY_SPECS: ClassVar[Sequence[DefaultDirectorySpec]] = (
@@ -269,4 +269,4 @@ class DirectoryFacade(ABC):
         ...
 
 
-__all__ = ["DefaultDirectorySpec", "DirectoryFacade"]
+__all__ = ["DefaultDirectorySpec", "DirectoryFacadeABC"]

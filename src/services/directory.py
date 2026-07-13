@@ -1,7 +1,7 @@
 """Concrete :class:`~src.api.directory_service.DirectoryServiceABC` implementation.
 
 This service composes :class:`~src.db.repos.directory.directory.DirectoryRepo`
-and :class:`~src.db.repos.note.note.NoteFacade` with the permission repo,
+and :class:`~src.db.repos.note.note.NoteFacadeImpl` with the permission repo,
 and orchestrates every directory-related concern (permission checks,
 README bookkeeping, pagination, default-directory resolution).
 
@@ -28,14 +28,14 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-from src.api.note_service import NoteServiceABC
-from src.api.permission_repo import DirectoryChild
-from src.api.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
-from src.api.user_context import UserContextABC
+from src.api.services.note_service import NoteServiceABC
+from src.api.repos.permission_repo import DirectoryChild
+from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
+from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
-from src.db.repos.directory.directory import DirectoryFacade
-from src.api.note_facade import NoteRepoFacadeABC
+from src.db.repos.directory.directory import DirectoryFacadeABC
+from src.api.facades.note_facade import NoteRepoFacadeABC
 from src.domain.permission_chain import (
     HasDirectoryDeletePerm,
     HasDirectoryViewPerm,
@@ -47,14 +47,14 @@ from src.utils.readme_parser import ParsedReadme, parse_readme
 
 
 if TYPE_CHECKING:
-    from src.services.attachments import AttachmentFacadeABC
+    from src.services.attachment_facade import AttachmentFacadeABC
 
 
 README_TITLE = "README.md"
 """Title of the auto-managed ``README.md`` note for each directory."""
 
 
-class DirectoryService(DirectoryServiceABC):
+class DirectoryServiceImpl(DirectoryServiceABC):
     """Concrete :class:`~src.api.directory_service.DirectoryServiceABC`.
 
     Every public method gates the call with a permission check from
@@ -64,14 +64,14 @@ class DirectoryService(DirectoryServiceABC):
 
     Recursive delete + :meth:`dry_delete` + the README attachment
     workflow require an :class:`AttachmentFacadeABC` and a
-    :class:`NoteService` so the service can fan the cascade out to
+    :class:`NoteServiceImpl` so the service can fan the cascade out to
     attachment rows and notes.  All collaborators are required --
     pass real instances wired by :func:`src.main.build`.
     """
 
     def __init__(
         self,
-        directory_repo: DirectoryFacade,
+        directory_repo: DirectoryFacadeABC,
         note_repo: NoteRepoFacadeABC,
         permission_repo: PermissionRepoABC,
         activity_logger: ActivityLoggerServiceABC,
@@ -253,42 +253,44 @@ class DirectoryService(DirectoryServiceABC):
 
         # Create the README.md which contains description and image of directory
         # then also insert note#parent_directory@directory relation 
-        if created_dir.id:
-            existing_readme_id = (
-                str(created_dir.readme_note_id)
-                if created_dir.readme_note_id
-                else None
-            )
-            readme: Optional[NoteEntity] = None
-            if not existing_readme_id:
-                readme = await self._create_readme(
-                    str(created_dir.id), 
-                    user_ctx,
+        unwrap_undefined(created_dir.id)
+        existing_readme_id = (
+            str(created_dir.readme_note_id)
+            if created_dir.readme_note_id
+            else None
+        )
+        readme: Optional[NoteEntity] = None
+        if not existing_readme_id:
+            # no readme -> insert
+            readme = await self._create_readme(
+                str(created_dir.id), 
+                user_ctx,
 
-                )
+            )
+        else:
+            # readme exists -> update spicedb/postgres pointers
+            await self._bind_readme(
+                str(created_dir.id), existing_readme_id
+            )
+        
+        # update readme with given image url.
+        image_urls = extract_attachment_ids(created_dir.image_url or "")
+        if image_urls and created_dir.image_url:
+            attachment_key = image_urls[0]
+            readme = readme or await self._note_repo.select_by_id(str(existing_readme_id), user_ctx)
+            if not readme:
+                self.log.warning(f"failed to fetch README note for directory {created_dir.id} to link attachment {attachment_key}")
             else:
-                await self._bind_readme(
-                    str(created_dir.id), existing_readme_id
-                )
-            
-            # update readme with given image url.
-            image_urls = extract_attachment_ids(created_dir.image_url or "")
-            if image_urls and created_dir.image_url:
-                attachment_key = image_urls[0]
-                readme = readme or await self._note_repo.select_by_id(str(existing_readme_id), user_ctx)
-                if not readme:
-                    self.log.warning(f"failed to fetch README note for directory {created_dir.id} to link attachment {attachment_key}")
-                else:
-                    await self._update_readme(readme, user_ctx, attachment_key=attachment_key)
+                await self._update_readme(readme, user_ctx, attachment_key=attachment_key)
 
-            refreshed = await self._directory_repo.fetch_directory(
-                str(created_dir.id)
-            )
-            if refreshed is not None:
-                created_dir = refreshed
-            await self._activity_logger.directory_created(
-                str(created_dir.id), user_ctx
-            )
+        refreshed = await self._directory_repo.fetch_directory(
+            str(created_dir.id)
+        )
+        if refreshed is not None:
+            created_dir = refreshed
+        await self._activity_logger.directory_created(
+            str(created_dir.id), user_ctx
+        )
         return created_dir
 
     async def patch_directory(
@@ -615,4 +617,4 @@ class DirectoryService(DirectoryServiceABC):
             directory.description = parsed.description
 
 
-__all__ = ["DirectoryService", "README_TITLE"]
+__all__ = ["DirectoryServiceImpl", "README_TITLE"]

@@ -1,7 +1,7 @@
-"""Unit tests for :meth:`DirectoryService.dry_delete` and the
-recursive :meth:`DirectoryService.delete_directory` cascade.
+"""Unit tests for :meth:`DirectoryServiceImpl.dry_delete` and the
+recursive :meth:`DirectoryServiceImpl.delete_directory` cascade.
 
-Wires the real :class:`DirectoryService` against the project-level
+Wires the real :class:`DirectoryServiceImpl` against the project-level
 in-memory fakes (same pattern as
 :file:`tests/test_thirdparty_migrations_real_services.py`) so the
 ``PermissionRepoABC.resolve_children`` -> :meth:`dry_delete` ->
@@ -24,11 +24,11 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-from src.api.permission_repo import (
+from src.api.repos.permission_repo import (
     DirectoryChild,
     PermissionRepoABC,
 )
-from src.api.relationship import (
+from src.api.other.relationship import (
     AttachmentRelationEnum,
     DirectoryRelationEnum,
     NoteRelationEnum,
@@ -37,14 +37,14 @@ from src.api.relationship import (
     Relationship,
     SubjectRef,
 )
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
-from src.services.attachments import AttachmentFacade
+from src.services.attachment_facade import AttachmentFacadeImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from src.services.directory import DirectoryService
-from src.services.note import NoteService
+from src.services.directory import DirectoryServiceImpl
+from src.services.note import NoteServiceImpl
 from src.db.table import TableABC
 from tests._fixtures_pkg.fakes import (
     _FakeCombinedNoteRepo,
@@ -100,7 +100,7 @@ def _wire_service(
     user_id: str = "user-1",
     queue_note_ids: Optional[List[str]] = None,
 ) -> Tuple[
-    DirectoryService,
+    DirectoryServiceImpl,
     _TestDirectoryRepo,
     _FakeNoteContentRepo,
     _FakeNoteRepoFacade,
@@ -108,7 +108,7 @@ def _wire_service(
     InMemoryAttachmentMetadataRepo,
     InMemoryPermissionRepo,
 ]:
-    """Build a :class:`DirectoryService` with the real ``NoteService`` + ``AttachmentFacade``."""
+    """Build a :class:`DirectoryServiceImpl` with the real ``NoteServiceImpl`` + ``AttachmentFacadeImpl``."""
     fake_db = _FakeDatabase()
     ids = queue_note_ids or [
         f"019f0000-0000-7000-8000-{i:012d}" for i in range(1, 50)
@@ -124,9 +124,9 @@ def _wire_service(
     jwt_provider = _FakeJwtProvider()
     activity_logger = _FakeActivityLoggerService()
 
-    from src.db.repos.note.note import NoteFacade
+    from src.db.repos.note.note import NoteFacadeImpl
 
-    real_facade = NoteFacade(
+    real_facade = NoteFacadeImpl(
         db=fake_db,
         content_repo=content_repo,
         combined_repo=_FakeCombinedNoteRepo(content_repo=content_repo),
@@ -152,17 +152,18 @@ def _wire_service(
 
     real_facade.insert = _insert_bridge  # type: ignore[assignment]
 
-    note_service = NoteService(
+    note_service = NoteServiceImpl(
         note_repo=real_facade,
         permission_repo=permission_repo,
         jwt_provider=jwt_provider,
         directory_repo=directory_repo,
         activity_logger=activity_logger,
+        logging_provider=silent_logger,
     )
 
     attachment_repo = InMemoryAttachmentRepo()
     attachment_metadata_repo = InMemoryAttachmentMetadataRepo()
-    attachment_facade = AttachmentFacade(
+    attachment_facade = AttachmentFacadeImpl(
         attachment_repo=attachment_repo,
         metadata_repo=attachment_metadata_repo,
         permission_repo=permission_repo,
@@ -170,7 +171,7 @@ def _wire_service(
         log=silent_logger,
     )
 
-    directory_service = DirectoryService(
+    directory_service = DirectoryServiceImpl(
         directory_repo=directory_repo,
         note_repo=real_facade,
         permission_repo=permission_repo,

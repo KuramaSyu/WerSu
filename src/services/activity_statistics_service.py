@@ -15,17 +15,17 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Sequence
 
-from src.api.activity import ActivityRepoABC
-from src.api.activity_statistics_service import (
+from src.api.repos.activity_repo import ActivityRepoABC
+from src.api.services.activity_statistics_service import (
     ActivityStatisticsServiceABC,
     Algorithm,
 )
-from src.api.directory_facade import DirectoryFacade
-from src.api.permission_repo import PermissionRepoABC
-from src.api.relationship import ObjectRef
-from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
-from src.api.user_context import UserContextABC
+from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.repos.permission_repo import PermissionRepoABC
+from src.api.other.relationship import ObjectRef
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
+from src.api.other.user_context import UserContextABC
 from src.db.entities.activity import ActivityEntity, ActivityFilterBuilder, ActivityScore
 from src.db.repos.note.content import NoteContentRepo
 from src.utils import logging_provider as default_logging_provider
@@ -48,7 +48,7 @@ def _strip_content(content: Optional[str]) -> Optional[str]:
     return content
 
 
-class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
+class ActivityStatisticsServiceImpl(ActivityStatisticsServiceABC):
     """Postgres-backed activity statistics service.
 
     Args:
@@ -70,7 +70,7 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
         self,
         activity_repo: ActivityRepoABC,
         permission_repo: PermissionRepoABC,
-        directory_repo: DirectoryFacade,
+        directory_repo: DirectoryFacadeABC,
         note_content_repo: NoteContentRepo,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
@@ -292,4 +292,4 @@ class DefaultActivityStatisticsService(ActivityStatisticsServiceABC):
         return scores
 
 
-__all__ = ["DefaultActivityStatisticsService"]
+__all__ = ["ActivityStatisticsServiceImpl"]

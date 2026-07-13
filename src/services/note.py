@@ -1,7 +1,7 @@
 """Concrete :class:`~src.api.note_service.NoteServiceABC` implementation.
 
 This service composes :class:`src.api.note_facade.NoteRepoFacadeABC`
-(via its :class:`~src.db.repos.note.note.NoteFacade` implementation)
+(via its :class:`~src.db.repos.note.note.NoteFacadeImpl` implementation)
 with the permission and directory repos and orchestrates every
 permission-related concern (parent-directory resolution, owner /
 parent-dir relation insert, post-fetch permission enrichment, search
@@ -16,7 +16,6 @@ else reaches the permission repo.
 from __future__ import annotations
 
 import datetime
-from logging import getLogger
 from typing import Callable, List, Optional
 
 from src.api import (
@@ -31,21 +30,21 @@ from src.api import (
     ActivityLoggerServiceABC,
     NoteIncludeOptions,
 )
-from src.api.note_service import GetNotesOptions, resolve_options
-from src.api.jwt_provider import JwtProvider
-from src.api.note_facade import NoteRepoFacadeABC, SearchType
-from src.api.relationship import AttachmentRelationEnum
-from src.api.types import Pagination
-from src.api.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
-from src.api.user_context import UserContextABC
+from src.api.services.note_service import GetNotesOptions, resolve_options
+from src.api.services.jwt_provider import JwtProvider
+from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.other.relationship import AttachmentRelationEnum
+from src.api.other.types import LoggingProvider, Pagination
+from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
+from src.api.other.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
-from src.db.repos.directory.directory import DirectoryFacade
+from src.db.repos.directory.directory import DirectoryFacadeABC
 from src.domain.permission_chain import  HasNoteDeletePerm, HasNoteWritePerm
 from src.utils.extract_attachments import extract_attachment_ids
 
 
-class NoteService(NoteServiceABC):
-    """Concrete :class:`~src.api.note_service.NoteServiceABC` backed by `NoteFacade`.
+class NoteServiceImpl(NoteServiceABC):
+    """Concrete :class:`~src.api.note_service.NoteServiceABC` backed by `NoteFacadeImpl`.
 
     Owns every permission-check and relation-mutation that previously
     lived on the note facade; the facade is now a pure CRUD repo.
@@ -56,8 +55,9 @@ class NoteService(NoteServiceABC):
         note_repo: NoteRepoFacadeABC,
         permission_repo: PermissionRepoABC,
         jwt_provider: JwtProvider,
-        directory_repo: DirectoryFacade,
+        directory_repo: DirectoryFacadeABC,
         activity_logger: ActivityLoggerServiceABC,
+        logging_provider: LoggingProvider,
         now: Callable[[], datetime.datetime] = datetime.datetime.now,
     ) -> None:
         self._note_repo = note_repo
@@ -65,6 +65,7 @@ class NoteService(NoteServiceABC):
         self._jwt_provider = jwt_provider
         self._directory_repo = directory_repo
         self._activity_logger = activity_logger
+        self._log = logging_provider(__name__, self)
         self._now = now
 
     async def get_note(
@@ -277,14 +278,13 @@ class NoteService(NoteServiceABC):
         # get user dirs, search for fleeting directory and return it.
         user_directory_ids = await self._directory_repo.list_user_directory_ids(user_ctx)
         default_name = self._directory_repo.get_default_directory_specs()[0].name
-        log = getLogger(__name__)
-        log.info(
+        self._log.info(
             f"Resolving default directory {default_name!r} for user {user_ctx.user_id!r} "
             f"by traversing {len(user_directory_ids)} directories"
         )
         for d_id in user_directory_ids:
             d = await self._directory_repo.fetch_directory(d_id)
-            log.info(f"Checking directory {d_id!r} -> {d!r}")
+            self._log.info(f"Checking directory {d_id!r} -> {d!r}")
             if d and d.slug == default_name:
                 return [str(unwrap_undefined(d.id))]
         raise ValueError(
@@ -363,4 +363,4 @@ class NoteService(NoteServiceABC):
         return tokens
 
 
-__all__ = ["NoteService"]
+__all__ = ["NoteServiceImpl"]

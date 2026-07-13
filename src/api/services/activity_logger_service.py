@@ -25,9 +25,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Dict, List, Mapping, Optional
 
-from src.api.activity import ActivityRepoABC
-from src.api.user_context import UserContextABC
-from src.api.types import LoggingProvider
+from src.api.other.types import LoggingProvider
+from src.api.other.user_context import UserContextABC
+from src.api.repos.activity_repo import ActivityRepoABC
 
 
 # Errors
@@ -138,7 +138,7 @@ class ActivityLoggerServiceABC(ABC):
     * any repo failure is wrapped in :class:`ActivityLoggerError`.
 
     Implementations:
-    * :class:`src.services.activity_logger_service.PostgresActivityLoggerService`
+    * :class:`src.services.activity_logger_service.ActivityLoggerServiceImpl`
     """
 
     # ----- note-target methods -----

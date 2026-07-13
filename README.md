@@ -63,9 +63,9 @@ docker compose down; rm -r data; docker compose up --build -d; env PYTHONTRACEMA
     uv run pytest -o addopts=''
     ```
 
-- Optional: run proof of concepts (e.g. the Garage smoke test under `pocs/`):
+- Optional: run proof of concepts (e.g. the Garage smoke test under `tests/pocs/`):
     ```bash
-    uv run pytest pocs/ -m poc
+    uv run pytest tests/pocs/ -m poc
     ```
 
 # SpiceDB and Zanzibar

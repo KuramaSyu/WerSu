@@ -17,7 +17,7 @@ import grpc
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider, ObjectRef, ObjectTypeEnum, Relationship
-from src.api.user_context import ContextFactory, UserContextABC
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.grpc_mod._log_decorator import log_service_call
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.converter.permission_relationship_converter import (

@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, List, Optional, TypedDict
 
-from src.api.user_context import UserContextABC
-from src.api.visitor import AcceptsVisitor, EntityVisitor
+from src.api.other.user_context import UserContextABC
+from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 
 if TYPE_CHECKING:
     from src.db.entities.note.metadata import NoteEntity
@@ -174,7 +174,7 @@ class NoteServiceABC(ABC):
     """Abstract application service for note reads and writes.
 
     Implementations:
-    * :class:`~src.services.note.NoteService`
+    * :class:`~src.services.note.NoteServiceImpl`
     """
 
     @abstractmethod

@@ -19,15 +19,15 @@ from typing import Any
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from src.api import NoteResponse
-from src.api.relationship import ObjectTypeEnum
-from src.api.undefined import UNDEFINED, UndefinedOr, is_undefined, unwrap_undefined
-from src.api.user_context import ActorAs
+from src.api.other.relationship import ObjectTypeEnum
+from src.api.other.undefined import UNDEFINED, UndefinedOr, is_undefined, unwrap_undefined
+from src.api.other.user_context import ActorAs
 from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
-from src.api.visitor import EntityVisitor
+from src.api.other.visitor import EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
 from src.grpc_mod.proto.activity_pb2 import (
     ACCESSED_AS_SYSTEM,
@@ -270,7 +270,7 @@ class ConvertToGrpcVisitor(EntityVisitor):
                 :class:`src.grpc_mod.proto.note_pb2.MinimalDirectory`
                 messages -- one per directory referenced anywhere
                 in `notes`.  Callers fetch these via
-                :meth:`src.db.repos.directory.directory.DirectoryFacade`
+                :meth:`src.db.repos.directory.directory.DirectoryFacadeABC`
                 so the visitor stays free of DB access.
             tags: pre-fetched
                 :class:`src.grpc_mod.proto.note_pb2.MinimalTag`

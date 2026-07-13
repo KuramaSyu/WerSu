@@ -6,7 +6,7 @@
    from that column, so chapters appeared without a name.  The fix
    is to pass ``display_name=chapter.name`` in the orchestrator.
 2. The previous unit tests used hand-rolled stubs that did not
-   exercise the real :meth:`NoteService._resolve_parent_directory_id`
+   exercise the real :meth:`NoteServiceImpl._resolve_parent_directory_id`
    visibility check, so any orchestrator-side regression on that
    code path passed silently.  The new
    :file:`tests/test_thirdparty_migrations_real_services.py` covers
@@ -22,14 +22,14 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-from src.api.directory_service import DirectoryServiceABC
-from src.api.note_service import NoteServiceABC
-from src.api.relationship import DirectoryRelationEnum
-from src.api.user_context import UserContextABC
+from src.api.services.directory_service import DirectoryServiceABC
+from src.api.services.note_service import NoteServiceABC
+from src.api.other.relationship import DirectoryRelationEnum
+from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
-from src.services.attachments import AttachmentFacadeABC
+from src.services.attachment_facade import AttachmentFacadeABC
 from src.services.thirdparty_migrations.bookstack import BookstackBookImport
 from tests.stubs.directory_service import _StubDirectoryService
 from tests.stubs.logging import silent_logger

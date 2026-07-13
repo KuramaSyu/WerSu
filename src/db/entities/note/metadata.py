@@ -5,13 +5,13 @@ from datetime import datetime
 from asyncpg import Record
 
 from src.db.entities.directory.directory import DirectoryEntity
-from src.api.visitor import AcceptsVisitor, EntityVisitor
+from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 from src.api import Relationship
 
 
 from .embedding import NoteEmbeddingEntity
 from .permission import NotePermissionEntity
-from src.api.undefined import *
+from src.api.other.undefined import *
 
 
 @dataclass

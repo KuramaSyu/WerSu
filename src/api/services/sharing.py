@@ -13,8 +13,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from src.api.undefined import UndefinedNoneOr
-from src.api.user_context import UserContextABC
+from src.api.other.undefined import UndefinedNoneOr
+from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 
 
@@ -171,7 +171,7 @@ class ShareAccessServiceABC(ABC):
     """Public-link access path used by unauthenticated callers.
 
     Implementations:
-    * :class:`src.services.share_access.ShareAccessService`
+    * :class:`src.services.share_access.ShareAccessServiceImpl`
     """
 
     @abstractmethod
@@ -235,7 +235,7 @@ class SharingServiceABC(ABC):
     underlying note on behalf of ``ctx``.
 
     Implementations:
-    * :class:`src.services.sharing.DefaultSharingService`
+    * :class:`src.services.sharing.SharingServiceImpl`
     """
 
     @abstractmethod

@@ -11,7 +11,7 @@ from __future__ import annotations
 import datetime as _dt
 from typing import Any, Literal
 
-from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined
+from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.repos.note.note import SearchType
 from src.grpc_mod.proto.note_pb2 import GetSearchNotesRequest

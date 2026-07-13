@@ -14,8 +14,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import List
 
-from src.api.permission_repo import PermissionRepoABC, ResolvedChildren
-from src.api.relationship import (
+from src.api.repos.permission_repo import PermissionRepoABC, ResolvedChildren
+from src.api.other.relationship import (
     AttachmentRelationEnum,
     DirectoryRelationEnum,
     NoteRelationEnum,
@@ -24,8 +24,8 @@ from src.api.relationship import (
     Relationship,
     SubjectRef,
 )
-from src.api.undefined import UNDEFINED, is_undefined
-from src.api.user_context import UserContextABC
+from src.api.other.undefined import UNDEFINED, is_undefined
+from src.api.other.user_context import UserContextABC
 
 
 class InMemoryPermissionRepo(PermissionRepoABC):

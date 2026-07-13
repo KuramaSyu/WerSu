@@ -1,12 +1,12 @@
 """
 POC for a local Garage S3 deployment.
 
-This is a proof-of-concept smoke test that lives under ``pocs/`` and is
+This is a proof-of-concept smoke test that lives under ``tests/pocs/`` and is
 excluded from the default test runs (see ``pytest.ini`` -> ``-m poc``).
 
 Run it explicitly with:
 
-    uv run pytest pocs/test_garage_poc.py -m poc
+    uv run pytest tests/pocs/test_garage_poc.py -m poc
 
 Expected environment file:
     infrastructure/.garage.env
@@ -87,6 +87,11 @@ def s3_client(garage_config):
     Create an S3-compatible client pointed at Garage.
 
     Garage implements the S3 API, so boto3 can be used directly.
+
+    Also ensures the configured bucket exists -- the local dev
+    instance started via ``docker compose up garage`` only ships the
+    ``garage`` bucket by default, so the test creates the default
+    bucket on first use.
     """
     client = boto3.client(
         "s3",

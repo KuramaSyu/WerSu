@@ -21,12 +21,12 @@ from datetime import datetime
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api.note_service import NoteResponse
+from src.api.services.note_service import NoteResponse
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
-from src.api.visitor import AcceptsVisitor, EntityVisitor
+from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.proto.attachments_pb2 import Attachment as GrpcAttachment

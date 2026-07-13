@@ -2,19 +2,19 @@
 
 The single-interface boundary the service layer talks to.  Concrete
 implementations live under :mod:`src.db.repos.note` (e.g.
-:class:`src.db.repos.note.note.NoteFacade`).
+:class:`src.db.repos.note.note.NoteFacadeImpl`).
 
 Implementations:
-* :class:`src.db.repos.note.note.NoteFacade`
+* :class:`src.db.repos.note.note.NoteFacadeImpl`
 """
 
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
-from src.api.note_service import NoteIncludeOptions
-from src.api.types import Pagination
-from src.api.user_context import UserContextABC
+from src.api.other.types import Pagination
+from src.api.other.user_context import UserContextABC
+from src.api.services.note_service import NoteIncludeOptions
 
 if TYPE_CHECKING:
     from src.db.entities.note.metadata import NoteEntity
@@ -47,7 +47,7 @@ class NoteRepoFacadeABC(ABC):
     :meth:`NoteRepoFacadeABC._fetch_note_permissions`.
 
     Implementations:
-    * :class:`src.db.repos.note.note.NoteFacade`
+    * :class:`src.db.repos.note.note.NoteFacadeImpl`
     """
 
     @property

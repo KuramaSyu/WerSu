@@ -2,23 +2,23 @@
 
 Unlike ``test_thirdparty_migrations_bookstack.py`` which uses tiny
 hand-rolled stubs, this file wires the **real**
-:class:`~src.services.directory.DirectoryService`,
-:class:`~src.services.note.NoteService` and
-:class:`~src.services.attachments.AttachmentFacade` against the
+:class:`~src.services.directory.DirectoryServiceImpl`,
+:class:`~src.services.note.NoteServiceImpl` and
+:class:`~src.services.attachment_facade.AttachmentFacadeImpl` against the
 in-memory fakes from :mod:`tests._fixtures_pkg.fakes`.
 
 The motivation: the BookStack importer was originally tested with
-stubs that do not exercise :meth:`NoteService._resolve_parent_directory_id`,
+stubs that do not exercise :meth:`NoteServiceImpl._resolve_parent_directory_id`,
 which queries :meth:`DirectoryRepo.list_user_directory_ids` to verify
 the caller can see the target directory.  Without that guard the
 orchestrator happily inserts pages against directories the user
 cannot see, which fails in production the moment
-:class:`NoteService` runs its visibility check.  These tests pin the
+:class:`NoteServiceImpl` runs its visibility check.  These tests pin the
 end-to-end path so the failure cannot regress again.
 
 Wire shape asserted:
 
-* The full pipeline against the real :class:`NoteService` produces a
+* The full pipeline against the real :class:`NoteServiceImpl` produces a
   non-zero ``pages_imported`` count and one
   :class:`~src.db.entities.note.metadata.NoteEntity` per page.
 * The book directory, every chapter directory and every page note
@@ -41,18 +41,18 @@ from typing import List, Optional
 
 import pytest
 
-from src.api.permission_repo import PermissionRepoABC
-from src.api.relationship import (
+from src.api.repos.permission_repo import PermissionRepoABC
+from src.api.other.relationship import (
     NoteRelationEnum,
     ObjectTypeEnum,
     Relationship,
 )
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.table import TableABC
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from src.services.attachments import AttachmentFacade
-from src.services.directory import DirectoryService
-from src.services.note import NoteService
+from src.services.attachment_facade import AttachmentFacadeImpl
+from src.services.directory import DirectoryServiceImpl
+from src.services.note import NoteServiceImpl
 from src.services.thirdparty_migrations.bookstack import BookstackBookImport
 from src.services.thirdparty_migrations.bookstack_html_converter import (
     BookstackHtmlConverter,
@@ -78,7 +78,7 @@ from tests.stubs.user_context import _UserContext as _UserCtx
 
 
 # ---------------------------------------------------------------------------
-# Tiny TableABC stub used by AttachmentFacade.link_attachment_to_note
+# Tiny TableABC stub used by AttachmentFacadeImpl.link_attachment_to_note
 # ---------------------------------------------------------------------------
 
 
@@ -152,10 +152,10 @@ def _wire_real_services(
         fake_db.fetchrow_responses.append({"id": nid})
 
     # ``_FakeNoteRepoFacade`` is the in-memory replacement for the
-    # real :class:`NoteFacade` used by the pure unit-test suite.  We
+    # real :class:`NoteFacadeImpl` used by the pure unit-test suite.  We
     # build one here and route the real facade at it via a thin
     # wrapper so the orchestrator can both insert and select notes
-    # end-to-end.  This keeps :class:`NoteFacade`'s real
+    # end-to-end.  This keeps :class:`NoteFacadeImpl`'s real
     # ``_resolve_parent_directory_id`` flow in the loop.
     fake_facade = _FakeNoteRepoFacade()
     embedding_repo = _FakeEmbeddingRepo()
@@ -165,9 +165,9 @@ def _wire_real_services(
     jwt_provider = _FakeJwtProvider()
     activity_logger = _FakeActivityLoggerService()
 
-    from src.db.repos.note.note import NoteFacade
+    from src.db.repos.note.note import NoteFacadeImpl
 
-    real_facade = NoteFacade(
+    real_facade = NoteFacadeImpl(
         db=fake_db,
         content_repo=content_repo,
         combined_repo=_FakeCombinedNoteRepo(content_repo=content_repo),
@@ -180,11 +180,11 @@ def _wire_real_services(
         tag_repo=_FakeNoteTagRepo(),
     )
 
-    # Bridge: the real ``NoteFacade.insert`` writes to the content
+    # Bridge: the real ``NoteFacadeImpl.insert`` writes to the content
     # repo via raw SQL (``_FakeDatabase.fetchrow`` echoes a queued
     # id and writes nothing), so we additionally seed both the
     # content repo and the fake facade's notes map on every insert.
-    # ``NoteService.insert_note`` calls ``_note_repo.insert(note, user)``
+    # ``NoteServiceImpl.insert_note`` calls ``_note_repo.insert(note, user)``
     # and then reads the returned ``note_id`` -- the real facade sets
     # ``note.note_id`` from the queued response, so the bridge only
     # needs to keep the content repo's ``_store`` in sync so that a
@@ -205,21 +205,22 @@ def _wire_real_services(
     # facade when the row is missing, so no bridge is needed for
     # read paths.
     facade = real_facade
-    note_service = NoteService(
+    note_service = NoteServiceImpl(
         note_repo=facade,
         permission_repo=permission_repo,
         jwt_provider=jwt_provider,
         directory_repo=directory_repo,
         activity_logger=activity_logger,
+        logging_provider=silent_logger,
     )
-    attachment_facade = AttachmentFacade(
+    attachment_facade = AttachmentFacadeImpl(
         attachment_repo=InMemoryAttachmentRepo(),
         metadata_repo=InMemoryAttachmentMetadataRepo(),
         permission_repo=permission_repo,
         attachments_note_link_table=_FakeLinkTable(),
         log=silent_logger,
     )
-    directory_service = DirectoryService(
+    directory_service = DirectoryServiceImpl(
         directory_repo=directory_repo,
         note_repo=facade,
         permission_repo=permission_repo,
@@ -303,7 +304,7 @@ def _small_book_payload() -> dict:
 
 @pytest.mark.asyncio
 async def test_real_services_import_every_page() -> None:
-    """End-to-end against the real NoteService / DirectoryService."""
+    """End-to-end against the real NoteServiceImpl / DirectoryServiceImpl."""
     (
         importer,
         _note_service,

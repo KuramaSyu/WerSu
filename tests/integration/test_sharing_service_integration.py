@@ -1,4 +1,4 @@
-"""Integration test coverage for ``DefaultSharingService`` with real infrastructure.
+"""Integration test coverage for ``SharingServiceImpl`` with real infrastructure.
 
 These tests exercise the share service end-to-end against real Postgres
 and SpiceDB containers, validating that:
@@ -23,11 +23,11 @@ import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
 from src.api import ObjectRef, ObjectTypeEnum
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.repos.sharing.sharing import SharingPostgresRepo
-from src.services.sharing import DefaultSharingService
+from src.services.sharing import SharingServiceImpl
 from tests.integration_helpers import (
     NoteRelationEnum,
     UserContext,
@@ -40,7 +40,7 @@ from tests.integration_helpers import (
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
 
 
-EnvT = Tuple[DefaultSharingService, SharingPostgresRepo]
+EnvT = Tuple[SharingServiceImpl, SharingPostgresRepo]
 
 # TODO: Remove what for and setup repo with consistency=true 
 
@@ -86,7 +86,7 @@ async def test_create_share_persists_row_and_grants_access(
 ) -> None:
     """Creating a share writes the row, creates the access user, and grants read."""
     env = sharing_service_env
-    sharing_service: DefaultSharingService = env.sharing_service
+    sharing_service: SharingServiceImpl = env.sharing_service
 
     user_id, note_id = await _bootstrap_owner_with_note(env)
 
@@ -154,7 +154,7 @@ async def test_update_share_permission_swaps_reader_to_writer(
 ) -> None:
     """Updating a share's permission replaces the access user's SpiceDB relation."""
     env = sharing_service_env
-    sharing_service: DefaultSharingService = env.sharing_service
+    sharing_service: SharingServiceImpl = env.sharing_service
 
     user_id, note_id = await _bootstrap_owner_with_note(env)
 
@@ -234,7 +234,7 @@ async def test_delete_share_removes_row_user_and_relations(
 ) -> None:
     """Deleting a share tears down row, temp user, and SpiceDB relations."""
     env = sharing_service_env
-    sharing_service: DefaultSharingService = env.sharing_service
+    sharing_service: SharingServiceImpl = env.sharing_service
 
     user_id, note_id = await _bootstrap_owner_with_note(env)
 

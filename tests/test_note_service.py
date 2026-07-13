@@ -1,4 +1,4 @@
-"""Fast unit tests for :class:`src.services.note.NoteService`.
+"""Fast unit tests for :class:`src.services.note.NoteServiceImpl`.
 
 These tests use the in-memory fakes from
 :mod:`tests._fixtures_pkg.fakes` and
@@ -27,9 +27,9 @@ from typing import List, Optional
 import pytest
 
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api.note_service import NoteResponse
-from src.api.permission_repo import PermissionRepoABC
-from src.api.relationship import (
+from src.api.services.note_service import NoteResponse
+from src.api.repos.permission_repo import PermissionRepoABC
+from src.api.other.relationship import (
     DirectoryRelationEnum,
     NoteRelationEnum,
     ObjectRef,
@@ -37,15 +37,15 @@ from src.api.relationship import (
     Relationship,
     SubjectRef,
 )
-from src.api.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
-from src.api.directory_facade import DirectoryFacade
-from src.db.repos.note.note import NoteFacade
-from src.api.note_facade import NoteRepoFacadeABC, SearchType
-from src.services.note import NoteService
+from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.db.repos.note.note import NoteFacadeImpl
+from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.services.note import NoteServiceImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from src.api.user_context import UserContextABC
-from src.api.jwt_provider import JwtProvider
+from src.api.other.user_context import UserContextABC
+from src.api.services.jwt_provider import JwtProvider
 from tests._fixtures_pkg.fakes import (
     _FakeCombinedNoteRepo,
     _FakeDatabase,
@@ -99,20 +99,20 @@ def _temporary_ctx(user_id: str = "tmp-user") -> _TemporaryUserContext:
 def _make_service(
     *,
     content_repo: Optional[_FakeNoteContentRepo] = None,
-    directory_repo: Optional[DirectoryFacade] = None,
+    directory_repo: Optional[DirectoryFacadeABC] = None,
     permission_repo: Optional[PermissionRepoABC] = None,
     jwt_provider: Optional[JwtProvider] = None,
     next_note_id: str = "019f0000-0000-7000-8000-000000000001",
 ) -> tuple[
-    NoteService,
+    NoteServiceImpl,
     _FakeDatabase,
     _FakeNoteContentRepo,
-    DirectoryFacade,
+    DirectoryFacadeABC,
     InMemoryPermissionRepo,
     _FakeJwtProvider,
     _FakeActivityLoggerService,
 ]:
-    """Build a :class:`NoteService` wired against the in-memory fakes.
+    """Build a :class:`NoteServiceImpl` wired against the in-memory fakes.
 
     The fake database queues the next note id the note facade will
     receive from ``INSERT ... RETURNING id`` so that ``insert_note``
@@ -128,7 +128,7 @@ def _make_service(
     fake_jwt = jwt_provider or _FakeJwtProvider()
     fake_activity_logger = _FakeActivityLoggerService()
     fake_tags = _FakeNoteTagRepo()
-    facade = NoteFacade(
+    facade = NoteFacadeImpl(
         db=fake_db,
         content_repo=fake_content,
         combined_repo=fake_combined,
@@ -138,12 +138,13 @@ def _make_service(
         directory_repo=fake_directory,
         tag_repo=fake_tags,
     )
-    service = NoteService(
+    service = NoteServiceImpl(
         note_repo=facade,
         permission_repo=fake_permission,
         jwt_provider=fake_jwt,
         directory_repo=fake_directory,
         activity_logger=fake_activity_logger,
+        logging_provider=_log_provider,
     )
     return service, fake_db, fake_content, fake_directory, fake_permission, fake_jwt, fake_activity_logger
 
@@ -276,7 +277,7 @@ async def test_insert_note_resolves_parent_directory_and_writes_owner_relation()
         for rel in permission_repo._store  # type: ignore[attr-defined]
         if str(rel.relation) == str(NoteRelationEnum.PARENT_DIRECTORY)
     ]
-    # both `NoteFacade.insert` and `NoteService.insert_note` may
+    # both `NoteFacadeImpl.insert` and `NoteServiceImpl.insert_note` may
     # write the relation; we only assert that at least one is recorded.
     assert parent_dir_rels, "no parent_directory relation was written"
     assert parent_dir_rels[0].resource.object_id == result.note_id
@@ -438,7 +439,7 @@ async def test_search_notes_enriches_results_with_directory_relations() -> None:
         for rel in hit.permissions
         if str(rel.relation) == str(NoteRelationEnum.PARENT_DIRECTORY)
     ]
-    # `NoteService._attach_directory_relations` is idempotent on the
+    # `NoteServiceImpl._attach_directory_relations` is idempotent on the
     # existing parent_directory rows, but a double-write path can
     # produce duplicates in test setups; we only assert at least one
     # matches the directory we exposed above.

@@ -28,8 +28,8 @@ import grpc
 from grpc.aio import ServicerContext
 
 from tests.stubs.user_context import _UserContextFactory
-from src.api.note_service import NoteResponse, NoteServiceABC
-from src.api.user_context import UserContextABC
+from src.api.services.note_service import NoteResponse, NoteServiceABC
+from src.api.other.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.proto.note_pb2 import GetNoteRequest, NoteResponse as GrpcNoteResponse

@@ -1,12 +1,12 @@
 """Facade :class:`DirectoryRepo` composing the Postgres repo + the permission service.
 
 This module replaces the old monolithic
-:class:`DirectoryRepoFacade`.  The persistence machinery
+:class:`DirectoryFacadeImpl`.  The persistence machinery
 lives in :class:`src.db.repos.directory.postgres.PostgresDirectoryRepo`
 and the permission / relation logic lives in
 :class:`src.api.permission_repo.PermissionRepoABC`.  The facade here
 composes them so existing consumers
-(:class:`~src.services.directory.DirectoryService` and friends) can
+(:class:`~src.services.directory.DirectoryServiceImpl` and friends) can
 keep depending on the :class:`src.api.directory_repo.DirectoryRepo`
 ABC without rewiring.
 """
@@ -16,29 +16,29 @@ from __future__ import annotations
 import asyncio
 from typing import List, Optional, Tuple
 
-from src.api.directory_facade import DirectoryFacade
-from src.api.directory_service import (
+from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.services.directory_service import (
     DirectoryIncludeOptions,
     resolve_directory_include_options,
 )
-from src.api.permission_repo import PermissionRepoABC
-from src.api.directory_repo import DirectoryRepoABC
-from src.api.relationship import (
+from src.api.repos.permission_repo import PermissionRepoABC
+from src.api.repos.directory_repo import DirectoryRepoABC
+from src.api.other.relationship import (
     DirectoryRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
     Relationship,
     SubjectRef,
 )
-from src.api.types import LoggingProvider
-from src.api.undefined import UNDEFINED, is_undefined, unwrap_undefined
-from src.api.user_context import UserContextABC
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED, is_undefined, unwrap_undefined
+from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.domain.permission_chain import HasDirectoryViewPerm, PermissionCheckChain, PermissionCheckChainStart
 from src.utils import convert_entity_for_db
 
 
-class DirectoryRepoFacade(DirectoryFacade):
+class DirectoryFacadeImpl(DirectoryFacadeABC):
     """Compose a :class:`PostgresDirectoryRepoABC` with the permission repo.
 
     The facade routes every :class:`DirectoryRepo` call to either the
@@ -467,7 +467,7 @@ class DirectoryRepoFacade(DirectoryFacade):
 
         Shared by :meth:`add_note_to_directory` and
         :meth:`remove_note_from_directory` so the validation matches
-        the contract on :class:`DirectoryFacade`.
+        the contract on :class:`DirectoryFacadeABC`.
         """
         if note_id is None or is_undefined(note_id):  # type: ignore[arg-type]
             raise ValueError("note_id is required")
@@ -475,4 +475,4 @@ class DirectoryRepoFacade(DirectoryFacade):
             raise ValueError("directory_id is required")
 
 
-__all__ = ["DirectoryRepoFacade"]
+__all__ = ["DirectoryFacadeImpl"]

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from src.api.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
+from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 
 
 @dataclass
