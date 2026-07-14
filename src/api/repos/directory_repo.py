@@ -255,38 +255,6 @@ class DirectoryRepoABC(ABC):
         ...
 
     @abstractmethod
-    async def tag_ids_of_directory(
-        self,
-        directory_id: str,
-    ) -> List[str]:
-        """Return every tag id attached to ``directory_id``.
-
-        Args:
-            directory_id: id of the directory whose tags to read.
-
-        Returns:
-            List[str]: tag ids, deduplicated and sorted.  ``[]``
-            when ``directory_id`` has no tags.
-        """
-        ...
-
-    @abstractmethod
-    async def replace_directory_tags(
-        self,
-        directory_id: str,
-        tag_ids: List[str],
-    ) -> None:
-        """Replace the full tag set of ``directory_id`` with ``tag_ids``.
-
-        Args:
-            directory_id: id of the directory whose tags are being
-                rewritten.
-            tag_ids: full list of tag ids; empty list clears every
-                tag binding.  Idempotent.
-        """
-        ...
-
-    @abstractmethod
     async def get_children(
         self,
         directory_id: str,

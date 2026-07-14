@@ -7,6 +7,7 @@ The directory repo walks ``note.directory_subdirectory`` and
 ``view`` check on the root directory.
 """
 
+import logging
 import uuid
 
 import pytest
@@ -16,12 +17,12 @@ from tests._fixtures_pkg.fakes import (
     _FakeDirectorySubdirectoryTable,
     _FakeDirectoryNoteTable,
     _FakeDirectoryTable,
-    _FakeDirectoryTagsTable,
+    _FakeTagRepo,
 )
 from src.api import ObjectRef, Relationship, SubjectRef
 from src.db.repos.directory.directory import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
-from src.db.repos.permissions.permission import SpicedbPermissionRepo
+from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
@@ -66,9 +67,10 @@ async def test_resolve_files_of_directory_spicedb(
             directory_table=_FakeDirectoryTable(),
             subdirectory_table=subdirectory_table,
             directory_note_table=note_table,
-            directory_tags_table=_FakeDirectoryTagsTable(),
         ),
         permission_repo=spicedb_permission_repo,
+        tag_repo=_FakeTagRepo(),
+        log=lambda *_a, **_k: logging.getLogger('test.directory_activity'),
     )
 
     resolved = await directory_repo.resolve_files_of_directory(

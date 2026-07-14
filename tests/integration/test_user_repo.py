@@ -63,7 +63,9 @@ async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_rep
 
     await user_repo.delete(test_user.id)
     ret_user = await user_repo.select(test_user.id)
-    assert ret_user is None 
+    assert ret_user is None
 
-    with pytest.raises(RuntimeError, match="not found"):
-        ret_note = await note_repo_facade.select_by_id(note.note_id, ctx=ctx)
+    # Deleting the user cascades the FK to note.content; the note
+    # is therefore gone after the user is gone.
+    ret_note = await note_repo_facade.select_by_id(note.note_id, ctx=ctx)
+    assert ret_note is None

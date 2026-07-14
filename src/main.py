@@ -60,8 +60,8 @@ from src.grpc_mod.proto.thirdparty_migrations_pb2_grpc import (
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server  # type: ignore[attr-defined]
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.note import NoteFacadeImpl
-from src.db.repos.note.tag import NoteTagPostgresRepo
+from src.db.repos.note.note_facade import NoteFacadeImpl
+from src.db.repos.tag.postgres import PostgresTagRepo
 from src.grpc_mod.attachment_service import GrpcAttachmentService
 from src.grpc_mod.directory_service import GrpcDirectoryService
 from src.grpc_mod.note_service import GrpcNoteService
@@ -280,14 +280,21 @@ async def serve():
         directory_subdirectory_table=directory_subdirectory_table,
     )
 
+    tag_repo: PostgresTagRepo = PostgresTagRepo(
+        tag_table=tags_table,
+        note_tag_table=note_tags_table,
+        directory_tag_table=directory_tags_table,
+        db=db,
+    )
+
     directory_repo = DirectoryFacadeImpl(
         postgres_repo=PostgresDirectoryRepo(  # this is not indented to be used by other parties
             directory_table=directory_table,
             subdirectory_table=directory_subdirectory_table,
             directory_note_table=directory_note_table,
-            directory_tags_table=directory_tags_table,
         ),
         permission_repo=permission_repo,
+        tag_repo=tag_repo,
         log=logging_provider,
     )
 
@@ -308,7 +315,7 @@ async def serve():
         ),
         permission_repo=permission_repo,
         directory_repo=directory_repo,
-        tag_repo=NoteTagPostgresRepo(tags_table=note_tags_table),
+        tag_repo=tag_repo,
         logging_provider=logging_provider,
         version_repo=version_repo,
     )

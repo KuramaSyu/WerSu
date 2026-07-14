@@ -53,7 +53,8 @@ from tests._fixtures_pkg.fakes import (
     _FakeJwtProvider,
     _FakeNoteContentRepo,
     _FakeNoteRepoFacade,
-    _FakeNoteTagRepo,
+    _FakeTagRepo,
+    _FakeVersionRepo,
     _TestDirectoryRepo,
 )
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService
@@ -124,7 +125,7 @@ def _wire_service(
     jwt_provider = _FakeJwtProvider()
     activity_logger = _FakeActivityLoggerService()
 
-    from src.db.repos.note.note import NoteFacadeImpl
+    from src.db.repos.note.note_facade import NoteFacadeImpl
 
     real_facade = NoteFacadeImpl(
         db=fake_db,
@@ -136,7 +137,8 @@ def _wire_service(
         ),
         permission_repo=permission_repo,
         directory_repo=directory_repo,
-        tag_repo=_FakeNoteTagRepo(),
+        tag_repo=_FakeTagRepo(),
+        version_repo=_FakeVersionRepo(),
     )
 
     # Bridge the real facade's insert into the fake facade's store

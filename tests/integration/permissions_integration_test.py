@@ -12,8 +12,8 @@ import pytest
 
 import uuid
 from tests.stubs.user_context import _UserContext as UserContext
-from src.api import ObjectRef, Relationship, SubjectRef
-from src.db.repos.permissions.permission import SpicedbPermissionRepo
+from src.api import ObjectRef, Relationship, SubjectRef, UNDEFINED
+from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
@@ -51,16 +51,32 @@ async def test_note_insert_and_check(spicedb_permission_repo: SpicedbPermissionR
     inserted = await spicedb_permission_repo.insert(relationships)
     assert len(inserted) == 2
 
-    emilia_notes = await spicedb_permission_repo.lookup_notes(UserContext("emilia"), "view")
-    assert [obj.object_id for obj in emilia_notes] == [note_id]
-
-    alfred_notes = await spicedb_permission_repo.lookup_notes(UserContext("alfred"), "view")
-    assert [obj.object_id for obj in alfred_notes] == [note_id]
-
-    alfred_admin_notes = await spicedb_permission_repo.lookup_notes(
-        UserContext("alfred"), "admin"
+    emilia_notes = await spicedb_permission_repo.lookup(
+        Relationship(
+            resource=ObjectRef(object_type="note", object_id=UNDEFINED),
+            relation="view",
+            subject=SubjectRef(object_type="user", object_id="emilia"),
+        )
     )
-    assert [obj.object_id for obj in alfred_admin_notes] == []
+    assert emilia_notes == [note_id]
+
+    alfred_notes = await spicedb_permission_repo.lookup(
+        Relationship(
+            resource=ObjectRef(object_type="note", object_id=UNDEFINED),
+            relation="view",
+            subject=SubjectRef(object_type="user", object_id="alfred"),
+        )
+    )
+    assert alfred_notes == [note_id]
+
+    alfred_admin_notes = await spicedb_permission_repo.lookup(
+        Relationship(
+            resource=ObjectRef(object_type="note", object_id=UNDEFINED),
+            relation="admin",
+            subject=SubjectRef(object_type="user", object_id="alfred"),
+        )
+    )
+    assert alfred_admin_notes == []
 
 
 async def test_note_missing_permissions(spicedb_permission_repo: SpicedbPermissionRepo):

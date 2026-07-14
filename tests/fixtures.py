@@ -28,10 +28,11 @@ from src.db.migrations.runner import MigrationRunner
 from src.db.repos import Database, UserPostgresRepo
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.tag import NoteTagPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
-from src.db.repos.note.note import NoteFacadeImpl
+from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.api.facades.note_facade import NoteRepoFacadeABC
+from src.api.repos.tag_repo import TagRepoABC
+from src.db.repos.tag.postgres import PostgresTagRepo
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.user.user import UserRepoABC
@@ -133,23 +134,30 @@ async def db(dsn):
 
 
 @pytest.fixture(scope="function")
-def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
+def directory_repo() -> _TestDirectoryRepo:
+    """Return an empty :class:`_TestDirectoryRepo` for tests to seed."""
+    return _TestDirectoryRepo()
+
+
+@pytest.fixture(scope="function")
+def note_repo_facade(
+    db: Database,
+    directory_repo: _TestDirectoryRepo,
+    tag_repo: TagRepoABC,
+) -> NoteRepoFacadeABC:
     """Return an in-memory :class:`NoteFacadeImpl` for unit tests.
 
     Uses the in-memory permission repo + directory repo to avoid the
-    SpiceDB container dependency.
+    SpiceDB container dependency.  The :func:`directory_repo` and
+    :func:`tag_repo` fixtures are shared so a test can pre-seed
+    directories / tags on the same instance the facade consults
+    during insert / select.
     """
     common_table_kwargs = {"db": db, "logging_provider": logging_provider}
     content_table = Table(
         **common_table_kwargs,
         table_name="note.content",
         id_fields=["id"],
-        error_log=True,
-    )
-    note_tags_table = Table(
-        **common_table_kwargs,
-        table_name="note.note_tag",
-        id_fields=["note_id", "tag_id"],
         error_log=True,
     )
     embedding_table = Table(
@@ -190,8 +198,8 @@ def note_repo_facade(db: Database) -> NoteRepoFacadeABC:
         # TODO: testing with SpiceDB could get hard. Maybe make a Fake
         # which does not do any checks.
         permission_repo=InMemoryPermissionRepo(),
-        directory_repo=_TestDirectoryRepo(),
-        tag_repo=NoteTagPostgresRepo(tags_table=note_tags_table),
+        directory_repo=directory_repo,
+        tag_repo=tag_repo,
         logging_provider=logging_provider,
         version_repo=version_repo,
     )
@@ -208,4 +216,31 @@ async def user_repo(db: Database) -> UserRepoABC:
             logging_provider=logging_provider,
         ),
         logging_provider=logging_provider,
+    )
+
+
+@pytest.fixture(scope="function")
+async def tag_repo(db: Database) -> TagRepoABC:
+    """Return a :class:`PostgresTagRepo` wired to the function-scoped db."""
+    common_table_kwargs = {"db": db, "logging_provider": logging_provider}
+    return PostgresTagRepo(
+        tag_table=Table(
+            **common_table_kwargs,
+            table_name="note.tag",
+            id_fields=["id"],
+            error_log=True,
+        ),
+        note_tag_table=Table(
+            **common_table_kwargs,
+            table_name="note.note_tag",
+            id_fields=["note_id", "tag_id"],
+            error_log=True,
+        ),
+        directory_tag_table=Table(
+            **common_table_kwargs,
+            table_name="note.directory_tag",
+            id_fields=["directory_id", "tag_id"],
+            error_log=True,
+        ),
+        db=db,
     )

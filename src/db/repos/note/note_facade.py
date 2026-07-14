@@ -5,8 +5,9 @@ Public methods follow the
 SQL statement lives in the repos the facade delegates to
 (:class:`~src.db.repos.note.content.NoteContentRepo`,
 :class:`~src.db.repos.note.combined.CombinedNotePostgresRepo`,
-:class:`NoteTagPostgresRepo`, the embedding / version repos).  The
-facade itself does **not** issue SQL -- it only orchestrates.
+:class:`src.db.repos.tag.postgres.PostgresTagRepo`, the embedding
+/ version repos).  The facade itself does **not** issue SQL --
+it only orchestrates.
 
 The :class:`Database` handle injected via the constructor is the
 one exception: search strategies live in their own module and own
@@ -23,8 +24,8 @@ from warnings import deprecated
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.api.repos.combined_note_repo import CombinedNoteRepoABC
 from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.repos.tag_repo import TagRepoABC
 from src.api.services.note_service import NoteIncludeOptions, resolve_include_options
-from src.api.repos.note_tag_repo import NoteTagRepoABC
 from src.api.other.relationship import AttachmentRelationEnum
 from src.api.other.types import LoggingProvider, Pagination
 from src.api.other.undefined import UNDEFINED, unwrap_undefined_or
@@ -65,7 +66,7 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         embedding_repo: NoteEmbeddingRepo,
         permission_repo: PermissionRepoABC,
         directory_repo: DirectoryFacadeABC,
-        tag_repo: NoteTagRepoABC,
+        tag_repo: TagRepoABC,
         logging_provider: LoggingProvider,
         version_repo: NoteVersionRepoABC,
     ):
@@ -158,6 +159,37 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
             f"for user {user.user_id!r}"
         )
 
+    async def _populate_relation_fields(
+        self,
+        note: NoteEntity,
+        note_id: str,
+    ) -> NoteEntity:
+        """Refresh `note.directory_ids` and `note.tag_ids` from their repos.
+
+        Replacement for the deprecated `_fetch_note_permissions`
+        and `_enrich_with_parent_directory_permissions` flows.
+        Those used to fan out from the permission repo to attach
+        :class:`~src.api.Relationship` rows to
+        `note.permissions`; the dedicated directory and tag repos
+        are now the single source of truth and the facade reads
+        them back so every returned
+        :class:`~src.db.entities.note.metadata.NoteEntity` carries
+        the canonical parent-directory and tag lists.
+
+        Args:
+            note: entity to enrich; mutated in place.
+            note_id: id used for the directory / tag lookups.
+
+        Returns:
+            NoteEntity: the same entity with `directory_ids` and
+            `tag_ids` populated from the dedicated repos.
+        """
+        note.directory_ids = await self._directory_repo.list_note_directory_ids(
+            note_id,
+        )
+        note.tag_ids = await self._tag_repo.list_tags_of("note", note_id)
+        return note
+
     # ---- insert / update ---------------------------------------------
 
     async def insert(self, note: NoteEntity, user: UserContextABC):
@@ -216,8 +248,8 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         # insert tags
         if note.tag_ids is not UNDEFINED:
             tag_ids = note.tag_ids or []
-            await self._tag_repo.replace_note_tags(
-                note_id, [str(t) for t in tag_ids if t],
+            await self._tag_repo.replace_tags_of(
+                "note", note_id, [str(t) for t in tag_ids if t],
             )
 
         # 5) note#owner@user permission
@@ -230,6 +262,9 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
 
         # deprecated: dont populate note.permissions
         # note.permissions = await self._fetch_note_permissions(note_id=note_id)
+        # replacement: read directory_ids and tag_ids back from their
+        # dedicated repos so the returned entity matches the persisted state.
+        note = await self._populate_relation_fields(note, note_id)
 
         # 6) version snapshot
         title_value: Optional[str] = unwrap_undefined_or(note.title)
@@ -271,8 +306,8 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         # replace tags when given
         if note.tag_ids is not UNDEFINED:
             tag_ids = note.tag_ids or []
-            await self._tag_repo.replace_note_tags(
-                str(note.note_id), [str(t) for t in tag_ids if t],
+            await self._tag_repo.replace_tags_of(
+                "note", str(note.note_id), [str(t) for t in tag_ids if t],
             )
 
         if note.permissions is UNDEFINED:
@@ -302,6 +337,9 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
             created_at=new_updated_at,
         )
 
+        # replacement: read directory_ids and tag_ids back from their
+        # dedicated repos so the returned entity matches the persisted state.
+        updated = await self._populate_relation_fields(updated, str(note.note_id))
         return updated
 
     async def delete(self, note_id: str, ctx: UserContextABC) -> Optional[List[NoteEntity]]:
@@ -332,6 +370,10 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         )
         if not entity:
             return None
+        # replacement: read directory_ids and tag_ids back from their
+        # dedicated repos so the returned entity reflects the current
+        # parent-directory and tag bindings regardless of `include_opts`.
+        entity = await self._populate_relation_fields(entity, note_id)
         # deprecated: dont populate note.permissions
         # if include_permissions:
         #     entity.permissions = await self._fetch_note_permissions(
@@ -352,10 +394,13 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         entities = await self._combined_repo.select_by_ids(
             note_ids, include=include_opts,
         )
-        if not include_permissions:
-            return entities
-        
-        # deprecated: dont assign relations
+
+        # replacement: read directory_ids and tag_ids back from their
+        # dedicated repos so every returned entity reflects its current
+        # parent-directory and tag bindings regardless of `include_opts`.
+        for entity in entities:
+            await self._populate_relation_fields(entity, str(entity.note_id))
+
         # for note in entities:
         #     note.permissions = await self._fetch_note_permissions(
         #         note_id=str(note.note_id),
@@ -409,10 +454,10 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
         for note in note_entities:
             if note.permissions is UNDEFINED:
                 note.permissions = []
-            if note.directory_ids is UNDEFINED:
-                note.directory_ids = []
-            if note.tag_ids is UNDEFINED:
-                note.tag_ids = []
+            # replacement: read directory_ids and tag_ids back from their
+            # dedicated repos so the search result rows mirror the per-id
+            # view of parent-directory and tag bindings.
+            await self._populate_relation_fields(note, str(note.note_id))
 
         # note_entities_dict: Dict[str, NoteEntity] = {
         #     str(note.note_id): note

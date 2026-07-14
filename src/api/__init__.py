@@ -60,7 +60,6 @@ from src.api.repos.permission_repo import (
 from src.api.repos.activity_repo import ActivityRepoABC, ActivityFilterBuilder
 from src.api.repos.user_action_repo import UserActionRepoABC
 from src.api.repos.combined_note_repo import CombinedNoteRepoABC
-from src.api.repos.note_tag_repo import NoteTagRepoABC
 from src.api.repos.directory_repo import DirectoryRepoABC
 
 # composite repo contracts (facades)
@@ -144,7 +143,6 @@ __all__ = [
     "ActivityFilterBuilder",
     "UserActionRepoABC",
     "CombinedNoteRepoABC",
-    "NoteTagRepoABC",
     "DirectoryRepoABC",
     # facades
     "DefaultDirectorySpec",

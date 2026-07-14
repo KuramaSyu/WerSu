@@ -223,7 +223,7 @@ async def test_create_share_rejects_bad_permission(bad_permission: object) -> No
 
 
 async def test_update_share_swaps_reader_relation_to_writer_via_permission_service() -> None:
-    """A ``permission`` change goes through ``PermissionService.replace_relationships``."""
+    """A ``permission`` change swaps the access user's reader tuple for writer."""
     existing = Relationship(
         resource=ObjectRef("note", "note-1"),
         relation=NoteRelationEnum.READER,
@@ -238,11 +238,9 @@ async def test_update_share_swaps_reader_relation_to_writer_via_permission_servi
             subject=SubjectRef("user", "creator-1"),
         )
     ])
-    permission_service = _FakePermissionService()
     service, _activity_logger = await _build_service(
         sharing_repo=_FakeSharingRepo([_share()]),
         permissions=permissions,
-        permission_service=permission_service,
     )
 
     updated = await service.update_share(
@@ -251,17 +249,23 @@ async def test_update_share_swaps_reader_relation_to_writer_via_permission_servi
     )
 
     assert updated.permission == "write"
-    assert len(permission_service.replace_calls) == 1
-    resource, rels, _ = permission_service.replace_calls[0]
-    assert resource == ObjectRef("note", "note-1")
-    # The access-user's writer replaces their previous reader; any
-    # unrelated relations seeded for the authz check are preserved.
-    assert any(
-        rel.relation == NoteRelationEnum.WRITER
-        and str(rel.subject.object_id) == "access-user"
-        and str(rel.resource.object_id) == "note-1"
-        for rel in rels
+    # The access user now holds writer; the reader was dropped.
+    stored = await permissions.list_relationships(
+        ObjectRef("note", "note-1")
     )
+    relations_as_user = {
+        str(rel.relation)
+        for rel in stored
+        if str(rel.subject.object_id) == "access-user"
+    }
+    assert relations_as_user == {str(NoteRelationEnum.WRITER)}
+    # Other relations on the note (the admin here) survive the swap.
+    admin_kept = any(
+        rel.relation == NoteRelationEnum.ADMIN
+        and str(rel.subject.object_id) == "creator-1"
+        for rel in stored
+    )
+    assert admin_kept
 
 
 async def test_update_share_preserves_unrelated_relationships() -> None:
@@ -276,20 +280,16 @@ async def test_update_share_preserves_unrelated_relationships() -> None:
         relation=NoteRelationEnum.READER,
         subject=SubjectRef("user", "access-user"),
     )
+    admin_rel = Relationship(
+        resource=ObjectRef("note", "note-1"),
+        relation=NoteRelationEnum.ADMIN,
+        subject=SubjectRef("user", "creator-1"),
+    )
     permissions = InMemoryPermissionRepo()
-    await permissions.insert([owner_rel, existing_reader])
-    await permissions.insert([
-        Relationship(
-            resource=ObjectRef("note", "note-1"),
-            relation=NoteRelationEnum.ADMIN,
-            subject=SubjectRef("user", "creator-1"),
-        )
-    ])
-    permission_service = _FakePermissionService()
+    await permissions.insert([owner_rel, existing_reader, admin_rel])
     service, _activity_logger = await _build_service(
         sharing_repo=_FakeSharingRepo([_share()]),
         permissions=permissions,
-        permission_service=permission_service,
     )
 
     await service.update_share(
@@ -297,16 +297,25 @@ async def test_update_share_preserves_unrelated_relationships() -> None:
         _UserContext("creator-1"),
     )
 
-    _, rels, _ = permission_service.replace_calls[0]
-    assert owner_rel in rels
-    assert existing_reader not in rels
+    stored = await permissions.list_relationships(
+        ObjectRef("note", "note-1")
+    )
+    # owner/admin/etc. survive untouched
+    assert owner_rel in stored
+    assert admin_rel in stored
+    # the access user's reader is gone
+    assert existing_reader not in stored
 
 
 async def test_update_share_without_permission_field_does_not_call_permission_service() -> None:
     """No ``permission`` field in the update -> no relation swap."""
+    permissions = await _perms_with_edit(
+        user_id="creator-1", editable_note_ids={"note-1"},
+    )
+    before = await permissions.list_relationships(ObjectRef("note", "note-1"))
     service, _activity_logger = await _build_service(
         sharing_repo=_FakeSharingRepo([_share()]),
-        permissions=await _perms_with_edit(user_id="creator-1", editable_note_ids={"note-1"}),
+        permissions=permissions,
         permission_service=_FakePermissionService(),
     )
 
@@ -316,7 +325,9 @@ async def test_update_share_without_permission_field_does_not_call_permission_se
     )
 
     assert updated.description == "new"
-    assert service._permission_service.replace_calls == []
+    # No relation swap occurred; the permission repo is unchanged.
+    after = await permissions.list_relationships(ObjectRef("note", "note-1"))
+    assert after == before
 
 
 async def test_update_share_denies_without_edit_permission() -> None:

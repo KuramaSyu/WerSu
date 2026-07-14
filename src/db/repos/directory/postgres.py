@@ -10,7 +10,10 @@ Tables touched:
 * ``note.directory_subdirectory`` -- parent / child graph between
   directories (the directory tree).
 * ``note.directory_note`` -- directory / note bindings.
-* ``note.directory_tag`` -- tag association for directories.
+
+Tag CRUD no longer lives here -- it is owned by
+:class:`src.db.repos.tag.postgres.PostgresTagRepo`.  The
+directory facade composes that repo in addition to this one.
 
 The directory tree and the note bindings are kept in two
 single-purpose tables (introduced in
@@ -53,10 +56,6 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         directory_note_table: ``TableABC`` over
             ``note.directory_note`` -- the directory / note
             bindings.
-        tags_table: ``TableABC`` over ``note.directory_tag``.  The
-            directory-repo surface exposes tag CRUD via
-            :meth:`tag_ids_of_directory` / :meth:`replace_directory_tags`,
-            so the table is required.
     """
 
     _DIRECTORY_COLUMNS = (
@@ -68,12 +67,10 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         directory_table: TableABC,
         subdirectory_table: TableABC,
         directory_note_table: TableABC,
-        directory_tags_table: TableABC,
     ) -> None:
         self._directory_table = directory_table
         self._subdirectory_table = subdirectory_table
         self._directory_note_table = directory_note_table
-        self._tags_table = directory_tags_table
 
     @property
     def directory_table(self) -> TableABC:
@@ -89,11 +86,6 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
     def directory_note_table(self) -> TableABC:
         """Return the ``note.directory_note`` :class:`TableABC`."""
         return self._directory_note_table
-
-    @property
-    def tags_table(self) -> TableABC:
-        """Return the ``note.directory_tag`` :class:`TableABC`."""
-        return self._tags_table
 
     # ---- inserts / updates / deletes ----------------------------------
 
@@ -568,37 +560,6 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         await self._directory_note_table.delete(
             {"directory_id": str(directory_id), "note_id": str(note_id)}
         )
-
-    async def tag_ids_of_directory(
-        self, directory_id: str,
-    ) -> List[str]:
-        records = await self._tags_table.select(
-            where={"directory_id": str(directory_id)},
-            select="tag_id",
-        )
-        return sorted(
-            {
-                str(r.get("tag_id"))
-                for r in records or []
-                if r.get("tag_id")
-            }
-        )
-
-    async def replace_directory_tags(
-        self, directory_id: str, tag_ids: List[str],
-    ) -> None:
-        """Wipe the directory's tags and reinsert ``tag_ids``."""
-        await self._tags_table.delete({"directory_id": str(directory_id)})
-        for tag_id in tag_ids:
-            if not tag_id:
-                continue
-            await self._tags_table.insert(
-                {
-                    "directory_id": str(directory_id),
-                    "tag_id": str(tag_id),
-                },
-                on_conflict="DO NOTHING",
-            )
 
     # ---- subtree walks -----------------------------------------------
 

@@ -17,6 +17,7 @@ import asyncio
 from typing import List, Optional, Tuple
 
 from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.repos.tag_repo import TagRepoABC
 from src.api.services.directory_service import (
     DirectoryIncludeOptions,
     resolve_directory_include_options,
@@ -44,16 +45,21 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
     The facade routes every :class:`DirectoryRepo` call to either the
     low-level Postgres repo (for storage) or the permission repo
     (for visibility checks and user-flavoured relation writes).
+    Tag CRUD on directories is delegated to the
+    :class:`TagRepoABC` -- the directory repo no longer owns
+    ``note.directory_tag`` writes.
     """
 
     def __init__(
         self,
         postgres_repo: DirectoryRepoABC,
         permission_repo: PermissionRepoABC,
+        tag_repo: TagRepoABC,
         log: LoggingProvider,
     ) -> None:
         self._postgres = postgres_repo
         self._permission_repo = permission_repo
+        self._tag_repo = tag_repo
         self._log = log(self)
 
     # ---- public contract ---------------------------------------------
@@ -90,8 +96,8 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         # list is treated as "clear every tag" -- the same semantics
         # the update path already followed.
         if entity.tag_ids:
-            await self._postgres.replace_directory_tags(
-                str(dir_id), list(entity.tag_ids)
+            await self._tag_repo.replace_tags_of(
+                "directory", str(dir_id), list(entity.tag_ids),
             )
 
         return created_entity
@@ -216,8 +222,8 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             )
 
         if entity.tag_ids:
-            await self._postgres.replace_directory_tags(
-                str(entity.id), list(entity.tag_ids)
+            await self._tag_repo.replace_tags_of(
+                "directory", str(entity.id), list(entity.tag_ids),
             )
 
         return await self.fetch_directory(str(entity.id))

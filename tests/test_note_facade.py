@@ -24,8 +24,8 @@ from src.api.other.types import Pagination
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.api.facades.directory_facade import DirectoryFacadeABC
-from src.db.repos.note import note as note_module
-from src.db.repos.note.note import NoteFacadeImpl
+from src.db.repos.note import note_facade as note_module
+from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.api.facades.note_facade import SearchType
 from tests._fixtures_pkg.fakes import (
     _FakeCombinedNoteRepo,
@@ -33,7 +33,7 @@ from tests._fixtures_pkg.fakes import (
     _FakeEmbeddingRepo,
     _FakeJwtProvider,
     _FakeNoteContentRepo,
-    _FakeNoteTagRepo,
+    _FakeTagRepo,
     _FakeVersionRepo,
     _TestDirectoryRepo,
 )
@@ -47,10 +47,10 @@ def _make_facade(
     db: Optional[_FakeDatabase] = None,
     content_repo: Optional[_FakeNoteContentRepo] = None,
     combined_repo: Optional[_FakeCombinedNoteRepo] = None,
-    tag_repo: Optional[_FakeNoteTagRepo] = None,
+    tag_repo: Optional[_FakeTagRepo] = None,
     permission_repo: Optional[InMemoryPermissionRepo] = None,
     directory_repo: Optional[DirectoryFacadeABC] = None,
-) -> tuple[NoteFacadeImpl, _FakeDatabase, _FakeNoteContentRepo, _FakeEmbeddingRepo, DirectoryFacadeABC, _FakeCombinedNoteRepo, _FakeNoteTagRepo]:
+) -> tuple[NoteFacadeImpl, _FakeDatabase, _FakeNoteContentRepo, _FakeEmbeddingRepo, DirectoryFacadeABC, _FakeCombinedNoteRepo, _FakeTagRepo, _FakeVersionRepo]:
     """Build a :class:`NoteFacadeImpl` wired against the in-memory fakes."""
     fake_db = db or _FakeDatabase()
     fake_content = content_repo or _FakeNoteContentRepo()
@@ -58,7 +58,8 @@ def _make_facade(
     fake_embedding = _FakeEmbeddingRepo()
     fake_permission = permission_repo or InMemoryPermissionRepo()
     fake_directory = directory_repo or _TestDirectoryRepo()
-    fake_tags = tag_repo or _FakeNoteTagRepo()
+    fake_tags = tag_repo or _FakeTagRepo()
+    fake_version_repo = version_repo or _FakeVersionRepo()
     facade = NoteFacadeImpl(
         db=fake_db,
         content_repo=fake_content,
@@ -68,9 +69,9 @@ def _make_facade(
         directory_repo=fake_directory,
         tag_repo=fake_tags,
         logging_provider=_log_provider,
-        version_repo=version_repo,
+        version_repo=fake_version_repo,
     )
-    return facade, fake_db, fake_content, fake_embedding, fake_directory, fake_combined, fake_tags
+    return facade, fake_db, fake_content, fake_embedding, fake_directory, fake_combined, fake_tags, fake_version_repo
 
 
 def _log_provider(*_args, **_kwargs):
@@ -93,7 +94,7 @@ def _seed_note(note_id: str = "note-1", **overrides) -> NoteEntity:
 
 async def test_insert_without_content_skips_embedding() -> None:
     """`insert` does not generate an embedding when `content` is empty."""
-    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags = _make_facade()
+    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade()
     fake_db.fetchrow_responses.append({"id": "note-empty"})
 
     note = NoteEntity(
@@ -112,7 +113,7 @@ async def test_insert_without_content_skips_embedding() -> None:
 
 async def test_insert_records_initial_snapshot_when_version_repo_present() -> None:
     """`insert` records an initial version snapshot via the version repo."""
-    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags = _make_facade(version_repo=_FakeVersionRepo())
+    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade(version_repo=_FakeVersionRepo())
     fake_db.fetchrow_responses.append({"id": "note-snap"})
 
     note = NoteEntity(
@@ -130,7 +131,7 @@ async def test_insert_records_initial_snapshot_when_version_repo_present() -> No
 
 async def test_update_overwrites_content_and_refreshes_embedding() -> None:
     """`update` re-fetches, mutates via content repo, refreshes embedding."""
-    facade, _db, content_repo, _embedding, _directory, _combined, _tags = _make_facade()
+    facade, _db, content_repo, _embedding, _directory, _combined, _tags, _version_repo = _make_facade()
     seeded = _seed_note(note_id="note-1", content="old content")
     content_repo.seed(seeded)
 
@@ -157,7 +158,7 @@ async def test_update_overwrites_content_and_refreshes_embedding() -> None:
 async def test_update_appends_version_entry_when_version_repo_present() -> None:
     """`update` forwards the before/after pair to `version_repo.append_version`."""
     version_repo = _FakeVersionRepo()
-    facade, _db, content_repo, _embedding, _directory, _combined, _tags = _make_facade(version_repo=version_repo)
+    facade, _db, content_repo, _embedding, _directory, _combined, _tags, _version_repo = _make_facade(version_repo=version_repo)
     content_repo.seed(_seed_note(note_id="note-1", content="old content"))
 
     updated_payload = NoteEntity(
@@ -182,7 +183,7 @@ async def test_update_appends_version_entry_when_version_repo_present() -> None:
 
 async def test_delete_returns_list_from_content_repo() -> None:
     """`delete` returns the list the content repo yields."""
-    facade, _db, content_repo, _embedding, _directory, _combined, _tags = _make_facade()
+    facade, _db, content_repo, _embedding, _directory, _combined, _tags, _version_repo = _make_facade()
     content_repo.seed(_seed_note(note_id="note-1"))
 
     deleted = await facade.delete("note-1", UserContext("user-1"))
@@ -197,7 +198,7 @@ async def test_delete_returns_list_from_content_repo() -> None:
 
 async def test_delete_returns_empty_list_when_nothing_matches() -> None:
     """`delete` returns an empty list when the content repo yields nothing."""
-    facade, _db, _content, _embedding, fake_directory, _combined, _tags = _make_facade()
+    facade, _db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade()
 
     deleted = await facade.delete("ghost", UserContext("user-1"))
 
@@ -206,7 +207,7 @@ async def test_delete_returns_empty_list_when_nothing_matches() -> None:
 
 async def test_select_by_id_normalises_permissions_to_empty_list() -> None:
     """`select_by_id` returns `permissions = []` and the seeded entity."""
-    facade, _db, content_repo, _embedding, _directory, _combined, _tags = _make_facade()
+    facade, _db, content_repo, _embedding, _directory, _combined, _tags, _version_repo = _make_facade()
     seeded = replace(_seed_note(note_id="note-1"), permissions=UNDEFINED)
     content_repo.seed(seeded)
 
@@ -226,7 +227,7 @@ async def test_search_notes_dispatches_known_strategy() -> None:
     SQL-driven search behaviour is covered by the integration tests
     in ``test_notes_repo.py``.
     """
-    from src.db.repos.note.note import DateNoteSearchStrategy
+    from src.db.repos.note.note_facade import DateNoteSearchStrategy
 
     class _RecordingStrategy:
         def __init__(self, **kwargs) -> None:
@@ -235,7 +236,7 @@ async def test_search_notes_dispatches_known_strategy() -> None:
         async def search(self):
             return []
 
-    facade, _db, _content, _embedding, fake_directory, _combined, _tags = _make_facade()
+    facade, _db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade()
     original = DateNoteSearchStrategy
     note_module.DateNoteSearchStrategy = _RecordingStrategy  # type: ignore[attr-defined]
     try:
@@ -258,7 +259,7 @@ async def test_search_notes_raises_for_unknown_search_type() -> None:
     class _Bad(Enum):
         NOPE = 99
 
-    facade, _db, _content, _embedding, fake_directory, _combined, _tags = _make_facade()
+    facade, _db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade()
 
     with pytest.raises(ValueError, match="Unknown SearchType"):
         await facade.search_notes(

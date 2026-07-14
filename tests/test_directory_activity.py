@@ -16,6 +16,7 @@ from tests._fixtures_pkg.fakes import (
     _FakeDirectoryNoteTable,
     _FakeDirectoryTable,
     _FakeDirectoryTagsTable,
+    _FakeTagRepo,
 )
 from tests.stubs import _UserContext
 from src.api import (
@@ -123,9 +124,9 @@ async def test_resolve_files_of_directory_depth_and_cycle() -> None:
             directory_table=_FakeDirectoryTable(),
             subdirectory_table=subdirectory_table,
             directory_note_table=note_table,
-            directory_tags_table=_FakeDirectoryTagsTable(),
         ),
         permission_repo=permission_repo,
+        tag_repo=_FakeTagRepo(),
         log=logging_provider,
     )
 

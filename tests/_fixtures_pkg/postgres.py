@@ -24,8 +24,9 @@ from src.db.repos.directory.directory import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.note import NoteFacadeImpl
-from src.db.repos.note.tag import NoteTagPostgresRepo
+from src.db.repos.note.note_facade import NoteFacadeImpl
+from src.db.repos.tag.postgres import PostgresTagRepo
+from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.db.repos.user.user import UserPostgresRepo
@@ -48,7 +49,7 @@ from tests._fixtures_pkg.spicedb_schema import (
 )
 
 
-# Image constants.  Mirrored here rather than imported from ``spicedb_schema``
+# Image constants.  Mirrored imported from ``spicedb_schema``
 # because the postgres image is a concern of *this* module only.
 POSTGRES_IMAGE = "pgvector/pgvector:0.8.1-pg18-trixie"
 
@@ -142,16 +143,48 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
                 id_fields=["id"],
                 logging_provider=logging_provider,
             ),
-            directory_tags_table=Table(
+        )
+        tag_repo = PostgresTagRepo(
+            tag_table=Table(
+                db=db,
+                table_name="note.tag",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            note_tag_table=Table(
+                db=db,
+                table_name="note.note_tag",
+                id_fields=["note_id", "tag_id"],
+                logging_provider=logging_provider,
+            ),
+            directory_tag_table=Table(
                 db=db,
                 table_name="note.directory_tag",
                 id_fields=["directory_id", "tag_id"],
                 logging_provider=logging_provider,
             ),
+            db=db,
         )
         directory_repo = DirectoryFacadeImpl(
             postgres_repo=postgres_directory_repo,
             permission_repo=permission_repo,
+            tag_repo=tag_repo,
+            log=logging_provider,
+        )
+        version_repo = NoteVersionPostgresRepo(
+            snapshot_table=Table(
+                db=db,
+                table_name="note.version_snapshot",
+                id_fields=["snapshot_id"],
+                logging_provider=logging_provider,
+            ),
+            delta_table=Table(
+                db=db,
+                table_name="note.version_delta",
+                id_fields=["delta_id"],
+                logging_provider=logging_provider,
+            ),
+            max_deltas_per_snapshot=2,
         )
         note_repo = NoteFacadeImpl(
             db=db,
@@ -167,15 +200,9 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             embedding_repo=_FakeEmbeddingRepo(),
             permission_repo=permission_repo,
             directory_repo=directory_repo,
-            tag_repo=NoteTagPostgresRepo(
-                tags_table=Table(
-                    db=db,
-                    table_name="note.note_tag",
-                    id_fields=["note_id", "tag_id"],
-                    logging_provider=logging_provider,
-                ),
-            ),
+            tag_repo=tag_repo,
             logging_provider=logging_provider,
+            version_repo=version_repo,
         )
         user_repo = UserPostgresRepo(
             table=Table(
@@ -187,7 +214,11 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             logging_provider=logging_provider,
         )
         user_context_factory = RepoContextFactory(user_repo=user_repo)
-        user_service = UserServiceImpl(user_repo=user_repo, directory_repo=directory_repo)
+        user_service = UserServiceImpl(
+            user_repo=user_repo,
+            directory_repo=directory_repo,
+            context_factory=user_context_factory,
+        )
         permission_service = PermissionServiceImpl(
             permission_repo=permission_repo,
             note_repo=note_repo,

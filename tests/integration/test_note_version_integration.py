@@ -8,8 +8,8 @@ from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
-from src.db.repos.note.note import NoteFacadeImpl
-from src.db.repos.note.tag import NoteTagPostgresRepo
+from src.db.repos.note.note_facade import NoteFacadeImpl
+from src.db.repos.tag.postgres import PostgresTagRepo
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.table import Table
@@ -57,6 +57,22 @@ async def test_note_versioning_records_snapshots_and_deltas(db, user_repo, test_
         id_fields=["note_id", "tag_id"],
         error_log=True,
     )
+    tag_repo = PostgresTagRepo(
+        tag_table=Table(
+            **common_table_kwargs,
+            table_name="note.tag",
+            id_fields=["id"],
+            error_log=True,
+        ),
+        note_tag_table=note_tags_table,
+        directory_tag_table=Table(
+            **common_table_kwargs,
+            table_name="note.directory_tag",
+            id_fields=["directory_id", "tag_id"],
+            error_log=True,
+        ),
+        db=db,
+    )
 
     note_repo = NoteFacadeImpl(
         db=db,
@@ -65,7 +81,7 @@ async def test_note_versioning_records_snapshots_and_deltas(db, user_repo, test_
         embedding_repo=_FakeEmbeddingRepo(),
         permission_repo=InMemoryPermissionRepo(),
         directory_repo=_TestDirectoryRepo(),
-        tag_repo=NoteTagPostgresRepo(tags_table=note_tags_table),
+        tag_repo=tag_repo,
         logging_provider=logging_provider,
         version_repo=version_repo,
     )

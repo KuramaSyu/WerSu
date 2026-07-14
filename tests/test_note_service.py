@@ -40,7 +40,7 @@ from src.api.other.relationship import (
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.api.facades.directory_facade import DirectoryFacadeABC
-from src.db.repos.note.note import NoteFacadeImpl
+from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
 from src.services.note import NoteServiceImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
@@ -52,7 +52,8 @@ from tests._fixtures_pkg.fakes import (
     _FakeEmbeddingRepo,
     _FakeJwtProvider,
     _FakeNoteContentRepo,
-    _FakeNoteTagRepo,
+    _FakeTagRepo,
+    _FakeVersionRepo,
     _TestDirectoryRepo,
 )
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService
@@ -124,10 +125,10 @@ def _make_service(
     fake_combined = _FakeCombinedNoteRepo(content_repo=fake_content)
     fake_embedding = _FakeEmbeddingRepo()
     fake_permission = permission_repo or InMemoryPermissionRepo()
-    fake_directory = directory_repo or _TestDirectoryRepo()
+    fake_directory = directory_repo or _TestDirectoryRepo(permission_repo=fake_permission)
     fake_jwt = jwt_provider or _FakeJwtProvider()
     fake_activity_logger = _FakeActivityLoggerService()
-    fake_tags = _FakeNoteTagRepo()
+    fake_tags = _FakeTagRepo()
     facade = NoteFacadeImpl(
         db=fake_db,
         content_repo=fake_content,
@@ -137,6 +138,7 @@ def _make_service(
         permission_repo=fake_permission,
         directory_repo=fake_directory,
         tag_repo=fake_tags,
+        version_repo=_FakeVersionRepo(),
     )
     service = NoteServiceImpl(
         note_repo=facade,

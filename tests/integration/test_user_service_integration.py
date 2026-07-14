@@ -23,8 +23,8 @@ from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryFacadeImpl
-from src.db.repos.note.note import NoteFacadeImpl
-from src.db.repos.permissions.permission import SpicedbPermissionRepo
+from src.db.repos.note.note_facade import NoteFacadeImpl
+from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.services.user_service import UserServiceImpl
 from tests.integration_helpers import (
     NoteRelationEnum,
@@ -201,7 +201,8 @@ async def test_insert_note_uses_specified_parent_directory_when_provided(
         pytest.fail(f"create_user() returned a user without an ID: {created_user!r}")
 
     custom_directory = await directory_repo.create_directory(
-        make_custom_directory(owner_user_id=str(created_user.id))
+        make_custom_directory(owner_user_id=str(created_user.id)),
+        user_ctx=await context_factory.create(str(created_user.id)),
     )
     if custom_directory.id is None:
         pytest.fail(
