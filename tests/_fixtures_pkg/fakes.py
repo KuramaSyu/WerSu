@@ -38,7 +38,7 @@ from src.api.other.relationship import (
 from src.db.repos.note.content import NoteContentRepo
 from src.db.table import TableABC
 from src.db.repos.note.embedding import NoteEmbeddingRepo
-from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api.services.note_service import NoteResponse, NoteServiceABC
 from src.services.attachment_facade import Attachment, AttachmentFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
@@ -469,7 +469,7 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
         return self.subtree_by_root.get(directory_id, ([], [directory_id]))
 
 
-class _FakeNoteRepoFacade(NoteRepoFacadeABC):
+class _FakeNoteRepoFacade(NoteFacadeABC):
     """In-memory :class:`NoteRepoFacadeABC` used by unit tests.
 
     Stores notes by id; ``insert`` mints a sequential id, every other

@@ -41,6 +41,7 @@ from src.api.other.undefined import (
     is_undefined,
     unwrap_undefined_or,
 )
+from src.api.repos.directory_repo import DirectoryChildType, DirectoryHierarchyType
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.table import TableABC
 
@@ -455,7 +456,7 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
 
     # ---- parent / child / tag bindings -------------------------------
 
-    async def set_parent_directories(
+    async def set_parent_directories_of(
         self,
         directory_id: str,
         parent_ids: List[str],
@@ -466,7 +467,7 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         ``ON CONFLICT DO NOTHING``; rows that no longer belong get
         deleted before the new set is inserted.
         """
-        current = set(await self.parent_directory_ids_of(directory_id))
+        current = set(await self.get_parent_of("directory", directory_id))
         desired = {str(p) for p in parent_ids if p}
 
         # Drop parents that are no longer wanted.
@@ -488,144 +489,175 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
                 on_conflict="DO NOTHING",
             )
 
-    async def parent_directory_ids_of(
-        self, directory_id: str,
+    async def get_parent_of(
+        self,
+        type: DirectoryHierarchyType,
+        directory_id: str,
     ) -> List[str]:
-        """Return every parent directory id, deduplicated and sorted."""
-        records = await self._subdirectory_table.select(
-            where={"child_directory_id": directory_id},
-            select="directory_id",
-        )
-        ids = {
-            str(r.get("directory_id"))
-            for r in records or []
-            if r.get("directory_id")
-        }
-        return sorted(ids)
+        """Return parent ids for the requested child type."""
+        parent_ids: set[str] = set()
+        if type in ("directory", "both"):
+            records = await self._subdirectory_table.select(
+                where={"child_directory_id": directory_id},
+                select="directory_id",
+            )
+            parent_ids.update(
+                str(r.get("directory_id"))
+                for r in records or []
+                if r.get("directory_id")
+            )
+        if type in ("note", "both"):
+            records = await self._directory_note_table.select(
+                where={"note_id": directory_id},
+                select="directory_id",
+            )
+            parent_ids.update(
+                str(r.get("directory_id"))
+                for r in records or []
+                if r.get("directory_id")
+            )
+        return sorted(parent_ids)
 
-    async def direct_child_directory_ids_of(
-        self, directory_id: str,
+    async def get_children_of(
+        self,
+        type: DirectoryHierarchyType,
+        directory_id: str,
+        depth: int = 1,
     ) -> List[str]:
-        records = await self._subdirectory_table.fetch(
-            f"""
-            SELECT child_directory_id FROM {self._subdirectory_table.name}
-            WHERE directory_id = $1
-            """,
-            directory_id,
-        )
-        return sorted(
-            {
+        """Return child ids for the requested type up to ``depth`` levels."""
+        if depth < 0:
+            raise ValueError("depth must be >= 0")
+        if depth == 0:
+            return []
+
+        visited: set[str] = set()
+        queued: set[str] = {str(directory_id)}
+        queue: list[tuple[str, int]] = [(str(directory_id), 0)]
+        note_ids: set[str] = set()
+        directory_ids: set[str] = set()
+
+        while queue:
+            current_id, current_depth = queue.pop(0)
+            if current_id in visited or current_depth >= depth:
+                continue
+            visited.add(current_id)
+
+            if type in ("note", "both"):
+                records = await self._directory_note_table.select(
+                    where={"directory_id": current_id},
+                    select="note_id",
+                )
+                note_ids.update(
+                    str(r.get("note_id"))
+                    for r in records or []
+                    if r.get("note_id")
+                )
+            records = await self._subdirectory_table.select(
+                where={"directory_id": current_id},
+                select="child_directory_id",
+            )
+            child_directory_ids = [
                 str(r.get("child_directory_id"))
                 for r in records or []
                 if r.get("child_directory_id")
-            }
-        )
+            ]
+            if type in ("directory", "both"):
+                directory_ids.update(child_directory_ids)
+            if current_depth + 1 < depth:
+                for child_id in child_directory_ids:
+                    if child_id not in queued:
+                        queued.add(child_id)
+                        queue.append((child_id, current_depth + 1))
 
-    async def list_note_ids(
-        self, directory_id: str,
-    ) -> List[str]:
-        """Direct child note ids of ``directory_id``.
+        if type == "note":
+            return sorted(note_ids)
+        if type == "directory":
+            return sorted(directory_ids)
+        return sorted(note_ids | directory_ids)
 
-        Sourced from ``note.directory_note``; empty list when
-        none.  Mirrors :meth:`direct_child_directory_ids_of` on the
-        directory side of the tree.
-        """
-        records = await self._directory_note_table.fetch(
-            f"""
-            SELECT note_id FROM {self._directory_note_table.name}
-            WHERE directory_id = $1
-            """,
-            directory_id,
-        )
-        return sorted(
-            {
-                str(r.get("note_id"))
-                for r in records or []
-                if r.get("note_id")
-            }
-        )
-
-    async def count_direct_child_directories(
-        self, directory_id: str,
-    ) -> int:
-        return len(await self.direct_child_directory_ids_of(directory_id))
-
-    async def bind_note(self, directory_id: str, note_id: str) -> None:
-        await self._directory_note_table.insert(
-            {"directory_id": str(directory_id), "note_id": str(note_id)},
-            on_conflict="DO NOTHING",
-        )
-
-    async def unbind_note(self, directory_id: str, note_id: str) -> None:
-        await self._directory_note_table.delete(
-            {"directory_id": str(directory_id), "note_id": str(note_id)}
-        )
-
-    # ---- subtree walks -----------------------------------------------
-
-    async def get_children(
+    async def get_children_for(
         self,
-        directory_id: str,
-        type: str,
-        *,
-        descendants: bool = False,
-        max_depth: int = 10,
+        type: DirectoryHierarchyType,
+        directory_ids: List[str],
+        depth: int = 1,
     ) -> List[str]:
-        valid_types = {"notes", "directories", "both"}
-        if type not in valid_types:
-            raise ValueError(f"type must be one of {valid_types}, got {type!r}")
-        if max_depth < 0:
-            raise ValueError("max_depth must be >= 0")
+        """Return child ids for multiple directories."""
+        if not directory_ids:
+            return []
+        child_ids: set[str] = set()
+        for directory_id in directory_ids:
+            child_ids.update(
+                await self.get_children_of(type, str(directory_id), depth=depth)
+            )
+        return sorted(child_ids)
 
-        if not descendants:
-            if type in ("notes", "both"):
-                note_ids = await self.list_note_ids(directory_id)
-            else:
-                note_ids = []
-            if type in ("directories", "both"):
-                dir_ids = await self.direct_child_directory_ids_of(directory_id)
-            else:
-                dir_ids = []
-            return sorted(set(note_ids) | set(dir_ids))
+    async def get_parent_for(
+        self,
+        type: DirectoryHierarchyType,
+        child_ids: List[str],
+    ) -> List[str]:
+        """Return parent ids for multiple child ids."""
+        if not child_ids:
+            return []
+        parent_ids: set[str] = set()
+        for child_id in child_ids:
+            parent_ids.update(await self.get_parent_of(type, str(child_id)))
+        return sorted(parent_ids)
 
-        visited: set[str] = set()
-        note_ids_set: set[str] = set()
-        dir_ids_set: set[str] = {str(directory_id)}
-        queue: list[tuple[str, int]] = [(str(directory_id), 0)]
-        while queue:
-            current_id, depth = queue.pop(0)
-            if current_id in visited:
-                continue
-            visited.add(current_id)
-            if depth > max_depth:
-                continue
-            if type in ("notes", "both"):
-                for note_id in await self.list_note_ids(current_id):
-                    note_ids_set.add(note_id)
-            if depth >= max_depth:
-                continue
-            for child_id in await self.direct_child_directory_ids_of(
-                current_id
-            ):
-                dir_ids_set.add(child_id)
-                if child_id not in visited:
-                    queue.append((child_id, depth + 1))
-        if type == "notes":
-            return sorted(note_ids_set)
-        if type == "directories":
-            return sorted(dir_ids_set)
-        return sorted(note_ids_set | dir_ids_set)
+    async def add_child_to_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        """Add a note or child directory binding."""
+        if type == "note":
+            await self._directory_note_table.insert(
+                {"directory_id": str(directory_id), "note_id": str(child_id)},
+                on_conflict="DO NOTHING",
+            )
+            return
+        if type == "directory":
+            await self._subdirectory_table.insert(
+                {
+                    "directory_id": str(directory_id),
+                    "child_directory_id": str(child_id),
+                },
+                on_conflict="DO NOTHING",
+            )
+            return
+        raise ValueError("type must be 'note' or 'directory'")
+
+    async def remove_child_from_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        """Remove a note or child directory binding."""
+        if type == "note":
+            await self._directory_note_table.delete(
+                {"directory_id": str(directory_id), "note_id": str(child_id)}
+            )
+            return
+        if type == "directory":
+            await self._subdirectory_table.delete(
+                {
+                    "directory_id": str(directory_id),
+                    "child_directory_id": str(child_id),
+                }
+            )
+            return
+        raise ValueError("type must be 'note' or 'directory'")
 
     async def get_descendants(
         self,
         root_id: str,
-        type: str,
+        type: DirectoryHierarchyType,
         *,
         max_depth: int = 10,
     ) -> List[str]:
-        return await self.get_children(
-            root_id, type, descendants=True, max_depth=max_depth
-        )
+        return await self.get_children_of(type, root_id, depth=max_depth)
 
     # --- helpers -------------------------------------------------------
 

@@ -42,7 +42,7 @@ class DirectoryFacadeABC(ABC):
     """Storage contract for directory rows and their SpiceDB relations.
 
     Implementations:
-        * :class:`src.db.repos.directory.directory.DirectoryFacadeImpl`
+        * :class:`~src.db.repos.directory.directory.DirectoryFacadeImpl`
     """
 
     DEFAULT_DIRECTORY_SPECS: ClassVar[Sequence[DefaultDirectorySpec]] = (

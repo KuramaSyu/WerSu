@@ -271,10 +271,13 @@ class Note(_message.Message):
     PERMISSIONS_FIELD_NUMBER: _builtins.int
     DIRECTORY_IDS_FIELD_NUMBER: _builtins.int
     TAG_IDS_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     title: _builtins.str
     content: _builtins.str
     author_id: _builtins.str
+    user_id: _builtins.str
+    """used for permission checking"""
     @_builtins.property
     def updated_at(self) -> _timestamp_pb2.Timestamp: ...
     @_builtins.property
@@ -296,10 +299,11 @@ class Note(_message.Message):
         permissions: _abc.Iterable[Global___PermissionRelationship] | None = ...,
         directory_ids: _abc.Iterable[_builtins.str] | None = ...,
         tag_ids: _abc.Iterable[_builtins.str] | None = ...,
+        user_id: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["updated_at", b"updated_at"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "content", b"content", "directory_ids", b"directory_ids", "id", b"id", "permissions", b"permissions", "tag_ids", b"tag_ids", "title", b"title", "updated_at", b"updated_at"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "content", b"content", "directory_ids", b"directory_ids", "id", b"id", "permissions", b"permissions", "tag_ids", b"tag_ids", "title", b"title", "updated_at", b"updated_at", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -450,9 +454,9 @@ class AlterNoteRequest(_message.Message):
     user_id: _builtins.str
     """the user_id of the user making the request, used for permission checking"""
     @_builtins.property
-    def directory_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    def directory_ids(self) -> Global___IdsOrUndefined: ...
     @_builtins.property
-    def tag_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    def tag_ids(self) -> Global___IdsOrUndefined: ...
     def __init__(
         self,
         *,
@@ -460,13 +464,13 @@ class AlterNoteRequest(_message.Message):
         title: _builtins.str | None = ...,
         content: _builtins.str | None = ...,
         author_id: _builtins.str | None = ...,
-        directory_ids: _abc.Iterable[_builtins.str] | None = ...,
-        tag_ids: _abc.Iterable[_builtins.str] | None = ...,
+        directory_ids: Global___IdsOrUndefined | None = ...,
+        tag_ids: Global___IdsOrUndefined | None = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "title", b"title"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "directory_ids", b"directory_ids", "directory_ids_change", b"directory_ids_change", "tag_ids", b"tag_ids", "tag_ids_change", b"tag_ids_change", "title", b"title"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "directory_ids", b"directory_ids", "id", b"id", "tag_ids", b"tag_ids", "title", b"title", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_author_id", b"_author_id", "_content", b"_content", "_title", b"_title", "author_id", b"author_id", "content", b"content", "directory_ids", b"directory_ids", "directory_ids_change", b"directory_ids_change", "id", b"id", "tag_ids", b"tag_ids", "tag_ids_change", b"tag_ids_change", "title", b"title", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType__author_id: _TypeAlias = _typing.Literal["author_id"]  # noqa: Y015
     _WhichOneofArgType__author_id: _TypeAlias = _typing.Literal["_author_id", b"_author_id"]  # noqa: Y015
@@ -474,14 +478,46 @@ class AlterNoteRequest(_message.Message):
     _WhichOneofArgType__content: _TypeAlias = _typing.Literal["_content", b"_content"]  # noqa: Y015
     _WhichOneofReturnType__title: _TypeAlias = _typing.Literal["title"]  # noqa: Y015
     _WhichOneofArgType__title: _TypeAlias = _typing.Literal["_title", b"_title"]  # noqa: Y015
+    _WhichOneofReturnType_directory_ids_change: _TypeAlias = _typing.Literal["directory_ids"]  # noqa: Y015
+    _WhichOneofArgType_directory_ids_change: _TypeAlias = _typing.Literal["directory_ids_change", b"directory_ids_change"]  # noqa: Y015
+    _WhichOneofReturnType_tag_ids_change: _TypeAlias = _typing.Literal["tag_ids"]  # noqa: Y015
+    _WhichOneofArgType_tag_ids_change: _TypeAlias = _typing.Literal["tag_ids_change", b"tag_ids_change"]  # noqa: Y015
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__author_id) -> _WhichOneofReturnType__author_id | None: ...
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__content) -> _WhichOneofReturnType__content | None: ...
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__title) -> _WhichOneofReturnType__title | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_directory_ids_change) -> _WhichOneofReturnType_directory_ids_change | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_tag_ids_change) -> _WhichOneofReturnType_tag_ids_change | None: ...
 
 Global___AlterNoteRequest: _TypeAlias = AlterNoteRequest  # noqa: Y015
+
+@_typing.final
+class IdsOrUndefined(_message.Message):
+    """repeated fields dont have a HasField. So we wrap them into a
+    `oneof` to distinguish "not set" from "explicitly cleared".
+    """
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    IDS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    def __init__(
+        self,
+        *,
+        ids: _abc.Iterable[_builtins.str] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["ids", b"ids"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___IdsOrUndefined: _TypeAlias = IdsOrUndefined  # noqa: Y015
 
 @_typing.final
 class Directory(_message.Message):

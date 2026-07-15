@@ -14,7 +14,7 @@ from src.db.entities.directory.directory import DirectoryEntity
 from src.db.repos.note.permission import NoteRelationEnum, ObjectTypeEnum
 from src.db.repos.note.content import NoteContentPostgresRepo, NoteContentRepo
 from src.db.repos.note.note_facade import NoteFacadeImpl
-from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api.repos.tag_repo import TagRepoABC
 from src.db.table import Table
 from src.db.entities.user.user import UserEntity
@@ -28,7 +28,7 @@ pytestmark = pytest.mark.integration
 
 # each test recreates user and note to keep readability per test
 
-async def test_create_note(db: Database, note_repo_facade: NoteRepoFacadeABC, user_repo: UserRepoABC, test_user: UserEntity):
+async def test_create_note(db: Database, note_repo_facade: NoteFacadeABC, user_repo: UserRepoABC, test_user: UserEntity):
     """Creates a test user, and creates a note for this user"""
     log = logging_provider(__name__)
     user = await user_repo.insert(test_user)
@@ -48,7 +48,7 @@ async def test_create_note(db: Database, note_repo_facade: NoteRepoFacadeABC, us
     log.debug(f"Created note: {ret_note}; expected: {test_note}")
     assert ret_note == test_note
 
-async def test_update_note(db: Database, note_repo_facade: NoteRepoFacadeABC, user_repo: UserRepoABC, test_user: UserEntity):
+async def test_update_note(db: Database, note_repo_facade: NoteFacadeABC, user_repo: UserRepoABC, test_user: UserEntity):
     """Creates a test user, and creates a note for this user"""
     user = await user_repo.insert(test_user)
     assert user.id
@@ -79,7 +79,7 @@ async def test_update_note(db: Database, note_repo_facade: NoteRepoFacadeABC, us
 
 async def test_create_and_remove_note(
     db: Database,
-    note_repo_facade: NoteRepoFacadeABC,
+    note_repo_facade: NoteFacadeABC,
     user_repo: UserRepoABC,
     tag_repo: TagRepoABC,
     test_user: UserEntity,
@@ -206,7 +206,7 @@ async def test_create_and_remove_note(
     assert test_note_select_after_delete is None
 
 async def test_search_by_context(
-    note_repo_facade: NoteRepoFacadeABC, 
+    note_repo_facade: NoteFacadeABC, 
     user_repo: UserRepoABC,
     test_user: UserEntity
 ):
@@ -266,7 +266,7 @@ async def test_search_by_context(
     ) == True
 
 async def test_search_by_web_lexme_matching(
-    note_repo_facade: NoteRepoFacadeABC, 
+    note_repo_facade: NoteFacadeABC, 
     user_repo: UserRepoABC,
     test_user: UserEntity
 ):
@@ -341,7 +341,7 @@ async def test_search_by_web_lexme_matching(
 
 
 async def test_search_by_similarity(
-    note_repo_facade: NoteRepoFacadeABC, 
+    note_repo_facade: NoteFacadeABC, 
     user_repo: UserRepoABC,
     test_user: UserEntity
 ):
@@ -392,7 +392,7 @@ async def test_search_by_similarity(
     ) == True
 
 async def test_search_no_filter(
-    note_repo_facade: NoteRepoFacadeABC, 
+    note_repo_facade: NoteFacadeABC, 
     user_repo: UserRepoABC,
     test_user: UserEntity
 ):
@@ -433,7 +433,7 @@ async def test_search_no_filter(
 
 
 async def test_search_assigns_parent_directories(
-    note_repo_facade: NoteRepoFacadeABC,
+    note_repo_facade: NoteFacadeABC,
     user_repo: UserRepoABC,
     test_user: UserEntity,
 ):
@@ -472,7 +472,7 @@ async def test_search_assigns_parent_directories(
 
 
 async def test_search_only_assigns_permissions_for_returned_notes(
-    note_repo_facade: NoteRepoFacadeABC,
+    note_repo_facade: NoteFacadeABC,
     user_repo: UserRepoABC,
     test_user: UserEntity,
 ):

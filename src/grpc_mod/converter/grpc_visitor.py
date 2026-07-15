@@ -189,8 +189,12 @@ class ConvertToGrpcVisitor(EntityVisitor):
             )
         )
         basic_args["id"] = basic_args.pop("note_id")
-        assert isinstance(entity.permissions, list)
-        basic_args["permissions"] = _convert_permissions(entity.permissions)
+
+        # permissions are deprecated
+        # assert isinstance(entity.permissions, list)
+        # basic_args["permissions"] = _convert_permissions(entity.permissions)
+        basic_args["permissions"]: List[PermissionRelationship] = []
+
         # ``directory_ids`` and ``tag_ids`` land on the proto only when
         # the entity actually populated them -- otherwise drop the
         # UNDEFINED placeholder so the proto field stays at its

@@ -47,7 +47,7 @@ class PostgresActivityRepo(ActivityRepoABC):
 
     def __init__(
         self,
-        table: TableABC[List[Record]],
+        table: TableABC,
         directory_repo: Optional[DirectoryFacadeABC] = None,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:

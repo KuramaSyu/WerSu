@@ -40,25 +40,17 @@ from src.utils import convert_entity_for_db
 
 
 class DirectoryFacadeImpl(DirectoryFacadeABC):
-    """Compose a :class:`PostgresDirectoryRepoABC` with the permission repo.
-
-    The facade routes every :class:`DirectoryRepo` call to either the
-    low-level Postgres repo (for storage) or the permission repo
-    (for visibility checks and user-flavoured relation writes).
-    Tag CRUD on directories is delegated to the
-    :class:`TagRepoABC` -- the directory repo no longer owns
-    ``note.directory_tag`` writes.
+    """Composes :class:`DirectoryRepoABC`, :class:`PermissionRepoABC` and :class:`TagRepoABC` 
     """
-
     def __init__(
         self,
-        postgres_repo: DirectoryRepoABC,
+        directory_repo: DirectoryRepoABC,
         permission_repo: PermissionRepoABC,
         tag_repo: TagRepoABC,
         log: LoggingProvider,
     ) -> None:
-        self._postgres = postgres_repo
-        self._permission_repo = permission_repo
+        self._dir_repo = directory_repo
+        self._perm_repo = permission_repo
         self._tag_repo = tag_repo
         self._log = log(self)
 
@@ -70,7 +62,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
 
         # Insert the directory row.
         assert entity_data.slug
-        created_entity = await self._postgres.insert_directory(
+        created_entity = await self._dir_repo.insert_directory(
             slug=entity_data.slug,
             display_name=entity_data.display_name,
             description=entity_data.description,
@@ -122,7 +114,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             when no row matches ``id``.
         """
         resolved = resolve_directory_include_options(include)
-        entity = await self._postgres.fetch_directory(
+        entity = await self._dir_repo.fetch_directory(
             str(id), include=resolved
         )
         if not entity:
@@ -147,8 +139,10 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         the new note.
         """
         self._assert_note_to_directory_ids(note_id, directory_id)
-        await self._postgres.bind_note(str(directory_id), str(note_id))
-        await self._permission_repo.insert(
+        await self._dir_repo.add_child_to_directory(
+            "note", directory_id, note_id
+        )
+        await self._perm_repo.insert(
             [
                 Relationship(
                     resource=ObjectRef(
@@ -176,8 +170,10 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         longer surface the note under this directory.
         """
         self._assert_note_to_directory_ids(note_id, directory_id)
-        await self._postgres.unbind_note(str(directory_id), str(note_id))
-        await self._permission_repo.delete(
+        await self._dir_repo.remove_child_from_directory(
+            "note", str(directory_id), str(note_id)
+        )
+        await self._perm_repo.delete(
             Relationship(
                 resource=ObjectRef(
                     object_type=ObjectTypeEnum.NOTE,
@@ -205,7 +201,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         if not entity.id:
             raise ValueError("Directory ID is required for update")
 
-        updated_entity = await self._postgres.update_directory(
+        updated_entity = await self._dir_repo.update_directory(
             str(entity.id),
             slug=entity.slug or UNDEFINED,
             display_name=entity.display_name,
@@ -239,7 +235,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
         """Return every directory id the user has view access to (direct tuples)."""
         # this is more or less a permission check as well as the source of truth for the directory hierarchy
-        return await self._permission_repo.lookup(
+        return await self._perm_repo.lookup(
             Relationship(
                 resource=ObjectRef(
                     object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED
@@ -253,29 +249,15 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
 
     async def list_note_directory_ids(self, note_id: str) -> List[str]:
         """Return the directory ids that directly parent ``note_id``.
-
-        Implementation goes through the permission repo (it's a
-        relationship lookup, not a Postgres row) since
-        ``note#parent_directory@directory`` is a SpiceDB-anchored
-        relation that lives next to the hierarchy pointer.
+        
         """
-        return sorted(
-            await self._permission_repo.lookup(
-                Relationship(
-                    resource=ObjectRef(ObjectTypeEnum.NOTE, str(note_id)),
-                    relation="parent_directory",
-                    subject=SubjectRef(
-                        object_type=ObjectTypeEnum.DIRECTORY, object_id=UNDEFINED
-                    ),
-                )
-            )
-        )
+        return await self._dir_repo.get_parent_of("note", str(note_id))
 
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         """Delete the directory row (cleanup is the caller's job)."""
         if not entity.id:
             raise ValueError("Directory ID is required for deletion")
-        return await self._postgres.delete_directory(str(entity.id))
+        return await self._dir_repo.delete_directory(str(entity.id))
 
     async def resolve_files_of_directory(
         self,
@@ -293,7 +275,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             start_directories = [str(directory_id)]
 
             # check view for dir
-            view_chain: PermissionCheckChain = HasDirectoryViewPerm(directory_id=str(directory_id)).set_permission_repo(self._permission_repo)
+            view_chain: PermissionCheckChain = HasDirectoryViewPerm(directory_id=str(directory_id)).set_permission_repo(self._perm_repo)
             can_view = await view_chain.check(actor)
             if can_view.error:
                 raise can_view.error
@@ -301,8 +283,8 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         note_ids: set[str] = set()
         for start in start_directories:
             note_ids.update(
-                await self._postgres.get_children(
-                    start, "notes", descendants=True, max_depth=max_depth
+                await self._dir_repo.get_children_of(
+                    "note", start, depth=max_depth
                 )
             )
         return sorted(note_ids)
@@ -315,13 +297,16 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         """Walk the hierarchy table and return ``(note_ids, directory_ids)``."""
         if max_depth < 0:
             raise ValueError("max_depth must be >= 0")
-        notes = await self._postgres.get_children(
-            directory_id, "notes", descendants=True, max_depth=max_depth
+        notes = await self._dir_repo.get_children_of(
+            "note", directory_id, depth=max_depth
         )
-        directories = await self._postgres.get_children(
-            directory_id, "directories", descendants=True, max_depth=max_depth
+        directories = [directory_id]
+        directories.extend(
+            await self._dir_repo.get_children_of(
+                "directory", directory_id, depth=max_depth
+            )
         )
-        return notes, directories
+        return notes, sorted(set(directories))
 
     # ---- counts ------------------------------------------------------
 
@@ -336,7 +321,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         """Fetch a batch of directories and hydrate relations + parent + counts."""
         if not ids:
             return []
-        entities = await self._postgres.fetch_directories_by_ids(ids)
+        entities = await self._dir_repo.fetch_directories_by_ids(ids)
         if not entities:
             return []
 
@@ -363,7 +348,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             return
         if populate_parents:
             entity.parent_directory_ids = (
-                await self._postgres.parent_directory_ids_of(directory_id)
+                await self._dir_repo.get_parent_of("directory", directory_id)
             )
         # deprecated
         # entity.relations = await self._fetch_user_relations_for_directory(
@@ -375,7 +360,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         directory_id: str,
     ) -> List[Relationship]:
         """Return every user-flavoured relation on this directory."""
-        matched: List[Relationship] = await self._permission_repo.lookup_relationships(
+        matched: List[Relationship] = await self._perm_repo.lookup_relationships(
             Relationship(
                 resource=ObjectRef(
                     object_type=ObjectTypeEnum.DIRECTORY,
@@ -402,13 +387,13 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         Empty ``new_parent_ids`` clears the directory of every parent.
         """
         existing = set(
-            await self._postgres.parent_directory_ids_of(directory_id)
+            await self._dir_repo.get_parent_of("directory", directory_id)
         )
         desired = {str(p) for p in new_parent_ids if p}
 
         # Drop SpiceDB relations for parents that are no longer wanted.
         for removed in existing - desired:
-            await self._permission_repo.delete(
+            await self._perm_repo.delete(
                 Relationship(
                     resource=ObjectRef(
                         object_type=ObjectTypeEnum.DIRECTORY,
@@ -424,7 +409,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
 
         # Insert SpiceDB relations for any new parents.
         for added in desired - existing:
-            await self._permission_repo.insert(
+            await self._perm_repo.insert(
                 [
                     Relationship(
                         resource=ObjectRef(
@@ -441,7 +426,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             )
 
         # Mirror the bind in the Postgres hierarchy table.
-        await self._postgres.set_parent_directories(
+        await self._dir_repo.set_parent_directories_of(
             directory_id, sorted(desired)
         )
 
@@ -461,7 +446,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
                 object_type=ObjectTypeEnum.USER, object_id=user_ctx.user_id
             ),
         )
-        await self._permission_repo.insert([admin_relation])
+        await self._perm_repo.insert([admin_relation])
         return admin_relation  # speed tradeoff to not call the permission repo a second time
 
     @staticmethod

@@ -30,7 +30,7 @@ from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
 from src.db.repos.note.note_facade import NoteFacadeImpl
-from src.api.facades.note_facade import NoteRepoFacadeABC
+from src.api.facades.note_facade import NoteFacadeABC
 from src.api.repos.tag_repo import TagRepoABC
 from src.db.repos.tag.postgres import PostgresTagRepo
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
@@ -144,7 +144,7 @@ def note_repo_facade(
     db: Database,
     directory_repo: _TestDirectoryRepo,
     tag_repo: TagRepoABC,
-) -> NoteRepoFacadeABC:
+) -> NoteFacadeABC:
     """Return an in-memory :class:`NoteFacadeImpl` for unit tests.
 
     Uses the in-memory permission repo + directory repo to avoid the

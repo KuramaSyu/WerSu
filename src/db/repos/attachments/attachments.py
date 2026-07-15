@@ -109,7 +109,7 @@ class AttachmentMetadataRepoABC(ABC):
 class AttachmentMetadataPostgresRepo(AttachmentMetadataRepoABC):
     """Postgres-backed metadata repository for attachments."""
 
-    def __init__(self, table: TableABC[List[Record]]):
+    def __init__(self, table: TableABC):
         self._table = table
 
     async def post_metadata(self, attachment: Attachment, user_ctx: UserContextABC) -> None:

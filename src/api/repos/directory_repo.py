@@ -1,12 +1,17 @@
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, TypeAlias
 
 from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.api.services.directory_service import DirectoryIncludeOptions
 from src.db.entities.directory.directory import DirectoryEntity
+
+DirectoryHierarchyType: TypeAlias = Literal["note", "directory", "both"]
+"""Child/parent query scope for directory hierarchy lookups."""
+
+DirectoryChildType: TypeAlias = Literal["note", "directory"]
+"""Child relation scope for add/remove operations."""
 
 
 class DirectoryRepoABC(ABC):
@@ -40,7 +45,7 @@ class DirectoryRepoABC(ABC):
 
         Returns:
             DirectoryEntity: the inserted entity with its
-            server-assigned id populated.  Hierarchy, parent,
+            server-assigned id populated. Hierarchy, parent,
             child and tag bindings are NOT applied here -- callers
             layer those on top.
 
@@ -69,7 +74,7 @@ class DirectoryRepoABC(ABC):
 
         Returns:
             Optional[DirectoryEntity]: the entity, or ``None``
-            when no row matches ``id``.  Row columns are always
+            when no row matches ``id``. Row columns are always
             populated; list / count fields are populated iff their
             flag was set.
         """
@@ -83,7 +88,7 @@ class DirectoryRepoABC(ABC):
         """Fetch multiple directory rows in one query (no enrichment).
 
         Args:
-            ids: directory ids to load.  Empty list returns the
+            ids: directory ids to load. Empty list returns the
                 empty list (no query is issued).
 
         Returns:
@@ -147,7 +152,7 @@ class DirectoryRepoABC(ABC):
         ...
 
     @abstractmethod
-    async def set_parent_directories(
+    async def set_parent_directories_of(
         self,
         directory_id: str,
         parent_ids: List[str],
@@ -164,80 +169,103 @@ class DirectoryRepoABC(ABC):
         ...
 
     @abstractmethod
-    async def parent_directory_ids_of(
+    async def get_parent_of(
         self,
-        directory_id: str,
+        type: DirectoryHierarchyType,
+        child_id: str,
     ) -> List[str]:
-        """Return every parent directory id of ``directory_id``.
+        """Return the parent ids of ``child_id`` filtered by ``type``.
 
         Args:
-            directory_id: id of the directory whose parents to
+            type: ``"note"`` / ``"directory"`` / ``"both"`` --
+                selects which parent relation(s) to return.
+            child_id: id of the child object whose parents to
                 enumerate.
 
         Returns:
-            List[str]: parent directory ids, deduplicated and
-            sorted.  ``[]`` when ``directory_id`` has no parents.
+            List[str]: parent ids, deduplicated and sorted.
+            ``[]`` when there are no parents.
         """
         ...
 
     @abstractmethod
-    async def direct_child_directory_ids_of(
+    async def get_children_of(
         self,
+        type: DirectoryHierarchyType,
         directory_id: str,
+        depth: int = 1,
     ) -> List[str]:
-        """Return every direct child directory of ``directory_id``.
+        """Return the child ids of ``directory_id`` filtered by ``type``.
 
         Args:
-            directory_id: id of the directory whose child
-                directories to enumerate.
+            type: ``"note"`` / ``"directory"`` / ``"both"`` --
+                selects which child relation(s) to return.
+            directory_id: id of the starting directory.
+            depth: recursion depth; ``1`` means direct children only.
 
         Returns:
-            List[str]: child directory ids, deduplicated and sorted.
-            ``[]`` when ``directory_id`` has none.
+            List[str]: matching child ids, deduplicated and sorted.
+            ``[]`` when there are none.
+
+        Raises:
+            ValueError: ``depth`` is negative.
         """
         ...
 
     @abstractmethod
-    async def list_note_ids(
+    async def get_children_for(
         self,
-        directory_id: str,
+        type: DirectoryHierarchyType,
+        directory_ids: List[str],
+        depth: int = 1,
     ) -> List[str]:
-        """Return every direct child note id of ``directory_id``.
+        """Return child ids for multiple directories.
 
         Args:
-            directory_id: id of the directory whose child notes
-                to enumerate.
+            type: ``"note"`` / ``"directory"`` / ``"both"``.
+            directory_ids: starting directory ids.
+            depth: recursion depth; ``1`` means direct children only.
 
         Returns:
-            List[str]: child note ids, deduplicated and sorted.
-            ``[]`` when ``directory_id`` has none.
+            List[str]: matching child ids across all inputs,
+            deduplicated and sorted.
+
+        Raises:
+            ValueError: ``depth`` is negative.
         """
         ...
 
     @abstractmethod
-    async def count_direct_child_directories(
+    async def get_parent_for(
         self,
-        directory_id: str,
-    ) -> int:
-        """Return the count of direct child directories.
+        type: DirectoryHierarchyType,
+        child_ids: List[str],
+    ) -> List[str]:
+        """Return parent ids for multiple child ids.
 
         Args:
-            directory_id: id of the directory whose child
-                directory count to read.
+            type: ``"note"`` / ``"directory"`` / ``"both"``.
+            child_ids: ids of the child objects to inspect.
 
         Returns:
-            int: number of direct child directories; ``0`` when
-            ``directory_id`` has none.
+            List[str]: parent ids across all inputs,
+            deduplicated and sorted.
         """
         ...
 
     @abstractmethod
-    async def bind_note(self, directory_id: str, note_id: str) -> None:
-        """Bind ``note_id`` as a direct child of ``directory_id``.
+    async def add_child_to_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        """Add a note or child directory to ``directory_id``.
 
         Args:
+            type: the child relation to create.
             directory_id: id of the parent directory.
-            note_id: id of the note to attach.
+            child_id: id of the child note or directory.
 
         Note:
             Idempotent: a no-op when the binding already exists.
@@ -245,69 +273,20 @@ class DirectoryRepoABC(ABC):
         ...
 
     @abstractmethod
-    async def unbind_note(self, directory_id: str, note_id: str) -> None:
-        """Remove the direct-child binding for ``note_id``.
-
-        Args:
-            directory_id: id of the parent directory.
-            note_id: id of the note to detach.
-        """
-        ...
-
-    @abstractmethod
-    async def get_children(
+    async def remove_child_from_directory(
         self,
+        type: DirectoryChildType,
         directory_id: str,
-        type: Literal["notes", "directories", "both"],
-        *,
-        descendants: bool = False,
-        max_depth: int = 10,
-    ) -> List[str]:
-        """Return the child ids of ``directory_id`` filtered by ``type``.
+        child_id: str,
+    ) -> None:
+        """Remove a note or child directory from ``directory_id``.
 
         Args:
-            directory_id: id of the starting directory.
-            type: ``"notes"`` / ``"directories"`` / ``"both"`` --
-                selects which side of the XOR constraint to return.
-            descendants: when ``True`` (default ``False``), walk
-                the full subtree instead of just the immediate
-                children.  ``max_depth`` caps the recursion.
-            max_depth: recursion cap for the subtree walk;
-                ignored when ``descendants=False``.  ``0`` means
-                "only the starting directory itself".
-
-        Returns:
-            List[str]: matching child ids, deduplicated and sorted.
-
-        Raises:
-            ValueError: ``type`` is not one of the allowed values
-                or ``max_depth`` is negative.
-        """
-        ...
-
-    @abstractmethod
-    async def get_descendants(
-        self,
-        root_id: str,
-        type: Literal["notes", "directories", "both"],
-        *,
-        max_depth: int = 10,
-    ) -> List[str]:
-        """Walk the subtree rooted at ``root_id`` and return ids by type.
-
-        Args:
-            root_id: starting directory id.
-            type: ``"notes"`` / ``"directories"`` / ``"both"``.
-            max_depth: recursion cap; ``0`` returns just the start.
-
-        Returns:
-            List[str]: matching descendant ids, deduplicated and
-            sorted.
-
-        Raises:
-            ValueError: ``type`` invalid or ``max_depth`` negative.
+            type: the child relation to delete.
+            directory_id: id of the parent directory.
+            child_id: id of the child note or directory.
         """
         ...
 
 
-__all__ = ["DirectoryRepoABC"]
+__all__ = ["DirectoryChildType", "DirectoryHierarchyType", "DirectoryRepoABC"]

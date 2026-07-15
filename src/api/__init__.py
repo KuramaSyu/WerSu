@@ -60,14 +60,18 @@ from src.api.repos.permission_repo import (
 from src.api.repos.activity_repo import ActivityRepoABC, ActivityFilterBuilder
 from src.api.repos.user_action_repo import UserActionRepoABC
 from src.api.repos.combined_note_repo import CombinedNoteRepoABC
-from src.api.repos.directory_repo import DirectoryRepoABC
+from src.api.repos.directory_repo import (
+    DirectoryChildType,
+    DirectoryHierarchyType,
+    DirectoryRepoABC,
+)
 
 # composite repo contracts (facades)
 from src.api.facades.directory_facade import (
     DefaultDirectorySpec,
     DirectoryFacadeABC,
 )
-from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.facades.note_facade import NoteFacadeABC, SearchType
 
 # application service contracts
 from src.api.services.directory_service import (
@@ -120,6 +124,8 @@ __all__ = [
     "RelationEnum",
     "RelationName",
     "Relationship",
+    "DirectoryChildType",
+    "DirectoryHierarchyType",
     "SubjectRef",
     # shared
     "LoggingProvider",

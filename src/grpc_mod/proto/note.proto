@@ -76,6 +76,9 @@ message Note {
     repeated PermissionRelationship permissions = 7;
     repeated string directory_ids = 8;
     repeated string tag_ids = 9;
+
+    // used for permission checking
+    string user_id = 10; 
 }
 
 message NoteResponse {
@@ -112,10 +115,22 @@ message AlterNoteRequest {
     optional string title = 2;
     optional string content = 3;
     optional string author_id = 4;
-    repeated string directory_ids = 5;
-    repeated string tag_ids = 6;
+    
+
+    oneof directory_ids_change {
+        IdsOrUndefined directory_ids = 5;
+    }
+    oneof tag_ids_change {
+        IdsOrUndefined tag_ids = 6;
+    }
     // the user_id of the user making the request, used for permission checking
     string user_id = 7;
+}
+
+// repeated fields dont have a HasField. So we wrap them into a
+// `oneof` to distinguish "not set" from "explicitly cleared".
+message IdsOrUndefined {
+    repeated string ids = 1;
 }
 
 message Directory {

@@ -32,7 +32,7 @@ from src.api import (
 )
 from src.api.services.note_service import GetNotesOptions, resolve_options
 from src.api.services.jwt_provider import JwtProvider
-from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api.other.relationship import AttachmentRelationEnum
 from src.api.other.types import LoggingProvider, Pagination
 from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
@@ -52,7 +52,7 @@ class NoteServiceImpl(NoteServiceABC):
 
     def __init__(
         self,
-        note_repo: NoteRepoFacadeABC,
+        note_repo: NoteFacadeABC,
         permission_repo: PermissionRepoABC,
         jwt_provider: JwtProvider,
         directory_repo: DirectoryFacadeABC,

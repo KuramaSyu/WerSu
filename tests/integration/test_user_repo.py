@@ -7,7 +7,7 @@ from testcontainers.postgres import PostgresContainer
 from tests.stubs.user_context import _UserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.user.user import UserEntity
-from src.api.facades.note_facade import NoteRepoFacadeABC
+from src.api.facades.note_facade import NoteFacadeABC
 from src.db.repos.user.user import UserRepoABC
 import src.api
 from src.db.repos import UserPostgresRepo, Database
@@ -39,7 +39,7 @@ async def test_update_user(db: Database, user_repo: UserRepoABC, test_user: User
     ret_user_by_id = await user_repo.select(ret_user_discord.id)
     assert ret_user_by_id == ret_user_discord  # both selects should return same user
 
-async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_repo_facade: NoteRepoFacadeABC, test_user: UserEntity):
+async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_repo_facade: NoteFacadeABC, test_user: UserEntity):
     """
     - Creates a user
     - Creates a note for that user

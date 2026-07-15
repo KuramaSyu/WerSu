@@ -9,7 +9,7 @@ from src.api.other.types import Pagination
 from src.api.other.user_context import UserContextABC
 from src.db.entities import DirectoryEntity, NoteEntity
 from src.api.facades.directory_facade import DirectoryFacadeABC
-from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api import (
     DirectoryRelationEnum,
     NoteRelationEnum,
@@ -22,7 +22,7 @@ from src.services.permissions import PermissionServiceImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 
 
-class _StubNoteRepo(NoteRepoFacadeABC):
+class _StubNoteRepo(NoteFacadeABC):
     """Minimal note repo stub implementing only selection for existence checks."""
 
     def __init__(self, note_ids: set[str]) -> None:

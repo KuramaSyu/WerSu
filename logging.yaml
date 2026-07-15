@@ -12,3 +12,4 @@ loggers:
   httpcore: ERROR
   src.services.thirdparty_migrations: DEBUG
   src.services.user: INFO
+  src.grpc_mod.note_service: DEBUG

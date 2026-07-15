@@ -35,7 +35,7 @@ from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryFacadeABC
-from src.api.facades.note_facade import NoteRepoFacadeABC
+from src.api.facades.note_facade import NoteFacadeABC
 from src.domain.permission_chain import (
     HasDirectoryDeletePerm,
     HasDirectoryViewPerm,
@@ -72,7 +72,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
     def __init__(
         self,
         directory_repo: DirectoryFacadeABC,
-        note_repo: NoteRepoFacadeABC,
+        note_repo: NoteFacadeABC,
         permission_repo: PermissionRepoABC,
         activity_logger: ActivityLoggerServiceABC,
         note_service: NoteServiceABC,

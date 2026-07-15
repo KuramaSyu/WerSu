@@ -41,7 +41,7 @@ from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.db.repos.note.note_facade import NoteFacadeImpl
-from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.services.note import NoteServiceImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from src.api.other.user_context import UserContextABC

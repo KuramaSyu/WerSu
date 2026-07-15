@@ -27,7 +27,7 @@ class SharingPostgresRepo(SharingRepoABC):
 
     def __init__(
         self,
-        table: TableABC[List[Record]],
+        table: TableABC,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         self._table = table

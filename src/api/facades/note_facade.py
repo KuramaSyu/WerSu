@@ -37,7 +37,7 @@ class SearchType(Enum):
     CONTEXT = 4
 
 
-class NoteRepoFacadeABC(ABC):
+class NoteFacadeABC(ABC):
     """Composite note repository spanning content, embeddings and permission repos.
 
     Every method is a thin DB wrapper; permission enforcement lives in

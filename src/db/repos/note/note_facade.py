@@ -23,7 +23,7 @@ from warnings import deprecated
 
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.api.repos.combined_note_repo import CombinedNoteRepoABC
-from src.api.facades.note_facade import NoteRepoFacadeABC, SearchType
+from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api.repos.tag_repo import TagRepoABC
 from src.api.services.note_service import NoteIncludeOptions, resolve_include_options
 from src.api.other.relationship import AttachmentRelationEnum
@@ -45,7 +45,7 @@ from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.db.repos.permissions import PermissionRepoABC
 
 
-class NoteFacadeImpl(NoteRepoFacadeABC):
+class NoteFacadeImpl(NoteFacadeABC):
     """Compose the note repos without issuing raw SQL.
 
     NoteFacadeImpl orchestrates the content, embedding, permission (insertion only), directory and tag repos.
@@ -166,23 +166,12 @@ class NoteFacadeImpl(NoteRepoFacadeABC):
     ) -> NoteEntity:
         """Refresh `note.directory_ids` and `note.tag_ids` from their repos.
 
-        Replacement for the deprecated `_fetch_note_permissions`
-        and `_enrich_with_parent_directory_permissions` flows.
-        Those used to fan out from the permission repo to attach
-        :class:`~src.api.Relationship` rows to
-        `note.permissions`; the dedicated directory and tag repos
-        are now the single source of truth and the facade reads
-        them back so every returned
-        :class:`~src.db.entities.note.metadata.NoteEntity` carries
-        the canonical parent-directory and tag lists.
-
         Args:
             note: entity to enrich; mutated in place.
             note_id: id used for the directory / tag lookups.
 
         Returns:
-            NoteEntity: the same entity with `directory_ids` and
-            `tag_ids` populated from the dedicated repos.
+            NoteEntity: updated version (same object)
         """
         note.directory_ids = await self._directory_repo.list_note_directory_ids(
             note_id,

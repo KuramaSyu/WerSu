@@ -288,7 +288,7 @@ async def serve():
     )
 
     directory_repo = DirectoryFacadeImpl(
-        postgres_repo=PostgresDirectoryRepo(  # this is not indented to be used by other parties
+        directory_repo=PostgresDirectoryRepo(  # this is not indented to be used by other parties
             directory_table=directory_table,
             subdirectory_table=directory_subdirectory_table,
             directory_note_table=directory_note_table,

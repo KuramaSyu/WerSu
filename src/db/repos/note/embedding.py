@@ -152,7 +152,7 @@ class NoteEmbeddingRepo(ABC):
 
 class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
     """Provides an impementation using Postgres as the backend database"""
-    def __init__(self, table: TableABC[List[Record]], embedding_generator: EmbeddingGeneratorABC):
+    def __init__(self, table: TableABC, embedding_generator: EmbeddingGeneratorABC):
         self._table = table
         self._embedding_generator = embedding_generator
 

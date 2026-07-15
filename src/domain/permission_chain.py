@@ -22,9 +22,9 @@ class CheckResult:
 
 class PermissionCheckChain(ABC):
     """Chain of responsibility for checking permissions."""
-    _next: Optional[PermissionCheckChain]
-    _prev: Optional[PermissionCheckChain]
-    
+    _next: Optional["PermissionCheckChain"]
+    _prev: Optional["PermissionCheckChain"]
+
     """repo which handles permission requests"""
     _repo: Optional[PermissionRepoABC]
 
@@ -72,13 +72,13 @@ class PermissionCheckChain(ABC):
             "First call on the first element `.set_permission_repo()`, then in subsequent calls it will be passed automatically with `.set_next()`")
         return self._permission_repo
 
-    def set_next(self, next: PermissionCheckChain) -> PermissionCheckChain:
+    def set_next(self, next: "PermissionCheckChain") -> "PermissionCheckChain":
         """Set the next chain element which is executed after this one"""
         self._next = next
         self._next.set_permission_repo(self._permission_repo)
         return next
 
-    def get_first(self) -> PermissionCheckChain:
+    def get_first(self) -> "PermissionCheckChain":
         """Get the first element of the chain, used as starting point"""
         if not self._prev:
             return self

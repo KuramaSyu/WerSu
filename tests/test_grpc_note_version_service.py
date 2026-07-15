@@ -9,7 +9,7 @@ from tests.stubs.user_context import _UserContext as UserContext, _UserContextFa
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.versioning import NoteVersionContent, NoteVersionEntry
-from src.api.facades.note_facade import NoteRepoFacadeABC
+from src.api.facades.note_facade import NoteFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.grpc_mod.proto.note_pb2 import (
     GetNoteVersionContentRequest,
@@ -86,7 +86,7 @@ class _StubVersionRepo(NoteVersionRepoABC):
         return self.content
 
 
-class _StubNoteRepo(NoteRepoFacadeABC):
+class _StubNoteRepo(NoteFacadeABC):
     def __init__(self) -> None:
         self.last_updated: Optional[NoteEntity] = None
 

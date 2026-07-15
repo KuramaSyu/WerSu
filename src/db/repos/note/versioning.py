@@ -77,8 +77,8 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
 
     def __init__(
         self,
-        snapshot_table: TableABC[List[Record]],
-        delta_table: TableABC[List[Record]],
+        snapshot_table: TableABC,
+        delta_table: TableABC,
         max_deltas_per_snapshot: int,
     ) -> None:
         if max_deltas_per_snapshot < 0:

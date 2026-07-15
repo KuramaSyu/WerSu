@@ -105,25 +105,38 @@ class GrpcNoteService(NoteServiceServicer):
     @log_service_call()
     async def PatchNote(self, request: AlterNoteRequest, context: ServicerContext) -> Note:
         try:
-            user_ctx = await self._context.create(request.author_id)
-            directory_ids = (
-                list(request.directory_ids)
-                if len(request.directory_ids) > 0
-                else UNDEFINED
+            self.log.debug(f"Updating note with request: {request}")
+            self.log.debug(
+                f"{request.WhichOneof('directory_ids_change')=}, "
+                f"{request.WhichOneof('tag_ids_change')=}, "
+                f"{request.HasField('title')=}, "
+                f"{request.HasField('content')=}, "
+                f"{request.HasField('author_id')=}, "
+                f"{request.id=}"
             )
-            tag_ids = (
-                list(request.tag_ids)
-                if len(request.tag_ids) > 0
-                else UNDEFINED
+            author_id = self._unwrap_optional(request, "author_id")
+            if author_id is UNDEFINED or not author_id:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("author_id is required")
+                return Note()
+
+            user_ctx = await self._context.create(author_id)
+            directory_ids = self._unwrap_oneof(
+                request, "directory_ids_change"
             )
+            tag_ids = self._unwrap_oneof(
+                request, "tag_ids_change"
+            )
+            title = self._unwrap_optional(request, "title")
+            content = self._unwrap_optional(request, "content")
             note_entity = await self._note_service.update_note(
                 NoteEntity(
                     note_id=request.id,
-                    author_id=request.author_id,
-                    content=request.content,
+                    author_id=author_id,
+                    content=content,
                     embeddings=UNDEFINED,
                     permissions=UNDEFINED,
-                    title=request.title,
+                    title=title,
                     updated_at=datetime.now(),
                     directory_ids=directory_ids,
                     tag_ids=tag_ids,
@@ -157,6 +170,38 @@ class GrpcNoteService(NoteServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while deleting note")
             return Note()
+
+    @staticmethod
+    def _unwrap_oneof(
+        request: AlterNoteRequest,
+        oneof_name: str,
+    ) -> object:
+        """Translate a `IdsOrUndefined` `oneof` arm value or UNDEFINED"""
+        which = request.WhichOneof(oneof_name)
+        if which is None:
+            return UNDEFINED
+        return list(getattr(request, which).ids)
+
+    @staticmethod
+    def _unwrap_optional(
+        request: AlterNoteRequest,
+        oneof_name: str,
+    ) -> object:
+        """Translate a proto3 `optional` scalar into the API sentinel.
+
+        Args:
+            request: the incoming :class:`AlterNoteRequest`.
+            oneof_name: name of the implicit oneof backing the
+                ``optional`` field on ``request``.
+
+        Returns:
+            ``UNDEFINED`` when the caller did not set the field, the
+            field's value otherwise (including the empty string when
+            the caller explicitly cleared it).
+        """
+        if request.HasField(oneof_name) == False:
+            return UNDEFINED
+        return getattr(request, oneof_name)
 
     @log_service_call()
     async def SearchNotes(

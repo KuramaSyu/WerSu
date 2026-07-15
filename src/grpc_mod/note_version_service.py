@@ -20,7 +20,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
-from src.api.facades.note_facade import NoteRepoFacadeABC
+from src.api.facades.note_facade import NoteFacadeABC
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities import NoteEntity
@@ -45,7 +45,7 @@ class GrpcNoteVersionService(NoteVersionServiceServicer):
 
     def __init__(
         self,
-        note_repo: NoteRepoFacadeABC,
+        note_repo: NoteFacadeABC,
         version_repo: NoteVersionRepoABC,
         directory_activity_service: DirectoryActivityServiceABC,
         log: LoggingProvider,

@@ -4,7 +4,7 @@ from typing import List, Sequence
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import UserContextABC
 from src.db.repos.directory.directory import DirectoryFacadeABC
-from src.api.facades.note_facade import NoteRepoFacadeABC
+from src.api.facades.note_facade import NoteFacadeABC
 from src.api import (
     DirectoryRelationEnum,
     PermissionRepoABC,
@@ -217,7 +217,7 @@ class PermissionServiceImpl(PermissionServiceABC):
     def __init__(
         self,
         permission_repo: PermissionRepoABC,
-        note_repo: NoteRepoFacadeABC,
+        note_repo: NoteFacadeABC,
         directory_repo: DirectoryFacadeABC,
     ) -> None:
         self._permission_repo = permission_repo
