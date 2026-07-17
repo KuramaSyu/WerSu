@@ -458,36 +458,56 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
 
     async def set_parent_directories_of(
         self,
-        directory_id: str,
+        subject_type: DirectoryChildType,
+        subject_id: str,
         parent_ids: List[str],
     ) -> None:
-        """Replace every parent of ``directory_id`` with ``parent_ids``.
+        """Firstly a set match is performed to avaoid dublicate writes. Then changes are inserted/deleted"""
+        # current parents of subject id
+        current: Set[str]
+        if subject_type == "directory":
+            current = set(await self.get_parent_of("directory", subject_id))
+        else:
+            current = set(await self.get_parent_of("note", subject_id))
 
-        Idempotent: rows that already match are skipped via
-        ``ON CONFLICT DO NOTHING``; rows that no longer belong get
-        deleted before the new set is inserted.
-        """
-        current = set(await self.get_parent_of("directory", directory_id))
+        # given, new parents for subject id
         desired = {str(p) for p in parent_ids if p}
 
         # Drop parents that are no longer wanted.
         for old in current - desired:
-            await self._subdirectory_table.delete(
-                {
-                    "directory_id": old,
-                    "child_directory_id": str(directory_id),
-                }
-            )
+            if subject_type == "directory":
+                await self._subdirectory_table.delete(
+                    {
+                        "directory_id": old,
+                        "child_directory_id": subject_id,
+                    }
+                )
+            else:
+                await self._directory_note_table.delete(
+                    {
+                        "directory_id": old,
+                        "note_id": subject_id,
+                    }
+                )
 
         # Insert the new ones.
         for new_parent in desired:
-            await self._subdirectory_table.insert(
-                {
-                    "directory_id": new_parent,
-                    "child_directory_id": str(directory_id),
-                },
-                on_conflict="DO NOTHING",
-            )
+            if subject_type == "directory":
+                await self._subdirectory_table.insert(
+                    {
+                        "directory_id": new_parent,
+                        "child_directory_id": subject_id,
+                    },
+                    on_conflict="DO NOTHING",
+                )
+            else:
+                await self._directory_note_table.insert(
+                    {
+                        "directory_id": new_parent,
+                        "note_id": subject_id,
+                    },
+                    on_conflict="DO NOTHING",
+                )
 
     async def get_parent_of(
         self,
