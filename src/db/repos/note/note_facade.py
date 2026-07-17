@@ -75,7 +75,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         self._combined_repo = combined_repo
         self._embedding_repo = embedding_repo
         self._permission_repo = permission_repo
-        self._directory_repo = directory_repo
+        self._directory_facade = directory_repo
         self._tag_repo = tag_repo
         self._version_repo = version_repo
         self.log = logging_provider(__name__, self)
@@ -127,7 +127,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         """Get the directory ids for a freshly-inserted note. Either
         use the user-supplied list of directories or fall back to the default directory.
         """
-        user_directory_ids = await self._directory_repo.list_user_directory_ids(
+        user_directory_ids = await self._directory_facade.list_user_directory_ids(
             user
         )
         if requested_ids:
@@ -143,7 +143,7 @@ class NoteFacadeImpl(NoteFacadeABC):
 
         # Fall back to the default ("fleeting_notes") directory.
         default_slug = (
-            self._directory_repo.get_default_directory_specs()[0].name
+            self._directory_facade.get_default_directory_specs()[0].name
         )
         self.log.info(
             f"No directory_ids supplied for note insert; "
@@ -151,7 +151,7 @@ class NoteFacadeImpl(NoteFacadeABC):
             f"user {user.user_id!r} by scanning {len(user_directory_ids)} dirs"
         )
         for d_id in user_directory_ids:
-            d = await self._directory_repo.fetch_directory(d_id)
+            d = await self._directory_facade.fetch_directory(d_id)
             if d and d.slug == default_slug:
                 return [str(d.id)]
         raise ValueError(
@@ -173,7 +173,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         Returns:
             NoteEntity: updated version (same object)
         """
-        note.directory_ids = await self._directory_repo.list_note_directory_ids(
+        note.directory_ids = await self._directory_facade.list_note_directory_ids(
             note_id,
         )
         note.tag_ids = await self._tag_repo.list_tags_of("note", note_id)
@@ -228,7 +228,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         # repopulate it to ensure consistency if one call would fail
         note.directory_ids = []
         for directory_id in resolved_dirs:
-            await self._directory_repo.add_note_to_directory(
+            await self._directory_facade.add_note_to_directory(
                 note_id, directory_id,
             )
             note.directory_ids.append(directory_id)
@@ -241,7 +241,7 @@ class NoteFacadeImpl(NoteFacadeABC):
                 "note", note_id, [str(t) for t in tag_ids if t],
             )
 
-        # 5) note#owner@user permission
+        # note#owner@user permission
         owner_relation = Relationship(
             resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
             relation=NoteRelationEnum.OWNER,
@@ -296,9 +296,14 @@ class NoteFacadeImpl(NoteFacadeABC):
         if note.tag_ids is not UNDEFINED:
             tag_ids = note.tag_ids or []
             await self._tag_repo.replace_tags_of(
-                "note", str(note.note_id), [str(t) for t in tag_ids if t],
+                "note", note.note_id, tag_ids,
             )
 
+        # replace dirs when given
+        if note.directory_ids is not UNDEFINED:
+            directory_ids = note.directory_ids or []
+            await self._directory_facade.set_parent_directories_of("note", note.note_id, directory_ids)
+        
         if note.permissions is UNDEFINED:
             updated.permissions = []
 
@@ -499,7 +504,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         """
         if not note_entities_dict:
             return
-        user_directory_ids = await self._directory_repo.list_user_directory_ids(ctx)
+        user_directory_ids = await self._directory_facade.list_user_directory_ids(ctx)
         for directory_id in user_directory_ids:
             note_ids = await self._permission_repo.lookup(
                 Relationship(
