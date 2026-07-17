@@ -287,7 +287,7 @@ async def serve():
         db=db,
     )
 
-    directory_repo = DirectoryFacadeImpl(
+    directory_facade = DirectoryFacadeImpl(
         directory_repo=PostgresDirectoryRepo(  # this is not indented to be used by other parties
             directory_table=directory_table,
             subdirectory_table=directory_subdirectory_table,
@@ -314,7 +314,7 @@ async def serve():
             embedding_generator=embedding_generator
         ),
         permission_repo=permission_repo,
-        directory_repo=directory_repo,
+        directory_repo=directory_facade,
         tag_repo=tag_repo,
         logging_provider=logging_provider,
         version_repo=version_repo,
@@ -336,7 +336,7 @@ async def serve():
     )
     activity_repo = PostgresActivityRepo(
         table=activity_table,
-        directory_repo=directory_repo,
+        directory_repo=directory_facade,
         logging_provider=logging_provider,
     )
 
@@ -352,12 +352,12 @@ async def serve():
     permission_service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=note_repo,
-        directory_repo=directory_repo,
+        directory_repo=directory_facade,
     )
 
     directory_activity_service = DirectoryActivityServiceImpl(
         version_repo=version_repo,
-        directory_repo=directory_repo,
+        directory_repo=directory_facade,
         log=logging_provider,
     )
 
@@ -383,7 +383,7 @@ async def serve():
         note_repo=note_repo,
         permission_repo=permission_repo,
         jwt_provider=jwt_provider,
-        directory_repo=directory_repo,
+        directory_repo=directory_facade,
         activity_logger=activity_logger_service,
         logging_provider=logging_provider,
     )
@@ -412,7 +412,7 @@ async def serve():
     activity_statistics_service: ActivityStatisticsServiceABC = ActivityStatisticsServiceImpl(
         activity_repo=activity_repo,
         permission_repo=permission_repo,
-        directory_repo=directory_repo,
+        directory_repo=directory_facade,
         note_content_repo=note_content_repo,
         logging_provider=logging_provider,
     )
@@ -429,7 +429,7 @@ async def serve():
     add_NoteVersionServiceServicer_to_server(note_version_service, server)
 
     directory_app_service = DirectoryServiceImpl(
-        directory_repo=directory_repo,
+        directory_repo=directory_facade,
         note_repo=note_repo,
         permission_repo=permission_repo,
         activity_logger=activity_logger_service,
@@ -479,7 +479,7 @@ async def serve():
     add_SharingServiceServicer_to_server(grpc_sharing_service, server)
 
     # setup gRPC user service
-    app_user_service = UserServiceImpl(user_repo=user_repo, directory_repo=directory_repo, context_factory=user_context_factory)
+    app_user_service = UserServiceImpl(user_repo=user_repo, directory_facade=directory_facade, context_factory=user_context_factory)
     grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider, to_grpc=grpc_visitor)
     add_UserServiceServicer_to_server(grpc_user_service, server)
 
