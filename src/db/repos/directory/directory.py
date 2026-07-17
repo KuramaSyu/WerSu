@@ -23,9 +23,14 @@ from src.api.services.directory_service import (
     resolve_directory_include_options,
 )
 from src.api.repos.permission_repo import PermissionRepoABC
-from src.api.repos.directory_repo import DirectoryRepoABC
+from src.api.repos.directory_repo import (
+    DirectoryChildType,
+    DirectoryHierarchyType,
+    DirectoryRepoABC,
+)
 from src.api.other.relationship import (
     DirectoryRelationEnum,
+    NoteRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
     Relationship,
@@ -60,7 +65,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         """Insert a row and mirror the entity's relations + parent pointers."""
         entity_data = convert_entity_for_db(entity)
 
-        # Insert the directory row.
+        # Insert the directory to DB
         assert entity_data.slug
         created_entity = await self._dir_repo.insert_directory(
             slug=entity_data.slug,
@@ -69,20 +74,23 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             image_url=entity_data.image_url,
             readme_note_id=entity_data.readme_note_id,
         )
+
+        # assert it has an id for later usage
         dir_id = unwrap_undefined(created_entity.id)
 
+        # check is parents are given; if so - replace them
         parent_ids = entity.parent_directory_ids
         if parent_ids:
             await self._replace_parents(dir_id, list(parent_ids))
 
-        # add user relation; other relations are are kept as they are.
+        # add note#admin@user relation for consistency and permission checks
         admin_relation = await self._create_user_admin_relation(dir_id, user_ctx)
-        created_entity.relations = created_entity.relations or []
         if created_entity.relations:
             self._log.warning(
                 f"Unwanted behaviour: create_directory() was called with non-empty relations: {created_entity.relations}. Only the admin relation will be persisted."
             )
-        created_entity.relations.append(admin_relation)
+        created_entity.relations = created_entity.relations or []
+        # created_entity.relations.append(admin_relation)
 
         # If the entity carried tags, persist them now.  An empty
         # list is treated as "clear every tag" -- the same semantics
@@ -259,6 +267,183 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             raise ValueError("Directory ID is required for deletion")
         return await self._dir_repo.delete_directory(str(entity.id))
 
+    # ---- DirectoryHelperMixin: hierarchy helpers ---------------------
+
+    async def set_parent_directories_of(
+        self,
+        subject_type: DirectoryChildType,
+        subject_id: str,
+        parent_ids: List[str],
+    ) -> None:
+        """Replace every parent of ``directory_id`` with ``parent_ids``.
+
+        Delegates to the underlying
+        :class:`~src.api.repos.directory_repo.DirectoryRepoABC`
+        so the Postgres hierarchy table is the single source of
+        truth.
+        """
+        # replace in DB
+        await self._dir_repo.set_parent_directories_of(
+            subject_type, subject_id, parent_ids
+        )
+        # delete all note -> directory relations in spicedb
+        await self._perm_repo.delete(
+            Relationship(
+                resource=ObjectRef("note", subject_id),
+                relation=NoteRelationEnum.PARENT_DIRECTORY,
+                subject=SubjectRef("directory", UNDEFINED),
+            )
+        )
+        # insert new ones into spicedb
+        for p in parent_ids:
+            await self._perm_repo.insert([
+                Relationship(
+                    resource=ObjectRef("note", subject_id),
+                    relation=NoteRelationEnum.PARENT_DIRECTORY,
+                    subject=SubjectRef("directory", p),
+                )]
+            )
+
+
+
+    async def get_parent_of(
+        self,
+        type: DirectoryHierarchyType,
+        child_id: str,
+    ) -> List[str]:
+        """Return parent ids of ``child_id`` filtered by ``type``."""
+        return await self._dir_repo.get_parent_of(type, str(child_id))
+
+    async def get_children_of(
+        self,
+        type: DirectoryHierarchyType,
+        directory_id: str,
+        depth: int = 1,
+    ) -> List[str]:
+        """Return child ids of ``directory_id`` filtered by ``type``."""
+        return await self._dir_repo.get_children_of(
+            type, str(directory_id), depth=depth
+        )
+
+    async def get_children_for(
+        self,
+        type: DirectoryHierarchyType,
+        directory_ids: List[str],
+        depth: int = 1,
+    ) -> List[str]:
+        """Return child ids for multiple ``directory_ids``."""
+        return await self._dir_repo.get_children_for(
+            type, [str(d) for d in directory_ids], depth=depth
+        )
+
+    async def get_parent_for(
+        self,
+        type: DirectoryHierarchyType,
+        child_ids: List[str],
+    ) -> List[str]:
+        """Return parent ids for multiple ``child_ids``."""
+        return await self._dir_repo.get_parent_for(
+            type, [str(c) for c in child_ids]
+        )
+
+    async def add_child_to_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        """Add a note or child directory to ``directory_id``.
+
+        Pure Postgres write -- does **not** touch SpiceDB.
+        Use :meth:`add_note_to_directory` for the Postgres + SpiceDB
+        combined write that the higher-level facade exposes.
+        """
+        # add db row
+        await self._dir_repo.add_child_to_directory(
+            type, str(directory_id), str(child_id)
+        )
+        # add spicedb relation
+        if type == "note":
+            await self._perm_repo.insert(
+                [
+                    Relationship(
+                        resource=ObjectRef(
+                            object_type=ObjectTypeEnum.NOTE,
+                            object_id=str(child_id),
+                        ),
+                        relation=NoteRelationEnum.PARENT_DIRECTORY,
+                        subject=SubjectRef(
+                            object_type=ObjectTypeEnum.DIRECTORY,
+                            object_id=str(directory_id),
+                        ),
+                    )
+                ]
+            )
+        elif type == "directory":
+            await self._perm_repo.insert(
+                [
+                    Relationship(
+                        resource=ObjectRef(
+                            object_type=ObjectTypeEnum.DIRECTORY,
+                            object_id=str(child_id),
+                        ),
+                        relation=DirectoryRelationEnum.PARENT,
+                        subject=SubjectRef(
+                            object_type=ObjectTypeEnum.DIRECTORY,
+                            object_id=str(directory_id),
+                        ),
+                    )
+                ]
+            )
+
+    async def remove_child_from_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        """Remove a note or child directory from ``directory_id``.
+
+        Pure Postgres write -- does **not** touch SpiceDB.
+        Use :meth:`remove_note_from_directory` for the Postgres + SpiceDB
+        combined delete that the higher-level facade exposes.
+        """
+        # remove db row
+        await self._dir_repo.remove_child_from_directory(
+            type, str(directory_id), str(child_id)
+        )
+        # remove spicedb relation
+        if type == "note":
+            await self._perm_repo.delete(
+                Relationship(
+                    resource=ObjectRef(
+                        object_type=ObjectTypeEnum.NOTE,
+                        object_id=str(child_id),
+                    ),
+                    relation=NoteRelationEnum.PARENT_DIRECTORY,
+                    subject=SubjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY,
+                        object_id=str(directory_id),
+                    ),
+                )
+            )
+        elif type == "directory":
+            await self._perm_repo.delete(
+                Relationship(
+                    resource=ObjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY,
+                        object_id=str(child_id),
+                    ),
+                    relation=DirectoryRelationEnum.PARENT,
+                    subject=SubjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY,
+                        object_id=str(directory_id),
+                    ),
+                )
+            )
+
+    # ---- higher-level helpers (facade-only, not on the ABC) ----------
+
     async def resolve_files_of_directory(
         self,
         directory_id: Optional[str],
@@ -427,7 +612,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
 
         # Mirror the bind in the Postgres hierarchy table.
         await self._dir_repo.set_parent_directories_of(
-            directory_id, sorted(desired)
+            "directory", directory_id, sorted(desired)
         )
 
     async def _create_user_admin_relation(
