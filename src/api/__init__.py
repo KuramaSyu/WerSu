@@ -62,6 +62,7 @@ from src.api.repos.user_action_repo import UserActionRepoABC
 from src.api.repos.combined_note_repo import CombinedNoteRepoABC
 from src.api.repos.directory_repo import (
     DirectoryChildType,
+    DirectoryHelperMixin,
     DirectoryHierarchyType,
     DirectoryRepoABC,
 )
@@ -149,6 +150,7 @@ __all__ = [
     "ActivityFilterBuilder",
     "UserActionRepoABC",
     "CombinedNoteRepoABC",
+    "DirectoryHelperMixin",
     "DirectoryRepoABC",
     # facades
     "DefaultDirectorySpec",

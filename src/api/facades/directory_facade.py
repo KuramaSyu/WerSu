@@ -13,9 +13,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, ClassVar, Optional, Sequence
 
 from src.api.other.user_context import UserContextABC
+from src.api.repos.directory_repo import DirectoryHelperMixin
 from src.db.entities.directory.directory import DirectoryEntity
 
 
@@ -38,8 +39,13 @@ class DefaultDirectorySpec:
     description: str
 
 
-class DirectoryFacadeABC(ABC):
-    """Storage contract for directory rows and their SpiceDB relations.
+class DirectoryFacadeABC(DirectoryHelperMixin):
+    """Facade to insert relations simultaneously into Postgres and SpiceDB
+    to ensure somehow consistency. Otherwise this facade could be replaced
+    with just one DirectoryRepoABC implementation.
+    
+    Implements:
+        * :class:`~src.api.repos.directory_repo.DirectoryHelperMixin`
 
     Implementations:
         * :class:`~src.db.repos.directory.directory.DirectoryFacadeImpl`
@@ -85,7 +91,11 @@ class DirectoryFacadeABC(ABC):
         return self.DEFAULT_DIRECTORY_SPECS
 
     @abstractmethod
-    async def create_directory(self, entity: DirectoryEntity, user_ctx: UserContextABC) -> DirectoryEntity:
+    async def create_directory(
+        self,
+        entity: DirectoryEntity,
+        user_ctx: UserContextABC,
+    ) -> DirectoryEntity:
         """Create a directory and ensure that permissions are set.
 
         Args:
@@ -98,7 +108,6 @@ class DirectoryFacadeABC(ABC):
             server-generated id populated.
         """
         ...
-
 
     @abstractmethod
     async def fetch_directory(
@@ -126,33 +135,10 @@ class DirectoryFacadeABC(ABC):
         ...
 
     @abstractmethod
-    async def add_note_to_directory(self, note_id: str, directory_id: str) -> None:
-        """Add a note to a directory.
-
-        Args:
-            note_id: the note to add.
-            directory_id: the directory to add it to.
-
-        Raises:
-            ValueError: ``note_id`` or ``directory_id`` is
-                :obj:`~src.api.undefined.UNDEFINED` or ``None``.
-        """
-        ...
-    
-    @abstractmethod
-    async def remove_note_from_directory(self, note_id: str, directory_id: str) -> None:
-        """Remove a note from a directory.
-
-        Args:
-            note_id: the note to remove.
-            directory_id: the directory to remove it from.
-        Raises:
-            ValueError: ``note_id`` or ``directory_id`` is
-                :obj:`~src.api.undefined.UNDEFINED` or ``None``.
-        """
-
-    @abstractmethod
-    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
+    async def update_directory(
+        self,
+        entity: DirectoryEntity,
+    ) -> Optional[DirectoryEntity]:
         """Partially update a directory by id.
 
         Args:
@@ -172,33 +158,10 @@ class DirectoryFacadeABC(ABC):
         ...
 
     @abstractmethod
-    async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
-        """Return every directory id the user has view access to.
-
-        Args:
-            user: caller identity, used to scope the SpiceDB lookup.
-
-        Returns:
-            List[str]: directory ids the user can view, sorted by
-            the underlying store's natural order.
-        """
-        ...
-
-    @abstractmethod
-    async def list_note_directory_ids(self, note_id: str) -> List[str]:
-        """Return every directory id a note is parented under.
-
-        Args:
-            note_id: note whose parent-directory relations should be
-                returned.
-
-        Returns:
-            List[str]: distinct directory ids the note sits in.
-        """
-        ...
-
-    @abstractmethod
-    async def delete_directory(self, entity: DirectoryEntity) -> bool:
+    async def delete_directory(
+        self,
+        entity: DirectoryEntity,
+    ) -> bool:
         """Delete a directory and its SpiceDB relations.
 
         Args:
@@ -211,60 +174,6 @@ class DirectoryFacadeABC(ABC):
         Raises:
             ValueError: ``entity.id`` is :obj:`~src.api.undefined.UNDEFINED`
                 or ``None``.
-        """
-        ...
-
-    @abstractmethod
-    async def resolve_files_of_directory(
-        self,
-        directory_id: Optional[str],
-        actor: UserContextABC,
-        max_depth: int = 10,
-    ) -> List[str]:
-        """Resolve note ids inside a directory and its subdirectories.
-
-        Args:
-            directory_id: root of the subtree.  ``None`` or empty
-                resolves every directory visible to ``actor``.
-            actor: caller identity, used for the view-permission
-                check on the root directory.
-            max_depth: recursion cap; ``0`` means only the root.
-
-        Returns:
-            List[str]: note ids discovered in the subtree, sorted.
-
-        Raises:
-            PermissionError: ``actor`` cannot view the requested
-                ``directory_id``.
-            ValueError: ``max_depth`` is negative.
-        """
-        ...
-
-    @abstractmethod
-    async def resolve_subtree(
-        self,
-        directory_id: str,
-        max_depth: int = 10,
-    ) -> Tuple[List[str], List[str]]:
-        """Walk a directory subtree and return its note + directory ids.
-
-        No user-level permission check is performed -- the activity
-        log queries the full subtree and the service layer applies
-        per-item visibility on top.  The walk matches
-        :meth:`resolve_files_of_directory`'s queue + visited pattern
-        so the two stay in lockstep.
-
-        Args:
-            directory_id: root of the subtree.
-            max_depth: recursion cap; ``0`` means only the root.
-
-        Returns:
-            Tuple[List[str], List[str]]: ``(note_ids, directory_ids)``
-            discovered in the subtree, both sorted.
-            ``directory_ids`` always includes the root.
-
-        Raises:
-            ValueError: ``max_depth`` is negative.
         """
         ...
 
