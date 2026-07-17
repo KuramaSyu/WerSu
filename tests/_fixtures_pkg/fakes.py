@@ -26,6 +26,10 @@ from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.tag import TagEntity
 from src.db.entities.note.versioning import NoteVersionEntry
 from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.repos.directory_repo import (
+    DirectoryChildType,
+    DirectoryHierarchyType,
+)
 from src.api.repos.permission_repo import PermissionRepoABC
 from src.api.other.relationship import (
     DirectoryRelationEnum,
@@ -467,6 +471,68 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
         alone when no seed is present.
         """
         return self.subtree_by_root.get(directory_id, ([], [directory_id]))
+
+    # ---- DirectoryHelperMixin: hierarchy helpers (no-op stubs) ------
+
+    async def set_parent_directories_of(
+        self,
+        directory_id: str,
+        parent_ids: List[str],
+    ) -> None:
+        """No-op stub for the directory repo contract."""
+        return None
+
+    async def get_parent_of(
+        self,
+        type: DirectoryHierarchyType,
+        child_id: str,
+    ) -> List[str]:
+        """No-op stub: return an empty parent list."""
+        return []
+
+    async def get_children_of(
+        self,
+        type: DirectoryHierarchyType,
+        directory_id: str,
+        depth: int = 1,
+    ) -> List[str]:
+        """No-op stub: return an empty child list."""
+        return []
+
+    async def get_children_for(
+        self,
+        type: DirectoryHierarchyType,
+        directory_ids: List[str],
+        depth: int = 1,
+    ) -> List[str]:
+        """No-op stub: return an empty child list."""
+        return []
+
+    async def get_parent_for(
+        self,
+        type: DirectoryHierarchyType,
+        child_ids: List[str],
+    ) -> List[str]:
+        """No-op stub: return an empty parent list."""
+        return []
+
+    async def add_child_to_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        """No-op stub for the directory repo contract."""
+        return None
+
+    async def remove_child_from_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        """No-op stub for the directory repo contract."""
+        return None
 
 
 class _FakeNoteRepoFacade(NoteFacadeABC):

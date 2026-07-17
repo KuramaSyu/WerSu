@@ -9,6 +9,10 @@ from tests.stubs.user_context import _UserContext as UserContext
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.versioning import NoteVersionEntry
 from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.repos.directory_repo import (
+    DirectoryChildType,
+    DirectoryHierarchyType,
+)
 from src.db.repos.directory.directory import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from tests._fixtures_pkg.fakes import (
@@ -79,6 +83,61 @@ class _FakeDirectoryRepo(DirectoryFacadeABC):
         max_depth: int = 10,
     ) -> Tuple[List[str], List[str]]:
         return (list(self._note_ids), [directory_id])
+
+    # ---- DirectoryHelperMixin: hierarchy helpers (no-op stubs) ------
+
+    async def set_parent_directories_of(
+        self,
+        directory_id: str,
+        parent_ids: List[str],
+    ) -> None:
+        return None
+
+    async def get_parent_of(
+        self,
+        type: DirectoryHierarchyType,
+        child_id: str,
+    ) -> List[str]:
+        return []
+
+    async def get_children_of(
+        self,
+        type: DirectoryHierarchyType,
+        directory_id: str,
+        depth: int = 1,
+    ) -> List[str]:
+        return []
+
+    async def get_children_for(
+        self,
+        type: DirectoryHierarchyType,
+        directory_ids: List[str],
+        depth: int = 1,
+    ) -> List[str]:
+        return []
+
+    async def get_parent_for(
+        self,
+        type: DirectoryHierarchyType,
+        child_ids: List[str],
+    ) -> List[str]:
+        return []
+
+    async def add_child_to_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        return None
+
+    async def remove_child_from_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        return None
 
 
 async def test_resolve_files_of_directory_depth_and_cycle() -> None:

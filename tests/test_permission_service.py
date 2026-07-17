@@ -9,6 +9,10 @@ from src.api.other.types import Pagination
 from src.api.other.user_context import UserContextABC
 from src.db.entities import DirectoryEntity, NoteEntity
 from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.repos.directory_repo import (
+    DirectoryChildType,
+    DirectoryHierarchyType,
+)
 from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api import (
     DirectoryRelationEnum,
@@ -113,6 +117,61 @@ class _StubDirectoryRepo(DirectoryFacadeABC):
 
     async def remove_note_from_directory(self, note_id: str, directory_id: str) -> None:
         """No-op recording stub."""
+        return None
+
+    # ---- DirectoryHelperMixin: hierarchy helpers (no-op stubs) ------
+
+    async def set_parent_directories_of(
+        self,
+        directory_id: str,
+        parent_ids: List[str],
+    ) -> None:
+        return None
+
+    async def get_parent_of(
+        self,
+        type: DirectoryHierarchyType,
+        child_id: str,
+    ) -> List[str]:
+        return []
+
+    async def get_children_of(
+        self,
+        type: DirectoryHierarchyType,
+        directory_id: str,
+        depth: int = 1,
+    ) -> List[str]:
+        return []
+
+    async def get_children_for(
+        self,
+        type: DirectoryHierarchyType,
+        directory_ids: List[str],
+        depth: int = 1,
+    ) -> List[str]:
+        return []
+
+    async def get_parent_for(
+        self,
+        type: DirectoryHierarchyType,
+        child_ids: List[str],
+    ) -> List[str]:
+        return []
+
+    async def add_child_to_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        return None
+
+    async def remove_child_from_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
         return None
 
 

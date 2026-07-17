@@ -7,6 +7,10 @@ from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
 from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.repos.directory_repo import (
+    DirectoryChildType,
+    DirectoryHierarchyType,
+)
 from src.api.other.relationship import ObjectRef, Relationship, SubjectRef
 from src.db.repos.note.permission import DirectoryRelationEnum, ObjectTypeEnum
 from src.db.repos.user.user import UserRepoABC
@@ -131,6 +135,61 @@ class _InMemoryDirectoryRepo(DirectoryFacadeABC):
         max_depth: int = 10,
     ) -> Tuple[List[str], List[str]]:
         return ([], [directory_id])
+
+    # ---- DirectoryHelperMixin: hierarchy helpers (no-op stubs) ------
+
+    async def set_parent_directories_of(
+        self,
+        directory_id: str,
+        parent_ids: List[str],
+    ) -> None:
+        return None
+
+    async def get_parent_of(
+        self,
+        type: DirectoryHierarchyType,
+        child_id: str,
+    ) -> List[str]:
+        return []
+
+    async def get_children_of(
+        self,
+        type: DirectoryHierarchyType,
+        directory_id: str,
+        depth: int = 1,
+    ) -> List[str]:
+        return []
+
+    async def get_children_for(
+        self,
+        type: DirectoryHierarchyType,
+        directory_ids: List[str],
+        depth: int = 1,
+    ) -> List[str]:
+        return []
+
+    async def get_parent_for(
+        self,
+        type: DirectoryHierarchyType,
+        child_ids: List[str],
+    ) -> List[str]:
+        return []
+
+    async def add_child_to_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        return None
+
+    async def remove_child_from_directory(
+        self,
+        type: DirectoryChildType,
+        directory_id: str,
+        child_id: str,
+    ) -> None:
+        return None
 
 
 class _InMemoryContextFactory(ContextFactory[UserContextABC]):
