@@ -19,11 +19,11 @@ class UserServiceImpl(UserServiceABC):
     def __init__(
         self,
         user_repo: UserRepoABC,
-        directory_repo: DirectoryFacadeABC,
+        directory_facade: DirectoryFacadeABC,
         context_factory: ContextFactory[UserContextABC],
     ) -> None:
         self._user_repo = user_repo
-        self._directory_repo = directory_repo
+        self._directory_facade = directory_facade
         self._context_factory = context_factory
 
     async def get_user(
@@ -46,8 +46,8 @@ class UserServiceImpl(UserServiceABC):
 
         user_ctx = await self._context_factory.create(user_id)
 
-        for spec in self._directory_repo.get_default_directory_specs():
-            await self._directory_repo.create_directory(
+        for spec in self._directory_facade.get_default_directory_specs():
+            await self._directory_facade.create_directory(
                 DirectoryEntity(
                     slug=spec.name,
                     display_name=spec.display_name,
