@@ -65,9 +65,7 @@ class Migration(MigrationABC):
             """
         )
 
-        # Directory -> note.  A directory may contain many notes
-        # (``note_id`` may repeat) and a note may live in many
-        # directories (``directory_id`` may repeat).
+        # Directory (n) <-> (m) note
         await ctx.db.execute(
             """
             CREATE TABLE IF NOT EXISTS note.directory_note (
