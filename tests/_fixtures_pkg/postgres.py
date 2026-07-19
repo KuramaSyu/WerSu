@@ -165,7 +165,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             ),
             db=db,
         )
-        directory_repo = DirectoryFacadeImpl(
+        directory_facade = DirectoryFacadeImpl(
             postgres_repo=postgres_directory_repo,
             permission_repo=permission_repo,
             tag_repo=tag_repo,
@@ -199,7 +199,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             combined_repo=CombinedNotePostgresRepo(db=db),
             embedding_repo=_FakeEmbeddingRepo(),
             permission_repo=permission_repo,
-            directory_repo=directory_repo,
+            directory_repo=directory_facade,
             tag_repo=tag_repo,
             logging_provider=logging_provider,
             version_repo=version_repo,
@@ -216,13 +216,13 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
         user_context_factory = RepoContextFactory(user_repo=user_repo)
         user_service = UserServiceImpl(
             user_repo=user_repo,
-            directory_repo=directory_repo,
+            directory_facade=directory_facade,
             context_factory=user_context_factory,
         )
         permission_service = PermissionServiceImpl(
             permission_repo=permission_repo,
             note_repo=note_repo,
-            directory_repo=directory_repo,
+            directory_repo=directory_facade,
         )
         sharing_repo = SharingPostgresRepo(
             table=Table(
@@ -240,7 +240,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
                 id_fields=["id"],
                 logging_provider=logging_provider,
             ),
-            directory_repo=directory_repo,
+            directory_repo=directory_facade,
             logging_provider=logging_provider,
         )
         user_action_repo = UserActionPostgresRepo(
@@ -274,7 +274,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
                 db=db,
                 spicedb_client=spicedb_client,
                 permission_repo=permission_repo,
-                directory_repo=directory_repo,
+                directory_repo=directory_facade,
                 note_repo=note_repo,
                 user_repo=user_repo,
                 user_context_factory=user_context_factory,

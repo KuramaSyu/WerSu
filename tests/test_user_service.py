@@ -213,7 +213,7 @@ def _make_test_user() -> UserEntity:
 def _make_service(user_repo, directory_repo) -> UserServiceImpl:
     return UserServiceImpl(
         user_repo=user_repo,
-        directory_repo=directory_repo,
+        directory_facade=directory_repo,
         context_factory=_InMemoryContextFactory(),
     )
 
