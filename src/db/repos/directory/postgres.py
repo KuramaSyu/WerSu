@@ -491,7 +491,7 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
                 )
 
         # Insert the new ones.
-        for new_parent in desired:
+        for new_parent in desired.difference(current):
             if subject_type == "directory":
                 await self._subdirectory_table.insert(
                     {
