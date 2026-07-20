@@ -305,7 +305,7 @@ async def serve():
     )
 
     note_content_repo = NoteContentPostgresRepo(content_table)
-    note_repo: NoteFacadeImpl = NoteFacadeImpl(
+    note_facade: NoteFacadeImpl = NoteFacadeImpl(
         db=db,
         content_repo=note_content_repo,
         combined_repo=CombinedNotePostgresRepo(db=db),
@@ -351,7 +351,7 @@ async def serve():
 
     permission_service = PermissionServiceImpl(
         permission_repo=permission_repo,
-        note_repo=note_repo,
+        note_repo=note_facade,
         directory_repo=directory_facade,
     )
 
@@ -366,7 +366,7 @@ async def serve():
     grpc_visitor = ConvertToGrpcVisitor()
 
     note_version_service = GrpcNoteVersionService(
-        note_repo=note_repo,
+        note_repo=note_facade,
         version_repo=version_repo,
         directory_activity_service=directory_activity_service,
         log=logging_provider,
@@ -380,7 +380,7 @@ async def serve():
     )
 
     app_note_service = NoteServiceImpl(
-        note_repo=note_repo,
+        note_repo=note_facade,
         permission_repo=permission_repo,
         jwt_provider=jwt_provider,
         directory_repo=directory_facade,
@@ -429,8 +429,8 @@ async def serve():
     add_NoteVersionServiceServicer_to_server(note_version_service, server)
 
     directory_app_service = DirectoryServiceImpl(
-        directory_repo=directory_facade,
-        note_repo=note_repo,
+        directory_facade=directory_facade,
+        note_facade=note_facade,
         permission_repo=permission_repo,
         activity_logger=activity_logger_service,
         note_service=app_note_service,

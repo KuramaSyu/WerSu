@@ -71,16 +71,16 @@ class DirectoryServiceImpl(DirectoryServiceABC):
 
     def __init__(
         self,
-        directory_repo: DirectoryFacadeABC,
-        note_repo: NoteFacadeABC,
+        directory_facade: DirectoryFacadeABC,
+        note_facade: NoteFacadeABC,
         permission_repo: PermissionRepoABC,
         activity_logger: ActivityLoggerServiceABC,
         note_service: NoteServiceABC,
         attachment_facade: AttachmentFacadeABC,
         log: LoggingProvider,
     ) -> None:
-        self._directory_repo = directory_repo
-        self._note_repo = note_repo
+        self._directory_facade = directory_facade
+        self._note_facade = note_facade
         self._permission_repo = permission_repo
         self._activity_logger = activity_logger
         self._note_service = note_service
@@ -116,7 +116,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         notes: List[NoteEntity] = []
         readme: Optional[NoteEntity] = None
         for note_id in note_ids:
-            note = await self._note_repo.select_by_id(note_id, user_ctx)
+            note = await self._note_facade.select_by_id(note_id, user_ctx)
             if note is None:
                 continue
             if note.title == README_TITLE:
@@ -152,7 +152,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
             are fetched; the entity carries no count fields.
         """
         await self._assert_directory_view(directory_id, user_ctx)
-        directory = await self._directory_repo.fetch_directory(
+        directory = await self._directory_facade.fetch_directory(
             directory_id, include=include,
         )
         if directory is None:
@@ -187,10 +187,10 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         if offset and offset < 0:
             raise ValueError("offset must be >= 0")
 
-        directory_ids = await self._directory_repo.list_user_directory_ids(user_ctx)
+        directory_ids = await self._directory_facade.list_user_directory_ids(user_ctx)
         directories: List[DirectoryEntity] = []
         for directory_id in directory_ids:
-            directory = await self._directory_repo.fetch_directory(
+            directory = await self._directory_facade.fetch_directory(
                 directory_id, include=include,
             )
             if directory:
@@ -237,9 +237,9 @@ class DirectoryServiceImpl(DirectoryServiceABC):
                 if result.error:
                     raise result.error
 
-        created_dir = await self._directory_repo.create_directory(
+        created_dir = await self._directory_facade.create_directory(
             DirectoryEntity(
-                id=entity.id,
+                id=UNDEFINED,  # soon to be created
                 slug=entity.slug,
                 display_name=entity.display_name,
                 description=entity.description,
@@ -277,13 +277,13 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         image_urls = extract_attachment_ids(created_dir.image_url or "")
         if image_urls and created_dir.image_url:
             attachment_key = image_urls[0]
-            readme = readme or await self._note_repo.select_by_id(str(existing_readme_id), user_ctx)
+            readme = readme or await self._note_facade.select_by_id(str(existing_readme_id), user_ctx)
             if not readme:
                 self.log.warning(f"failed to fetch README note for directory {created_dir.id} to link attachment {attachment_key}")
             else:
                 await self._update_readme(readme, user_ctx, attachment_key=attachment_key)
 
-        refreshed = await self._directory_repo.fetch_directory(
+        refreshed = await self._directory_facade.fetch_directory(
             str(created_dir.id)
         )
         if refreshed is not None:
@@ -312,7 +312,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         if result.error:
             raise result.error
 
-        updated = await self._directory_repo.update_directory(entity)
+        updated = await self._directory_facade.update_directory(entity)
         if updated is not None:
             await self._activity_logger.directory_edited(
                 str(entity.id), user_ctx
@@ -365,7 +365,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
                 continue
             await self.delete_directory(sub_id, user_ctx)
 
-        deleted = await self._directory_repo.delete_directory(
+        deleted = await self._directory_facade.delete_directory(
             DirectoryEntity(id=directory_id)
         )
         if deleted:
@@ -391,7 +391,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         for sub_id in children.sub_directory_ids:
             if sub_id == directory_id:
                 continue
-            directory = await self._directory_repo.fetch_directory(sub_id)
+            directory = await self._directory_facade.fetch_directory(sub_id)
             slug = (
                 str(directory.slug)
                 if directory is not None and directory.slug not in (UNDEFINED, None)
@@ -400,7 +400,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
             result.append(DirectoryChild(id=sub_id, kind="directory", name=slug))
 
         for note_id in children.note_ids:
-            note = await self._note_repo.select_by_id(note_id, user_ctx)
+            note = await self._note_facade.select_by_id(note_id, user_ctx)
             title = (
                 str(note.title)
                 if note is not None and note.title not in (UNDEFINED, None)
@@ -539,7 +539,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
             permissions=UNDEFINED,
             directory_ids=[directory_id],
         )
-        inserted = await self._note_repo.insert(readme, user_ctx)
+        inserted = await self._note_facade.insert(readme, user_ctx)
 
         if inserted.note_id:
             await self._bind_readme(directory_id, str(inserted.note_id))
@@ -553,7 +553,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         and permission checks see the binding.  Idempotent across
         repeat binds.
         """
-        await self._directory_repo.update_directory(
+        await self._directory_facade.update_directory(
             DirectoryEntity(
                 id=directory_id,
                 readme_note_id=readme_note_id,
@@ -605,7 +605,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         readme_id = directory.readme_note_id
         if readme_id in (UNDEFINED, None):
             return
-        readme = await self._note_repo.select_by_id(str(readme_id), user_ctx)
+        readme = await self._note_facade.select_by_id(str(readme_id), user_ctx)
         if not readme:
             return
         parsed = parse_readme(
