@@ -197,11 +197,10 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
             await self._link_attachments_for_note(page, note, file_index, flat_id_index, user_ctx)
 
         # Rewrite cross-references in the inserted notes.  Page /
-        # chapter / book kinds resolve to note / directory ids that
-        # we now have; image / attachment kinds resolve via the
-        # id_index map.  attachment_meta carries the original
-        # filename so non-image / non-PDF attachments render as
-        # ``[filename](url)`` links.
+        # chapter / book kinds resolve to note / directory ids;
+        # image / attachment kinds resolve via id_index.
+        # attachment_meta carries the original filename so non-image
+        # / non-PDF attachments render as ``[filename](url)`` links.
         self.log.debug(f"Rewriting cross-references for {len(first_pass)} imported pages")
         await self._rewrite_cross_references(
             first_pass, id_index, attachment_meta, user_ctx
@@ -315,6 +314,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
         attachment_meta: Dict[int, str],
         user_ctx: UserContextABC,
     ) -> NoteEntity:
+        """Create markdown and rewrite attachment refs"""
         parent_dir_id = chapter_dirs.get(page.chapter_id or -1) or str(book_dir.id)
         # parse `[[bsexport:image:N]]` and resolve them to their new attachment key;
         # the second-pass `rewrite_cross_references` then cleans up any placeholders that survived 
