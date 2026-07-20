@@ -90,10 +90,11 @@ class GrpcDirectoryService(DirectoryServiceServicer):
             return Directory()
 
     @log_service_call()
-    async def GetDirectories(  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def GetDirectories(
         self, request: GetDirectoriesRequest, context: ServicerContext[GetDirectoriesRequest, Directory]
     ) -> AsyncIterator[Directory]:
         try:
+            self.log.debug(f"GetDirectories request: {request}")
             if not request.user_id:
                 context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
                 context.set_details("user_id is required")
