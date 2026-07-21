@@ -148,9 +148,8 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
                 return None
             return self._row_to_entity(record)
 
-        # Pick a dedicated SQL per combination of list flags.  No
-        # count-only SQL is needed -- callers derive counts from the
-        # list lengths.
+        # Pick a dedicated SQL per combination of list flags.
+        # this is to increase performance by just performing one SQL op
         if want_parents and not (want_child_dirs or want_child_notes):
             return await self._fetch_directory_with_parents(str(id))
         if want_child_dirs and want_child_notes and not want_parents:
@@ -278,18 +277,27 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
     async def _fetch_directory_with_children(
         self, id: str,
     ) -> Optional[DirectoryEntity]:
-        """Row + child directory ids + child note ids (one JOIN each)."""
+        """Row + child directory ids + child note ids (one JOIN each).
+
+        Note:
+            The two LEFT JOINs against ``note.directory_subdirectory``
+            and ``note.directory_note`` produce a Cartesian product
+            of ``N_subdirs * N_notes`` rows; without ``DISTINCT`` each
+            child id would be repeated M (or N) times in the arrays
+            and inflate the frontend counts.  ``array_agg(DISTINCT)``
+            collapses those duplicates back to the real id set.
+        """
         records = await self._directory_table.fetch(
             """
             SELECT d.id, d.slug, d.display_name, d.description,
                    d.image_url, d.readme_note_id,
                    COALESCE(
-                       array_agg(s.child_directory_id)
+                       array_agg(DISTINCT s.child_directory_id)
                        FILTER (WHERE s.child_directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS child_directory_ids,
                    COALESCE(
-                       array_agg(n.note_id)
+                       array_agg(DISTINCT n.note_id)
                        FILTER (WHERE n.note_id IS NOT NULL),
                        '{}'::text[]
                    ) AS child_note_ids
@@ -334,23 +342,31 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         ``note.directory_note``.  The three ``array_agg`` calls
         with ``FILTER`` collapse the cross-product of rows into
         the three id lists.
+
+        Note:
+            The three LEFT JOINs produce a Cartesian product
+            (``N_parents * N_children_dirs * N_children_notes``
+            rows); without ``DISTINCT`` each id would be repeated
+            across every cross-joined row and inflate the
+            frontend counts.  ``array_agg(DISTINCT)`` collapses
+            those duplicates back to the real id sets.
         """
         records = await self._directory_table.fetch(
             """
             SELECT d.id, d.slug, d.display_name, d.description,
                    d.image_url, d.readme_note_id,
                    COALESCE(
-                       array_agg(parent_s.directory_id)
+                       array_agg(DISTINCT parent_s.directory_id)
                        FILTER (WHERE parent_s.directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS parent_directory_ids,
                    COALESCE(
-                       array_agg(child_s.child_directory_id)
+                       array_agg(DISTINCT child_s.child_directory_id)
                        FILTER (WHERE child_s.child_directory_id IS NOT NULL),
                        '{}'::text[]
                    ) AS child_directory_ids,
                    COALESCE(
-                       array_agg(child_n.note_id)
+                       array_agg(DISTINCT child_n.note_id)
                        FILTER (WHERE child_n.note_id IS NOT NULL),
                        '{}'::text[]
                    ) AS child_note_ids
