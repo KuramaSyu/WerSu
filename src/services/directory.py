@@ -177,10 +177,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         Note:
             Overlays each directory's parsed README note before
             pagination so a linked ``README.md`` drives the
-            displayed `image_url` / `description`.  Direct child
-            counts are derived from `len(directory.child_directory_ids)`
-            and `len(directory.child_note_ids)` when those lists
-            are fetched; the entity carries no count fields.
+            displayed `image_url` / `description`.  
         """
         if limit and limit < 0:
             raise ValueError("limit must be >= 0")
@@ -200,7 +197,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
             directories = [
                 d
                 for d in directories
-                if d.parent_directory_ids not in (UNDEFINED, None)
+                if d.parent_directory_ids
                 and parent_id in {
                     str(p) for p in (d.parent_directory_ids or []) if p
                 }
@@ -208,8 +205,8 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         for directory in directories:
             await self._apply_readme_overrides(directory, user_ctx)
 
-        effective_offset = offset if offset is not None else 0
-        if limit is not None:
+        effective_offset = offset or 0
+        if limit:
             return directories[effective_offset : effective_offset + limit]
         return directories[effective_offset:]
 
