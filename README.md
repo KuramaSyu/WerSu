@@ -57,7 +57,7 @@ docker compose down; rm -r data; docker compose up --build -d; env PYTHONTRACEMA
     uv run pytest
     ```
 
-- Run the integration tests against real Postgres / SpiceDB / Garage (requires Docker; containers are started automatically via testcontainers).  These live under `tests/integration/` and carry the `integration` marker:
+- Run the integration tests which use real databases (Postgres, SpiceDB, garage).  These live under `tests/integration/` and carry the `integration` marker:
     ```bash
     uv run pytest tests/integration/ -m integration
     ```
