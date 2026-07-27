@@ -468,7 +468,7 @@ async def test_search_assigns_parent_directories(
     # the default fleeting dir should be assgined to it
     assert len(parent_directories) == 1
     # note.permissions should not be populated
-    assert found.permissions is [] or found.permissions is UNDEFINED, "note.permissions still get populated"
+    assert found.permissions == [] or found.permissions is UNDEFINED, "note.permissions still get populated"
 
 
 async def test_search_only_assigns_permissions_for_returned_notes(
