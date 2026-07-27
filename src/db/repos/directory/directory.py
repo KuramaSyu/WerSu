@@ -37,7 +37,7 @@ from src.api.other.relationship import (
     SubjectRef,
 )
 from src.api.other.types import LoggingProvider
-from src.api.other.undefined import UNDEFINED, is_undefined, unwrap_undefined
+from src.api.other.undefined import UNDEFINED, unwrap_undefined
 from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.domain.permission_chain import HasDirectoryViewPerm, PermissionCheckChain, PermissionCheckChainStart
@@ -134,67 +134,6 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         # )
         return entity
 
-    async def add_note_to_directory(
-        self,
-        note_id: str,
-        directory_id: str,
-    ) -> None:
-        """Bind ``note_id`` as a direct child of ``directory_id``.
-
-        Mirrors the bind on both sides of the contract: writes the
-        Postgres hierarchy row and the SpiceDB ``parent_directory``
-        relation so visibility checks against the directory pick up
-        the new note.
-        """
-        self._assert_note_to_directory_ids(note_id, directory_id)
-        await self._dir_repo.add_child_to_directory(
-            "note", directory_id, note_id
-        )
-        await self._perm_repo.insert(
-            [
-                Relationship(
-                    resource=ObjectRef(
-                        object_type=ObjectTypeEnum.NOTE,
-                        object_id=str(note_id),
-                    ),
-                    relation="parent_directory",
-                    subject=SubjectRef(
-                        object_type=ObjectTypeEnum.DIRECTORY,
-                        object_id=str(directory_id),
-                    ),
-                )
-            ]
-        )
-
-    async def remove_note_from_directory(
-        self,
-        note_id: str,
-        directory_id: str,
-    ) -> None:
-        """Unbind ``note_id`` from the direct child of ``directory_id``.
-
-        Drops both the Postgres hierarchy row and the SpiceDB
-        ``parent_directory`` relation so visibility checks no
-        longer surface the note under this directory.
-        """
-        self._assert_note_to_directory_ids(note_id, directory_id)
-        await self._dir_repo.remove_child_from_directory(
-            "note", str(directory_id), str(note_id)
-        )
-        await self._perm_repo.delete(
-            Relationship(
-                resource=ObjectRef(
-                    object_type=ObjectTypeEnum.NOTE,
-                    object_id=str(note_id),
-                ),
-                relation="parent_directory",
-                subject=SubjectRef(
-                    object_type=ObjectTypeEnum.DIRECTORY,
-                    object_id=str(directory_id),
-                ),
-            )
-        )
-
     async def update_directory(
         self,
         entity: DirectoryEntity,
@@ -255,12 +194,6 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             )
         )
 
-    async def list_note_directory_ids(self, note_id: str) -> List[str]:
-        """Return the directory ids that directly parent ``note_id``.
-        
-        """
-        return await self._dir_repo.get_parent_of("note", str(note_id))
-
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         """Delete the directory row (cleanup is the caller's job)."""
         if not entity.id:
@@ -311,7 +244,10 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         type: DirectoryHierarchyType,
         child_id: str,
     ) -> List[str]:
-        """Return parent ids of ``child_id`` filtered by ``type``."""
+        """Return parent directory ids of ``child_id``.
+
+        See :meth:`DirectoryHelperMixin.get_parent_of`.
+        """
         return await self._dir_repo.get_parent_of(type, str(child_id))
 
     async def get_children_of(
@@ -320,7 +256,10 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         directory_id: str,
         depth: int = 1,
     ) -> List[str]:
-        """Return child ids of ``directory_id`` filtered by ``type``."""
+        """Return child ids under ``directory_id``.
+
+        See :meth:`DirectoryHelperMixin.get_children_of`.
+        """
         return await self._dir_repo.get_children_of(
             type, str(directory_id), depth=depth
         )
@@ -354,9 +293,10 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
     ) -> None:
         """Add a note or child directory to ``directory_id``.
 
-        Pure Postgres write -- does **not** touch SpiceDB.
-        Use :meth:`add_note_to_directory` for the Postgres + SpiceDB
-        combined write that the higher-level facade exposes.
+        Writes both the Postgres hierarchy row and the matching
+        SpiceDB ``parent_directory`` / ``parent`` relation so
+        visibility checks against the directory pick up the new
+        child.
         """
         # add db row
         await self._dir_repo.add_child_to_directory(
@@ -404,9 +344,9 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
     ) -> None:
         """Remove a note or child directory from ``directory_id``.
 
-        Pure Postgres write -- does **not** touch SpiceDB.
-        Use :meth:`remove_note_from_directory` for the Postgres + SpiceDB
-        combined delete that the higher-level facade exposes.
+        Drops both the Postgres hierarchy row and the matching
+        SpiceDB relation so visibility checks no longer surface
+        the child under this directory.
         """
         # remove db row
         await self._dir_repo.remove_child_from_directory(
@@ -633,22 +573,5 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         )
         await self._perm_repo.insert([admin_relation])
         return admin_relation  # speed tradeoff to not call the permission repo a second time
-
-    @staticmethod
-    def _assert_note_to_directory_ids(
-        note_id: object,
-        directory_id: object,
-    ) -> None:
-        """Reject :obj:`~src.api.undefined.UNDEFINED` or ``None`` ids.
-
-        Shared by :meth:`add_note_to_directory` and
-        :meth:`remove_note_from_directory` so the validation matches
-        the contract on :class:`DirectoryFacadeABC`.
-        """
-        if note_id is None or is_undefined(note_id):  # type: ignore[arg-type]
-            raise ValueError("note_id is required")
-        if directory_id is None or is_undefined(directory_id):  # type: ignore[arg-type]
-            raise ValueError("directory_id is required")
-
 
 __all__ = ["DirectoryFacadeImpl"]
