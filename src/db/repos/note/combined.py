@@ -1,33 +1,21 @@
 """Postgres implementation of :class:`CombinedNoteRepoABC`.
 
-Owns the three SQL shapes used by :class:`NoteFacadeImpl` when a
-caller asks for tags / parent directory enrichment.  Each
-shape is a dedicated statement so a cheap basic read stays
-cheap when the caller doesn't ask for enrichment.
-
-Tables joined:
-
-* ``note.content`` -- the note row.
-* ``note.directory_note`` -- the note->directory edge rows.
-* ``note.note_tag`` -- the note->tag edge rows.
-
-The directory->note edge used to live on the XOR table
-``note.directory_hierarchy``; the split into
-``note.directory_note`` (and the sibling
-``note.directory_subdirectory`` for the directory tree) keeps
-the note-side JOIN a single-table read with no
-``IS NULL``/``IS NOT NULL`` filtering.
+Pure dispatcher: every concrete SQL statement lives on a
+subvariant of :class:`~src.db.repos.note.note_fetch_strategy.NoteFetchStrategyABC`.
+This module just picks the strategy that matches the caller's
+:class:`~src.api.services.note_service.NoteIncludeOptions` and
+delegates the round-trip.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from src.api.repos.combined_note_repo import CombinedNoteRepoABC
-from src.api.services.note_service import NoteIncludeOptions, resolve_include_options
-from src.api.other.undefined import UNDEFINED
+from src.api.services.note_service import NoteIncludeOptions
 from src.db.database import Database
 from src.db.entities import NoteEntity
+from src.db.repos.note.note_fetch_strategy import strategy_for
 
 
 class CombinedNotePostgresRepo(CombinedNoteRepoABC):
@@ -49,17 +37,8 @@ class CombinedNotePostgresRepo(CombinedNoteRepoABC):
         *,
         include: Optional[NoteIncludeOptions] = None,
     ) -> Optional[NoteEntity]:
-        include_opts = resolve_include_options(include)
-        want_dirs = bool(include_opts.get("include_directory_ids"))
-        want_tags = bool(include_opts.get("include_tag_ids"))
-
-        if not want_dirs and not want_tags:
-            return await self._select_by_id_row_only(str(note_id))
-        if want_dirs and want_tags:
-            return await self._select_by_id_with_dirs_and_tags(str(note_id))
-        if want_dirs:
-            return await self._select_by_id_with_dirs(str(note_id))
-        return await self._select_by_id_with_tags(str(note_id))
+        strategy = strategy_for(include)
+        return await strategy.fetch_one(self._db, str(note_id))
 
     async def select_by_ids(
         self,
@@ -67,244 +46,8 @@ class CombinedNotePostgresRepo(CombinedNoteRepoABC):
         *,
         include: Optional[NoteIncludeOptions] = None,
     ) -> List[NoteEntity]:
-        include_opts = resolve_include_options(include)
-        want_dirs = bool(include_opts.get("include_directory_ids"))
-        want_tags = bool(include_opts.get("include_tag_ids"))
-
-        if not want_dirs and not want_tags:
-            return await self._select_by_ids_row_only(list(note_ids))
-        if want_dirs and want_tags:
-            return await self._select_by_ids_with_dirs_and_tags(list(note_ids))
-        if want_dirs:
-            return await self._select_by_ids_with_dirs(list(note_ids))
-        return await self._select_by_ids_with_tags(list(note_ids))
-
-    # ---- dedicated SQL shapes --------------------------------------
-
-    async def _select_by_id_row_only(self, note_id: str) -> Optional[NoteEntity]:
-        record = await self._db.fetchrow(
-            """
-            SELECT id, title, content, updated_at, author_id
-            FROM note.content
-            WHERE id = $1
-            """,
-            note_id,
-        )
-        if not record:
-            return None
-        d = dict(record)
-        d["note_id"] = d.pop("id")
-        return NoteEntity(**d, embeddings=[], permissions=UNDEFINED)
-
-    async def _select_by_id_with_dirs(self, note_id: str) -> Optional[NoteEntity]:
-        records = await self._db.fetch(
-            """
-            SELECT n.id, n.title, n.content, n.updated_at, n.author_id,
-                   COALESCE(
-                       array_agg(dn.directory_id)
-                       FILTER (WHERE dn.directory_id IS NOT NULL),
-                       '{}'::text[]
-                   ) AS directory_ids
-            FROM note.content n
-            LEFT JOIN note.directory_note dn
-                ON dn.note_id = n.id
-            WHERE n.id = $1
-            GROUP BY n.id
-            """,
-            note_id,
-        )
-        if not records:
-            return None
-        d = dict(records[0])
-        d["note_id"] = d.pop("id")
-        d["directory_ids"] = [
-            str(v) for v in (d.get("directory_ids") or []) if v is not None
-        ]
-        return NoteEntity(**d, embeddings=[], permissions=UNDEFINED)
-
-    async def _select_by_id_with_tags(self, note_id: str) -> Optional[NoteEntity]:
-        records = await self._db.fetch(
-            """
-            SELECT n.id, n.title, n.content, n.updated_at, n.author_id,
-                   COALESCE(
-                       array_agg(nt.tag_id)
-                       FILTER (WHERE nt.tag_id IS NOT NULL),
-                       '{}'::text[]
-                   ) AS tag_ids
-            FROM note.content n
-            LEFT JOIN note.note_tag nt ON nt.note_id = n.id
-            WHERE n.id = $1
-            GROUP BY n.id
-            """,
-            note_id,
-        )
-        if not records:
-            return None
-        d = dict(records[0])
-        d["note_id"] = d.pop("id")
-        d["tag_ids"] = [
-            str(v) for v in (d.get("tag_ids") or []) if v is not None
-        ]
-        return NoteEntity(**d, embeddings=[], permissions=UNDEFINED)
-
-    async def _select_by_id_with_dirs_and_tags(
-        self, note_id: str,
-    ) -> Optional[NoteEntity]:
-        records = await self._db.fetch(
-            """
-            SELECT n.id, n.title, n.content, n.updated_at, n.author_id,
-                   COALESCE(
-                       array_agg(DISTINCT dn.directory_id)
-                       FILTER (WHERE dn.directory_id IS NOT NULL),
-                       '{}'::text[]
-                   ) AS directory_ids,
-                   COALESCE(
-                       array_agg(DISTINCT nt.tag_id)
-                       FILTER (WHERE nt.tag_id IS NOT NULL),
-                       '{}'::text[]
-                   ) AS tag_ids
-            FROM note.content n
-            LEFT JOIN note.directory_note dn
-                ON dn.note_id = n.id
-            LEFT JOIN note.note_tag nt ON nt.note_id = n.id
-            WHERE n.id = $1
-            GROUP BY n.id
-            """,
-            note_id,
-        )
-        if not records:
-            return None
-        d = dict(records[0])
-        d["note_id"] = d.pop("id")
-        d["directory_ids"] = [
-            str(v) for v in (d.get("directory_ids") or []) if v is not None
-        ]
-        d["tag_ids"] = [
-            str(v) for v in (d.get("tag_ids") or []) if v is not None
-        ]
-        return NoteEntity(**d, embeddings=[], permissions=UNDEFINED)
-
-    async def _select_by_ids_row_only(
-        self, note_ids: List[str],
-    ) -> List[NoteEntity]:
-        records = await self._db.fetch(
-            """
-            SELECT id, title, content, updated_at, author_id
-            FROM note.content
-            WHERE id = ANY($1::text[])
-            """,
-            note_ids,
-        )
-        return self._records_to_entities(
-            records, note_ids, with_dirs=False, with_tags=False,
-        )
-
-    async def _select_by_ids_with_dirs(
-        self, note_ids: List[str],
-    ) -> List[NoteEntity]:
-        records = await self._db.fetch(
-            """
-            SELECT n.id, n.title, n.content, n.updated_at, n.author_id,
-                   COALESCE(
-                       array_agg(dn.directory_id)
-                       FILTER (WHERE dn.directory_id IS NOT NULL),
-                       '{}'::text[]
-                   ) AS directory_ids
-            FROM note.content n
-            LEFT JOIN note.directory_note dn
-                ON dn.note_id = n.id
-            WHERE n.id = ANY($1::text[])
-            GROUP BY n.id
-            """,
-            note_ids,
-        )
-        return self._records_to_entities(
-            records, note_ids, with_dirs=True, with_tags=False,
-        )
-
-    async def _select_by_ids_with_tags(
-        self, note_ids: List[str],
-    ) -> List[NoteEntity]:
-        records = await self._db.fetch(
-            """
-            SELECT n.id, n.title, n.content, n.updated_at, n.author_id,
-                   COALESCE(
-                       array_agg(nt.tag_id)
-                       FILTER (WHERE nt.tag_id IS NOT NULL),
-                       '{}'::text[]
-                   ) AS tag_ids
-            FROM note.content n
-            LEFT JOIN note.note_tag nt ON nt.note_id = n.id
-            WHERE n.id = ANY($1::text[])
-            GROUP BY n.id
-            """,
-            note_ids,
-        )
-        return self._records_to_entities(
-            records, note_ids, with_dirs=False, with_tags=True,
-        )
-
-    async def _select_by_ids_with_dirs_and_tags(
-        self, note_ids: List[str],
-    ) -> List[NoteEntity]:
-        records = await self._db.fetch(
-            """
-            SELECT n.id, n.title, n.content, n.updated_at, n.author_id,
-                   COALESCE(
-                       array_agg(DISTINCT dn.directory_id)
-                       FILTER (WHERE dn.directory_id IS NOT NULL),
-                       '{}'::text[]
-                   ) AS directory_ids,
-                   COALESCE(
-                       array_agg(DISTINCT nt.tag_id)
-                       FILTER (WHERE nt.tag_id IS NOT NULL),
-                       '{}'::text[]
-                   ) AS tag_ids
-            FROM note.content n
-            LEFT JOIN note.directory_note dn
-                ON dn.note_id = n.id
-            LEFT JOIN note.note_tag nt ON nt.note_id = n.id
-            WHERE n.id = ANY($1::text[])
-            GROUP BY n.id
-            """,
-            note_ids,
-        )
-        return self._records_to_entities(
-            records, note_ids, with_dirs=True, with_tags=True,
-        )
-
-    def _records_to_entities(
-        self,
-        records: List[Dict[str, Any]],
-        note_ids: List[str],
-        *,
-        with_dirs: bool,
-        with_tags: bool,
-    ) -> List[NoteEntity]:
-        by_id: Dict[str, Dict[str, Any]] = {}
-        for row in records:
-            row_dict = dict(row)
-            row_dict["note_id"] = row_dict.pop("id")
-            if with_dirs:
-                row_dict["directory_ids"] = [
-                    str(v) for v in (row_dict.get("directory_ids") or [])
-                    if v is not None
-                ]
-            if with_tags:
-                row_dict["tag_ids"] = [
-                    str(v) for v in (row_dict.get("tag_ids") or [])
-                    if v is not None
-                ]
-            by_id[str(row_dict["note_id"])] = row_dict
-        missing = [nid for nid in note_ids if nid not in by_id]
-        if missing:
-            raise ValueError(
-                f"Notes with ids {missing!r} could not be resolved"
-            )
-        return [
-            NoteEntity(**by_id[nid], embeddings=[], permissions=UNDEFINED)
-            for nid in note_ids
-        ]
+        strategy = strategy_for(include)
+        return await strategy.fetch_many(self._db, list(note_ids))
 
 
 __all__ = ["CombinedNotePostgresRepo"]
