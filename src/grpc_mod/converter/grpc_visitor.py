@@ -195,10 +195,10 @@ class ConvertToGrpcVisitor(EntityVisitor):
         # basic_args["permissions"] = _convert_permissions(entity.permissions)
         basic_args["permissions"]: List[PermissionRelationship] = []
 
-        # ``directory_ids`` and ``tag_ids`` land on the proto only when
-        # the entity actually populated them -- otherwise drop the
-        # UNDEFINED placeholder so the proto field stays at its
-        # default (empty list).
+        # ``directory_ids``, ``tag_ids``, and ``attachment_ids`` land
+        # on the proto only when the entity actually populated them
+        # -- otherwise drop the UNDEFINED placeholder so the proto
+        # field stays at its default (empty list).
         if entity.directory_ids:
             basic_args["directory_ids"] = [
                 str(v) for v in entity.directory_ids if v
@@ -206,6 +206,10 @@ class ConvertToGrpcVisitor(EntityVisitor):
         if entity.tag_ids:
             basic_args["tag_ids"] = [
                 str(v) for v in entity.tag_ids if v
+            ]
+        if entity.attachment_ids:
+            basic_args["attachment_ids"] = [
+                str(v) for v in entity.attachment_ids if v
             ]
 
         return Note(
