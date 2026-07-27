@@ -205,8 +205,8 @@ async def test_delete_returns_empty_list_when_nothing_matches() -> None:
     assert deleted == []
 
 
-async def test_select_by_id_normalises_permissions_to_empty_list() -> None:
-    """`select_by_id` returns `permissions = []` and the seeded entity."""
+async def test_select_by_id_leaves_permissions_as_undefined() -> None:
+    """`select_by_id` returns `permissions = UNDEFINED` and the seeded entity."""
     facade, _db, content_repo, _embedding, _directory, _combined, _tags, _version_repo = _make_facade()
     seeded = replace(_seed_note(note_id="note-1"), permissions=UNDEFINED)
     content_repo.seed(seeded)
@@ -214,7 +214,7 @@ async def test_select_by_id_normalises_permissions_to_empty_list() -> None:
     record = await facade.select_by_id("note-1", UserContext("user-1"))
 
     assert record is not None
-    assert record.permissions == []
+    assert record.permissions is UNDEFINED
     assert record.note_id == "note-1"
 
 
