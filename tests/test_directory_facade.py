@@ -126,8 +126,8 @@ class _RecordingDirectoryRepo(DirectoryRepoABC):
         self.set_parent_calls: List[_SetParentCall] = []
         self.get_parent_calls: List[Tuple[DirectoryHierarchyType, str]] = []
         self.get_children_calls: List[Tuple[DirectoryHierarchyType, str, int]] = []
-        self.get_children_for_calls: List[Tuple[DirectoryHierarchyType, List[str], int]] = []
-        self.get_parent_for_calls: List[Tuple[DirectoryHierarchyType, List[str]]] = []
+        self.get_children_for_calls: List[Tuple[DirectoryChildType, List[str], int]] = []
+        self.get_parent_for_calls: List[Tuple[DirectoryChildType, List[str]]] = []
         self.add_child_calls: List[_ChildCall] = []
         self.remove_child_calls: List[_ChildCall] = []
 
@@ -305,28 +305,32 @@ class _RecordingDirectoryRepo(DirectoryRepoABC):
 
     async def get_children_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         directory_ids: List[str],
         depth: int = 1,
-    ) -> List[str]:
+    ) -> Dict[str, List[str]]:
         if depth < 0:
             raise ValueError("depth must be >= 0")
-        self.get_children_for_calls.append((type, [str(d) for d in directory_ids], depth))
-        union: Set[str] = set()
+        self.get_children_for_calls.append(
+            (child_type, [str(d) for d in directory_ids], depth)
+        )
+        result: Dict[str, List[str]] = {}
         for d in directory_ids:
-            union |= self._children_of(type, str(d))  # type: ignore[arg-type]
-        return sorted(union)
+            result[str(d)] = sorted(self._children_of(child_type, str(d)))  # type: ignore[arg-type]
+        return result
 
     async def get_parent_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_ids: List[str],
-    ) -> List[str]:
-        self.get_parent_for_calls.append((type, [str(c) for c in child_ids]))
-        union: Set[str] = set()
+    ) -> Dict[str, List[str]]:
+        self.get_parent_for_calls.append(
+            (child_type, [str(c) for c in child_ids])
+        )
+        result: Dict[str, List[str]] = {}
         for c in child_ids:
-            union |= self._parents_of(type, str(c))  # type: ignore[arg-type]
-        return sorted(union)
+            result[str(c)] = sorted(self._parents_of(child_type, str(c)))  # type: ignore[arg-type]
+        return result
 
     async def add_child_to_directory(
         self,

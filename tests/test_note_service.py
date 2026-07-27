@@ -390,12 +390,13 @@ async def test_delete_note_raises_when_user_lacks_delete() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_search_notes_enriches_results_with_directory_relations() -> None:
-    """`search_notes` attaches `PARENT_DIRECTORY` relations to matching notes.
+async def test_search_notes_enriches_results_with_directory_ids() -> None:
+    """`search_notes` populates `directory_ids` on matching notes.
 
     We populate the permission repo with a `note#PARENT_DIRECTORY@directory`
     relation pointing at a note id that the search strategy will
-    surface, then verify the returned note has the relation.
+    surface, then verify the returned note has the directory id
+    in `directory_ids`.
     """
     service, fake_db, content_repo, directory_repo, permission_repo, _jwt, _activity_logger = _make_service()
 
@@ -440,16 +441,7 @@ async def test_search_notes_enriches_results_with_directory_relations() -> None:
     assert len(results) == 1
     hit = results[0]
     assert hit.note_id == "note-1"
-    parent_dir_rels = [
-        rel
-        for rel in hit.permissions
-        if str(rel.relation) == str(NoteRelationEnum.PARENT_DIRECTORY)
-    ]
-    # `NoteServiceImpl._attach_directory_relations` is idempotent on the
-    # existing parent_directory rows, but a double-write path can
-    # produce duplicates in test setups; we only assert at least one
-    # matches the directory we exposed above.
-    assert any(str(rel.subject.object_id) == directory_id for rel in parent_dir_rels)
+    assert directory_id in (hit.directory_ids or [])
 
 
 async def test_search_notes_returns_empty_list_when_no_matches() -> None:

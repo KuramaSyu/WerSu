@@ -485,20 +485,141 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
 
     async def get_children_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         directory_ids: List[str],
         depth: int = 1,
-    ) -> List[str]:
-        """No-op stub: return an empty child list."""
-        return []
+    ) -> Dict[str, List[str]]:
+        """Return per-input-directory children from the in-memory store.
+
+        The in-memory store is mirrored by the permission repo --
+        tests that only populate the permission repo still see the
+        child set here.
+        """
+        if depth <= 0:
+            return {str(d): [] for d in directory_ids}
+        result: Dict[str, List[str]] = {}
+        for directory_id in directory_ids:
+            directory_id = str(directory_id)
+            note_ids: set[str] = set()
+            child_dir_ids: set[str] = set()
+            visited: set[str] = {directory_id}
+            queue: list[tuple[str, int]] = [(directory_id, 0)]
+            while queue:
+                current, current_depth = queue.pop(0)
+                if child_type == "note":
+                    for parent, note_id in self._directory_note:
+                        if parent == current and current_depth + 1 <= depth:
+                            note_ids.add(note_id)
+                elif child_type == "directory":
+                    for parent, child in self._directory_child:
+                        if parent == current and child not in visited:
+                            child_dir_ids.add(child)
+                            if current_depth + 1 < depth:
+                                visited.add(child)
+                                queue.append((child, current_depth + 1))
+            # Fallback: read from the permission repo for tests that
+            # only populate the SpiceDB side.  Production keeps both
+            # stores in sync, so this is purely a unit-test aid.
+            if child_type == "note" and self._permission_repo is not None:
+                note_ids.update(
+                    await self._permission_repo.lookup(
+                        Relationship(
+                            resource=ObjectRef(
+                                object_type=ObjectTypeEnum.NOTE,
+                                object_id=UNDEFINED,
+                            ),
+                            relation=NoteRelationEnum.PARENT_DIRECTORY,
+                            subject=SubjectRef(
+                                object_type=ObjectTypeEnum.DIRECTORY,
+                                object_id=directory_id,
+                            ),
+                        )
+                    )
+                )
+            elif child_type == "directory" and self._permission_repo is not None:
+                child_dir_ids.update(
+                    await self._permission_repo.lookup(
+                        Relationship(
+                            resource=ObjectRef(
+                                object_type=ObjectTypeEnum.DIRECTORY,
+                                object_id=UNDEFINED,
+                            ),
+                            relation=DirectoryRelationEnum.PARENT,
+                            subject=SubjectRef(
+                                object_type=ObjectTypeEnum.DIRECTORY,
+                                object_id=directory_id,
+                            ),
+                        )
+                    )
+                )
+            if child_type == "note":
+                result[directory_id] = sorted(note_ids)
+            elif child_type == "directory":
+                result[directory_id] = sorted(child_dir_ids)
+            else:
+                result[directory_id] = sorted(note_ids | child_dir_ids)
+        return result
 
     async def get_parent_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_ids: List[str],
-    ) -> List[str]:
-        """No-op stub: return an empty parent list."""
-        return []
+    ) -> Dict[str, List[str]]:
+        """Return per-input-id parents from the in-memory store.
+
+        The in-memory store is mirrored by the permission repo --
+        tests that only populate the permission repo still see the
+        parent set here.
+        """
+        result: Dict[str, List[str]] = {}
+        for child_id in child_ids:
+            child_id = str(child_id)
+            parents: set[str] = set()
+            if child_type == "note":
+                for parent, note_id in self._directory_note:
+                    if note_id == child_id:
+                        parents.add(parent)
+            elif child_type == "directory":
+                for parent, child in self._directory_child:
+                    if child == child_id:
+                        parents.add(parent)
+            # Fallback: read from the permission repo for tests that
+            # only populate the SpiceDB side.  Production keeps both
+            # stores in sync, so this is purely a unit-test aid.
+            if child_type == "note" and self._permission_repo is not None:
+                parents.update(
+                    await self._permission_repo.lookup(
+                        Relationship(
+                            resource=ObjectRef(
+                                object_type=ObjectTypeEnum.NOTE,
+                                object_id=child_id,
+                            ),
+                            relation=NoteRelationEnum.PARENT_DIRECTORY,
+                            subject=SubjectRef(
+                                object_type=ObjectTypeEnum.DIRECTORY,
+                                object_id=UNDEFINED,
+                            ),
+                        )
+                    )
+                )
+            elif child_type == "directory" and self._permission_repo is not None:
+                parents.update(
+                    await self._permission_repo.lookup(
+                        Relationship(
+                            resource=ObjectRef(
+                                object_type=ObjectTypeEnum.DIRECTORY,
+                                object_id=child_id,
+                            ),
+                            relation=DirectoryRelationEnum.PARENT,
+                            subject=SubjectRef(
+                                object_type=ObjectTypeEnum.DIRECTORY,
+                                object_id=UNDEFINED,
+                            ),
+                        )
+                    )
+                )
+            result[child_id] = sorted(parents)
+        return result
 
     async def add_child_to_directory(
         self,

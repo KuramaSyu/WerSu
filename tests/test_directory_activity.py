@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pytest
 
@@ -101,18 +101,18 @@ class _FakeDirectoryRepo(DirectoryFacadeABC):
 
     async def get_children_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         directory_ids: List[str],
         depth: int = 1,
-    ) -> List[str]:
-        return []
+    ) -> Dict[str, List[str]]:
+        return {str(d): [] for d in directory_ids}
 
     async def get_parent_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_ids: List[str],
-    ) -> List[str]:
-        return []
+    ) -> Dict[str, List[str]]:
+        return {str(c): [] for c in child_ids}
 
     async def add_child_to_directory(
         self,
