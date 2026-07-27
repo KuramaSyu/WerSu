@@ -56,6 +56,9 @@ class NoteIncludeOptions(TypedDict, total=False):
     * `include_tag_ids` -- populates `note.tag_ids` from
       ``note.note_tag JOIN note.tag``.  Cheap: covers the
       ``(note_id, tag_id)`` primary key.
+    * `include_attachment_ids` -- populates `note.attachment_ids`
+      from ``note.attachment_note_link``.  Cheap: covers the
+      ``(note_id, attachment_key)`` primary key.
     * `include_permissions` -- keeps the existing per-note SpiceDB
       lookup under the same option so callers don't have to
       special-case it.  Defaults to `True` to match the historic
@@ -69,6 +72,7 @@ class NoteIncludeOptions(TypedDict, total=False):
 
     include_directory_ids: bool
     include_tag_ids: bool
+    include_attachment_ids: bool
     include_permissions: bool
 
 
@@ -88,7 +92,8 @@ def resolve_include_options(
     return NoteIncludeOptions(
         include_directory_ids=bool(raw.get("include_directory_ids", False)),
         include_tag_ids=bool(raw.get("include_tag_ids", False)),
-        include_permissions=bool(raw.get("include_permissions", True)),
+        include_attachment_ids=bool(raw.get("include_attachment_ids", False)),
+        include_permissions=bool(raw.get("include_permissions", False)),
     )
 
 

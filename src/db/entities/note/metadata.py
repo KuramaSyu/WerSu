@@ -25,6 +25,7 @@ class NoteEntity(AcceptsVisitor):
     content: UndefinedNoneOr[str] = UNDEFINED
     directory_ids: UndefinedOr[List[str]] = UNDEFINED
     tag_ids: UndefinedOr[List[str]] = UNDEFINED
+    attachment_ids: UndefinedOr[List[str]] = UNDEFINED
 
     # for internal usage only
     embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED

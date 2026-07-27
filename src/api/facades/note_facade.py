@@ -136,7 +136,7 @@ class NoteFacadeABC(ABC):
                 :class:`~src.api.note_service.NoteIncludeOptions`.
                 When omitted (or every flag ``False``) only the row
                 is fetched and `note.directory_ids` /
-                `note.tag_ids` stay at
+                `note.tag_ids` / `note.attachment_ids` stay at
                 :obj:`~src.api.undefined.UNDEFINED`.
             include_permissions: when `False`, skip the per-note
                 permission lookup and leave `note.permissions = []`.
@@ -176,8 +176,8 @@ class NoteFacadeABC(ABC):
 
         Returns:
             List[NoteEntity]: resolved notes in `note_ids` order.
-            `directory_ids` / `tag_ids` are populated iff their
-            matching `include` flag was set.
+            `directory_ids` / `tag_ids` / `attachment_ids` are
+            populated iff their matching `include` flag was set.
         """
 
     @abstractmethod
