@@ -530,7 +530,18 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         type: DirectoryHierarchyType,
         directory_id: str,
     ) -> List[str]:
-        """Return parent ids for the requested child type."""
+        """Return parent directory ids for the requested child type.
+
+        ``type`` defines the type of `directory_id`:
+
+        * ``"directory"`` / ``"both"`` -- read
+          ``note.directory_subdirectory`` on
+          ``child_directory_id = directory_id`` and return the
+          matching ``directory_id``s (parent dir of a dir).
+        * ``"note"`` / ``"both"`` -- read ``note.directory_note``
+          on ``note_id = directory_id`` and return the matching
+          ``directory_id``s (parent dir of a note).
+        """
         parent_ids: set[str] = set()
         if type in ("directory", "both"):
             records = await self._subdirectory_table.select(
@@ -560,11 +571,18 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         directory_id: str,
         depth: int = 1,
     ) -> List[str]:
-        """Return child ids for the requested type up to ``depth`` levels."""
+        """Return child ids under ``directory_id`` up to ``depth`` levels.
+
+        ``type`` defines the type of children to return:
+        ``"note"`` -> ``note_id``s, ``"directory"`` ->
+        ``child_directory_id``s, ``"both"`` -> union.
+
+        ``depth=0`` visits the starting directory itself (1 level);
+        ``depth=N`` visits ``N+1`` levels -- the starting
+        directory plus ``N`` levels of children beneath it.
+        """
         if depth < 0:
             raise ValueError("depth must be >= 0")
-        if depth == 0:
-            return []
 
         visited: set[str] = set()
         queued: set[str] = {str(directory_id)}
@@ -574,7 +592,7 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
 
         while queue:
             current_id, current_depth = queue.pop(0)
-            if current_id in visited or current_depth >= depth:
+            if current_id in visited or current_depth > depth:
                 continue
             visited.add(current_id)
 
@@ -599,7 +617,7 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
             ]
             if type in ("directory", "both"):
                 directory_ids.update(child_directory_ids)
-            if current_depth + 1 < depth:
+            if current_depth + 1 <= depth:
                 for child_id in child_directory_ids:
                     if child_id not in queued:
                         queued.add(child_id)
