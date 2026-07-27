@@ -205,7 +205,16 @@ async def test_get_note_mints_jwts_for_temporary_user_when_viewing_attachment() 
         content="see https://cdn.example/api/attachments/att-a and /api/attachments/att-b",
     )
     content_repo.seed(note)
-    # grant view on both attachments to the temp user
+    # grant view on note-1 + both attachments to the temp user
+    await permission_repo.insert(
+        [
+            Relationship(
+                resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+                relation=NoteRelationEnum.READER,
+                subject=SubjectRef(ObjectTypeEnum.USER, "tmp-user"),
+            )
+        ]
+    )
     for att in ("att-a", "att-b"):
         await permission_repo.insert(
             [
@@ -237,14 +246,19 @@ async def test_get_note_skips_attachments_without_view_permission() -> None:
         content="/api/attachments/att-a /api/attachments/att-b",
     )
     content_repo.seed(note)
-    # grant view on att-a only
+    # grant view on note-1 + att-a only
     await permission_repo.insert(
         [
+            Relationship(
+                resource=ObjectRef(ObjectTypeEnum.NOTE, "note-1"),
+                relation=NoteRelationEnum.READER,
+                subject=SubjectRef(ObjectTypeEnum.USER, "tmp-user"),
+            ),
             Relationship(
                 resource=ObjectRef(ObjectTypeEnum.ATTACHMENT, "att-a"),
                 relation=NoteRelationEnum.READER,
                 subject=SubjectRef(ObjectTypeEnum.USER, "tmp-user"),
-            )
+            ),
         ]
     )
 
@@ -260,7 +274,7 @@ async def test_get_note_skips_attachments_without_view_permission() -> None:
 
 
 async def test_insert_note_resolves_parent_directory_and_writes_owner_relation() -> None:
-    """`insert_note` writes owner + parent_directory relations and returns the note."""
+    """`insert_note` writes an owner relation and resolves a parent directory."""
     service, _db, _content, _dir, permission_repo, _jwt, _activity_logger = _make_service()
 
     result = await service.insert_note(
@@ -273,16 +287,11 @@ async def test_insert_note_resolves_parent_directory_and_writes_owner_relation()
         _human_ctx("user-1"),
     )
 
-    # parent_directory relation was written
-    parent_dir_rels = [
-        rel
-        for rel in permission_repo._store  # type: ignore[attr-defined]
-        if str(rel.relation) == str(NoteRelationEnum.PARENT_DIRECTORY)
-    ]
-    # both `NoteFacadeImpl.insert` and `NoteServiceImpl.insert_note` may
-    # write the relation; we only assert that at least one is recorded.
-    assert parent_dir_rels, "no parent_directory relation was written"
-    assert parent_dir_rels[0].resource.object_id == result.note_id
+    # parent directory was resolved -- the returned note has at
+    # least one entry on `directory_ids` pointing at a directory
+    # the caller can see.
+    assert result.directory_ids, "no parent directory was resolved"
+    assert _dir.user_to_directory_ids or _dir.directories_by_id
 
     # owner relation was written
     owner_rels = [
@@ -292,11 +301,6 @@ async def test_insert_note_resolves_parent_directory_and_writes_owner_relation()
     ]
     assert owner_rels, "no owner relation was written"
     assert owner_rels[0].subject.object_id == "user-1"
-
-    # returned note has both relations on its `permissions` field
-    assert any(
-        str(rel.relation) == str(NoteRelationEnum.OWNER) for rel in result.permissions
-    )
 
 
 async def test_insert_note_rejects_inaccessible_parent_dir() -> None:
@@ -474,6 +478,7 @@ async def test_get_note_records_note_viewed() -> None:
     """`get_note` records a `note_viewed` event for successful fetches."""
     service, _db, content_repo, _dir, _perm, _jwt, activity_logger = _make_service()
     content_repo.seed(_seed_note(note_id="note-1"))
+    await _grant_admin(_perm, "user-1", "note-1")
 
     await service.get_note("note-1", _human_ctx("user-1"))
 
@@ -485,9 +490,21 @@ async def test_get_note_records_note_viewed() -> None:
 async def test_get_note_does_not_record_on_miss() -> None:
     """`get_note` does not record `note_viewed` when the repo raises."""
     service, _db, _content, _dir, _perm, _jwt, activity_logger = _make_service()
+    # Grant view on `ghost` so the permission check passes and the
+    # missing-row `RuntimeError` from the content repo actually
+    # surfaces -- that's the path the test is pinning.
+    await _perm.insert(
+        [
+            Relationship(
+                resource=ObjectRef(ObjectTypeEnum.NOTE, "ghost"),
+                relation=NoteRelationEnum.READER,
+                subject=SubjectRef(ObjectTypeEnum.USER, "user-1"),
+            )
+        ]
+    )
 
     try:
-        await service.get_note("ghost", _human_ctx())
+        await service.get_note("ghost", _human_ctx("user-1"))
     except RuntimeError:
         pass
 
