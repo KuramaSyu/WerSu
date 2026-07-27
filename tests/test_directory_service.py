@@ -49,8 +49,8 @@ def _make_service() -> tuple[
     note_repo = _FakeNoteRepoFacade()
     activity_logger = _FakeActivityLoggerService()
     service = DirectoryServiceImpl(
-        directory_repo=directory_repo,
-        note_repo=note_repo,
+        directory_facade=directory_repo,
+        note_facade=note_repo,
         permission_repo=permission_repo,
         activity_logger=activity_logger,
         note_service=None,  # type: ignore[arg-type]

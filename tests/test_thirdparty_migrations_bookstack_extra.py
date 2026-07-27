@@ -54,7 +54,7 @@ class _StubNoteService(NoteServiceABC):
     async def update_note(self, note: NoteEntity, user_ctx: UserContextABC) -> NoteEntity:
         return note
 
-    async def get_note(self, note_id, user_ctx):
+    async def get_note(self, note_id, user_ctx, *, include=None):
         raise NotImplementedError
 
     async def delete_note(self, note_id, user_ctx):

@@ -90,9 +90,6 @@ class _StubDirectoryRepo(DirectoryFacadeABC):
     async def fetch_all_directories(self) -> List[DirectoryEntity]:
         raise NotImplementedError()
 
-    async def list_note_directory_ids(self, note_id: str) -> List[str]:
-        raise NotImplementedError()
-
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         raise NotImplementedError()
 
@@ -110,14 +107,6 @@ class _StubDirectoryRepo(DirectoryFacadeABC):
         max_depth: int = 10,
     ) -> Tuple[List[str], List[str]]:
         return ([], [directory_id])
-
-    async def add_note_to_directory(self, note_id: str, directory_id: str) -> None:
-        """No-op recording stub."""
-        return None
-
-    async def remove_note_from_directory(self, note_id: str, directory_id: str) -> None:
-        """No-op recording stub."""
-        return None
 
     # ---- DirectoryHelperMixin: hierarchy helpers (no-op stubs) ------
 

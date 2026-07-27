@@ -84,7 +84,7 @@ class _StubNoteService(NoteServiceABC):
         self.updated.append(note)
         return note
 
-    async def get_note(self, note_id, user_ctx):
+    async def get_note(self, note_id, user_ctx, *, include=None):
         raise NotImplementedError
 
     async def delete_note(self, note_id, user_ctx):

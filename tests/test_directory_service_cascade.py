@@ -174,8 +174,8 @@ def _wire_service(
     )
 
     directory_service = DirectoryServiceImpl(
-        directory_repo=directory_repo,
-        note_repo=real_facade,
+        directory_facade=directory_repo,
+        note_facade=real_facade,
         permission_repo=permission_repo,
         activity_logger=activity_logger,
         note_service=note_service,

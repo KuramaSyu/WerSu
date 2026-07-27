@@ -223,8 +223,8 @@ def _wire_real_services(
         log=silent_logger,
     )
     directory_service = DirectoryServiceImpl(
-        directory_repo=directory_repo,
-        note_repo=facade,
+        directory_facade=directory_repo,
+        note_facade=facade,
         permission_repo=permission_repo,
         activity_logger=activity_logger,
         attachment_facade=attachment_facade,
@@ -413,10 +413,8 @@ async def test_pages_land_in_the_right_directory() -> None:
     )
 
     def _parent_dir_id(note) -> Optional[str]:
-        for rel in (note.permissions or []):
-            if str(rel.relation) == str(NoteRelationEnum.PARENT_DIRECTORY):
-                return str(rel.subject.object_id)
-        return None
+        ids = note.directory_ids or []
+        return str(ids[0]) if ids else None
 
     assert _parent_dir_id(page_a) == str(chapter_dir.id)
     assert _parent_dir_id(page_b) == str(chapter_dir.id)

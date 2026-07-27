@@ -28,7 +28,7 @@ import grpc
 from grpc.aio import ServicerContext
 
 from tests.stubs.user_context import _UserContextFactory
-from src.api.services.note_service import NoteResponse, NoteServiceABC
+from src.api.services.note_service import NoteIncludeOptions, NoteResponse, NoteServiceABC
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
@@ -60,9 +60,12 @@ class _StubNoteService(NoteServiceABC):
         self,
         note_id: str,
         user_ctx: UserContextABC,
+        *,
+        include: Optional[NoteIncludeOptions] = None,
     ) -> NoteResponse:
         self.last_note_id = note_id
         self.last_user_ctx = user_ctx
+        self.last_include = include
         return self._response
 
     async def insert_note(self, note, user_ctx):  # pragma: no cover - unused

@@ -54,16 +54,7 @@ class _FakeDirectoryRepo(DirectoryFacadeABC):
     async def delete_directory(self, entity):  # type: ignore[override]
         raise NotImplementedError()
 
-    async def add_note_to_directory(self, note_id: str, directory_id: str) -> None:
-        raise NotImplementedError()
-
-    async def remove_note_from_directory(self, note_id: str, directory_id: str) -> None:
-        raise NotImplementedError()
-
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
-        return []
-
-    async def list_note_directory_ids(self, note_id: str) -> List[str]:
         return []
 
     async def delete_directory(self, entity) -> bool:  # type: ignore[override]
@@ -179,7 +170,7 @@ async def test_resolve_files_of_directory_depth_and_cycle() -> None:
     note_table.add_note_child("grand", "note-grand")
 
     directory_repo = DirectoryFacadeImpl(
-        postgres_repo=PostgresDirectoryRepo(
+        directory_repo=PostgresDirectoryRepo(
             directory_table=_FakeDirectoryTable(),
             subdirectory_table=subdirectory_table,
             directory_note_table=note_table,
