@@ -166,7 +166,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             db=db,
         )
         directory_facade = DirectoryFacadeImpl(
-            postgres_repo=postgres_directory_repo,
+            directory_repo=postgres_directory_repo,
             permission_repo=permission_repo,
             tag_repo=tag_repo,
             log=logging_provider,
