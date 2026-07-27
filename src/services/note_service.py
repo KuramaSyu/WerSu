@@ -39,7 +39,7 @@ from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefine
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory import DirectoryFacadeABC
-from src.domain.permission_chain import  HasNoteDeletePerm, HasNoteWritePerm
+from src.domain.permission_chain import  HasNoteDeletePerm, HasNoteViewPerm, HasNoteWritePerm
 from src.utils.extract_attachments import extract_attachment_ids
 
 
@@ -75,6 +75,11 @@ class NoteServiceImpl(NoteServiceABC):
         *,
         include: Optional["NoteIncludeOptions"] = None,
     ) -> NoteResponse:
+        check = HasNoteViewPerm(note_id).set_permission_repo(self._permission_repo)
+        result = await check.check(user_ctx)
+        if result.error:
+            raise result.error
+    
         note = await self._note_repo.select_by_id(
             note_id, user_ctx, include=include,
         )
