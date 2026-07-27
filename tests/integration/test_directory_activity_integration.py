@@ -63,7 +63,7 @@ async def test_resolve_files_of_directory_spicedb(
     note_table.add_note_child(child_id, note_child)
 
     directory_repo = DirectoryFacadeImpl(
-        postgres_repo=PostgresDirectoryRepo(
+        directory_repo=PostgresDirectoryRepo(
             directory_table=_FakeDirectoryTable(),
             subdirectory_table=subdirectory_table,
             directory_note_table=note_table,
