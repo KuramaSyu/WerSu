@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Literal, Optional, TypeAlias
+from typing import Dict, List, Literal, Optional, TypeAlias
 
 from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.api.services.directory_service import DirectoryIncludeOptions
@@ -90,21 +90,28 @@ class DirectoryHelperMixin(ABC):
     @abstractmethod
     async def get_children_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         directory_ids: List[str],
         depth: int = 1,
-    ) -> List[str]:
-        """Return child ids for multiple directories.
+    ) -> Dict[str, List[str]]:
+        """Return child ids for multiple directories, keyed by input id.
+
+        ``child_type`` describes the type of children to return
+        (the entire input batch is treated as one type). With
+        ``"note"`` the result lists the note children of every
+        input directory; with ``"directory"`` it lists the child
+        directories.
 
         Args:
-            type: defines the type of children to return --
-                ``"note"`` / ``"directory"`` / ``"both"``.
+            child_type: ``"note"`` or ``"directory"``.
             directory_ids: starting directory ids.
             depth: recursion depth; ``1`` means direct children only.
 
         Returns:
-            List[str]: matching child ids across all inputs,
-            deduplicated and sorted.
+            Dict[str, List[str]]: mapping from each input
+            ``directory_id`` to its matching child ids,
+            deduplicated and sorted. ``directory_id``s without
+            children map to ``[]``. Empty input returns ``{}``.
 
         Raises:
             ValueError: ``depth`` is negative.
@@ -114,18 +121,26 @@ class DirectoryHelperMixin(ABC):
     @abstractmethod
     async def get_parent_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_ids: List[str],
-    ) -> List[str]:
-        """Return parent ids for multiple child ids.
+    ) -> Dict[str, List[str]]:
+        """Return parent ids for multiple child ids, keyed by input id.
+
+        ``child_type`` describes the type of every id in
+        ``child_ids`` (the entire input batch is treated as one
+        type). With ``"note"`` the result lists the parent
+        directories of every note id; with ``"directory"`` it
+        lists the parents of every directory id.
 
         Args:
-            type: ``"note"`` / ``"directory"`` / ``"both"``.
+            child_type: ``"note"`` or ``"directory"``.
             child_ids: ids of the child objects to inspect.
 
         Returns:
-            List[str]: parent ids across all inputs,
-            deduplicated and sorted.
+            Dict[str, List[str]]: mapping from each input
+            ``child_id`` to its matching parent ids,
+            deduplicated and sorted. ``child_id``s without
+            parents map to ``[]``. Empty input returns ``{}``.
         """
         ...
 

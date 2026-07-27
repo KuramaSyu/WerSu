@@ -14,7 +14,7 @@ ABC without rewiring.
 from __future__ import annotations
 
 import asyncio
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.api.repos.tag_repo import TagRepoABC
@@ -266,23 +266,29 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
 
     async def get_children_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         directory_ids: List[str],
         depth: int = 1,
-    ) -> List[str]:
-        """Return child ids for multiple ``directory_ids``."""
+    ) -> Dict[str, List[str]]:
+        """Return child ids for multiple ``directory_ids``.
+
+        See :meth:`DirectoryHelperMixin.get_children_for`.
+        """
         return await self._dir_repo.get_children_for(
-            type, [str(d) for d in directory_ids], depth=depth
+            child_type, [str(d) for d in directory_ids], depth=depth
         )
 
     async def get_parent_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_ids: List[str],
-    ) -> List[str]:
-        """Return parent ids for multiple ``child_ids``."""
+    ) -> Dict[str, List[str]]:
+        """Return parent ids for multiple ``child_ids``.
+
+        See :meth:`DirectoryHelperMixin.get_parent_for`.
+        """
         return await self._dir_repo.get_parent_for(
-            type, [str(c) for c in child_ids]
+            child_type, [str(c) for c in child_ids]
         )
 
     async def add_child_to_directory(

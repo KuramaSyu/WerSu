@@ -28,7 +28,7 @@ for.  No string-building over a base query.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import asyncpg  # type: ignore[import]
 
@@ -631,32 +631,55 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
 
     async def get_children_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         directory_ids: List[str],
         depth: int = 1,
-    ) -> List[str]:
-        """Return child ids for multiple directories."""
-        if not directory_ids:
-            return []
-        child_ids: set[str] = set()
+    ) -> Dict[str, List[str]]:
+        """Return child ids per input directory.
+
+        Args:
+            child_type: ``"note"`` or ``"directory"`` -- selects
+                which child table to scan for each input directory.
+            directory_ids: starting directory ids.
+            depth: recursion depth; ``1`` means direct children only.
+
+        Returns:
+            Dict[str, List[str]]: mapping from each input
+            ``directory_id`` to its matching child ids,
+            deduplicated and sorted. ``directory_id``s without
+            children map to ``[]``.
+        """
+        result: Dict[str, List[str]] = {}
         for directory_id in directory_ids:
-            child_ids.update(
-                await self.get_children_of(type, str(directory_id), depth=depth)
+            result[str(directory_id)] = await self.get_children_of(
+                child_type, str(directory_id), depth=depth
             )
-        return sorted(child_ids)
+        return result
 
     async def get_parent_for(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_ids: List[str],
-    ) -> List[str]:
-        """Return parent ids for multiple child ids."""
-        if not child_ids:
-            return []
-        parent_ids: set[str] = set()
+    ) -> Dict[str, List[str]]:
+        """Return parent ids per input child id.
+
+        Args:
+            child_type: ``"note"`` or ``"directory"`` -- selects
+                which child table to scan for each input id.
+            child_ids: ids of the child objects to inspect.
+
+        Returns:
+            Dict[str, List[str]]: mapping from each input
+            ``child_id`` to its matching parent ids,
+            deduplicated and sorted. ``child_id``s without
+            parents map to ``[]``.
+        """
+        result: Dict[str, List[str]] = {}
         for child_id in child_ids:
-            parent_ids.update(await self.get_parent_of(type, str(child_id)))
-        return sorted(parent_ids)
+            result[str(child_id)] = await self.get_parent_of(
+                child_type, str(child_id)
+            )
+        return result
 
     async def add_child_to_directory(
         self,

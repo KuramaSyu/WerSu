@@ -176,7 +176,7 @@ class NoteServiceImpl(NoteServiceABC):
             ctx=user_ctx,
             pagination=Pagination(limit=limit, offset=offset),
         )
-        await self._attach_directory_relations(notes, user_ctx)
+        await self._populate_directory_ids(notes)
         return notes
 
     async def get_notes(
@@ -296,54 +296,25 @@ class NoteServiceImpl(NoteServiceABC):
             f"Could not resolve default directory {default_name!r} for user {user_ctx.user_id!r}"
         )
     
-    async def _attach_directory_relations(
+    async def _populate_directory_ids(
         self,
         notes: List[NoteEntity],
-        user_ctx: UserContextABC,
     ) -> None:
-        """Populate `permissions` for each note with directory relations. 
-        Since the user probably has less directories than notes, we iterate over the directories, 
-        and check for each, if it has a `PARENT_DIRECTORY` relation, meaning it has a child note. 
-        If yes, then we append it to the note's permissions. """
+        """Populate ``directory_ids`` for every note from the directory repo.
+
+        Asks the directory repo for the parents of every note in
+        one batch call and assigns the result to
+        ``note.directory_ids``. Notes with no parents end up with
+        an empty list.
+        """
         if not notes:
             return
-        notes_by_id: dict[str, NoteEntity] = {
-            str(note.note_id): note
-            for note in notes
-            if note.note_id not in (UNDEFINED, None)
-        }
-        if not notes_by_id:
-            return
-        
-        # iterate all directories
-        user_directory_ids = await self._directory_repo.list_user_directory_ids(user_ctx)
-        for directory_id in user_directory_ids:
-            # fetch note:???#PARENT_DIRECTORY@direcory:id
-            note_ids = await self._permission_repo.lookup(
-                Relationship(
-                    resource=ObjectRef(ObjectTypeEnum.NOTE, UNDEFINED),
-                    relation=NoteRelationEnum.PARENT_DIRECTORY,
-                    subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directory_id),
-                )
-            )
-            # check if the found note ids belong to any note contained in notes.
-            for note_id in note_ids:
-                target_note = notes_by_id.get(note_id)
-
-                if not target_note:
-                    # should never happen
-                    continue
-
-                if not target_note.permissions:
-                    target_note.permissions = []
-
-                target_note.permissions.append(
-                    Relationship(
-                        resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
-                        relation=NoteRelationEnum.PARENT_DIRECTORY,
-                        subject=SubjectRef(ObjectTypeEnum.DIRECTORY, directory_id),
-                    )
-                )
+        note_ids = [unwrap_undefined(n.note_id) for n in notes]
+        parents_by_note = await self._directory_repo.get_parent_for(
+            "note", note_ids
+        )
+        for note, note_id in zip(notes, note_ids):
+            note.directory_ids = parents_by_note.get(note_id, [])
 
     async def _build_attachment_tokens(
         self,
