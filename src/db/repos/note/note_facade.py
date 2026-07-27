@@ -318,8 +318,10 @@ class NoteFacadeImpl(NoteFacadeABC):
         if note.directory_ids:
             directory_ids: List[str] = note.directory_ids or []
             await self._directory_facade.set_parent_directories_of("note", unwrap_undefined(note.note_id), directory_ids)
-        
-        if note.permissions is UNDEFINED:
+
+        # `permissions` deprecated; the returned `updated` therefore comes back with the
+        # dataclass default `UNDEFINED`
+        if updated.permissions is UNDEFINED:
             updated.permissions = []
 
         new_title: str = unwrap_undefined_or(
@@ -368,15 +370,19 @@ class NoteFacadeImpl(NoteFacadeABC):
     ) -> Optional[NoteEntity]:
         """Resolve a single note by id, with the requested enrichment.
 
-        The combined repo's :class:`NoteFetchStrategyABC` SQL
-        already returns `directory_ids` / `tag_ids` /
-        `attachment_ids` alongside the note row, so no extra
-        relation-field re-read is needed here.
+        `directory_ids` and `tag_ids` are always refreshed from
+        the directory / tag repos before returning so callers
+        see the same shape the write paths produced -- the
+        combined repo's side-table JOINs are honoured when they
+        carry data, but this facade remains the source of truth.
         """
         include_opts = resolve_include_options(include)
-        return await self._combined_repo.select_by_id(
+        note = await self._combined_repo.select_by_id(
             note_id, include=include_opts,
         )
+        if note is not None:
+            await self._populate_relation_fields(note, note_id)
+        return note
 
     async def select_by_ids(
         self,
@@ -388,14 +394,16 @@ class NoteFacadeImpl(NoteFacadeABC):
     ) -> List[NoteEntity]:
         """Bulk variant of :meth:`select_by_id`.
 
-        The combined repo's :class:`NoteFetchStrategyABC` SQL
-        already returns `directory_ids` / `tag_ids` /
-        `attachment_ids` alongside the note rows.
+        `directory_ids` and `tag_ids` are refreshed per-id from
+        the directory / tag repos -- see :meth:`select_by_id`.
         """
         include_opts = resolve_include_options(include)
-        return await self._combined_repo.select_by_ids(
+        notes = await self._combined_repo.select_by_ids(
             note_ids, include=include_opts,
         )
+        for note in notes:
+            await self._populate_relation_fields(note, str(note.note_id))
+        return notes
 
     async def search_notes(
         self,
