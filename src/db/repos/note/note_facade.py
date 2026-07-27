@@ -28,7 +28,7 @@ from src.api.repos.tag_repo import TagRepoABC
 from src.api.services.note_service import NoteIncludeOptions, resolve_include_options
 from src.api.other.relationship import AttachmentRelationEnum
 from src.api.other.types import LoggingProvider, Pagination
-from src.api.other.undefined import UNDEFINED, unwrap_undefined_or
+from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.other.user_context import UserContextABC
 from src.db import Database
 from src.db.entities import NoteEntity
@@ -164,7 +164,17 @@ class NoteFacadeImpl(NoteFacadeABC):
         note: NoteEntity,
         note_id: str,
     ) -> NoteEntity:
-        """Refresh `note.directory_ids` and `note.tag_ids` from their repos.
+        """Refresh `note.directory_ids` / `tag_ids` after a write path.
+
+        Used by the write paths (`insert` / `update` /
+        `search_notes`) to mirror the freshly-written
+        parent-directory + tag bindings back onto the in-memory
+        entity before it's returned to the caller.  The read
+        paths (`select_by_id` / `select_by_ids`) skip this
+        helper entirely -- the combined repo's
+        `NoteFetchStrategyABC` SQL already returns
+        `directory_ids` / `tag_ids` / `attachment_ids`
+        alongside the note row.
 
         Args:
             note: entity to enrich; mutated in place.
@@ -173,8 +183,8 @@ class NoteFacadeImpl(NoteFacadeABC):
         Returns:
             NoteEntity: updated version (same object)
         """
-        note.directory_ids = await self._directory_facade.list_note_directory_ids(
-            note_id,
+        note.directory_ids = await self._directory_facade.get_parent_of(
+            "note", note_id,
         )
         note.tag_ids = await self._tag_repo.list_tags_of("note", note_id)
         return note
@@ -225,11 +235,11 @@ class NoteFacadeImpl(NoteFacadeABC):
                 resolved_dirs = await self._resolve_directory_ids(None, user)
 
         # assign the resolved directory ids. reset note.directory_ids and
-        # repopulate it to ensure consistency if one call would fail
+        # repopulate it to ensure consistency if one call would fail.
         note.directory_ids = []
         for directory_id in resolved_dirs:
-            await self._directory_facade.add_note_to_directory(
-                note_id, directory_id,
+            await self._directory_facade.add_child_to_directory(
+                "note", str(directory_id), str(note_id),
             )
             note.directory_ids.append(directory_id)
 
@@ -296,13 +306,13 @@ class NoteFacadeImpl(NoteFacadeABC):
         if note.tag_ids is not UNDEFINED:
             tag_ids = note.tag_ids or []
             await self._tag_repo.replace_tags_of(
-                "note", note.note_id, tag_ids,
+                "note", unwrap_undefined(note.note_id), tag_ids,
             )
 
         # replace dirs when given
-        if note.directory_ids is not UNDEFINED:
-            directory_ids = note.directory_ids or []
-            await self._directory_facade.set_parent_directories_of("note", note.note_id, directory_ids)
+        if note.directory_ids:
+            directory_ids: List[str] = note.directory_ids or []
+            await self._directory_facade.set_parent_directories_of("note", unwrap_undefined(note.note_id), directory_ids)
         
         if note.permissions is UNDEFINED:
             updated.permissions = []
@@ -353,27 +363,15 @@ class NoteFacadeImpl(NoteFacadeABC):
     ) -> Optional[NoteEntity]:
         """Resolve a single note by id, with the requested enrichment.
 
-        The cheap row-only fetch and the three JOIN shapes live on
-        :class:`CombinedNoteRepo`.  Permissions are layered on top
-        so each :meth:`NoteServiceABC.get_note` consumer gets a
-        ready-to-return entity.
+        The combined repo's :class:`NoteFetchStrategyABC` SQL
+        already returns `directory_ids` / `tag_ids` /
+        `attachment_ids` alongside the note row, so no extra
+        relation-field re-read is needed here.
         """
         include_opts = resolve_include_options(include)
-        entity = await self._combined_repo.select_by_id(
+        return await self._combined_repo.select_by_id(
             note_id, include=include_opts,
         )
-        if not entity:
-            return None
-        # replacement: read directory_ids and tag_ids back from their
-        # dedicated repos so the returned entity reflects the current
-        # parent-directory and tag bindings regardless of `include_opts`.
-        entity = await self._populate_relation_fields(entity, note_id)
-        # deprecated: dont populate note.permissions
-        # if include_permissions:
-        #     entity.permissions = await self._fetch_note_permissions(
-        #         note_id=note_id,
-        #     )
-        return entity
 
     async def select_by_ids(
         self,
@@ -383,26 +381,16 @@ class NoteFacadeImpl(NoteFacadeABC):
         include: Optional[NoteIncludeOptions] = None,
         include_permissions: bool = True,
     ) -> List[NoteEntity]:
-        """Bulk variant of :meth:`select_by_id`."""
+        """Bulk variant of :meth:`select_by_id`.
+
+        The combined repo's :class:`NoteFetchStrategyABC` SQL
+        already returns `directory_ids` / `tag_ids` /
+        `attachment_ids` alongside the note rows.
+        """
         include_opts = resolve_include_options(include)
-        entities = await self._combined_repo.select_by_ids(
+        return await self._combined_repo.select_by_ids(
             note_ids, include=include_opts,
         )
-
-        # replacement: read directory_ids and tag_ids back from their
-        # dedicated repos so every returned entity reflects its current
-        # parent-directory and tag bindings regardless of `include_opts`.
-        for entity in entities:
-            await self._populate_relation_fields(entity, str(entity.note_id))
-
-        # for note in entities:
-        #     note.permissions = await self._fetch_note_permissions(
-        #         note_id=str(note.note_id),
-        #     )
-
-        return entities
-
-    # ---- search ------------------------------------------------------
 
     async def search_notes(
         self,
@@ -452,17 +440,6 @@ class NoteFacadeImpl(NoteFacadeABC):
             # dedicated repos so the search result rows mirror the per-id
             # view of parent-directory and tag bindings.
             await self._populate_relation_fields(note, str(note.note_id))
-
-        # note_entities_dict: Dict[str, NoteEntity] = {
-        #     str(note.note_id): note
-        #     for note in note_entities
-        #     if note.note_id is not UNDEFINED
-        # }
-
-        # deprecated: dont assign relations
-        # await self._enrich_with_parent_directory_permissions(
-        #     ctx, note_entities_dict,
-        # )
         return note_entities
 
     def _strategy_for(
@@ -489,44 +466,6 @@ class NoteFacadeImpl(NoteFacadeABC):
             )
         raise ValueError(f"Unknown SearchType: {search_type}")
 
-    @deprecated("dont populate note.permissions anymore")
-    async def _enrich_with_parent_directory_permissions(
-        self,
-        ctx: UserContextABC,
-        note_entities_dict: Dict[str, NoteEntity],
-    ) -> None:
-        """Augment each note with the user's ``parent_directory`` relations.
-
-        Mirrors the per-id behaviour of
-        :meth:`NoteServiceImpl.get_note` -- search callers see the same
-        parent-directory relations the per-id view would have
-        returned.
-        """
-        if not note_entities_dict:
-            return
-        user_directory_ids = await self._directory_facade.list_user_directory_ids(ctx)
-        for directory_id in user_directory_ids:
-            note_ids = await self._permission_repo.lookup(
-                Relationship(
-                    resource=ObjectRef(ObjectTypeEnum.NOTE, UNDEFINED),
-                    relation=NoteRelationEnum.PARENT_DIRECTORY,
-                    subject=SubjectRef(
-                        object_type=ObjectTypeEnum.DIRECTORY,
-                        object_id=directory_id,
-                    ),
-                )
-            )
-            for note_id in note_ids:
-                if note_id and note_entities_dict.get(note_id):
-                    note_entities_dict[note_id].permissions.append(  # type: ignore
-                        Relationship(
-                            resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
-                            relation=NoteRelationEnum.PARENT_DIRECTORY,
-                            subject=SubjectRef(
-                                ObjectTypeEnum.DIRECTORY, directory_id,
-                            ),
-                        )
-                    )
 
 
 def _strip_non_content_fields(note: NoteEntity) -> NoteEntity:
@@ -535,7 +474,8 @@ def _strip_non_content_fields(note: NoteEntity) -> NoteEntity:
     The ``content_repo.update`` method writes only the columns on
     the ``note.content`` row -- the relation / list fields
     (``embeddings``, ``permissions``, ``directory_ids``,
-    ``tag_ids``) must not bleed into the SET clause.
+    ``tag_ids``, ``attachment_ids``) must not bleed into the SET
+    clause.
     """
     return NoteEntity(
         note_id=UNDEFINED,
@@ -547,4 +487,5 @@ def _strip_non_content_fields(note: NoteEntity) -> NoteEntity:
         permissions=UNDEFINED,
         directory_ids=UNDEFINED,
         tag_ids=UNDEFINED,
+        attachment_ids=UNDEFINED,
     )
