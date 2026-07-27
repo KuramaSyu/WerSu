@@ -49,17 +49,16 @@ class DirectoryHelperMixin(ABC):
         type: DirectoryHierarchyType,
         child_id: str,
     ) -> List[str]:
-        """Return the parent ids of ``child_id`` filtered by ``type``.
+        """Return the parent directory ids of ``child_id``.
 
         Args:
-            type: ``"note"`` / ``"directory"`` / ``"both"`` --
-                selects which parent relation(s) to return.
-            child_id: id of the child object whose parents to
-                enumerate.
+            type: defines the type of `child_id` -- ``"note"``
+                or ``"directory"`` or ``"both"``.
+            child_id: id whose parents to enumerate.
 
         Returns:
-            List[str]: parent ids, deduplicated and sorted.
-            ``[]`` when there are no parents.
+            List[str]: parent directory ids, deduplicated and
+            sorted. ``[]`` when there are no parents.
         """
         ...
 
@@ -70,17 +69,18 @@ class DirectoryHelperMixin(ABC):
         directory_id: str,
         depth: int = 1,
     ) -> List[str]:
-        """Return the child ids of ``directory_id`` filtered by ``type``.
+        """Return the child ids under ``directory_id``.
 
         Args:
-            type: ``"note"`` / ``"directory"`` / ``"both"`` --
-                selects which child relation(s) to return.
+            type: defines the type of children to return --
+                ``"note"`` / ``"directory"`` / ``"both"``.
             directory_id: id of the starting directory.
-            depth: recursion depth; ``1`` means direct children only.
+            depth: recursion depth; ``1`` means direct children
+                only (``directory_id`` itself is never returned).
 
         Returns:
-            List[str]: matching child ids, deduplicated and sorted.
-            ``[]`` when there are none.
+            List[str]: matching child ids, deduplicated and
+            sorted. ``[]`` when there are none.
 
         Raises:
             ValueError: ``depth`` is negative.
@@ -97,7 +97,8 @@ class DirectoryHelperMixin(ABC):
         """Return child ids for multiple directories.
 
         Args:
-            type: ``"note"`` / ``"directory"`` / ``"both"``.
+            type: defines the type of children to return --
+                ``"note"`` / ``"directory"`` / ``"both"``.
             directory_ids: starting directory ids.
             depth: recursion depth; ``1`` means direct children only.
 
