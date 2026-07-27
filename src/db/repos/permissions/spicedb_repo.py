@@ -175,8 +175,7 @@ class SpicedbPermissionRepo(PermissionRepoABC):
             ``note.directory_subdirectory``.  Kept on the repo so
             the directory subtree walks in
             :meth:`DirectoryFacadeImpl.resolve_subtree` /
-            :meth:`DirectoryFacadeImpl.list_note_directory_ids`
-            can target Postgres directly.  Optional -- the repo
+            ``note.directory_note`` lookups can target Postgres directly.  Optional -- the repo
             still works without it, falling back to
             :meth:`lookup_relationships` for the same shapes.
         """

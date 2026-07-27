@@ -22,7 +22,7 @@ class CombinedNoteRepoABC(ABC):
         *,
         include: Optional[NoteIncludeOptions] = None,
     ) -> Optional[NoteEntity]:
-        """Fetch one note with optional `directory_ids` + `tag_ids`.
+        """Fetch one note with optional `directory_ids` + `tag_ids` + `attachment_ids`.
 
         Args:
             note_id: id of the note to load.
@@ -32,10 +32,10 @@ class CombinedNoteRepoABC(ABC):
         Returns:
             Optional[NoteEntity]: the resolved note, or ``None``
             when no row matches ``note_id``.  ``directory_ids`` /
-            ``tag_ids`` are populated iff their flag was set;
-            ``embeddings`` / ``permissions`` are never populated
-            -- call ``NoteFacadeImpl.select_by_id`` (or the service)
-            for permission enrichment.
+            ``tag_ids`` / ``attachment_ids`` are populated iff their
+            flag was set; ``embeddings`` / ``permissions`` are never
+            populated -- call ``NoteFacadeImpl.select_by_id`` (or the
+            service) for permission enrichment.
         """
         ...
 
@@ -59,5 +59,7 @@ class CombinedNoteRepoABC(ABC):
 
         Returns:
             List[NoteEntity]: resolved notes in ``note_ids`` order.
+            ``directory_ids`` / ``tag_ids`` / ``attachment_ids`` are
+            populated iff their matching flag was set.
         """
         ...
