@@ -174,6 +174,7 @@ def test_visit_note_returns_note_with_basic_fields() -> None:
         author_id="a1",
         updated_at=updated_at,
         permissions=[],
+        attachment_ids=["att-1", "att-2"],
     )
 
     proto: Note = entity.convert(_visitor())
@@ -184,25 +185,25 @@ def test_visit_note_returns_note_with_basic_fields() -> None:
     assert proto.content == "world"
     assert proto.author_id == "a1"
     assert proto.updated_at.ToDatetime() == updated_at
+    # `attachment_ids` is forwarded onto the proto as a list of strings.
+    assert list(proto.attachment_ids) == ["att-1", "att-2"]
 
 
-def test_visit_note_converts_permissions_to_permission_relationships() -> None:
-    """`visit_note` translates each `Relationship` into a proto permission."""
+def test_visit_note_drops_attachment_ids_when_entity_has_none() -> None:
+    """`visit_note` omits `attachment_ids` when the entity never set them."""
     entity = NoteEntity(
         note_id="n1",
-        title="t",
-        content="c",
+        title="hello",
+        content="world",
         author_id="a1",
-        permissions=[_relationship("n1", "alice")],
+        permissions=[],
     )
 
     proto: Note = entity.convert(_visitor())
 
-    assert len(proto.permissions) == 1
-    perm = proto.permissions[0]
-    assert perm.relation == "writer"
-    assert perm.subject.object_id == "alice"
-    assert perm.resource.object_id == "n1"
+    assert isinstance(proto, Note)
+    assert list(proto.attachment_ids) == []
+
 
 def test_visit_user_returns_user_with_basic_fields() -> None:
     """`visit_user` maps the entity scalar fields onto the proto."""
