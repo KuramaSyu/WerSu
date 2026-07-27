@@ -76,9 +76,10 @@ message Note {
     repeated PermissionRelationship permissions = 7;
     repeated string directory_ids = 8;
     repeated string tag_ids = 9;
-
+    
     // used for permission checking
     string user_id = 10; 
+    repeated string attachment_ids = 11;
 }
 
 message NoteResponse {

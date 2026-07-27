@@ -272,6 +272,7 @@ class Note(_message.Message):
     DIRECTORY_IDS_FIELD_NUMBER: _builtins.int
     TAG_IDS_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
+    ATTACHMENT_IDS_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     title: _builtins.str
     content: _builtins.str
@@ -288,6 +289,8 @@ class Note(_message.Message):
     def directory_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     @_builtins.property
     def tag_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def attachment_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     def __init__(
         self,
         *,
@@ -300,10 +303,11 @@ class Note(_message.Message):
         directory_ids: _abc.Iterable[_builtins.str] | None = ...,
         tag_ids: _abc.Iterable[_builtins.str] | None = ...,
         user_id: _builtins.str = ...,
+        attachment_ids: _abc.Iterable[_builtins.str] | None = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["updated_at", b"updated_at"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["author_id", b"author_id", "content", b"content", "directory_ids", b"directory_ids", "id", b"id", "permissions", b"permissions", "tag_ids", b"tag_ids", "title", b"title", "updated_at", b"updated_at", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["attachment_ids", b"attachment_ids", "author_id", b"author_id", "content", b"content", "directory_ids", b"directory_ids", "id", b"id", "permissions", b"permissions", "tag_ids", b"tag_ids", "title", b"title", "updated_at", b"updated_at", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
