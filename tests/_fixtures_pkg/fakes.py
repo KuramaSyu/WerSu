@@ -144,16 +144,19 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
         # subtree seed this so ``resolve_subtree`` returns their ids.
         # Roots not in the dict fall back to ``([], [directory_id])``.
         self.subtree_by_root: Dict[str, Tuple[List[str], List[str]]] = {}
-        # ``note_to_directory_ids``: note id -> list of parent directory
-        # ids.  Populated by :meth:`add_note_to_directory` so
-        # :meth:`list_note_directory_ids` returns the bindings the test
-        # just established.
-        self.note_to_directory_ids: Dict[str, List[str]] = {}
         # Recorded calls for assertions.
         self.created: List[DirectoryEntity] = []
         self.updated: List[DirectoryEntity] = []
         self.deleted: List[str] = []
         self._next_directory_id = 0
+        # In-memory note / directory bindings.  Production persists
+        # these in the ``note.directory_note`` /
+        # ``note.directory_subdirectory`` tables; this fake mirrors the
+        # shape the production code expects from those tables so the
+        # ``add_child_to_directory`` + ``get_parent_of`` /
+        # ``get_children_of`` round-trip works end-to-end.
+        self._directory_note: set[tuple[str, str]] = set()
+        self._directory_child: set[tuple[str, str]] = set()
         # Optional permission repo reference so that ``create_directory``
         # can mirror the production behaviour of writing the relations
         # the entity carries.  Without this, tests that use the real
@@ -338,74 +341,6 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
     async def fetch_all_directories(self) -> List[DirectoryEntity]:
         return list(self.directories_by_id.values())
 
-    async def list_note_directory_ids(self, note_id: str) -> List[str]:
-        """Return the dirs the note was added to via ``add_note_to_directory``.
-
-        Production :class:`DirectoryFacadeImpl.list_note_directory_ids`
-        queries the permission repo for ``parent_directory``
-        relations; the fake tracks the same set locally so tests
-        that drive :meth:`add_note_to_directory` see the matching
-        ids on subsequent reads.
-        """
-        return sorted(self.note_to_directory_ids.get(str(note_id), []))
-
-    async def add_note_to_directory(self, note_id: str, directory_id: str) -> None:
-        """Stub that mirrors the production `parent_directory` write.
-
-        Production
-        :class:`DirectoryFacadeImpl.add_note_to_directory` writes both
-        the Postgres hierarchy row and the SpiceDB `parent_directory`
-        relation.  Tests use this stub instead of a real Postgres
-        table, but they still need to observe the `parent_directory`
-        relation through whatever permission repo the test wired --
-        so we mirror the relation here when a permission repo is
-        available.  The in-memory ``note_to_directory_ids`` map
-        also tracks the binding so subsequent
-        :meth:`list_note_directory_ids` reads see it.
-        """
-        self.note_to_directory_ids.setdefault(str(note_id), [])
-        if str(directory_id) not in self.note_to_directory_ids[str(note_id)]:
-            self.note_to_directory_ids[str(note_id)].append(str(directory_id))
-        if self._permission_repo is not None:
-            await self._permission_repo.insert(
-                [
-                    Relationship(
-                        resource=ObjectRef(
-                            object_type="note",
-                            object_id=str(note_id),
-                        ),
-                        relation="parent_directory",
-                        subject=SubjectRef(
-                            object_type="directory",
-                            object_id=str(directory_id),
-                        ),
-                    )
-                ]
-            )
-
-    async def remove_note_from_directory(self, note_id: str, directory_id: str) -> None:
-        """Stub mirroring production by deleting the SpiceDB relation.
-
-        Mirrors :class:`DirectoryFacadeImpl.remove_note_to_directory`,
-        which also clears the `parent_directory` relation in SpiceDB.
-        """
-        if str(directory_id) in self.note_to_directory_ids.get(str(note_id), []):
-            self.note_to_directory_ids[str(note_id)].remove(str(directory_id))
-        if self._permission_repo is not None:
-            await self._permission_repo.delete(
-                Relationship(
-                    resource=ObjectRef(
-                        object_type="note",
-                        object_id=str(note_id),
-                    ),
-                    relation="parent_directory",
-                    subject=SubjectRef(
-                        object_type="directory",
-                        object_id=str(directory_id),
-                    ),
-                )
-            )
-
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         directory_id = str(entity.id)
         self.deleted.append(directory_id)
@@ -476,19 +411,44 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
 
     async def set_parent_directories_of(
         self,
-        directory_id: str,
+        subject_type: DirectoryChildType,
+        subject_id: str,
         parent_ids: List[str],
     ) -> None:
-        """No-op stub for the directory repo contract."""
-        return None
+        """Replace every parent of ``subject_id`` with ``parent_ids``."""
+        subject_id = str(subject_id)
+        if subject_type == "note":
+            self._directory_note = {
+                (parent, note) for (parent, note) in self._directory_note
+                if note != subject_id
+            }
+            for parent in parent_ids:
+                self._directory_note.add((str(parent), subject_id))
+        elif subject_type == "directory":
+            self._directory_child = {
+                (parent, child) for (parent, child) in self._directory_child
+                if child != subject_id
+            }
+            for parent in parent_ids:
+                self._directory_child.add((str(parent), subject_id))
 
     async def get_parent_of(
         self,
         type: DirectoryHierarchyType,
         child_id: str,
     ) -> List[str]:
-        """No-op stub: return an empty parent list."""
-        return []
+        """Return parent ids of ``child_id`` from the in-memory store."""
+        child_id = str(child_id)
+        parents: set[str] = set()
+        if type in ("note", "both"):
+            for parent, note_id in self._directory_note:
+                if note_id == child_id:
+                    parents.add(parent)
+        if type in ("directory", "both"):
+            for parent, child in self._directory_child:
+                if child == child_id:
+                    parents.add(parent)
+        return sorted(parents)
 
     async def get_children_of(
         self,
@@ -496,8 +456,32 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
         directory_id: str,
         depth: int = 1,
     ) -> List[str]:
-        """No-op stub: return an empty child list."""
-        return []
+        """Return child ids of ``directory_id`` from the in-memory store."""
+        if depth <= 0:
+            return []
+        directory_id = str(directory_id)
+        note_ids: set[str] = set()
+        child_dir_ids: set[str] = set()
+        visited: set[str] = {directory_id}
+        queue: list[tuple[str, int]] = [(directory_id, 0)]
+        while queue:
+            current, current_depth = queue.pop(0)
+            if type in ("note", "both"):
+                for parent, note_id in self._directory_note:
+                    if parent == current and current_depth + 1 <= depth:
+                        note_ids.add(note_id)
+            for parent, child in self._directory_child:
+                if parent == current and child not in visited:
+                    if type in ("directory", "both"):
+                        child_dir_ids.add(child)
+                    if current_depth + 1 < depth:
+                        visited.add(child)
+                        queue.append((child, current_depth + 1))
+        if type == "note":
+            return sorted(note_ids)
+        if type == "directory":
+            return sorted(child_dir_ids)
+        return sorted(note_ids | child_dir_ids)
 
     async def get_children_for(
         self,
@@ -522,8 +506,13 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
         directory_id: str,
         child_id: str,
     ) -> None:
-        """No-op stub for the directory repo contract."""
-        return None
+        """Add a note or child directory binding to the in-memory store."""
+        directory_id = str(directory_id)
+        child_id = str(child_id)
+        if type == "note":
+            self._directory_note.add((directory_id, child_id))
+        elif type == "directory":
+            self._directory_child.add((directory_id, child_id))
 
     async def remove_child_from_directory(
         self,
@@ -531,8 +520,13 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
         directory_id: str,
         child_id: str,
     ) -> None:
-        """No-op stub for the directory repo contract."""
-        return None
+        """Remove a note or child directory binding."""
+        directory_id = str(directory_id)
+        child_id = str(child_id)
+        if type == "note":
+            self._directory_note.discard((directory_id, child_id))
+        elif type == "directory":
+            self._directory_child.discard((directory_id, child_id))
 
 
 class _FakeNoteRepoFacade(NoteFacadeABC):
@@ -839,10 +833,10 @@ class _FakeDirectorySubdirectoryTable(TableABC):
         return [] if before == after else [{"removed": True}]
 
     async def select(self, where=None, order_by=None, select: str = "*", additional_values=None):
-        directory_id = (where or {}).get("child_directory_id")
+        directory_id = (where or {}).get("directory_id")
         items = []
         for parent, child in sorted(self.rows):
-            if directory_id is not None and child != directory_id:
+            if directory_id is not None and parent != directory_id:
                 continue
             items.append({"directory_id": parent, "child_directory_id": child})
         return items
@@ -946,7 +940,17 @@ class _FakeDirectoryNoteTable(TableABC):
         return [] if before == after else [{"removed": True}]
 
     async def select(self, where=None, order_by=None, select: str = "*", additional_values=None):
-        return list(self.rows)
+        where = where or {}
+        directory_id = where.get("directory_id")
+        note_id = where.get("note_id")
+        items = []
+        for parent, row_note_id in sorted(self.rows):
+            if directory_id is not None and parent != directory_id:
+                continue
+            if note_id is not None and row_note_id != note_id:
+                continue
+            items.append({"directory_id": parent, "note_id": row_note_id})
+        return items
 
     async def select_row(self, where, select: str = "*"):
         return None
@@ -1168,7 +1172,11 @@ class _StubNoteService(NoteServiceABC):
         self.update_calls: List[NoteEntity] = []
 
     async def get_note(
-        self, note_id: str, user_ctx: UserContextABC
+        self,
+        note_id: str,
+        user_ctx: UserContextABC,
+        *,
+        include: Optional[NoteIncludeOptions] = None,
     ) -> NoteResponse:  # pragma: no cover - unused by directory tests
         raise NotImplementedError
 
@@ -1275,9 +1283,9 @@ class _FakeCombinedNoteRepo(CombinedNoteRepoABC):
     """In-memory :class:`CombinedNoteRepoABC` used by pure unit tests.
 
     Delegates row reads to an optional :class:`_FakeNoteContentRepo`
-    so the contents stay in sync; tracks directory / tag id sets in
-    separate dicts so the facade's CRUD passes can drive them
-    directly.
+    so the contents stay in sync; tracks directory / tag /
+    attachment id sets in separate dicts so the facade's CRUD
+    passes can drive them directly.
     """
 
     def __init__(
@@ -1287,6 +1295,7 @@ class _FakeCombinedNoteRepo(CombinedNoteRepoABC):
         self._content_repo = content_repo
         self.directory_ids_by_note: Dict[str, List[str]] = {}
         self.tag_ids_by_note: Dict[str, List[str]] = {}
+        self.attachment_ids_by_note: Dict[str, List[str]] = {}
 
     async def select_by_id(
         self,
@@ -1333,6 +1342,12 @@ class _FakeCombinedNoteRepo(CombinedNoteRepoABC):
             note.tag_ids = list(self.tag_ids_by_note[str(note.note_id)])
         else:
             note.tag_ids = []
+        if str(note.note_id) in self.attachment_ids_by_note:
+            note.attachment_ids = list(
+                self.attachment_ids_by_note[str(note.note_id)]
+            )
+        else:
+            note.attachment_ids = []
         return note
 
 
