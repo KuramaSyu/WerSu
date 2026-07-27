@@ -264,6 +264,11 @@ class NoteFacadeImpl(NoteFacadeABC):
         # replacement: read directory_ids and tag_ids back from their
         # dedicated repos so the returned entity matches the persisted state.
         note = await self._populate_relation_fields(note, note_id)
+        # match the `update` path: a fresh insert carries no
+        # caller-supplied permissions, so the returned entity
+        # reflects the same `[]` shape as after an update.
+        if note.permissions is UNDEFINED:
+            note.permissions = []
 
         # 6) version snapshot
         title_value: Optional[str] = unwrap_undefined_or(note.title)
