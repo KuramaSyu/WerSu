@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar, Optional, Sequence
+from typing import TYPE_CHECKING, ClassVar, List, Optional, Sequence
 
 from src.api.other.user_context import UserContextABC
 from src.api.repos.directory_repo import DirectoryHelperMixin
@@ -174,6 +174,23 @@ class DirectoryFacadeABC(DirectoryHelperMixin):
         Raises:
             ValueError: ``entity.id`` is :obj:`~src.api.undefined.UNDEFINED`
                 or ``None``.
+        """
+        ...
+
+    @abstractmethod
+    async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
+        """Return every directory id ``user`` has view access to.
+
+        Backed by the permission repo rather than the Postgres
+        hierarchy table, so the result reflects direct and
+        inherited view relations equally.
+
+        Args:
+            user: caller whose visible-directory set to enumerate.
+
+        Returns:
+            List[str]: directory ids the user can view,
+            deduplicated and sorted.
         """
         ...
 
