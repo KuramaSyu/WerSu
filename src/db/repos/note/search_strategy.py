@@ -103,12 +103,16 @@ class NoteSearchStrategy(ABC):
 
 class DateNoteSearchStrategy(NoteSearchStrategy):
     """Return notes sorted by date (most recent first)."""
-    
+
     async def search(self) -> list["NoteEntity"]:
         query = f"""
         SELECT id, title, author_id, content, updated_at
         FROM note.content
         WHERE author_id = $1
+            AND NOT EXISTS (
+                SELECT 1 FROM note.directory d
+                WHERE d.readme_note_id = note.content.id
+            )
         ORDER BY updated_at DESC
         LIMIT {self.limit}
         OFFSET {self.offset};
@@ -121,10 +125,10 @@ class DateNoteSearchStrategy(NoteSearchStrategy):
 
 class WebNoteSearchStrategy(NoteSearchStrategy):
     """
-    Return notes which match by lexme or similarity in the title and content. 
+    Return notes which match by lexme or similarity in the title and content.
     Title is also fuzzy searched
     """
-    
+
     async def search(self) -> list["NoteEntity"]:
         note_ids = await self._get_user_note_ids()
         query = f"""
@@ -134,9 +138,13 @@ class WebNoteSearchStrategy(NoteSearchStrategy):
                 websearch_to_tsquery('english', $1)
             ) AS fts_rank
         FROM note.content
-        WHERE 
+        WHERE
             id = ANY($2)
             AND search_vector @@ websearch_to_tsquery('english', $1)
+            AND NOT EXISTS (
+                SELECT 1 FROM note.directory d
+                WHERE d.readme_note_id = note.content.id
+            )
         ORDER BY fts_rank DESC
         LIMIT {self.limit}
         OFFSET {self.offset};
@@ -145,17 +153,21 @@ class WebNoteSearchStrategy(NoteSearchStrategy):
         # if not records:
         #     raise RuntimeError("Failed to fetch notes by exact title.")
         return [NoteEntity.from_record(record) for record in records]
-    
+
 
 class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
     """Return notes where the title or content is similar to the query"""
-    
+
     async def search(self) -> list["NoteEntity"]:
         note_ids = await self._get_user_note_ids()
         query = f"""
         SELECT id, title, author_id, content, updated_at
         FROM note.content
         WHERE id = ANY($2)
+            AND NOT EXISTS (
+                SELECT 1 FROM note.directory d
+                WHERE d.readme_note_id = note.content.id
+            )
         ORDER BY similarity(title || ' ' || content, $1) DESC
         LIMIT {self.limit}
         OFFSET {self.offset};
@@ -169,12 +181,12 @@ class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
 class ContextNoteSearchStrategy(NoteSearchStrategy):
     """Return notes based on semantic search using embeddings."""
     def __init__(
-        self, 
-        db: DatabaseABC, 
-        query: str, 
-        limit: int, 
-        offset: int, 
-        user_context: UserContextABC, 
+        self,
+        db: DatabaseABC,
+        query: str,
+        limit: int,
+        offset: int,
+        user_context: UserContextABC,
         generator: EmbeddingGeneratorABC,
         note_permissions: PermissionRepoABC,
     ) -> None:
@@ -187,10 +199,14 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         query = f"""
         SELECT id, title, author_id, content, updated_at, (embedding <=> $1::vector) AS similarity
         FROM note.embedding
-        JOIN 
-            note.content on note.content.id = note.embedding.note_id 
+        JOIN
+            note.content on note.content.id = note.embedding.note_id
         WHERE note.embedding.model = $2
             AND note.content.id = ANY($3)
+            AND NOT EXISTS (
+                SELECT 1 FROM note.directory d
+                WHERE d.readme_note_id = note.content.id
+            )
         ORDER BY similarity ASC
         LIMIT {self.limit}
         OFFSET {self.offset}
