@@ -38,7 +38,7 @@ from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.db.repos.note.search_strategy import (
     ContextNoteSearchStrategy,
     DateNoteSearchStrategy,
-    FuzzyTitleContentSearchStrategy,
+    SimilaritySearchStrategy,
     WebNoteSearchStrategy,
 )
 from src.db.repos.note.versioning import NoteVersionRepoABC
@@ -471,7 +471,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         if search_type == SearchType.FULL_TEXT_TITLE:
             return WebNoteSearchStrategy(**common_init_parameters)
         if search_type == SearchType.FUZZY:
-            return FuzzyTitleContentSearchStrategy(**common_init_parameters)
+            return SimilaritySearchStrategy(**common_init_parameters)
         if search_type == SearchType.CONTEXT:
             return ContextNoteSearchStrategy(
                 **common_init_parameters,

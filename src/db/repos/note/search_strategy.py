@@ -155,6 +155,35 @@ class WebNoteSearchStrategy(NoteSearchStrategy):
         return [NoteEntity.from_record(record) for record in records]
 
 
+class SimilaritySearchStrategy(NoteSearchStrategy):
+    """Return notes ranked by trigram similarity against title and content.
+
+    The query is compared against ``title`` and ``content``
+    independently; the rank is the greater of the two so a strong
+    title hit wins over a noisy content hit (and vice versa).
+    """
+
+    async def search(self) -> list["NoteEntity"]:
+        note_ids = await self._get_user_note_ids()
+        query = f"""
+        SELECT id, title, author_id, content, updated_at
+        FROM note.content
+        WHERE id = ANY($2)
+            AND NOT EXISTS (
+                SELECT 1 FROM note.directory d
+                WHERE d.readme_note_id = note.content.id
+            )
+        ORDER BY GREATEST(
+            similarity(title, $1),
+            similarity(content, $1)
+        ) DESC
+        LIMIT {self.limit}
+        OFFSET {self.offset};
+        """
+        records = await self.db.fetch(query, self.query, note_ids)
+        return [NoteEntity.from_record(record) for record in records]
+
+
 class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
     """Return notes where the title or content is similar to the query"""
 
