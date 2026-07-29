@@ -159,7 +159,7 @@ class GrpcNoteService(NoteServiceServicer):
     @log_service_call()
     async def DeleteNote(self, request: DeleteNoteRequest, context: ServicerContext) -> Note:
         try:
-            user_ctx = await self._context.create(request.author_id)
+            user_ctx = await self._context.create(request.user_id)
             deleted_note = await self._note_service.delete_note(
                 request.id,
                 user_ctx,
@@ -167,7 +167,7 @@ class GrpcNoteService(NoteServiceServicer):
 
             if deleted_note is None:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
-                context.set_details(f"Note not found where user with id {request.author_id} has permissions")
+                context.set_details(f"Note not found where user with id {request.user_id} has permissions")
                 return Note()
             return deleted_note.convert(self._to_grpc)
         except Exception:
