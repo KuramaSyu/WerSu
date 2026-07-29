@@ -326,7 +326,7 @@ async def test_get_directory_records_directory_viewed() -> None:
     await service.get_directory("dir-1", _UserContext("user-1"))
 
     assert activity_logger.calls == [
-        ("directory_viewed", "dir-1", "user-1", {})
+        ("directory_viewed", "dir-1", "user-1", {"directory_slug": "root"})
     ]
 
 
@@ -381,7 +381,12 @@ async def test_create_directory_records_directory_created() -> None:
         _UserContext("user-1"),
     )
 
-    assert ("directory_created", str(created.id), "user-1", {}) in activity_logger.calls
+    assert (
+        "directory_created",
+        str(created.id),
+        "user-1",
+        {"directory_slug": "root"},
+    ) in activity_logger.calls
 
 
 async def test_patch_directory_records_directory_edited() -> None:
@@ -405,7 +410,12 @@ async def test_patch_directory_records_directory_edited() -> None:
         _UserContext("user-1"),
     )
 
-    assert ("directory_edited", "dir-1", "user-1", {}) in activity_logger.calls
+    assert (
+        "directory_edited",
+        "dir-1",
+        "user-1",
+        {"directory_slug": "renamed"},
+    ) in activity_logger.calls
 
 
 async def test_delete_directory_records_directory_deleted() -> None:
@@ -427,7 +437,12 @@ async def test_delete_directory_records_directory_deleted() -> None:
     deleted = await service.delete_directory("dir-1", _UserContext("user-1"))
 
     assert deleted is True
-    assert ("directory_deleted", "dir-1", "user-1", {}) in activity_logger.calls
+    assert (
+        "directory_deleted",
+        "dir-1",
+        "user-1",
+        {"directory_slug": "root"},
+    ) in activity_logger.calls
 
 
 async def test_delete_directory_does_not_record_on_permission_denied() -> None:

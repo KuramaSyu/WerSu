@@ -175,7 +175,6 @@ class TestAddActivity:
     @pytest.mark.asyncio
     async def test_insert_role_grant(self, repo: PostgresActivityRepo) -> None:
         """A ``role_grant`` row carries ``role_id`` and JSON metadata."""
-        import json
         entity = await _insert(
             repo,
             action="role_grant",
@@ -188,9 +187,13 @@ class TestAddActivity:
         assert entity.role_id == "r-1"
         assert entity.note_id is None
         assert entity.directory_id is None
-        assert entity.metadata == json.dumps(
-            {"subject_id": "bob", "role_name": "writer"}
-        )
+        # ``_from_record`` normalises the raw JSON string into a dict
+        # so callers (gRPC visitor, statistics service, ...) see the
+        # same shape regardless of which dialect the row came from.
+        assert entity.metadata == {
+            "subject_id": "bob",
+            "role_name": "writer",
+        }
 
     @pytest.mark.asyncio
     async def test_insert_rejects_missing_action(self, repo: PostgresActivityRepo) -> None:

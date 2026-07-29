@@ -8,14 +8,19 @@ from __future__ import annotations
 
 import pytest
 
+from src.api.other.undefined import UNDEFINED
+from src.api.other.visitor import EntityVisitor
 from src.api.repos.activity_repo import ActivityRepoABC
 from src.api.services.activity_logger_service import (
     ActivityLoggerError,
+    EventMetadataVisitor,
     RoleChangeMetadata,
     RoleGrantMetadata,
     RoleRevokeMetadata,
 )
 from src.db.entities.activity import ActivityEntity
+from src.db.entities.directory.directory import DirectoryEntity
+from src.db.entities.note.metadata import NoteEntity
 from src.services.activity_logger_service import ActivityLoggerServiceImpl
 from tests.stubs.activity_repo import _FakeActivityRepo
 from tests.stubs.user_context import _UserContext as _FakeUserContext
@@ -201,6 +206,53 @@ class TestDirectoryMethods:
     ) -> None:
         await logger.directory_deleted("d-1", alice)
         assert repo.added[0].action == "directory_deleted"
+
+
+# MetadataVisitor
+
+
+class TestMetadataVisitor:
+    """``MetadataVisitor`` snapshots entity fields into a metadata dict."""
+
+    def test_note_convert_snapshots_title(self) -> None:
+        """`note.convert(MetadataVisitor())` returns ``{"note_name": ...}``."""
+        assert NoteEntity(title="My note").convert(EventMetadataVisitor()) == {
+            "note_name": "My note",
+        }
+
+    def test_directory_convert_snapshots_slug_and_display_name(self) -> None:
+        """`directory.convert(MetadataVisitor())` returns slug + display_name."""
+        assert DirectoryEntity(
+            slug="root", display_name="Root",
+        ).convert(EventMetadataVisitor()) == {
+            "directory_slug": "root",
+            "directory_name": "Root",
+        }
+
+    def test_note_convert_drops_unset_fields(self) -> None:
+        """Unset title is dropped from the dict."""
+        assert NoteEntity().convert(EventMetadataVisitor()) == {}
+
+    def test_directory_convert_drops_unset_fields(self) -> None:
+        """Unset slug / display_name are dropped from the dict."""
+        assert DirectoryEntity().convert(EventMetadataVisitor()) == {}
+
+    def test_visit_note_handles_none(self) -> None:
+        """`visit_note(None)` returns an empty dict for the missing-snapshot path."""
+        assert EventMetadataVisitor().visit_note(None) == {}
+
+    def test_visit_directory_handles_none(self) -> None:
+        """`visit_directory(None)` returns an empty dict for the missing-snapshot path."""
+        assert EventMetadataVisitor().visit_directory(None) == {}
+
+    def test_metadata_visitor_is_an_entity_visitor(self) -> None:
+        """`MetadataVisitor` subclasses `EntityVisitor` so ``entity.convert`` dispatches to it."""
+        assert issubclass(EventMetadataVisitor, EntityVisitor)
+
+    def test_visit_is_alias_for_convert(self) -> None:
+        """``note.visit(MetadataVisitor())`` and ``note.convert(MetadataVisitor())`` agree."""
+        note = NoteEntity(title="X")
+        assert note.visit(EventMetadataVisitor()) == note.convert(EventMetadataVisitor())
 
 
 # Role-target methods

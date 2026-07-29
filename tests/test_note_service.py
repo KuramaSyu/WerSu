@@ -475,7 +475,7 @@ async def test_get_note_records_note_viewed() -> None:
     await service.get_note("note-1", _human_ctx("user-1"))
 
     assert activity_logger.calls == [
-        ("note_viewed", "note-1", "user-1", {})
+        ("note_viewed", "note-1", "user-1", {"note_name": "Seed"})
     ]
 
 
@@ -517,7 +517,12 @@ async def test_insert_note_records_note_created() -> None:
         _human_ctx("user-1"),
     )
 
-    assert ("note_created", str(result.note_id), "user-1", {}) in activity_logger.calls
+    assert (
+        "note_created",
+        str(result.note_id),
+        "user-1",
+        {"note_name": "New"},
+    ) in activity_logger.calls
 
 
 async def test_delete_note_records_note_deleted() -> None:
@@ -528,7 +533,7 @@ async def test_delete_note_records_note_deleted() -> None:
 
     await service.delete_note("note-1", _human_ctx("user-1"))
 
-    assert ("note_deleted", "note-1", "user-1", {}) in activity_logger.calls
+    assert ("note_deleted", "note-1", "user-1", {"note_name": "Seed"}) in activity_logger.calls
 
 
 async def test_delete_note_does_not_record_on_permission_denied() -> None:

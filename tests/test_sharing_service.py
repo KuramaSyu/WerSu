@@ -544,7 +544,11 @@ async def test_create_share_records_note_shared_with_metadata() -> None:
             "note_shared",
             "note-1",
             "creator-1",
-            {"permission": "reader", "access_as": access_as},
+            {
+                "permission": "reader",
+                "access_as": access_as,
+                "description": "",
+            },
         )
     ]
 
@@ -584,7 +588,7 @@ async def test_delete_shares_records_note_unshared_per_share() -> None:
         assert action == "note_unshared"
         assert note_id == "note-1"
         assert actor_id == "creator"
-        assert set(metadata) == {"share_id", "access_as"}
+        assert set(metadata) == {"share_id", "access_as", "description"}
 
 
 async def test_delete_shares_does_not_record_when_denied() -> None:
