@@ -571,10 +571,28 @@ class ConvertToGrpcVisitor(EntityVisitor):
         """Serialise the per-row metadata payload to a JSON string.
 
         ``UNDEFINED`` and ``None`` both produce an empty object so the
-        client always sees valid JSON.
+        client always sees valid JSON.  Postgres' asyncpg driver
+        decodes JSONB columns back as the raw JSON string by default,
+        so we accept either a dict (the in-memory path) or a JSON
+        string (the Postgres / SQLite ``TEXT`` path) and normalise
+        before dumping.
         """
         if is_undefined(metadata) or metadata is None:
             return "{}"
+        # Postgres asyncpg JSONB and SQLite TEXT both surface as a
+        # raw JSON string; parse it before re-serialising so the
+        # client sees the original dict instead of an empty object.
+        if isinstance(metadata, str):
+            try:
+                parsed = json.loads(metadata)
+                metadata = parsed
+            except (TypeError, ValueError):
+                return json.dumps({})
+        if isinstance(metadata, dict):
+            try:
+                return json.dumps(metadata)
+            except (TypeError, ValueError):
+                return json.dumps({})
         try:
             return json.dumps(dict(metadata))
         except (TypeError, ValueError):
