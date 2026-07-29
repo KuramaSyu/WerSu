@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
 from datetime import datetime
 
 from asyncpg import Record
@@ -12,6 +12,9 @@ from src.api import Relationship
 from .embedding import NoteEmbeddingEntity
 from .permission import NotePermissionEntity
 from src.api.other.undefined import *
+
+if TYPE_CHECKING:
+    from src.api.services.activity_logger_service import EventMetadataVisitor, NoteMetadata
 
 
 @dataclass

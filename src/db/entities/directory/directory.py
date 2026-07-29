@@ -1,9 +1,15 @@
 from dataclasses import dataclass
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.api import Relationship
 from src.api.other.visitor import AcceptsVisitor, EntityVisitor
+
+if TYPE_CHECKING:
+    from src.api.services.activity_logger_service import (
+        DirectoryMetadata,
+        EventMetadataVisitor,
+    )
 
 
 @dataclass
