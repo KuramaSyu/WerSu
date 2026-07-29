@@ -21,13 +21,20 @@ Implementations:
 from __future__ import annotations
 
 import re
+import typing
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Dict, List, Mapping, Optional
 
 from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, is_undefined
 from src.api.other.user_context import UserContextABC
+from src.api.other.visitor import EntityVisitor
 from src.api.repos.activity_repo import ActivityRepoABC
+
+if typing.TYPE_CHECKING:
+    from src.db.entities.directory.directory import DirectoryEntity
+    from src.db.entities.note.metadata import NoteEntity
 
 
 # Errors
@@ -91,6 +98,101 @@ class RoleChangeMetadata:
 
     added: List[str]
     removed: List[str]
+
+
+# Note / directory target metadata
+
+
+class EventMetadataVisitor(EntityVisitor):
+    """Visitor that turns a note / directory into an activity metadata dict.
+
+    Concrete :class:`~src.api.other.visitor.EntityVisitor` subclass
+    that builds the per-event ``metadata`` payload.  Only
+    :meth:`visit_note` and :meth:`visit_directory` are meaningful --
+    every other :meth:`visit_*` raises :exc:`NotImplementedError`
+    because the activity log only cares about note / directory
+    targets.  The :meth:`visit_*` methods return the dict that will
+    ride on ``metadata_json``; missing / unset entity fields are
+    dropped from the dict so the row stays queryable.
+
+    Use via :meth:`~src.db.entities.note.metadata.NoteEntity.convert`
+    or :meth:`~src.db.entities.directory.directory.DirectoryEntity.convert`:
+
+        note.convert(MetadataVisitor())
+        directory.convert(MetadataVisitor())
+
+    When the caller does not have an entity to dispatch from (e.g.
+    the ``directory_deleted`` snapshot path), call
+    :meth:`visit_note` / :meth:`visit_directory` directly with the
+    (possibly `None`) entity.
+    """
+
+    def visit_note(self, entity: "NoteEntity") -> Dict[str, object]:
+        """Snapshot the note's title under ``note_name``.
+
+        Args:
+            entity: note the action targeted.  When `None`, an empty
+            dict is returned so callers do not have to special-case
+            the missing-snapshot path.
+
+        Returns:
+            Dict[str, object]: ``{"note_name": ...}`` when the title
+            was known, ``{}`` otherwise.
+        """
+        if entity is None:
+            return {}
+        out: Dict[str, object] = {}
+        if not is_undefined(entity.title) and entity.title is not None:
+            out["note_name"] = entity.title
+        return out
+
+    def visit_directory(self, entity: "DirectoryEntity") -> Dict[str, object]:
+        """Snapshot the directory's slug and display_name.
+
+        Args:
+            entity: directory the action targeted.  When `None`, an
+            empty dict is returned.
+
+        Returns:
+            Dict[str, object]: ``{"directory_slug": ...,
+            "directory_name": ...}`` with only the keys that were
+            actually known.
+        """
+        if entity is None:
+            return {}
+        out: Dict[str, object] = {}
+        if not is_undefined(entity.slug) and entity.slug is not None:
+            out["directory_slug"] = entity.slug
+        if (
+            not is_undefined(entity.display_name)
+            and entity.display_name is not None
+        ):
+            out["directory_name"] = entity.display_name
+        return out
+
+    def visit_note_minimal(self, entity: "NoteEntity") -> Dict[str, object]:
+        raise NotImplementedError
+
+    def visit_user(self, entity: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
+    def visit_note_share(self, entity: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
+    def visit_attachment(self, entity: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
+    def visit_attachment_metadata(self, entity: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
+    def visit_note_response(self, response: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
+    def visit_activity(self, entity: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
+    def visit_activity_score(self, score: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
 
 
 # Match: <object_type>:<object_id>#<relation>@<subject_type>:<subject_id>
@@ -296,6 +398,7 @@ class ActivityLoggerServiceABC(ABC):
 __all__ = [
     "ActivityLoggerError",
     "ActivityLoggerServiceABC",
+    "EventMetadataVisitor",
     "RoleChangeMetadata",
     "RoleGrantMetadata",
     "RoleRevokeMetadata",
