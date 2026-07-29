@@ -93,11 +93,11 @@ services:
     depends_on:
       - garage
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.imgproxy.entrypoints=websecure
-      - traefik.http.routers.imgproxy.rule=Host(`img.${DOMAIN}`)
-      - traefik.http.routers.imgproxy.tls.certresolver=letsencrypt
-      - traefik.http.services.imgproxy.loadbalancer.server.port=8080
+      traefik.enable: "true"
+      traefik.http.routers.imgproxy.entrypoints: websecure
+      traefik.http.routers.imgproxy.rule: Host(`img.${DOMAIN}`)
+      traefik.http.routers.imgproxy.tls.certresolver: letsencrypt
+      traefik.http.services.imgproxy.loadbalancer.server.port: "8080"
 
   wersu-grpc:
     <<: *default
@@ -131,11 +131,14 @@ services:
     depends_on:
       - wersu-rest
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.wersu-frontend.entrypoints=websecure
-      - traefik.http.routers.wersu-frontend.rule=Host(`${FRONTEND_HOST}`)
-      - traefik.http.routers.wersu-frontend.tls.certresolver=letsencrypt
-      - traefik.http.services.wersu-frontend.loadbalancer.server.port=5173
+      traefik.enable: "true"
+      traefik.http.routers.wersu-frontend.entrypoints: websecure
+      traefik.http.routers.wersu-frontend.rule: Host(`${FRONTEND_HOST}`)
+      traefik.http.routers.wersu-frontend.tls.certresolver: letsencrypt
+      traefik.http.services.wersu-frontend.loadbalancer.server.port: "5173"
+      # Auto update with watchtower
+      com.centurylinklabs.watchtower.enable: "true"
+
 
   hocuspocus:
     <<: *default
