@@ -1,10 +1,32 @@
 # Wersu
+
+# Getting Started
+
+Clone, generate `.env`, run docker, and update.
+
+```bash
+# 1. Clone
+git clone https://github.com/KuramaSyu/WerSu.git
+cd WerSu
+
+# 2. Generate .env.prod (interactive, prompts for everything)
+./scripts/generate-prod-env.py
+
+# 3. Bring the stack up
+docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d
+
+# 4. To update after pulling new images or a new IMAGE_TAG
+docker compose -f docker-compose.prod.yaml --env-file .env.prod pull
+docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d
+```
+
+The prod compose assumes a host-level Traefik is already running on
+the `proxy` Docker network. See
+[docs/prod-deployment.md](docs/prod-deployment.md) for the full setup.
+
 ### Project Structure
 ![img](wersu-structure.drawio.png)
 
-# Todo
-- better logging, more di
-- don't regenerate embedding generator too often 
 
 # Development Docs
 ### Logging configuration
@@ -71,15 +93,3 @@ docker compose down; rm -r data; docker compose up --build -d; env PYTHONTRACEMA
     ```bash
     uv run pytest tests/pocs/ -m poc
     ```
-
-# SpiceDB and Zanzibar
-Zanzibar is a way to store relations between objects. One implementation for it is SpiceDB. Let's say you want to 
-say that a user has admin rights for a Note, because it's the creator, then you would typically create an entity
-for the note, persist it so that it gets an ID. Now you could store a `has_admin` in the note relation where the 
-note is also stored. But this has a view limitations. Let's first take a look on how to do it right:
-Create a Zanzibar Relation in the following format:
-`resource:resource_id#relation@object:object_id`
-in the case of giving a user admin-rights for a file it would look like this:
-`note:note_id#admin@user:user_id` (read as user `user_id` has admin permission for note `note_id`).
-Now you can not only store permissions, but also create relations like storing what directory a note belongs to:
-`directory:directory_id#parent@note:note_id`
