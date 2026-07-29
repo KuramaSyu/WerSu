@@ -1,0 +1,154 @@
+# IMPORTANT: 
+#   1. a traefik v3 container needs to be running on the `proxy` network. change the name if you want.
+#   2. generate env file: python3 ./scripts/generate-prod-env.py
+#   3. start: docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d
+
+name: wersu-prod
+
+# Network layout:
+# - poxy: external for outside connections; traefik needs to be (already) running on this network.
+# - internal: backend services which should not be exposed
+x-default: &default
+  restart: always
+  networks:
+    - internal
+    - proxy
+
+services:
+  postgres:
+    <<: *default
+    image: pgvector/pgvector:0.8.1-pg18-trixie
+    container_name: wersu-postgres
+    env_file: ./.env.prod
+    volumes:
+      - ./data/pgvector:/var/lib/postgresql
+      - ./pgvector_init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT 1'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+
+  spicedb-migrate:
+    image: authzed/spicedb:latest
+    container_name: wersu-spicedb-migrate
+    env_file: ./.env.prod
+    command:
+      - datastore
+      - migrate
+      - head
+      - --datastore-engine=postgres
+      - --datastore-conn-uri=postgres://spicedb:${SPICEDB_PASSWORD}@postgres:5432/spicedb?sslmode=disable
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  spicedb:
+    <<: *default
+    image: authzed/spicedb:latest
+    container_name: wersu-spicedb
+    env_file: ./.env.prod
+    command:
+      - serve
+      - --http-enabled=false
+      - --grpc-preshared-key=${GRPC_SPICEDB_CREDENTIALS}
+      - --datastore-engine=postgres
+      - --datastore-conn-uri=postgres://spicedb:${SPICEDB_PASSWORD}@postgres:5432/spicedb?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+      spicedb-migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal
+
+  garage:
+    <<: *default
+    image: dxflrs/garage:v2.3.0
+    container_name: wersu-garage
+    env_file: ./.env.prod
+    command:
+      - /garage
+      - server
+    volumes:
+      - ./infrastructure/garage.toml:/etc/garage.toml:ro
+      - ./data/garage/meta:/tmp/meta
+      - ./data/garage/data:/tmp/data
+    networks:
+      - internal
+
+  imgproxy:
+    <<: *default
+    image: ghcr.io/imgproxy/imgproxy:latest
+    container_name: wersu-imgproxy
+    env_file: ./.env.prod
+    depends_on:
+      - garage
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.imgproxy.entrypoints=websecure
+      - traefik.http.routers.imgproxy.rule=Host(`img.${DOMAIN}`)
+      - traefik.http.routers.imgproxy.tls.certresolver=letsencrypt
+      - traefik.http.services.imgproxy.loadbalancer.server.port=8080
+
+  wersu-grpc:
+    <<: *default
+    image: ghcr.io/kuramasyu/wersu-grpc:${IMAGE_TAG:-latest}
+    container_name: wersu-grpc
+    env_file: ./.env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      spicedb:
+        condition: service_started
+    networks:
+      - internal
+
+  wersu-rest:
+    <<: *default
+    image: ghcr.io/kuramasyu/wersu-rest:${IMAGE_TAG:-latest}
+    container_name: wersu-rest
+    env_file: ./.env.prod
+    depends_on:
+      - wersu-grpc
+      - postgres
+      - spicedb
+      - garage
+
+  wersu-frontend:
+    <<: *default
+    image: ghcr.io/kuramasyu/wersu-frontend:${IMAGE_TAG:-latest}
+    container_name: wersu-frontend
+    env_file: ./.env.prod
+    depends_on:
+      - wersu-rest
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.wersu-frontend.entrypoints=websecure
+      - traefik.http.routers.wersu-frontend.rule=Host(`${FRONTEND_HOST}`)
+      - traefik.http.routers.wersu-frontend.tls.certresolver=letsencrypt
+      - traefik.http.services.wersu-frontend.loadbalancer.server.port=5173
+
+  hocuspocus:
+    <<: *default
+    build:
+      context: ./infrastructure/hocuspocus
+      dockerfile: Dockerfile
+    container_name: wersu-hocuspocus
+    env_file: ./.env.prod
+    depends_on:
+      - spicedb
+
+networks:
+  proxy:
+    external: true
+  internal:
+    name: wersu-internal
