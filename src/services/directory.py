@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, List, Optional
 from src.api import (
     ActivityLoggerServiceABC,
     DirectoryIncludeOptions,
-    DirectoryRelationEnum,
     DirectoryServiceABC,
     LoggingProvider,
     NoteRelationEnum,
@@ -29,6 +28,7 @@ from src.api import (
     SubjectRef,
 )
 from src.api.services.note_service import NoteServiceABC
+from src.api.services.activity_logger_service import EventMetadataVisitor
 from src.api.repos.permission_repo import DirectoryChild
 from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.other.user_context import UserContextABC
@@ -86,6 +86,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         self._note_service = note_service
         self._attachment_facade = attachment_facade
         self.log = log(__name__, self)
+        self._to_metadata = EventMetadataVisitor()
 
     async def get_directory_notes(
         self,
@@ -158,7 +159,10 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         if directory is None:
             return None
         await self._apply_readme_overrides(directory, user_ctx)
-        await self._activity_logger.directory_viewed(directory_id, user_ctx)
+        await self._activity_logger.directory_viewed(
+            directory_id, user_ctx,
+            metadata=directory.convert(self._to_metadata),
+        )
         return directory
 
     async def get_directories(
@@ -286,7 +290,8 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         if refreshed is not None:
             created_dir = refreshed
         await self._activity_logger.directory_created(
-            str(created_dir.id), user_ctx
+            str(created_dir.id), user_ctx,
+            metadata=created_dir.convert(self._to_metadata),
         )
         return created_dir
 
@@ -312,7 +317,8 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         updated = await self._directory_facade.update_directory(entity)
         if updated is not None:
             await self._activity_logger.directory_edited(
-                str(entity.id), user_ctx
+                str(entity.id), user_ctx,
+                metadata=entity.convert(self._to_metadata),
             )
         return updated
 
@@ -362,12 +368,16 @@ class DirectoryServiceImpl(DirectoryServiceABC):
                 continue
             await self.delete_directory(sub_id, user_ctx)
 
+        # Snapshot the directory before deletion so the deletion for event recording
+        snapshot = await self._directory_facade.fetch_directory(directory_id)
+
         deleted = await self._directory_facade.delete_directory(
             DirectoryEntity(id=directory_id)
         )
         if deleted:
             await self._activity_logger.directory_deleted(
-                directory_id, user_ctx
+                directory_id, user_ctx,
+                metadata=snapshot.convert(self._to_metadata) if snapshot else None,
             )
         return deleted
 
@@ -556,21 +566,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
                 readme_note_id=readme_note_id,
             )
         )
-        await self._ensure_readme_parent_directory_relation(
-            directory_id=directory_id,
-            readme_note_id=readme_note_id,
-        )
-
-    async def _ensure_readme_parent_directory_relation(
-        self,
-        directory_id: str,
-        readme_note_id: str,
-    ) -> None:
-        """Insert the ``note#parent_directory@directory`` relation if missing.
-
-        Skips the insert when an existing relation already points at
-        `directory_id`, keeping the bind idempotent.
-        """
+        # this should probably be done in the directory facade
         existing = await self._permission_repo.lookup_relationships(
             Relationship(
                 resource=ObjectRef(ObjectTypeEnum.NOTE, readme_note_id),

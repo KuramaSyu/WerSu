@@ -78,7 +78,7 @@ class SharingServiceImpl(SharingServiceABC):
         await self._activity_logger.note_shared(
             str(created.note_id),
             ctx,
-            metadata={"permission": str(relation), "access_as": access_as},
+            metadata={"permission": str(relation), "access_as": access_as, "description": created.description or ""},
         )
 
         return created
@@ -150,7 +150,7 @@ class SharingServiceImpl(SharingServiceABC):
             await self._activity_logger.note_unshared(
                 note_id,
                 ctx,
-                metadata={"share_id": share_id, "access_as": access_as},
+                metadata={"share_id": share_id, "access_as": access_as, "description": share.description or ""},
             )
 
 

@@ -32,6 +32,7 @@ from src.api import (
 )
 from src.api.services.note_service import GetNotesOptions, resolve_options
 from src.api.services.jwt_provider import JwtProvider
+from src.api.services.activity_logger_service import EventMetadataVisitor
 from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api.other.relationship import AttachmentRelationEnum
 from src.api.other.types import LoggingProvider, Pagination
@@ -67,6 +68,7 @@ class NoteServiceImpl(NoteServiceABC):
         self._activity_logger = activity_logger
         self._log = logging_provider(__name__, self)
         self._now = now
+        self._to_metadata = EventMetadataVisitor()
 
     async def get_note(
         self,
@@ -85,8 +87,11 @@ class NoteServiceImpl(NoteServiceABC):
         )
         if note is None:
             return NoteResponse(note=None)
-
-        await self._activity_logger.note_viewed(note_id, user_ctx)
+        
+        await self._activity_logger.note_viewed(
+            note_id, user_ctx,
+            metadata=note.convert(self._to_metadata),
+        )
 
         note.permissions = await self._fetch_note_permissions(note_id)
 
@@ -109,8 +114,10 @@ class NoteServiceImpl(NoteServiceABC):
             note.updated_at = self._now()
 
         inserted = await self._note_repo.insert(note, user_ctx)
-
-        await self._activity_logger.note_created(str(inserted.note_id), user_ctx)
+        await self._activity_logger.note_created(
+            str(inserted.note_id), user_ctx,
+            metadata=inserted.convert(self._to_metadata),
+        )
 
         # a local copy for later usage; this already got inserted in the note repo
         # parent_dir_relation = Relationship(
@@ -159,7 +166,10 @@ class NoteServiceImpl(NoteServiceABC):
         if not deleted:
             return None
         assert len(deleted) <= 1
-        await self._activity_logger.note_deleted(note_id, user_ctx)
+        await self._activity_logger.note_deleted(
+            note_id, user_ctx,
+            metadata=deleted[0].convert(self._to_metadata),
+        )
         return deleted[0]
 
     async def search_notes(
