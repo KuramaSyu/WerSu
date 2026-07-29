@@ -284,8 +284,23 @@ class PostgresActivityRepo(ActivityRepoABC):
 
     @staticmethod
     def _from_record(record: Record) -> ActivityEntity:
-        """Convert a full ``activity`` row into the entity."""
-        return ActivityEntity(**dict(record))
+        """Convert a full ``activity`` row into the entity.
+
+        Postgres' asyncpg driver decodes a ``JSONB`` column as the raw
+        JSON string, and the test SQLite schema stores ``metadata``
+        as ``TEXT`` -- either way the record carries a string.  The
+        ``ActivityEntity.metadata`` field is typed as a mapping, so
+        we parse the string back into a dict on the way out so the
+        rest of the stack (gRPC visitor, statistics service, ...)
+        can treat it uniformly.
+        """
+        data = dict(record)
+        if isinstance(data.get("metadata"), str):
+            try:
+                data["metadata"] = json.loads(data["metadata"])
+            except (TypeError, ValueError):
+                data["metadata"] = {}
+        return ActivityEntity(**data)
 
 
 def _eq_pair(column: str, value: object) -> Optional[WherePair]:
