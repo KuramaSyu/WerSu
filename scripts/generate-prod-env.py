@@ -442,8 +442,9 @@ def main() -> int:
 
     values = collect_values()
 
-    # POSTGRES_PASSWORD: if the user left it blank, fill in a random.
-    if not values.get("POSTGRES_PASSWORD"):
+    # POSTGRES_PASSWORD: auto-generate if the user left it blank or
+    # accepted the [autogenerate] default at the prompt.
+    if not values.get("POSTGRES_PASSWORD") or values["POSTGRES_PASSWORD"] == "[autogenerate]":
         values["POSTGRES_PASSWORD"] = rand_hex(32)
 
     # Static defaults for any auto-generated / non-asked values. These
