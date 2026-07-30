@@ -200,11 +200,24 @@ def validate(field: Field, value: str) -> str | None:
 
 # ---------- Prompt loop ----------
 
-def print_help(key: str) -> None:
-    """Print the multi-line help block for a field, if one is defined."""
+def print_help(key: str, values: dict[str, str]) -> None:
+    """Print the multi-line help block for a field, if one is defined.
+
+    Any ``<KEY>`` placeholder in the help text is replaced with the
+    matching value from ``values`` (only if it's already been asked).
+    Lets the Discord step reference the user's domain automatically
+    instead of asking them to substitute ``<DOMAIN>`` themselves.
+    """
     text = HELP.get(key)
     if not text:
         return
+
+    def sub(match: re.Match[str]) -> str:
+        k = match.group(1)
+        return values.get(k, match.group(0))
+
+    text = re.sub(r"<([A-Z][A-Z0-9_]*)>", sub, text)
+
     print()
     for line in text.splitlines():
         if line:
@@ -248,7 +261,7 @@ def collect_values() -> dict[str, str]:
                 domain = values.get("DOMAIN", "")
                 default = f"wersu.{domain}" if domain else default
 
-            print_help(field.key)
+            print_help(field.key, values)
 
             while True:
                 value = prompt(field, default_override=default)
