@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE USER spicedb WITH PASSWORD 'spicedb';
 CREATE DATABASE spicedb OWNER spicedb;
 

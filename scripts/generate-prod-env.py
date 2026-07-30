@@ -133,7 +133,6 @@ FIELDS: list[Field] = [
 # (these are the secrets that must be unpredictable).
 # Size is in bytes; the rendered value is twice that many hex chars.
 RANDOM_FIELDS: dict[str, int] = {
-    "SPICEDB_PASSWORD": 32,
     "GRPC_SPICEDB_CREDENTIALS": 32,
     "JWT_SECRET": 64,
     "SESSION_SECRET": 64,
@@ -142,6 +141,15 @@ RANDOM_FIELDS: dict[str, int] = {
     # produces similar sizes.
     "GARAGE_DEFAULT_ACCESS_KEY": 16,
     "GARAGE_DEFAULT_SECRET_KEY": 32,
+}
+
+# Static default values for things that need to match a literal in
+# pgvector_init.sql but shouldn't be asked of the user. SPICEDB_PASSWORD
+# is the password pgvector_init.sql uses when creating the spicedb
+# Postgres role; it must agree with the password SpiceDB's
+# --datastore-conn-uri uses.
+STATIC_DEFAULTS: dict[str, str] = {
+    "SPICEDB_PASSWORD": "spicedb",
 }
 
 
@@ -443,6 +451,8 @@ def main() -> int:
     # lines that reference them (e.g. S3_REGION=${GARAGE_DEFAULT_BUCKET})
     # get a real value. The @random:<KEY>@ placeholders still get their
     # own freshly-generated random values during substitution.
+    for key, default in STATIC_DEFAULTS.items():
+        values.setdefault(key, default)
     values.setdefault("GARAGE_DEFAULT_BUCKET", "bucket")
 
     if args.output.is_file() and not args.force:
