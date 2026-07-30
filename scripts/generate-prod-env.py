@@ -276,15 +276,17 @@ def collect_values() -> dict[str, str]:
             values[field.key] = value
 
             # Cross-field: Discord ID and Secret must be set together.
-            # If the user just answered one but the other is still
-            # missing, clear both and restart from the top of FIELDS.
-            if field.key in ("DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"):
+            # Only check after the SECOND of the pair (Secret) has been
+            # answered - by that point both values have been entered, so
+            # a missing one is a real problem rather than the user just
+            # not having seen the next prompt yet.
+            if field.key == "DISCORD_CLIENT_SECRET":
                 cid = values.get("DISCORD_CLIENT_ID", "")
                 csec = values.get("DISCORD_CLIENT_SECRET", "")
                 if (cid and not csec) or (csec and not cid):
                     print(
                         "  DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET "
-                        "must both be set. Restarting the prompts...",
+                        "must both be set. Re-asking both...",
                         file=sys.stderr,
                     )
                     values["DISCORD_CLIENT_ID"] = ""
