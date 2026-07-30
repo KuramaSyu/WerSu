@@ -123,10 +123,10 @@ services:
       - spicedb
       - garage
 
-  wersu-frontend:
+  wersu-web-app:
     <<: *default
-    image: ghcr.io/kuramasyu/wersu-frontend:${IMAGE_TAG:-latest}
-    container_name: wersu-frontend
+    image: ghcr.io/kuramasyu/wersu-web-app:${IMAGE_TAG:-latest}
+    container_name: wersu-web-app
     env_file: ./.env.prod
     depends_on:
       - wersu-rest
