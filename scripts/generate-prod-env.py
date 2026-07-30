@@ -86,9 +86,9 @@ HELP: dict[str, str] = {
         "       https://api.<DOMAIN>/api/auth/discord/callback\n"
         "     (use http://localhost if you only want to test locally\n"
         "     first).\n"
-        "  4. Copy the Client ID. We need the secret later too\n"
-        "You can leave both blank to skip Discord for now and add it\n"
-        "later - logins just won't work until you do."
+        "  4. Copy the Client ID. We need the secret on the next prompt.\n"
+        "Both ID and Secret are required - the script rejects runs\n"
+        "where only one is set."
     ),
     "DISCORD_CLIENT_SECRET": (
         "Same Discord app as the Client ID. The Secret sits next to\n"
@@ -117,9 +117,9 @@ FIELDS: list[Field] = [
     Field("FRONTEND_HOST", "Frontend hostname", mode="optional",
           group="Public config"),
 
-    Field("DISCORD_CLIENT_ID", "Discord client ID", mode="optional",
+    Field("DISCORD_CLIENT_ID", "Discord client ID", mode="required",
           group="Public config"),
-    Field("DISCORD_CLIENT_SECRET", "Discord client secret", mode="optional",
+    Field("DISCORD_CLIENT_SECRET", "Discord client secret", mode="required",
           group="Public config"),
 
     Field("POSTGRES_USER", "Postgres user", default="postgres",
@@ -165,6 +165,18 @@ def is_domain(value: str) -> bool:
     ))
 
 
+def is_discord_client_id(value: str) -> bool:
+    # Discord client IDs are snowflakes: 17-20 digit numeric strings.
+    return bool(re.fullmatch(r"\d{17,20}", value))
+
+
+def is_discord_client_secret(value: str) -> bool:
+    # Discord secrets are ~30+ chars of url-safe base64-ish noise. We
+    # just want to catch typos (truncated copy-paste, trailing spaces,
+    # accidentally pasted the client ID again), not pin the format.
+    return len(value) >= 24 and " " not in value
+
+
 def validate(field: Field, value: str) -> str | None:
     """Return None if ``value`` is OK, else an error message."""
     if field.mode == "optional":
@@ -175,6 +187,12 @@ def validate(field: Field, value: str) -> str | None:
         return f"{value!r} doesn't look like an email"
     if field.mode == "domain" and not is_domain(value):
         return f"{value!r} doesn't look like a domain"
+    if field.key == "DISCORD_CLIENT_ID" and not is_discord_client_id(value):
+        return (f"{value!r} doesn't look like a Discord client ID "
+                f"(expected 17-20 digit numeric string)")
+    if field.key == "DISCORD_CLIENT_SECRET" and not is_discord_client_secret(value):
+        return (f"{value!r} doesn't look like a Discord client secret "
+                f"(expected ~30+ chars, no whitespace)")
     return None
 
 
@@ -224,8 +242,14 @@ def collect_values() -> dict[str, str]:
     values: dict[str, str] = {}
 
     while True:
+        # Index into FIELDS. Using a manual index lets the Discord
+        # cross-field check restart the loop from the top when the user
+        # only fills in one of the two values.
+        i = 0
         current_group = None
-        for field in FIELDS:
+        while i < len(FIELDS):
+            field = FIELDS[i]
+
             # Print a section header when the group changes, so the
             # terminal output mirrors the block layout of the .env file.
             if field.group != current_group:
@@ -250,6 +274,26 @@ def collect_values() -> dict[str, str]:
                     break
                 print(f"  {err}", file=sys.stderr)
             values[field.key] = value
+
+            # Cross-field: Discord ID and Secret must be set together.
+            # If the user just answered one but the other is still
+            # missing, clear both and restart from the top of FIELDS.
+            if field.key in ("DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"):
+                cid = values.get("DISCORD_CLIENT_ID", "")
+                csec = values.get("DISCORD_CLIENT_SECRET", "")
+                if (cid and not csec) or (csec and not cid):
+                    print(
+                        "  DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET "
+                        "must both be set. Restarting the prompts...",
+                        file=sys.stderr,
+                    )
+                    values["DISCORD_CLIENT_ID"] = ""
+                    values["DISCORD_CLIENT_SECRET"] = ""
+                    i = 0
+                    current_group = None
+                    continue
+
+            i += 1
 
         print()
         print("Summary:")
