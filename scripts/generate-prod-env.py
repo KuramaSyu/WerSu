@@ -101,17 +101,16 @@ HELP: dict[str, str] = {
         "your own with: openssl rand -hex 32"
     ),
     "IMAGE_TAG": (
-        "Tag of the three app images to pull from ghcr.io/kuramasyu/*.\n"
-        "  - 'latest' tracks the most recent build (auto-updated by\n"
-        "    Watchtower for wersu-frontend).\n"
-        "  - 'vX.Y.Z' pins a specific release. Change this in\n"
-        "    .env.prod and re-run `docker compose up -d` to bump."
+        "Tag of the three app images to pull from docker.io/kuramasyu/*.\n"
+        "  - 'dev' tracks the most recent build of the default branch.\n"
+        "  - 'vX.Y.Z' pins a specific release. Bump this in\n"
+        "    .env.prod and re-run `docker compose up -d` to deploy."
     ),
 }
 
 # Field definitions. Edit this list to add or change prompts.
 FIELDS: list[Field] = [
-    Field("IMAGE_TAG", "Image tag", default="latest", mode="optional",
+    Field("IMAGE_TAG", "Image tag", default="dev", mode="optional",
           group="Public config"),
     Field("DOMAIN", "Apex domain", mode="domain", group="Public config"),
     Field("FRONTEND_HOST", "Frontend hostname", mode="optional",

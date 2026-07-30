@@ -101,7 +101,7 @@ services:
 
   wersu-grpc:
     <<: *default
-    image: ghcr.io/kuramasyu/wersu-grpc:${IMAGE_TAG:-latest}
+    image: docker.io/kuramasyu/wersu-grpc:${IMAGE_TAG:-dev}
     container_name: wersu-grpc
     env_file: ./.env.prod
     depends_on:
@@ -114,7 +114,7 @@ services:
 
   wersu-rest:
     <<: *default
-    image: ghcr.io/kuramasyu/wersu-rest:${IMAGE_TAG:-latest}
+    image: docker.io/kuramasyu/wersu-rest:${IMAGE_TAG:-dev}
     container_name: wersu-rest
     env_file: ./.env.prod
     depends_on:
@@ -125,7 +125,7 @@ services:
 
   wersu-web-app:
     <<: *default
-    image: ghcr.io/kuramasyu/wersu-web-app:${IMAGE_TAG:-latest}
+    image: docker.io/kuramasyu/wersu-web-app:${IMAGE_TAG:-dev}
     container_name: wersu-web-app
     env_file: ./.env.prod
     depends_on:
