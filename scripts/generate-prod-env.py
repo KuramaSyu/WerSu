@@ -26,9 +26,8 @@ import os
 import re
 import secrets
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = Path(__file__).resolve().parent / ".env.prod.template"
@@ -87,10 +86,7 @@ HELP: dict[str, str] = {
         "       https://api.<DOMAIN>/api/auth/discord/callback\n"
         "     (use http://localhost if you only want to test locally\n"
         "     first).\n"
-        "  4. Copy the Client ID. The Client Secret is on the same\n"
-        "     page - copy that too.\n"
-        "  5. Under 'Scopes' tick identify and email so the API can\n"
-        "     read the user's profile + email.\n"
+        "  4. Copy the Client ID. We need the secret later too\n"
         "You can leave both blank to skip Discord for now and add it\n"
         "later - logins just won't work until you do."
     ),
@@ -103,21 +99,6 @@ HELP: dict[str, str] = {
         "Password for the Postgres role that owns the app database.\n"
         "Leave blank to auto-generate a 64-char random value. Or set\n"
         "your own with: openssl rand -hex 32"
-    ),
-    "GARAGE_DEFAULT_ACCESS_KEY": (
-        "S3 credentials for the garage object store. Run\n"
-        "  garage key create\n"
-        "inside the garage container (or via its admin API) to mint a\n"
-        "key, then paste the access key + secret here. Leave both\n"
-        "blank to use the dev defaults - fine for an initial deploy,\n"
-        "rotate before opening the box to the public."
-    ),
-    "GARAGE_DEFAULT_SECRET_KEY": "See Garage access key hint.",
-    "GARAGE_DEFAULT_BUCKET": (
-        "Name of the S3 bucket garage uses. Create it with\n"
-        "  garage bucket create <name>\n"
-        "inside the garage container. The default 'garage' works if\n"
-        "you've run `garage bucket create garage` already."
     ),
     "IMAGE_TAG": (
         "Tag of the three app images to pull from ghcr.io/kuramasyu/*.\n"
@@ -143,26 +124,25 @@ FIELDS: list[Field] = [
 
     Field("POSTGRES_USER", "Postgres user", default="postgres",
           mode="optional", group="Storage credentials"),
-    Field("POSTGRES_PASSWORD", "Postgres password", mode="optional",
-          group="Storage credentials"),
-    Field("POSTGRES_DB", "Postgres database name", default="db",
+    Field("POSTGRES_PASSWORD", "Postgres password", default="[autogenerate]",
           mode="optional", group="Storage credentials"),
-
-    Field("GARAGE_DEFAULT_ACCESS_KEY", "Garage access key", mode="optional",
-          group="Storage credentials"),
-    Field("GARAGE_DEFAULT_SECRET_KEY", "Garage secret key", mode="optional",
-          group="Storage credentials"),
-    Field("GARAGE_DEFAULT_BUCKET", "Garage bucket name", default="garage",
+    Field("POSTGRES_DB", "Postgres database name", default="db",
           mode="optional", group="Storage credentials"),
 ]
 
 # Random fields. The values are generated unconditionally at the end
 # (these are the secrets that must be unpredictable).
+# Size is in bytes; the rendered value is twice that many hex chars.
 RANDOM_FIELDS: dict[str, int] = {
     "SPICEDB_PASSWORD": 32,
     "GRPC_SPICEDB_CREDENTIALS": 32,
     "JWT_SECRET": 64,
     "SESSION_SECRET": 64,
+    # Garage S3 credentials: 16-byte access key (32 hex chars),
+    # 32-byte secret (64 hex chars). Garage's own `key create`
+    # produces similar sizes.
+    "GARAGE_DEFAULT_ACCESS_KEY": 16,
+    "GARAGE_DEFAULT_SECRET_KEY": 32,
 }
 
 
@@ -324,14 +304,20 @@ def collect_values() -> dict[str, str]:
 # ---------- Substitution ----------
 
 def substitute(text: str, values: dict[str, str]) -> str:
-    """Replace @ask:<KEY>@ and @random:<KEY>@ placeholders.
+    """Replace @ask:<KEY>@ and @random:<KEY>@ placeholders, then expand
+    any ``${OTHER_KEY}`` shell-style references against the rendered
+    output. This lets the template compose values out of other values
+    (e.g. ``DATABASE_DSN`` built from ``POSTGRES_USER``) without
+    relying on the runtime to expand them - docker compose's
+    ``${VAR}`` substitution does not happen inside ``env_file``
+    values.
 
-    After the ask/random passes, also expand any ``${OTHER_KEY}`` shell-style
-    references in the rendered values against ``values``. This lets the
-    template compose values out of other values (e.g. ``DATABASE_DSN``
-    built from ``POSTGRES_USER``) without relying on the runtime to
-    expand them - docker compose's ``${VAR}`` substitution does not
-    happen inside ``env_file`` values.
+    Why we re-scan the rendered output instead of using the ``values``
+    dict for ``${...}`` expansion: ``@random:<KEY>@`` placeholders
+    generate values during substitution that are never written back
+    into ``values``. Re-parsing the rendered text picks those up so a
+    downstream ``S3_REGION=${GARAGE_DEFAULT_BUCKET}`` (literal) still
+    expands to the auto-generated bucket name, etc.
     """
 
     def replace_ask(match: re.Match[str]) -> str:
@@ -349,15 +335,25 @@ def substitute(text: str, values: dict[str, str]) -> str:
     if leftover:
         raise ValueError(f"leftover placeholders after substitution: {leftover}")
 
-    # Expand ${OTHER_KEY} references. Only references whose KEY is in
-    # ``values`` are touched; literal ${...} that we don't know about
-    # are passed through (so the runtime can still see ${DOMAIN} for
-    # docker compose's own interpolation if it ever reads this file).
+    # Build the ${KEY} lookup from the rendered output. We only pick
+    # up real ``KEY=value`` lines so commented-out placeholders (with
+    # ``#`` prefix) and unrelated text don't leak in.
+    derived: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.lstrip()
+        if line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        if re.fullmatch(r"[A-Z][A-Z0-9_]*", k):
+            derived[k] = v
+
+    # Plus the user-provided values (so derived values can compose
+    # against both - though in practice the rendered lines win).
+    derived.update(values)
+
     def expand_braces(match: re.Match[str]) -> str:
         key = match.group(1)
-        if key in values:
-            return values[key]
-        return match.group(0)
+        return derived.get(key, match.group(0))
 
     return re.sub(r"\$\{([A-Z][A-Z0-9_]*)\}", expand_braces, text)
 
@@ -396,6 +392,13 @@ def main() -> int:
     # POSTGRES_PASSWORD: if the user left it blank, fill in a random.
     if not values.get("POSTGRES_PASSWORD"):
         values["POSTGRES_PASSWORD"] = rand_hex(32)
+
+    # Static defaults for any auto-generated / non-asked values. These
+    # are exposed via ${KEY} expansion in substitute() so downstream
+    # lines that reference them (e.g. S3_REGION=${GARAGE_DEFAULT_BUCKET})
+    # get a real value. The @random:<KEY>@ placeholders still get their
+    # own freshly-generated random values during substitution.
+    values.setdefault("GARAGE_DEFAULT_BUCKET", "bucket")
 
     if args.output.is_file() and not args.force:
         confirm = input(f"{args.output} already exists. Overwrite? [y/N] ").strip()
