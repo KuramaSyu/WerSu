@@ -45,7 +45,6 @@ class Field:
     key: str
     prompt: str
     default: str = ""
-    hint: str = ""
     # Validation mode. ``required`` re-prompts on empty; ``optional``
     # accepts empty (falls back to ``default``); ``email`` / ``domain``
     # additionally format-check the value.
@@ -58,15 +57,83 @@ def rand_hex(nbytes: int) -> str:
     return secrets.token_hex(nbytes)
 
 
+# Per-field help blocks. Printed before the prompt for the field that
+# needs more than a one-liner. Keep these readable in a terminal -
+# short paragraphs, blank lines between steps.
+HELP: dict[str, str] = {
+    "DOMAIN": (
+        "Your apex domain, e.g. inu-the-bot.com.\n"
+        "Traefik will route the four subdomains below to the matching\n"
+        "services on this host:\n"
+        "  - api.<DOMAIN>      -> wersu-rest\n"
+        "  - ws.<DOMAIN>       -> hocuspocus\n"
+        "  - img.<DOMAIN>      -> imgproxy\n"
+        "  - wersu.<DOMAIN>    -> wersu-frontend\n"
+        "Create A (or AAAA) records for each, all pointing at this\n"
+        "host's public IP. Port 80 must be reachable from the internet\n"
+        "so Let's Encrypt can issue the HTTPS cert."
+    ),
+    "FRONTEND_HOST": (
+        "Hostname the React frontend is served on. Defaults to\n"
+        "wersu.<DOMAIN>. Change this if your frontend lives somewhere\n"
+        "else (e.g. a sub-path on the apex)."
+    ),
+    "DISCORD_CLIENT_ID": (
+        "Discord OAuth is how users log in. To set it up:\n"
+        "  1. Open https://discord.com/developers/applications and\n"
+        "     create a new application (e.g. named 'WerSu Login').\n"
+        "  2. In the left panel open OAuth2.\n"
+        "  3. Add a redirect:\n"
+        "       https://api.<DOMAIN>/api/auth/discord/callback\n"
+        "     (use http://localhost if you only want to test locally\n"
+        "     first).\n"
+        "  4. Copy the Client ID. The Client Secret is on the same\n"
+        "     page - copy that too.\n"
+        "  5. Under 'Scopes' tick identify and email so the API can\n"
+        "     read the user's profile + email.\n"
+        "You can leave both blank to skip Discord for now and add it\n"
+        "later - logins just won't work until you do."
+    ),
+    "DISCORD_CLIENT_SECRET": (
+        "Same Discord app as the Client ID. The Secret sits next to\n"
+        "the ID on the OAuth2 page - click 'Reset Secret' if you've\n"
+        "never copied it before."
+    ),
+    "POSTGRES_PASSWORD": (
+        "Password for the Postgres role that owns the app database.\n"
+        "Leave blank to auto-generate a 64-char random value. Or set\n"
+        "your own with: openssl rand -hex 32"
+    ),
+    "GARAGE_DEFAULT_ACCESS_KEY": (
+        "S3 credentials for the garage object store. Run\n"
+        "  garage key create\n"
+        "inside the garage container (or via its admin API) to mint a\n"
+        "key, then paste the access key + secret here. Leave both\n"
+        "blank to use the dev defaults - fine for an initial deploy,\n"
+        "rotate before opening the box to the public."
+    ),
+    "GARAGE_DEFAULT_SECRET_KEY": "See Garage access key hint.",
+    "GARAGE_DEFAULT_BUCKET": (
+        "Name of the S3 bucket garage uses. Create it with\n"
+        "  garage bucket create <name>\n"
+        "inside the garage container. The default 'garage' works if\n"
+        "you've run `garage bucket create garage` already."
+    ),
+    "IMAGE_TAG": (
+        "Tag of the three app images to pull from ghcr.io/kuramasyu/*.\n"
+        "  - 'latest' tracks the most recent build (auto-updated by\n"
+        "    Watchtower for wersu-frontend).\n"
+        "  - 'vX.Y.Z' pins a specific release. Change this in\n"
+        "    .env.prod and re-run `docker compose up -d` to bump."
+    ),
+}
+
 # Field definitions. Edit this list to add or change prompts.
 FIELDS: list[Field] = [
-    Field("IMAGE_TAG", "Image tag", default="latest",
-          hint="latest for dev, semver for releases", mode="optional",
+    Field("IMAGE_TAG", "Image tag", default="latest", mode="optional",
           group="Public config"),
-    Field("DOMAIN", "Apex domain", hint="e.g. inu-the-bot.com",
-          mode="domain", group="Public config"),
-    Field("FRONTEND_HOST", "Frontend hostname",
-          hint="blank to use wersu.<DOMAIN>", mode="optional",
+    Field("DOMAIN", "Apex domain", mode="domain", group="Public config"),
+    Field("FRONTEND_HOST", "Frontend hostname", mode="optional",
           group="Public config"),
 
     Field("DISCORD_CLIENT_ID", "Discord client ID", mode="optional",
@@ -76,16 +143,14 @@ FIELDS: list[Field] = [
 
     Field("POSTGRES_USER", "Postgres user", default="postgres",
           mode="optional", group="Storage credentials"),
-    Field("POSTGRES_PASSWORD", "Postgres password", hint="blank = random",
-          mode="optional", group="Storage credentials"),
+    Field("POSTGRES_PASSWORD", "Postgres password", mode="optional",
+          group="Storage credentials"),
     Field("POSTGRES_DB", "Postgres database name", default="db",
           mode="optional", group="Storage credentials"),
 
-    Field("GARAGE_DEFAULT_ACCESS_KEY", "Garage access key",
-          hint="leave blank to use the dev defaults", mode="optional",
+    Field("GARAGE_DEFAULT_ACCESS_KEY", "Garage access key", mode="optional",
           group="Storage credentials"),
-    Field("GARAGE_DEFAULT_SECRET_KEY", "Garage secret key",
-          hint="leave blank to use the dev defaults", mode="optional",
+    Field("GARAGE_DEFAULT_SECRET_KEY", "Garage secret key", mode="optional",
           group="Storage credentials"),
     Field("GARAGE_DEFAULT_BUCKET", "Garage bucket name", default="garage",
           mode="optional", group="Storage credentials"),
@@ -135,17 +200,30 @@ def validate(field: Field, value: str) -> str | None:
 
 # ---------- Prompt loop ----------
 
-def prompt(field: Field) -> str:
-    """Ask once. Empty input falls back to ``field.default``."""
+def print_help(key: str) -> None:
+    """Print the multi-line help block for a field, if one is defined."""
+    text = HELP.get(key)
+    if not text:
+        return
+    print()
+    for line in text.splitlines():
+        if line:
+            print(f"  {line}")
+        else:
+            print()
+
+
+def prompt(field: Field, default_override: str = "") -> str:
+    """Ask once. Empty input falls back to ``default_override`` if set,
+    else ``field.default``."""
     parts = [field.prompt]
-    if field.hint:
-        parts.append(f"({field.hint})")
-    if field.default:
-        parts.append(f"[{field.default}]")
+    default = default_override or field.default
+    if default:
+        parts.append(f"[{default}]")
     label = " ".join(parts) + ": "
 
     raw = input(label).strip()
-    return raw or field.default
+    return raw or default
 
 
 def collect_values() -> dict[str, str]:
@@ -170,8 +248,10 @@ def collect_values() -> dict[str, str]:
                 domain = values.get("DOMAIN", "")
                 default = f"wersu.{domain}" if domain else default
 
+            print_help(field.key)
+
             while True:
-                value = prompt(field)
+                value = prompt(field, default_override=default)
                 err = validate(field, value)
                 if err is None:
                     break
