@@ -10,7 +10,7 @@ git clone https://github.com/KuramaSyu/WerSu.git
 cd WerSu
 
 # 2. Generate .env.prod (interactive, prompts for everything)
-./scripts/generate-prod-env.py
+chmod u+x ./scripts/generate-prod-env.py && ./scripts/generate-prod-env.py
 
 # 3. Bring the stack up
 docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d
