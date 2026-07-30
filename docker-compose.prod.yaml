@@ -21,7 +21,7 @@ services:
     container_name: wersu-postgres
     env_file: ./.env.prod
     volumes:
-      - ./data/pgvector:/var/lib/postgresql
+      - ../data/pgvector:/var/lib/postgresql
       - ./pgvector_init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test:
@@ -80,8 +80,8 @@ services:
       - server
     volumes:
       - ./infrastructure/garage.toml:/etc/garage.toml:ro
-      - ./data/garage/meta:/tmp/meta
-      - ./data/garage/data:/tmp/data
+      - ../data/garage/meta:/tmp/meta
+      - ../data/garage/data:/tmp/data
     networks:
       - internal
 
