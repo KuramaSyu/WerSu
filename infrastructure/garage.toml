@@ -1,12 +1,29 @@
+# Minimal Garage configuration for the WerSu prod stack.
+#
+# Every secret lives in environment variables, not in this file. The
+# --single-node --default-bucket flags passed by docker-compose.prod.yaml
+# automatically:
+#   - assign the cluster layout (no `garage layout assign` needed)
+#   - create the bucket named by $GARAGE_DEFAULT_BUCKET
+#   - create the access key from $GARAGE_DEFAULT_ACCESS_KEY +
+#     $GARAGE_DEFAULT_SECRET_KEY and grant it owner/read/write on that
+#     bucket
+#
+# That means on a fresh data dir the container is usable immediately;
+# no `garage key create` / `garage bucket allow` follow-ups.
+
 metadata_dir = "/tmp/meta"
 data_dir = "/tmp/data"
 db_engine = "sqlite"
 
 replication_factor = 1
 
+# rpc_secret / admin_token / metrics_token are sourced from
+# $GARAGE_RPC_SECRET / $GARAGE_ADMIN_TOKEN / $GARAGE_METRICS_TOKEN at
+# process start (Garage reads these env vars directly - no need to
+# duplicate the values here).
 rpc_bind_addr = "[::]:3901"
 rpc_public_addr = "127.0.0.1:3901"
-rpc_secret = "181daae763dbfaf1aa5d9f2780f959c890d8ceb21b271e3498028758547e5fa0"
 
 [s3_api]
 s3_region = "garage"
@@ -20,5 +37,3 @@ index = "index.html"
 
 [admin]
 api_bind_addr = "[::]:3903"
-admin_token = "//62mmNZjunN3rXMU1VhUVbcdnEjbZWvlkuPfBl4c78="
-metrics_token = "7dJHKha9592Ju7AsuqSiaEasuRjtS7zjhvYeykjjUuk="

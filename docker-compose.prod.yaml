@@ -68,11 +68,17 @@ services:
     container_name: wersu-garage
     restart: always
     env_file: ./.env.prod
+    # --single-node: skip cluster layout setup (no replication).
+    # --default-bucket: auto-create the bucket named by
+    # $GARAGE_DEFAULT_BUCKET and grant $GARAGE_DEFAULT_ACCESS_KEY
+    # owner/read/write on it
     command:
       - /garage
       - server
+      - --single-node
+      - --default-bucket
     volumes:
-      - ./infrastructure/garage.toml:/etc/garage.toml:ro
+      - ../data/garage/config/garage.toml:/etc/garage.toml:ro
       - ../data/garage/meta:/tmp/meta
       - ../data/garage/data:/tmp/data
     networks:
@@ -154,9 +160,7 @@ services:
     networks:
       - internal
       - proxy
-    # WS -> WSS: the `websecure` entrypoint terminates TLS; Traefik
-    # passes the WebSocket Upgrade/Connection headers through to the
-    # hocuspocus backend on port 8666. No extra middleware is needed.
+    # WS -> WSS: the `websecure` entrypoint handles it too
     labels:
       traefik.enable: "true"
       traefik.http.routers.wersu-hocuspocus.entrypoints: websecure
