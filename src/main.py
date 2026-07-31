@@ -101,13 +101,13 @@ async def serve():
     log = logging_provider(__name__)
     setup_table_logging(logging_provider)
 
+
+    # extract env vars
     db_dsn = get_os_env_variable(
         "DATABASE_DSN",
         log,
         "postgres://postgres:postgres@localhost:5433/db?sslmode=disable"
     )
-
-    # extract env vars
     grpc_host = get_os_env_variable("GRPC_HOST", log, "[::]")
     grpc_port = get_os_env_variable("GRPC_PORT", log, "50052")
     grpc_spicedb_credentials = get_os_env_variable("GRPC_SPICEDB_CREDENTIALS", log, UNDEFINED)
