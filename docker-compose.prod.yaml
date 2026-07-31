@@ -127,6 +127,13 @@ services:
       - postgres
       - spicedb
       - garage
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.wersu-frontend.entrypoints: websecure
+      traefik.http.routers.wersu-frontend.rule: Host(`${BACKEND_URL}`)
+      traefik.http.routers.wersu-frontend.tls.certresolver: letsencrypt
+      traefik.http.services.wersu-frontend.loadbalancer.server.port: "8080"
+
 
   wersu-web-app:
     <<: *default
