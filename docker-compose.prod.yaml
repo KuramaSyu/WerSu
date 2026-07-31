@@ -1,7 +1,14 @@
-# IMPORTANT: 
+# IMPORTANT:
 #   1. a traefik v3 container needs to be running on the `proxy` network. change the name if you want.
 #   2. generate env file: python3 ./scripts/generate-prod-env.py
 #   3. start: docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d
+#
+# DATA_PATH: persistent state (postgres data, garage meta/data, garage
+# config) is mounted via ${DATA_PATH}/... in every volume below. The
+# default `../data` puts it next to the repo, but you can change it to
+# anything else in .env.prod - both this file and scripts/generate-prod-env.py
+# read the same variable, so the script writes garage.toml to wherever
+# this compose file looks for it.
 
 name: wersu-prod
 services:
@@ -11,7 +18,7 @@ services:
     restart: always
     env_file: ./.env.prod
     volumes:
-      - ../data/pgvector:/var/lib/postgresql
+      - ${DATA_PATH}/pgvector:/var/lib/postgresql
       - ./pgvector_init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       # $$ escapes compose interpolation: the rendered test becomes
@@ -68,13 +75,19 @@ services:
     container_name: wersu-garage
     restart: always
     env_file: ./.env.prod
+    # --single-node: skip cluster layout setup (no replication).
+    # --default-bucket: auto-create the bucket named by
+    # $GARAGE_DEFAULT_BUCKET and grant $GARAGE_DEFAULT_ACCESS_KEY
+    # owner/read/write on it
     command:
       - /garage
       - server
+      - --single-node
+      - --default-bucket
     volumes:
-      - ./infrastructure/garage.toml:/etc/garage.toml:ro
-      - ../data/garage/meta:/tmp/meta
-      - ../data/garage/data:/tmp/data
+      - ${DATA_PATH}/garage/config/garage.toml:/etc/garage.toml:ro
+      - ${DATA_PATH}/garage/meta:/tmp/meta
+      - ${DATA_PATH}/garage/data:/tmp/data
     networks:
       - internal
 
@@ -154,9 +167,7 @@ services:
     networks:
       - internal
       - proxy
-    # WS -> WSS: the `websecure` entrypoint terminates TLS; Traefik
-    # passes the WebSocket Upgrade/Connection headers through to the
-    # hocuspocus backend on port 8666. No extra middleware is needed.
+    # WS -> WSS: the `websecure` entrypoint handles it too
     labels:
       traefik.enable: "true"
       traefik.http.routers.wersu-hocuspocus.entrypoints: websecure

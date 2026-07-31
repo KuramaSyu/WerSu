@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Generate .env.prod from .env.prod.default for the WerSu prod stack.
+"""Generate .env.prod from .env.prod.template for the WerSu prod stack.
 
-Walks the user through every required value (domain, ACME email,
-postgres password, Discord creds, ...), fills in cryptographically
-random secrets, and writes a finished .env.prod next to
-docker-compose.prod.yaml.
+Walks the user through every required value (domain, postgres password,
+Discord creds, ...), fills in cryptographically random secrets, and
+writes a finished .env.prod next to docker-compose.prod.yaml.
 
-Re-running is safe: it never overwrites an existing .env.prod without
-explicit confirmation.
+Re-running is fully supported: previously-typed values become the
+default at each prompt (press Enter to keep), and the script asks
+once whether to regenerate any pre-existing secrets (default: keep).
+This makes the script safe to run again whenever a new @random:<KEY>@
+slot is added to the template - missing secrets are filled in,
+existing ones are reused unless you ask otherwise.
 
 The template uses two kinds of placeholders:
 
   @ask:<KEY>@     filled with a value the user provides
-  @random:<KEY>@  filled with a fresh secrets.token_hex(N)
+  @random:<KEY>@  filled with a fresh secrets.token_hex(N); reused
+                  from the existing .env.prod if the user chose keep
 
 Anything else in the template is passed through verbatim, including
 comments and ${DOMAIN}-style references that docker-compose
@@ -25,6 +29,7 @@ import argparse
 import os
 import re
 import secrets
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,9 +37,39 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = Path(__file__).resolve().parent / ".env.prod.template"
 OUTPUT = REPO_ROOT / ".env.prod"
+# Resolved in main() once DATA_PATH has been read from values - it
+# depends on the user's choice and can't be a module constant.
+GARAGE_CONFIG_PATH: Path | None = None
 
 ASK_PATTERN = re.compile(r"@ask:([A-Z][A-Z0-9_]*)@")
 RANDOM_PATTERN = re.compile(r"@random:([A-Z][A-Z0-9_]*)@")
+ENV_LINE_PATTERN = re.compile(
+    # KEY=value, KEY="value", or KEY='value'. We deliberately ignore
+    # commented lines (leading whitespace + '#') and the rare quoted-
+    # value edge case where '=' appears inside the value itself - the
+    # template never uses that pattern.
+    r"^\s*(?P<key>[A-Z][A-Z0-9_]*)\s*=\s*(?P<value>.*?)\s*$"
+)
+
+
+def parse_existing_env(path: Path) -> dict[str, str]:
+    """Parse a previously-generated .env.prod back into a {KEY: value}
+    dict. Comments (lines starting with '#', possibly after leading
+    whitespace) and blank lines are skipped. Values are returned
+    verbatim - no shell-style quote stripping - matching the on-disk
+    shape the script writes."""
+    if not path.is_file():
+        return {}
+    parsed: dict[str, str] = {}
+    for raw in path.read_text().splitlines():
+        line = raw.lstrip()
+        if not line or line.startswith("#"):
+            continue
+        match = ENV_LINE_PATTERN.match(raw)
+        if not match:
+            continue
+        parsed[match.group("key")] = match.group("value")
+    return parsed
 
 
 @dataclass
@@ -142,6 +177,14 @@ RANDOM_FIELDS: dict[str, int] = {
     # produces similar sizes.
     "GARAGE_DEFAULT_ACCESS_KEY": 16,
     "GARAGE_DEFAULT_SECRET_KEY": 32,
+    # Garage server secrets. The RPC secret is shared across all
+    # cluster nodes (32 bytes hex = 64 chars). Admin + metrics tokens
+    # are base64-style random strings; using 32 bytes hex matches the
+    # shape `openssl rand -hex 32` produces, which is also what the
+    # official quick-start suggests.
+    "GARAGE_RPC_SECRET": 32,
+    "GARAGE_ADMIN_TOKEN": 32,
+    "GARAGE_METRICS_TOKEN": 32,
 }
 
 # Static default values for things that shouldn't be asked of the user
@@ -154,7 +197,50 @@ RANDOM_FIELDS: dict[str, int] = {
 STATIC_DEFAULTS: dict[str, str] = {
     "SPICEDB_PASSWORD": "spicedb",
     "GARAGE_DEFAULT_BUCKET": "garage",
+    # Where docker-compose.prod.yaml mounts persistent state from
+    # (postgres data dir, garage meta/data dirs, garage config).
+    # Relative to the repo root. Change this if you want all stateful
+    # data in a different location - the compose file picks it up via
+    # ${DATA_PATH} interpolation, and the script resolves it the same
+    # way before writing garage.toml.
+    "DATA_PATH": "../data",
 }
+
+# Embedded garage.toml - written to data/garage/config/garage.toml on
+# every successful run. Living here (rather than as a checked-in file)
+# makes it easy to regenerate the whole stack from scratch with one
+# command, and keeps the secret-free config next to the script that
+# produces the secrets it consumes.
+#
+# rpc_secret / admin_token / metrics_token are intentionally absent:
+# the garage binary reads them from $GARAGE_RPC_SECRET /
+# $GARAGE_ADMIN_TOKEN / $GARAGE_METRICS_TOKEN at process start.
+GARAGE_CONFIG_TEMPLATE = """\
+# Minimal Garage configuration for the WerSu prod stack.
+
+metadata_dir = "/tmp/meta"
+data_dir = "/tmp/data"
+db_engine = "sqlite"
+
+replication_factor = 1
+
+# secrets are read from env file
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"
+
+[s3_web]
+bind_addr = "[::]:3902"
+root_domain = ".web.garage.localhost"
+index = "index.html"
+
+[admin]
+api_bind_addr = "[::]:3903"
+"""
 
 
 # ---------- Validators ----------
@@ -377,7 +463,11 @@ def collect_values(manual_password: bool = False) -> dict[str, str]:
 
 # ---------- Substitution ----------
 
-def substitute(text: str, values: dict[str, str]) -> str:
+def substitute(
+    text: str,
+    values: dict[str, str],
+    existing_randoms: dict[str, str] | None = None,
+) -> str:
     """Replace @ask:<KEY>@ and @random:<KEY>@ placeholders, then expand
     any ``${OTHER_KEY}`` shell-style references against the rendered
     output. This lets the template compose values out of other values
@@ -392,7 +482,16 @@ def substitute(text: str, values: dict[str, str]) -> str:
     into ``values``. Re-parsing the rendered text picks those up so a
     downstream ``AWS_ACCESS_KEY_ID=${GARAGE_DEFAULT_ACCESS_KEY}``
     (literal) still expands to the freshly-generated key, etc.
+
+    ``existing_randoms`` lets re-runs preserve previously-generated
+    secrets when the user answered "keep" to the regen prompt. Keys
+    not present in ``existing_randoms`` (e.g. a brand-new @random slot
+    that didn't exist in the previous .env.prod) fall through to
+    fresh generation, so the script can also be used to backfill
+    missing secrets.
     """
+
+    existing_randoms = existing_randoms or {}
 
     def replace_ask(match: re.Match[str]) -> str:
         key = match.group(1)
@@ -401,9 +500,14 @@ def substitute(text: str, values: dict[str, str]) -> str:
         return values[key]
 
     text = ASK_PATTERN.sub(replace_ask, text)
-    text = RANDOM_PATTERN.sub(
-        lambda m: rand_hex(RANDOM_FIELDS[m.group(1)]), text
-    )
+
+    def replace_random(match: re.Match[str]) -> str:
+        key = match.group(1)
+        if key in existing_randoms:
+            return existing_randoms[key]
+        return rand_hex(RANDOM_FIELDS[key])
+
+    text = RANDOM_PATTERN.sub(replace_random, text)
 
     leftover = re.findall(r"@(ask|random):[A-Z][A-Z0-9_]*@", text)
     if leftover:
@@ -442,11 +546,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--template", type=Path, default=TEMPLATE,
-        help="Template file to read (default: .env.prod.default at repo root).",
-    )
-    parser.add_argument(
-        "--force", action="store_true",
-        help="Overwrite .env.prod without prompting if it already exists.",
+        help="Template file to read (default: .env.prod.template at repo root).",
     )
     parser.add_argument(
         "--manual-password", action="store_true",
@@ -469,30 +569,92 @@ def main() -> int:
     print("Press enter to accept defaults shown in [brackets].")
     print()
 
+    # Warn before the user invests any time at the prompts. We don't
+    # yet know DATA_PATH (it's a static default applied after the
+    # loop), so we show the conventional default; if the user has
+    # changed it in a previous .env.prod, the warning still matches
+    # the actual destination because compose and the script both read
+    # the same value.
+    print(f"NOTE: Persistent state (postgres data, garage meta/data, "
+          f"garage config) will live under DATA_PATH.")
+    print(f"      Default: ../data (relative to the repo root).")
+    print(f"      Do NOT delete that directory unless you also want to "
+          f"wipe all garage keys and buckets.")
+    print()
+
+    # On a re-run, parse the existing .env.prod so we can reuse
+    # previously-typed ASK values and previously-generated secrets.
+    # ASK values become Field.defaults (so the user can press Enter
+    # to keep them); secrets are passed to substitute() to skip
+    # regeneration when the user chooses "keep".
+    existing = parse_existing_env(args.output)
+    existing_randoms: dict[str, str] = {}
+    if existing:
+        for field in FIELDS:
+            if field.key in existing:
+                field.default = existing[field.key]
+        # Anything that looks like a RANDOM_FIELD key gets queued for
+        # reuse. We don't validate the value here - the template
+        # authors the format, so the on-disk value will be either a
+        # valid hex string (from a previous run) or absent (first run).
+        for key in RANDOM_FIELDS:
+            if key in existing:
+                existing_randoms[key] = existing[key]
+
+        print(f"Found existing {args.output}:")
+        for key in (*(f.key for f in FIELDS), *RANDOM_FIELDS):
+            if key in existing:
+                print(f"  {key} = {existing[key]}")
+        print()
+
+    # Decide whether to keep or regenerate any pre-existing secrets.
+    # "keep" (default) means every @random:<KEY>@ placeholder reuses
+    # the value from the existing .env.prod; "regen" regenerates all
+    # of them. Keys not present in the existing env are always freshly
+    # generated regardless of the answer here, so the script can also
+    # backfill secrets that were added after the first deploy.
+    regenerate_secrets = False
+    if existing_randoms:
+        answer = input(
+            f"{len(existing_randoms)} secret(s) detected. "
+            "Regenerate or keep? [keep]: "
+        ).strip().lower()
+        if answer in ("regen", "regenerate", "r", "yes", "y"):
+            regenerate_secrets = True
+            existing_randoms = {}
+        print()
+    if regenerate_secrets:
+        print("Will regenerate all existing secrets.")
+    elif existing_randoms:
+        print(f"Will keep {len(existing_randoms)} existing secret(s); "
+              "missing ones will be generated fresh.")
+    print()
+
     values = collect_values(manual_password=args.manual_password)
 
     # POSTGRES_PASSWORD: auto-generate when not provided. In manual
     # mode the user can either type one or leave it blank; in non-
     # manual mode the field was never prompted for. Either way, blank
-    # means "make one".
+    # means "make one". On a re-run, prefer the existing value - if
+    # POSTGRES_PASSWORD was set by a previous run it's seeded into
+    # values below before collect_values() runs, so the prompt loop
+    # would have overwritten it only if the user typed something.
     if not values.get("POSTGRES_PASSWORD"):
-        values["POSTGRES_PASSWORD"] = rand_hex(32)
+        values["POSTGRES_PASSWORD"] = existing.get("POSTGRES_PASSWORD") or rand_hex(32)
 
     # Static defaults for any non-asked values. These are exposed via
     # ${KEY} expansion in substitute() so downstream lines that
     # reference them (e.g. AWS_ACCESS_KEY_ID=${GARAGE_DEFAULT_ACCESS_KEY})
     # get a real value. The @random:<KEY>@ placeholders still get their
     # own freshly-generated random values during substitution.
+    # We don't override static defaults from the existing env - the
+    # script is the source of truth for these literal values
+    # (e.g. SPICEDB_PASSWORD must match pgvector_init.sql, DATA_PATH
+    # determines where persistent state lives).
     for key, default in STATIC_DEFAULTS.items():
         values.setdefault(key, default)
 
-    if args.output.is_file() and not args.force:
-        confirm = input(f"{args.output} already exists. Overwrite? [y/N] ").strip()
-        if confirm.lower() not in ("y", "yes"):
-            print(f"aborted, {args.output} left untouched")
-            return 0
-
-    rendered = substitute(args.template.read_text(), values)
+    rendered = substitute(args.template.read_text(), values, existing_randoms)
     args.output.write_text(rendered)
 
     # Tight permissions so other users on the host can't read the
@@ -502,8 +664,31 @@ def main() -> int:
     except OSError:
         pass
 
+    # Resolve the garage.toml destination from DATA_PATH. The compose
+    # file interpolates the same var, so as long as DATA_PATH is the
+    # same in both, the mount target matches what we write here.
+    # ``Path(os.path.join(REPO_ROOT, DATA_PATH))`` semantics: a
+    # leading ".." walks above the repo root; an absolute path bypasses
+    # the repo entirely.
+    data_path = Path(values["DATA_PATH"])
+    if not data_path.is_absolute():
+        data_path = (REPO_ROOT / data_path).resolve()
+    garage_config_path = data_path / "garage" / "config" / "garage.toml"
+
+    # Render and write garage.toml. If a stale directory is in the way
+    # at the target path (e.g. a previous failed run created
+    # ``config/garage.toml/`` as a directory), wipe it before writing -
+    # the user has already approved overwriting everything else.
+    if garage_config_path.is_dir():
+        shutil.rmtree(garage_config_path)
+    garage_config_path.parent.mkdir(parents=True, exist_ok=True)
+    garage_config_path.write_text(GARAGE_CONFIG_TEMPLATE)
+    global GARAGE_CONFIG_PATH
+    GARAGE_CONFIG_PATH = garage_config_path
+
     print()
     print(f"wrote {args.output} (mode 600 where supported)")
+    print(f"wrote {GARAGE_CONFIG_PATH}")
     print("deploy with:")
     print("  docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d")
     return 0
