@@ -145,7 +145,7 @@ services:
     labels:
       traefik.enable: "true"
       traefik.http.routers.wersu-frontend.entrypoints: websecure
-      traefik.http.routers.wersu-frontend.rule: Host(`${FRONTEND_HOST}`)
+      traefik.http.routers.wersu-frontend.rule: Host(`${FRONTEND_URL}`)
       traefik.http.routers.wersu-frontend.tls.certresolver: letsencrypt
       traefik.http.services.wersu-frontend.loadbalancer.server.port: "5173"
       # Auto update with watchtower
