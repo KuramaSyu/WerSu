@@ -38,14 +38,13 @@ flowchart LR
         frontend["wersu-frontend"]
         rest["wersu-rest"]
         hoco["hocuspocus"]
-        imgproxy["imgproxy"]
     end
 
     subgraph internal ["internal network"]
         frontend
         rest
         hoco
-        imgproxy
+        imgproxy["imgproxy"]
         grpc["wersu-grpc"]
         spicedb["spicedb"]
         pg["postgres"]
@@ -56,8 +55,8 @@ flowchart LR
     Traefik -->|websecure| frontend
     Traefik -->|websecure| rest
     Traefik -->|websecure| hoco
-    Traefik -->|websecure| imgproxy
 
+    rest --> imgproxy
     rest --> grpc
     grpc --> pg
     grpc --> spicedb
@@ -81,7 +80,7 @@ The prod compose expects:
   certificate resolver configured. ACME email and other Traefik knobs
   live in your Traefik config, not in `.env.prod`.
 - Ports 443 free on the host
-- `DOMAIN` (e.g. `inu-the-bot.com`) and the four subdomains (`wersu-api.`, `wersu-ws.`, `wersu-img.`, `wersu.`)
+- `DOMAIN` (e.g. `inu-the-bot.com`) and the three subdomains (`wersu-api.`, `wersu-ws.`, `wersu.`)
 - `.env.prod` generated with:
   ```bash
   ./scripts/generate-prod-env.py
@@ -110,11 +109,12 @@ the prompts the script shows:
   `GRPC_SPICEDB_CREDENTIALS`, `JWT_SECRET`, `SESSION_SECRET`. Filled
   with `secrets.token_hex(...)` at script time.
 - **Derived URLs** - `DISCORD_REDIRECT_URI`, `FRONTEND_URL`,
-  `BACKEND_URL`, `HOCUSPOCUS_WS_URL`, `IMGPROXY_ADDRESS`. Composed
-  from `DOMAIN` / `FRONTEND_HOST`.
+  `BACKEND_URL`, `HOCUSPOCUS_WS_URL`. Composed from `DOMAIN` /
+  `FRONTEND_HOST`.
 - **Service runtime config** - internal hostnames and ports
   (`DATABASE_DSN`, `GRPC_HOST`, `GRPC_SERVER_ADDRESS`,
-  `IMGPROXY_USE_S3`, etc.). Don't edit these unless you know why.
+  `IMGPROXY_USE_S3`, `IMGPROXY_ADDRESS`, etc.). Don't edit these
+  unless you know why.
 
 `JWT_SECRET` is shared between `wersu-grpc`, `wersu-rest` and `hocuspocus`
 
@@ -132,11 +132,8 @@ Image sources are in the table below.
 | `ghcr.io/kuramasyu/wersu-rest`     | `KuramaSyu/WerSu-Rest`        |
 | `ghcr.io/kuramasyu/wersu-frontend` | `KuramaSyu/WerSu-Frontend`    |
 
-The frontend image bakes in `VITE_BACKEND_URL` and
-`VITE_HOCUSPOCUS_WS_URL` at build time. The frontend also reads
-`BACKEND_URL` and `HOCUSPOCUS_WS_URL` at runtime, so a `.env.prod`
-change is enough unless you want to update the build-time fallback
-too (that still requires a frontend rebuild).
+The frontend reads `BACKEND_URL` and `HOCUSPOCUS_WS_URL` at runtime,
+so a `.env.prod` change is enough — no frontend rebuild required.
 
 `hocuspocus` has no published image; the prod compose builds it from
 `infrastructure/hocuspocus/` inline.

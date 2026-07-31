@@ -86,18 +86,16 @@ services:
       - internal
 
   imgproxy:
-    <<: *default
+    # Internal-only: wersu-rest talks to it over the docker network
+    # at http://imgproxy:8080. No Traefik route, no proxy network.
     image: ghcr.io/imgproxy/imgproxy:latest
     container_name: wersu-imgproxy
     env_file: ./.env.prod
     depends_on:
       - garage
-    labels:
-      traefik.enable: "true"
-      traefik.http.routers.imgproxy.entrypoints: websecure
-      traefik.http.routers.imgproxy.rule: Host(`wersu-img.${DOMAIN}`)
-      traefik.http.routers.imgproxy.tls.certresolver: letsencrypt
-      traefik.http.services.imgproxy.loadbalancer.server.port: "8080"
+    restart: always
+    networks:
+      - internal
 
   wersu-grpc:
     <<: *default

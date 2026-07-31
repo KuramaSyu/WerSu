@@ -64,7 +64,7 @@ grep -q '^# Apex domain under which' "$OUT" || { echo "FAIL block comment"; exit
 grep -q '^DISCORD_REDIRECT_URI=https://api.\${DOMAIN}/api/auth/discord/callback$' "$OUT" || { echo "FAIL DERIVED1"; exit 1; }
 grep -q '^FRONTEND_URL=https://\${FRONTEND_HOST}$' "$OUT" || { echo "FAIL DERIVED2"; exit 1; }
 grep -q '^BACKEND_URL=https://api.\${DOMAIN}$' "$OUT" || { echo "FAIL DERIVED3"; exit 1; }
-grep -q '^IMGPROXY_ADDRESS=https://img.\${DOMAIN}$' "$OUT" || { echo "FAIL DERIVED4"; exit 1; }
+grep -q '^IMGPROXY_ADDRESS=http://imgproxy:8080$' "$OUT" || { echo "FAIL IMGPROXY"; exit 1; }
 
 echo "SMOKE OK"
 echo "--- generated output ---"

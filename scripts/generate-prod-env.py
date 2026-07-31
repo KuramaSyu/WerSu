@@ -66,7 +66,6 @@ HELP: dict[str, str] = {
         "services on this host:\n"
         "  - wersu-api.<DOMAIN>  -> wersu-rest\n"
         "  - wersu-ws.<DOMAIN>   -> hocuspocus\n"
-        "  - wersu-img.<DOMAIN>  -> imgproxy\n"
         "  - wersu.<DOMAIN>      -> wersu-frontend (FRONTEND_HOST)\n"
         "Create A (or AAAA) records for each, all pointing at this\n"
         "host's public IP. Port 80 must be reachable from the internet\n"
