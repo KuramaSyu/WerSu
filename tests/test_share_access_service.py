@@ -25,7 +25,7 @@ from src.api.other.relationship import ObjectRef, Relationship, SubjectRef
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_action import UserActionEntity
-from src.services.share_access import ShareAccessService
+from src.services.share_access import ShareAccessServiceImpl
 from src.db.repos.user import RepoContextFactory, UnimplementedUserContext
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.logging import silent_logger
@@ -63,7 +63,7 @@ async def _build_service(
     user_repo: _FakeUserRepo,
     user_action_repo: _FakeUserActionRepo,
     permissions: Optional[InMemoryPermissionRepo] = None,
-) -> ShareAccessService:
+) -> ShareAccessServiceImpl:
     repo = permissions or InMemoryPermissionRepo()
     # Default access-user -> note-1 reader relation so the share
     # resolves as readable; tests can override by passing a
@@ -77,7 +77,7 @@ async def _build_service(
                 subject=SubjectRef("user", "access-user"),
             )
         ])
-    return ShareAccessService(
+    return ShareAccessServiceImpl(
         sharing_repo=sharing_repo,
         permission_repo=repo,
         user_repo=user_repo,

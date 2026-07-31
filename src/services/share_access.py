@@ -13,7 +13,7 @@ from src.db.repos.user import UnimplementedUserContext
 from src.db.repos.user.user import UserRepoABC
 
 
-class ShareAccessService(ShareAccessServiceABC):
+class ShareAccessServiceImpl(ShareAccessServiceABC):
     def __init__(
         self,
         sharing_repo: SharingRepoABC,

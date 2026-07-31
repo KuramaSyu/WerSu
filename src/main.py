@@ -401,7 +401,7 @@ async def serve():
         user_repo=user_repo,
         activity_logger=activity_logger_service,
     )
-    share_access_service: ShareAccessServiceABC = share_access.ShareAccessService(
+    share_access_service: ShareAccessServiceABC = share_access.ShareAccessServiceImpl(
         sharing_repo=sharing_repo,
         permission_repo=permission_repo,
         user_repo=user_repo,
