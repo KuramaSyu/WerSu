@@ -37,6 +37,7 @@ from src.services.thirdparty_migrations import (
 from src.utils.attachment_url import build_attachment_link_url, build_attachment_url
 from src.services.thirdparty_migrations.bookstack_html_converter import (
     BookstackHtmlConverter,
+    ConvertOptions,
 )
 from src.services.thirdparty_migrations.bookstack_models import (
     BookstackBook,
@@ -76,6 +77,13 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
             by tests).
         converter: optional :class:`BookstackHtmlConverter` override
             (used by tests).
+        convert_options: optional :class:`ConvertOptions` overrides
+            forwarded to :meth:`BookstackHtmlConverter.convert_content`
+            for every page of this import.  Set ``convert_details``
+            to `True` if the source HTML uses ``<details>``
+            collapsible sections and they should survive into the
+            imported notes; the default is `False` (legacy
+            behaviour: html2text strips the wrapper tags).
     """
 
     def __init__(
@@ -89,6 +97,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
         log: LoggingProvider,
         reader: BookstackBookReader | None = None,
         converter: BookstackHtmlConverter | None = None,
+        convert_options: ConvertOptions | None = None,
     ) -> None:
         self._attachment_facade = attachment_facade
         self._directory_service = directory_service
@@ -101,6 +110,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
             attachment_url_builder=attachment_url_builder,
             attachment_link_builder=attachment_link_builder,
         )
+        self._convert_options = convert_options
 
     async def migrate(
         self,
@@ -331,6 +341,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
             file_index,
             bsexport_index=valid_bsexport_index_to_uuid,
             attachment_meta=attachment_meta,
+            options=self._convert_options,
         )
         return await self._note_service.insert_note(
             NoteEntity(

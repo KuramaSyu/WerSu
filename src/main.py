@@ -443,6 +443,7 @@ async def serve():
         directory_service=directory_app_service,
         note_service=app_note_service,
         log=logging_provider,
+        convert_options={"convert_details": True, "convert_math": True},
     )
 
     directory_service = GrpcDirectoryService(
