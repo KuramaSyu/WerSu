@@ -149,10 +149,13 @@ services:
     env_file: ./.env.prod
     depends_on:
       - spicedb
+    # WS -> WSS: the `websecure` entrypoint terminates TLS; Traefik
+    # passes the WebSocket Upgrade/Connection headers through to the
+    # hocuspocus backend on port 8666. No extra middleware is needed.
     labels:
       traefik.enable: "true"
       traefik.http.routers.wersu-hocuspocus.entrypoints: websecure
-      traefik.http.routers.wersu-hocuspocus.rule: Host(`${HOCUSPOCUS_HOST}`)
+      traefik.http.routers.wersu-hocuspocus.rule: Host(`wersu-ws.${DOMAIN}`)
       traefik.http.routers.wersu-hocuspocus.tls.certresolver: letsencrypt
       traefik.http.services.wersu-hocuspocus.loadbalancer.server.port: "8666"
 

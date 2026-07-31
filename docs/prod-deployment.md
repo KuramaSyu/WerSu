@@ -110,8 +110,8 @@ the prompts the script shows:
   `GRPC_SPICEDB_CREDENTIALS`, `JWT_SECRET`, `SESSION_SECRET`. Filled
   with `secrets.token_hex(...)` at script time.
 - **Derived URLs** - `DISCORD_REDIRECT_URI`, `FRONTEND_URL`,
-  `BACKEND_URL`, `IMGPROXY_ADDRESS`. Composed from `DOMAIN` /
-  `FRONTEND_HOST`.
+  `BACKEND_URL`, `HOCUSPOCUS_WS_URL`, `IMGPROXY_ADDRESS`. Composed
+  from `DOMAIN` / `FRONTEND_HOST`.
 - **Service runtime config** - internal hostnames and ports
   (`DATABASE_DSN`, `GRPC_HOST`, `GRPC_SERVER_ADDRESS`,
   `IMGPROXY_USE_S3`, etc.). Don't edit these unless you know why.
@@ -133,8 +133,10 @@ Image sources are in the table below.
 | `ghcr.io/kuramasyu/wersu-frontend` | `KuramaSyu/WerSu-Frontend`    |
 
 The frontend image bakes in `VITE_BACKEND_URL` and
-`VITE_HOCUSPOCUS_WS_URL` at build time. Changing those requires a
-frontend rebuild, not just a `.env.prod` change.
+`VITE_HOCUSPOCUS_WS_URL` at build time. The frontend also reads
+`BACKEND_URL` and `HOCUSPOCUS_WS_URL` at runtime, so a `.env.prod`
+change is enough unless you want to update the build-time fallback
+too (that still requires a frontend rebuild).
 
 `hocuspocus` has no published image; the prod compose builds it from
 `infrastructure/hocuspocus/` inline.

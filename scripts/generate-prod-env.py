@@ -65,7 +65,7 @@ HELP: dict[str, str] = {
         "Traefik will route the four subdomains below to the matching\n"
         "services on this host:\n"
         "  - wersu-api.<DOMAIN>  -> wersu-rest\n"
-        "  - wersu-ws.<DOMAIN>   -> hocuspocus (HOCUSPOCUS_HOST)\n"
+        "  - wersu-ws.<DOMAIN>   -> hocuspocus\n"
         "  - wersu-img.<DOMAIN>  -> imgproxy\n"
         "  - wersu.<DOMAIN>      -> wersu-frontend (FRONTEND_HOST)\n"
         "Create A (or AAAA) records for each, all pointing at this\n"
@@ -76,12 +76,6 @@ HELP: dict[str, str] = {
         "Hostname the React frontend is served on. Defaults to\n"
         "wersu.<DOMAIN>. Change this if your frontend lives somewhere\n"
         "else (e.g. a sub-path on the apex)."
-    ),
-    "HOCUSPOCUS_HOST": (
-        "Hostname the hocuspocus websocket server is served on.\n"
-        "Defaults to wersu-ws.<DOMAIN> (matching the Traefik route in\n"
-        "docker-compose.prod.yaml). Only change if you proxy\n"
-        "hocuspocus through a different hostname."
     ),
     "DISCORD_CLIENT_ID": (
         "Discord OAuth is how users log in. To set it up:\n"
@@ -120,8 +114,6 @@ FIELDS: list[Field] = [
           group="Public config"),
     Field("DOMAIN", "Apex domain", mode="domain", group="Public config"),
     Field("FRONTEND_HOST", "Frontend hostname", mode="optional",
-          group="Public config"),
-    Field("HOCUSPOCUS_HOST", "Hocuspocus hostname", mode="optional",
           group="Public config"),
 
     Field("DISCORD_CLIENT_ID", "Discord client ID", mode="required",
@@ -272,16 +264,13 @@ def collect_values() -> dict[str, str]:
                 print(f"--- {field.group} ---")
                 current_group = field.group
 
-            # FRONTEND_HOST defaults to "wersu.<DOMAIN>" and
-            # HOCUSPOCUS_HOST to "wersu-ws.<DOMAIN>" - they always
-            # live on dedicated subdomains so the apex can host
+            # FRONTEND_HOST defaults to "wersu.<DOMAIN>" - it always
+            # lives on a dedicated subdomain so the apex can host
             # other things later.
             default = field.default
             domain = values.get("DOMAIN", "")
             if field.key == "FRONTEND_HOST" and not values.get("FRONTEND_HOST"):
                 default = f"wersu.{domain}" if domain else default
-            if field.key == "HOCUSPOCUS_HOST" and not values.get("HOCUSPOCUS_HOST"):
-                default = f"wersu-ws.{domain}" if domain else default
 
             print_help(field.key, values)
 
