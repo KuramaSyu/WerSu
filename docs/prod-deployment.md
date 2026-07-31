@@ -8,7 +8,7 @@ the prod-specific bits.
 
 - `docker-compose.yaml` - the dev stack, used during development.
 - `docker-compose.prod.yaml` - the prod stack, pulls the three
-  prebuilt images from `docker.io/kuramasyu/*` and assumes a host-level
+  prebuilt images from `ghcr.io/kuramasyu/*` and assumes a host-level
   reverse proxy is already running.
 
 Both stack their persistent data under `./data/`, so don't run them
@@ -81,7 +81,7 @@ The prod compose expects:
   certificate resolver configured. ACME email and other Traefik knobs
   live in your Traefik config, not in `.env.prod`.
 - Ports 443 free on the host
-- `DOMAIN` (e.g. `inu-the-bot.com`) and the four subdomains (`api.`, `ws.`, `img.` `wersu.`)
+- `DOMAIN` (e.g. `inu-the-bot.com`) and the four subdomains (`wersu-api.`, `wersu-ws.`, `wersu-img.`, `wersu.`)
 - `.env.prod` generated with:
   ```bash
   ./scripts/generate-prod-env.py
@@ -128,9 +128,9 @@ Image sources are in the table below.
 
 | Image                            | Repo                          |
 | -------------------------------- | ----------------------------- |
-| `docker.io/kuramasyu/wersu-grpc`     | `KuramaSyu/WerSu` |
-| `docker.io/kuramasyu/wersu-rest`     | `KuramaSyu/WerSu-Rest`        |
-| `docker.io/kuramasyu/wersu-web-app`  | `KuramaSyu/WerSu-Frontend`    |
+| `ghcr.io/kuramasyu/wersu-grpc`     | `KuramaSyu/WerSu` |
+| `ghcr.io/kuramasyu/wersu-rest`     | `KuramaSyu/WerSu-Rest`        |
+| `ghcr.io/kuramasyu/wersu-frontend` | `KuramaSyu/WerSu-Frontend`    |
 
 The frontend image bakes in `VITE_BACKEND_URL` and
 `VITE_HOCUSPOCUS_WS_URL` at build time. Changing those requires a

@@ -64,10 +64,10 @@ HELP: dict[str, str] = {
         "Your apex domain, e.g. inu-the-bot.com.\n"
         "Traefik will route the four subdomains below to the matching\n"
         "services on this host:\n"
-        "  - api.<DOMAIN>      -> wersu-rest\n"
-        "  - ws.<DOMAIN>       -> hocuspocus\n"
-        "  - img.<DOMAIN>      -> imgproxy\n"
-        "  - wersu.<DOMAIN>    -> wersu-frontend\n"
+        "  - wersu-api.<DOMAIN>  -> wersu-rest\n"
+        "  - wersu-ws.<DOMAIN>   -> hocuspocus (HOCUSPOCUS_HOST)\n"
+        "  - wersu-img.<DOMAIN>  -> imgproxy\n"
+        "  - wersu.<DOMAIN>      -> wersu-frontend (FRONTEND_HOST)\n"
         "Create A (or AAAA) records for each, all pointing at this\n"
         "host's public IP. Port 80 must be reachable from the internet\n"
         "so Let's Encrypt can issue the HTTPS cert."
@@ -77,13 +77,19 @@ HELP: dict[str, str] = {
         "wersu.<DOMAIN>. Change this if your frontend lives somewhere\n"
         "else (e.g. a sub-path on the apex)."
     ),
+    "HOCUSPOCUS_HOST": (
+        "Hostname the hocuspocus websocket server is served on.\n"
+        "Defaults to wersu-ws.<DOMAIN> (matching the Traefik route in\n"
+        "docker-compose.prod.yaml). Only change if you proxy\n"
+        "hocuspocus through a different hostname."
+    ),
     "DISCORD_CLIENT_ID": (
         "Discord OAuth is how users log in. To set it up:\n"
         "  1. Open https://discord.com/developers/applications and\n"
         "     create a new application (e.g. named 'WerSu Login').\n"
         "  2. In the left panel open OAuth2.\n"
         "  3. Add a redirect:\n"
-        "       https://api.<DOMAIN>/api/auth/discord/callback\n"
+        "       https://wersu-api.<DOMAIN>/api/auth/discord/callback\n"
         "     (use http://localhost if you only want to test locally\n"
         "     first).\n"
         "  4. Copy the Client ID. We need the secret on the next prompt.\n"
@@ -114,6 +120,8 @@ FIELDS: list[Field] = [
           group="Public config"),
     Field("DOMAIN", "Apex domain", mode="domain", group="Public config"),
     Field("FRONTEND_HOST", "Frontend hostname", mode="optional",
+          group="Public config"),
+    Field("HOCUSPOCUS_HOST", "Hocuspocus hostname", mode="optional",
           group="Public config"),
 
     Field("DISCORD_CLIENT_ID", "Discord client ID", mode="required",
@@ -264,13 +272,16 @@ def collect_values() -> dict[str, str]:
                 print(f"--- {field.group} ---")
                 current_group = field.group
 
-            # FRONTEND_HOST defaults to "wersu.<DOMAIN>" - it always
-            # lives on a dedicated subdomain so the apex can host
+            # FRONTEND_HOST defaults to "wersu.<DOMAIN>" and
+            # HOCUSPOCUS_HOST to "wersu-ws.<DOMAIN>" - they always
+            # live on dedicated subdomains so the apex can host
             # other things later.
             default = field.default
+            domain = values.get("DOMAIN", "")
             if field.key == "FRONTEND_HOST" and not values.get("FRONTEND_HOST"):
-                domain = values.get("DOMAIN", "")
                 default = f"wersu.{domain}" if domain else default
+            if field.key == "HOCUSPOCUS_HOST" and not values.get("HOCUSPOCUS_HOST"):
+                default = f"wersu-ws.{domain}" if domain else default
 
             print_help(field.key, values)
 
