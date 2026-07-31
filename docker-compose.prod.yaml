@@ -4,21 +4,11 @@
 #   3. start: docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d
 
 name: wersu-prod
-
-# Network layout:
-# - poxy: external for outside connections; traefik needs to be (already) running on this network.
-# - internal: backend services which should not be exposed
-x-default: &default
-  restart: always
-  networks:
-    - internal
-    - proxy
-
 services:
   postgres:
-    <<: *default
     image: pgvector/pgvector:0.8.1-pg18-trixie
     container_name: wersu-postgres
+    restart: always
     env_file: ./.env.prod
     volumes:
       - ../data/pgvector:/var/lib/postgresql
@@ -27,10 +17,6 @@ services:
       # $$ escapes compose interpolation: the rendered test becomes
       # `psql -U $POSTGRES_USER -d $POSTGRES_DB ...`, which the
       # container's shell expands from env_file at healthcheck time.
-      # Without the escape, compose expands ${POSTGRES_USER} at parse
-      # time from the host shell + .env - and if .env.prod is missing
-      # the result is `psql -U  -d db ...`, where `-d` is parsed as
-      # the username and PG logs `role "-d" does not exist`.
       test:
         - CMD-SHELL
         - psql -U $${POSTGRES_USER} -d $${POSTGRES_DB} -c 'SELECT 1'
@@ -59,9 +45,9 @@ services:
       - internal
 
   spicedb:
-    <<: *default
     image: authzed/spicedb:latest
     container_name: wersu-spicedb
+    restart: always
     env_file: ./.env.prod
     command:
       - serve
@@ -78,9 +64,9 @@ services:
       - internal
 
   garage:
-    <<: *default
     image: dxflrs/garage:v2.3.0
     container_name: wersu-garage
+    restart: always
     env_file: ./.env.prod
     command:
       - /garage
@@ -105,9 +91,9 @@ services:
       - internal
 
   wersu-grpc:
-    <<: *default
     image: docker.io/kuramasyu/wersu-grpc:${IMAGE_TAG:-dev}
     container_name: wersu-grpc
+    restart: always
     env_file: ./.env.prod
     depends_on:
       postgres:
@@ -118,49 +104,56 @@ services:
       - internal
 
   wersu-rest:
-    <<: *default
     image: docker.io/kuramasyu/wersu-rest:${IMAGE_TAG:-dev}
     container_name: wersu-rest
+    restart: always
     env_file: ./.env.prod
     depends_on:
       - wersu-grpc
       - postgres
       - spicedb
       - garage
+    networks:
+      - internal
+      - proxy
     labels:
       traefik.enable: "true"
       traefik.http.routers.wersu-frontend.entrypoints: websecure
       traefik.http.routers.wersu-frontend.rule: Host(`${BACKEND_URL}`)
-      traefik.http.routers.wersu-frontend.tls.certresolver: letsencrypt
       traefik.http.services.wersu-frontend.loadbalancer.server.port: "8080"
 
 
   wersu-web-app:
-    <<: *default
     image: docker.io/kuramasyu/wersu-web-app:${IMAGE_TAG:-dev}
     container_name: wersu-web-app
+    restart: always
     env_file: ./.env.prod
     depends_on:
       - wersu-rest
+    networks:
+      - internal
+      - proxy
     labels:
       traefik.enable: "true"
       traefik.http.routers.wersu-frontend.entrypoints: websecure
       traefik.http.routers.wersu-frontend.rule: Host(`${FRONTEND_URL}`)
-      traefik.http.routers.wersu-frontend.tls.certresolver: letsencrypt
       traefik.http.services.wersu-frontend.loadbalancer.server.port: "5173"
       # Auto update with watchtower
       com.centurylinklabs.watchtower.enable: "true"
 
 
   hocuspocus:
-    <<: *default
     build:
       context: ./infrastructure/hocuspocus
       dockerfile: Dockerfile
     container_name: wersu-hocuspocus
+    restart: always
     env_file: ./.env.prod
     depends_on:
       - spicedb
+    networks:
+      - internal
+      - proxy
     # WS -> WSS: the `websecure` entrypoint terminates TLS; Traefik
     # passes the WebSocket Upgrade/Connection headers through to the
     # hocuspocus backend on port 8666. No extra middleware is needed.
@@ -168,7 +161,6 @@ services:
       traefik.enable: "true"
       traefik.http.routers.wersu-hocuspocus.entrypoints: websecure
       traefik.http.routers.wersu-hocuspocus.rule: Host(`wersu-ws.${DOMAIN}`)
-      traefik.http.routers.wersu-hocuspocus.tls.certresolver: letsencrypt
       traefik.http.services.wersu-hocuspocus.loadbalancer.server.port: "8666"
 
 networks:
