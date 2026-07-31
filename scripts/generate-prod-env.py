@@ -97,7 +97,9 @@ HELP: dict[str, str] = {
     "POSTGRES_PASSWORD": (
         "Password for the Postgres role that owns the app database.\n"
         "Leave blank to auto-generate a 64-char random value. Or set\n"
-        "your own with: openssl rand -hex 32"
+        "your own with: openssl rand -hex 32\n"
+        "This prompt only appears when --manual-password is passed;\n"
+        "otherwise the script auto-generates one with no prompt."
     ),
     "IMAGE_TAG": (
         "Tag of the three app images to pull from docker.io/kuramasyu/*.\n"
@@ -122,7 +124,7 @@ FIELDS: list[Field] = [
 
     Field("POSTGRES_USER", "Postgres user", default="postgres",
           mode="optional", group="Storage credentials"),
-    Field("POSTGRES_PASSWORD", "Postgres password", default="[autogenerate]",
+    Field("POSTGRES_PASSWORD", "Postgres password", default="",
           mode="optional", group="Storage credentials"),
     Field("POSTGRES_DB", "Postgres database name", default="db",
           mode="optional", group="Storage credentials"),
@@ -142,13 +144,16 @@ RANDOM_FIELDS: dict[str, int] = {
     "GARAGE_DEFAULT_SECRET_KEY": 32,
 }
 
-# Static default values for things that need to match a literal in
-# pgvector_init.sql but shouldn't be asked of the user. SPICEDB_PASSWORD
-# is the password pgvector_init.sql uses when creating the spicedb
-# Postgres role; it must agree with the password SpiceDB's
-# --datastore-conn-uri uses.
+# Static default values for things that shouldn't be asked of the user
+# but still need to be available via ${KEY} expansion in substitute().
+# SPICEDB_PASSWORD must match the literal password pgvector_init.sql uses
+# when creating the spicedb Postgres role. GARAGE_DEFAULT_BUCKET is the
+# bucket name wired into the app code, the garage `--default-bucket`
+# startup flag, and the imgproxy config - changing it breaks garage-
+# backed uploads and image proxying.
 STATIC_DEFAULTS: dict[str, str] = {
     "SPICEDB_PASSWORD": "spicedb",
+    "GARAGE_DEFAULT_BUCKET": "garage",
 }
 
 
@@ -243,8 +248,14 @@ def prompt(field: Field, default_override: str = "") -> str:
     return raw or default
 
 
-def collect_values() -> dict[str, str]:
-    """Run the full prompt loop, including summary + edit step."""
+def collect_values(manual_password: bool = False) -> dict[str, str]:
+    """Run the full prompt loop, including summary + edit step.
+
+    POSTGRES_PASSWORD is only prompted for when ``manual_password`` is
+    True; otherwise the script auto-generates a fresh random value and
+    no row appears in the summary (run `--manual-password` to set one
+    yourself).
+    """
     values: dict[str, str] = {}
 
     while True:
@@ -255,6 +266,12 @@ def collect_values() -> dict[str, str]:
         current_group = None
         while i < len(FIELDS):
             field = FIELDS[i]
+
+            # In non-manual mode skip the POSTGRES_PASSWORD prompt
+            # entirely - the value will be auto-generated below.
+            if field.key == "POSTGRES_PASSWORD" and not manual_password:
+                i += 1
+                continue
 
             # Print a section header when the group changes, so the
             # terminal output mirrors the block layout of the .env file.
@@ -305,9 +322,14 @@ def collect_values() -> dict[str, str]:
 
         print()
         print("Summary:")
-        pw_display = "(set)" if values["POSTGRES_PASSWORD"] else "(random)"
+        pw_value = values.get("POSTGRES_PASSWORD", "")
+        pw_display = "(set)" if pw_value else "(random)"
         current_group = None
         for f in FIELDS:
+            # Hide the POSTGRES_PASSWORD row entirely in non-manual
+            # mode (it's auto-generated, not user-provided).
+            if f.key == "POSTGRES_PASSWORD" and not manual_password:
+                continue
             if f.group != current_group:
                 print(f"  [{f.group}]")
                 current_group = f.group
@@ -368,8 +390,8 @@ def substitute(text: str, values: dict[str, str]) -> str:
     dict for ``${...}`` expansion: ``@random:<KEY>@`` placeholders
     generate values during substitution that are never written back
     into ``values``. Re-parsing the rendered text picks those up so a
-    downstream ``S3_REGION=${GARAGE_DEFAULT_BUCKET}`` (literal) still
-    expands to the auto-generated bucket name, etc.
+    downstream ``AWS_ACCESS_KEY_ID=${GARAGE_DEFAULT_ACCESS_KEY}``
+    (literal) still expands to the freshly-generated key, etc.
     """
 
     def replace_ask(match: re.Match[str]) -> str:
@@ -426,6 +448,14 @@ def main() -> int:
         "--force", action="store_true",
         help="Overwrite .env.prod without prompting if it already exists.",
     )
+    parser.add_argument(
+        "--manual-password", action="store_true",
+        help=(
+            "Prompt for POSTGRES_PASSWORD (with [autogenerate] default). "
+            "Without this flag the password is auto-generated with no "
+            "prompt."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.template.is_file():
@@ -439,21 +469,22 @@ def main() -> int:
     print("Press enter to accept defaults shown in [brackets].")
     print()
 
-    values = collect_values()
+    values = collect_values(manual_password=args.manual_password)
 
-    # POSTGRES_PASSWORD: auto-generate if the user left it blank or
-    # accepted the [autogenerate] default at the prompt.
-    if not values.get("POSTGRES_PASSWORD") or values["POSTGRES_PASSWORD"] == "[autogenerate]":
+    # POSTGRES_PASSWORD: auto-generate when not provided. In manual
+    # mode the user can either type one or leave it blank; in non-
+    # manual mode the field was never prompted for. Either way, blank
+    # means "make one".
+    if not values.get("POSTGRES_PASSWORD"):
         values["POSTGRES_PASSWORD"] = rand_hex(32)
 
-    # Static defaults for any auto-generated / non-asked values. These
-    # are exposed via ${KEY} expansion in substitute() so downstream
-    # lines that reference them (e.g. S3_REGION=${GARAGE_DEFAULT_BUCKET})
+    # Static defaults for any non-asked values. These are exposed via
+    # ${KEY} expansion in substitute() so downstream lines that
+    # reference them (e.g. AWS_ACCESS_KEY_ID=${GARAGE_DEFAULT_ACCESS_KEY})
     # get a real value. The @random:<KEY>@ placeholders still get their
     # own freshly-generated random values during substitution.
     for key, default in STATIC_DEFAULTS.items():
         values.setdefault(key, default)
-    values.setdefault("GARAGE_DEFAULT_BUCKET", "bucket")
 
     if args.output.is_file() and not args.force:
         confirm = input(f"{args.output} already exists. Overwrite? [y/N] ").strip()
