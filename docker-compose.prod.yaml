@@ -119,7 +119,7 @@ services:
     labels:
       traefik.enable: "true"
       traefik.http.routers.wersu-frontend.entrypoints: websecure
-      traefik.http.routers.wersu-frontend.rule: Host(`${BACKEND_URL}`)
+      traefik.http.routers.wersu-frontend.rule: Host(`wersu-api.${DOMAIN}`)
       traefik.http.services.wersu-frontend.loadbalancer.server.port: "8080"
 
 
@@ -136,7 +136,7 @@ services:
     labels:
       traefik.enable: "true"
       traefik.http.routers.wersu-frontend.entrypoints: websecure
-      traefik.http.routers.wersu-frontend.rule: Host(`${FRONTEND_URL}`)
+      traefik.http.routers.wersu-frontend.rule: Host(`wersu.${DOMAIN}`)
       traefik.http.services.wersu-frontend.loadbalancer.server.port: "5173"
       # Auto update with watchtower
       com.centurylinklabs.watchtower.enable: "true"
