@@ -1,7 +1,14 @@
-# IMPORTANT: 
+# IMPORTANT:
 #   1. a traefik v3 container needs to be running on the `proxy` network. change the name if you want.
 #   2. generate env file: python3 ./scripts/generate-prod-env.py
 #   3. start: docker compose -f docker-compose.prod.yaml --env-file .env.prod up -d
+#
+# DATA_PATH: persistent state (postgres data, garage meta/data, garage
+# config) is mounted via ${DATA_PATH}/... in every volume below. The
+# default `../data` puts it next to the repo, but you can change it to
+# anything else in .env.prod - both this file and scripts/generate-prod-env.py
+# read the same variable, so the script writes garage.toml to wherever
+# this compose file looks for it.
 
 name: wersu-prod
 services:
@@ -11,7 +18,7 @@ services:
     restart: always
     env_file: ./.env.prod
     volumes:
-      - ../data/pgvector:/var/lib/postgresql
+      - ${DATA_PATH}/pgvector:/var/lib/postgresql
       - ./pgvector_init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       # $$ escapes compose interpolation: the rendered test becomes
@@ -78,9 +85,9 @@ services:
       - --single-node
       - --default-bucket
     volumes:
-      - ../data/garage/config/garage.toml:/etc/garage.toml:ro
-      - ../data/garage/meta:/tmp/meta
-      - ../data/garage/data:/tmp/data
+      - ${DATA_PATH}/garage/config/garage.toml:/etc/garage.toml:ro
+      - ${DATA_PATH}/garage/meta:/tmp/meta
+      - ${DATA_PATH}/garage/data:/tmp/data
     networks:
       - internal
 

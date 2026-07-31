@@ -29,16 +29,17 @@ import argparse
 import os
 import re
 import secrets
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-# One level above the repo
-DATA_ROOT = REPO_ROOT.parent
 TEMPLATE = Path(__file__).resolve().parent / ".env.prod.template"
 OUTPUT = REPO_ROOT / ".env.prod"
-GARAGE_CONFIG_PATH = DATA_ROOT / "data" / "garage" / "config" / "garage.toml"
+# Resolved in main() once DATA_PATH has been read from values - it
+# depends on the user's choice and can't be a module constant.
+GARAGE_CONFIG_PATH: Path | None = None
 
 ASK_PATTERN = re.compile(r"@ask:([A-Z][A-Z0-9_]*)@")
 RANDOM_PATTERN = re.compile(r"@random:([A-Z][A-Z0-9_]*)@")
@@ -196,6 +197,13 @@ RANDOM_FIELDS: dict[str, int] = {
 STATIC_DEFAULTS: dict[str, str] = {
     "SPICEDB_PASSWORD": "spicedb",
     "GARAGE_DEFAULT_BUCKET": "garage",
+    # Where docker-compose.prod.yaml mounts persistent state from
+    # (postgres data dir, garage meta/data dirs, garage config).
+    # Relative to the repo root. Change this if you want all stateful
+    # data in a different location - the compose file picks it up via
+    # ${DATA_PATH} interpolation, and the script resolves it the same
+    # way before writing garage.toml.
+    "DATA_PATH": "../data",
 }
 
 # Embedded garage.toml - written to data/garage/config/garage.toml on
@@ -561,6 +569,19 @@ def main() -> int:
     print("Press enter to accept defaults shown in [brackets].")
     print()
 
+    # Warn before the user invests any time at the prompts. We don't
+    # yet know DATA_PATH (it's a static default applied after the
+    # loop), so we show the conventional default; if the user has
+    # changed it in a previous .env.prod, the warning still matches
+    # the actual destination because compose and the script both read
+    # the same value.
+    print(f"NOTE: Persistent state (postgres data, garage meta/data, "
+          f"garage config) will live under DATA_PATH.")
+    print(f"      Default: ../data (relative to the repo root).")
+    print(f"      Do NOT delete that directory unless you also want to "
+          f"wipe all garage keys and buckets.")
+    print()
+
     # On a re-run, parse the existing .env.prod so we can reuse
     # previously-typed ASK values and previously-generated secrets.
     # ASK values become Field.defaults (so the user can press Enter
@@ -628,7 +649,8 @@ def main() -> int:
     # own freshly-generated random values during substitution.
     # We don't override static defaults from the existing env - the
     # script is the source of truth for these literal values
-    # (e.g. SPICEDB_PASSWORD must match pgvector_init.sql).
+    # (e.g. SPICEDB_PASSWORD must match pgvector_init.sql, DATA_PATH
+    # determines where persistent state lives).
     for key, default in STATIC_DEFAULTS.items():
         values.setdefault(key, default)
 
@@ -642,12 +664,27 @@ def main() -> int:
     except OSError:
         pass
 
-    # Render and write garage.toml alongside the rest of the stack.
-    # The config itself contains no secrets (those come from .env.prod
-    # via env_file in compose), but it lives next to data/garage/{meta,
-    # data} so everything garage touches is under one directory.
-    GARAGE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    GARAGE_CONFIG_PATH.write_text(GARAGE_CONFIG_TEMPLATE)
+    # Resolve the garage.toml destination from DATA_PATH. The compose
+    # file interpolates the same var, so as long as DATA_PATH is the
+    # same in both, the mount target matches what we write here.
+    # ``Path(os.path.join(REPO_ROOT, DATA_PATH))`` semantics: a
+    # leading ".." walks above the repo root; an absolute path bypasses
+    # the repo entirely.
+    data_path = Path(values["DATA_PATH"])
+    if not data_path.is_absolute():
+        data_path = (REPO_ROOT / data_path).resolve()
+    garage_config_path = data_path / "garage" / "config" / "garage.toml"
+
+    # Render and write garage.toml. If a stale directory is in the way
+    # at the target path (e.g. a previous failed run created
+    # ``config/garage.toml/`` as a directory), wipe it before writing -
+    # the user has already approved overwriting everything else.
+    if garage_config_path.is_dir():
+        shutil.rmtree(garage_config_path)
+    garage_config_path.parent.mkdir(parents=True, exist_ok=True)
+    garage_config_path.write_text(GARAGE_CONFIG_TEMPLATE)
+    global GARAGE_CONFIG_PATH
+    GARAGE_CONFIG_PATH = garage_config_path
 
     print()
     print(f"wrote {args.output} (mode 600 where supported)")
