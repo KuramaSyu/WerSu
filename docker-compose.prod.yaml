@@ -24,9 +24,16 @@ services:
       - ../data/pgvector:/var/lib/postgresql
       - ./pgvector_init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
+      # $$ escapes compose interpolation: the rendered test becomes
+      # `psql -U $POSTGRES_USER -d $POSTGRES_DB ...`, which the
+      # container's shell expands from env_file at healthcheck time.
+      # Without the escape, compose expands ${POSTGRES_USER} at parse
+      # time from the host shell + .env - and if .env.prod is missing
+      # the result is `psql -U  -d db ...`, where `-d` is parsed as
+      # the username and PG logs `role "-d" does not exist`.
       test:
         - CMD-SHELL
-        - psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c 'SELECT 1'
+        - psql -U $${POSTGRES_USER} -d $${POSTGRES_DB} -c 'SELECT 1'
       interval: 10s
       timeout: 5s
       retries: 5
