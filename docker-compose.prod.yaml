@@ -95,7 +95,7 @@ services:
     labels:
       traefik.enable: "true"
       traefik.http.routers.imgproxy.entrypoints: websecure
-      traefik.http.routers.imgproxy.rule: Host(`img.${DOMAIN}`)
+      traefik.http.routers.imgproxy.rule: Host(`wersu-img.${DOMAIN}`)
       traefik.http.routers.imgproxy.tls.certresolver: letsencrypt
       traefik.http.services.imgproxy.loadbalancer.server.port: "8080"
 
@@ -149,6 +149,12 @@ services:
     env_file: ./.env.prod
     depends_on:
       - spicedb
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.wersu-hocuspocus.entrypoints: websecure
+      traefik.http.routers.wersu-hocuspocus.rule: Host(`${HOCUSPOCUS_HOST}`)
+      traefik.http.routers.wersu-hocuspocus.tls.certresolver: letsencrypt
+      traefik.http.services.wersu-hocuspocus.loadbalancer.server.port: "8666"
 
 networks:
   proxy:
