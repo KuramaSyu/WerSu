@@ -71,3 +71,8 @@ Implementations | Generally keep it simple there. If it does nothing special, th
 Helper functions | Just what they do
 Errors within any method or function | Always document them  
 Inline Comments | Always. but small and compact. They nearly never should span over multiple lines, if they don't have a good reason for that. Only if theres a bug or something serious which is worth explaining over multiple lines
+
+### Comments
+#### "no-op" / "noop" / "no-op" / "silently ignored"
+
+When a method body is prefaced with a comment like **"# later or equal -> noop"** or **"# no-op if not registered"**, the intent is that the call returns without raising and without mutating state.
