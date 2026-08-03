@@ -20,6 +20,12 @@ The names are also re-exported here so legacy code paths that import
 
 from .activity_logger_service import _FakeActivityLoggerService  # noqa: F401
 from .attachments import *  # noqa: F401,F403
+from .background_process import (  # noqa: F401
+    FakeBackgroundProcess,
+    InMemoryTaskHandle,
+    InMemoryTaskSpawner,
+    ManualClock,
+)
 from .directory_service import _StubDirectoryService  # noqa: F401
 from .in_memory_permission_repo import InMemoryPermissionRepo  # noqa: F401
 from .logging import silent_logger  # noqa: F401
