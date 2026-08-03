@@ -2,6 +2,7 @@ import logging
 import sys
 import os
 import time
+from datetime import datetime
 
 import asyncio
 from typing import Any, Dict
@@ -24,6 +25,15 @@ from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_se
 from src.grpc_mod.sharing_service import GrpcSharingService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.services import PermissionServiceImpl, UserServiceImpl, DirectoryActivityServiceImpl, AttachmentFacadeImpl, share_access
+from src.services.background_process import (
+    AsyncClockAsyncio,
+    BackgroundSchedulerImpl,
+    TaskSpawnerAsyncio,
+)
+from src.services.background_process.processes import (
+    UserDisableProcessImpl,
+    UserEnableProcessImpl,
+)
 from src.services.activity_logger_service import ActivityLoggerServiceImpl
 from src.services.activity_statistics_service import ActivityStatisticsServiceImpl
 from src.services.sharing import SharingServiceImpl
@@ -507,9 +517,36 @@ async def serve():
     server.add_insecure_port(listen_addr)
     log.info(f"gRPC server listening on {listen_addr}")
 
+    # Background processes: drive user-action rows on schedule.
+    log.info("Starting background scheduler...")
+    user_disable_process = UserDisableProcessImpl(
+        user_action_repo=user_action_repo,
+        get_now=lambda: datetime.now(),
+        log=logging_provider,
+    )
+    user_enable_process = UserEnableProcessImpl(
+        user_action_repo=user_action_repo,
+        get_now=lambda: datetime.now(),
+        log=logging_provider,
+    )
+    background_scheduler = BackgroundSchedulerImpl(
+        clock=AsyncClockAsyncio(),
+        task_spawner=TaskSpawnerAsyncio(),
+        stop_flag=AsyncClockAsyncio(),
+        get_now=lambda: datetime.now(),
+        log=logging_provider,
+    )
+    background_scheduler.register(user_disable_process)
+    background_scheduler.register(user_enable_process)
+    background_scheduler.attach_handles()
+    background_scheduler.start()
+
     # Start the server
     await server.start()
-    await server.wait_for_termination()
+    try:
+        await server.wait_for_termination()
+    finally:
+        await background_scheduler.stop()
 
 
 if __name__ == "__main__":
