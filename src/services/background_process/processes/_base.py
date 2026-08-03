@@ -49,7 +49,13 @@ class _UserActionByKindProcessImpl(UserActionProcessABC):
     async def run(self) -> None:
         due = await self._fetch_due_pending()
         if not due:
+            self.log.debug(f"{self.action_name}: no due actions")
             return
+        user_ids = [str(a.user_id) for a in due]
+        self.log.info(
+            f"{self.action_name}: executing {len(due)} action(s) "
+            f"for user_id(s)={','.join(user_ids)}"
+        )
         now = self._normalise(self._get_now())
         for action in due:
             action.executed_at = now
@@ -58,6 +64,10 @@ class _UserActionByKindProcessImpl(UserActionProcessABC):
                 f"{self.action_name}: user_id={action.user_id} "
                 f"action_id={action.id} scheduled_at={action.execute_at}"
             )
+        self.log.info(
+            f"{self.action_name}: completed {len(due)} action(s) "
+            f"for user_id(s)={','.join(user_ids)}"
+        )
 
     async def _fetch_due_pending(self) -> List[UserActionEntity]:
         """Every pending action of our kind whose ``execute_at`` has passed."""

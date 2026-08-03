@@ -225,15 +225,26 @@ class BackgroundSchedulerImpl(BackgroundSchedulerABC):
             RuntimeError: if ``process`` is not registered.
         """
         if id(process) not in self._entries_by_process:
+            self.log.debug(
+                f"schedule: process {type(process).__name__} not registered"
+            )
             raise RuntimeError("process not registered")
         existing = self._entries_by_process[id(process)]
         if existing is not None and existing.when <= when:
             # new when is later or equal -> noop
+            self.log.debug(
+                f"schedule: {type(process).__name__} noop "
+                f"(existing={existing.when}, new={when})"
+            )
             return
 
         if existing is not None:
             try:
                 self._heap.remove(existing)
+                self.log.debug(
+                    f"schedule: replaced entry for {type(process).__name__} "
+                    f"(was={existing.when}, now={when})"
+                )
             except ValueError:
                 pass
 
@@ -246,6 +257,10 @@ class BackgroundSchedulerImpl(BackgroundSchedulerABC):
         )
         heapq.heappush(self._heap, entry)
         self._entries_by_process[id(process)] = entry
+        self.log.debug(
+            f"schedule: added entry for {type(process).__name__} at {when} "
+            f"(why={why.get('name', '?')})"
+        )
         await self._maybe_shorten_sleep()
 
     async def _maybe_shorten_sleep(self) -> None:
