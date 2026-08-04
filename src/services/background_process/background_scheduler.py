@@ -82,6 +82,7 @@ class BackgroundSchedulerImpl(BackgroundSchedulerABC):
         self._entries_by_process: Dict[int, Optional[_HeapEntry]] = {}
         self._registered: List[BackgroundProcessABC] = []
         self._attached: set[int] = set()  # ids of processes with a handle bound
+        self._on_handle: Dict[int, Callable[[SchedulerHandleABC], None]] = {}
         self._seq = 0
         self._handles_attached = False
         self._started = False
@@ -89,18 +90,26 @@ class BackgroundSchedulerImpl(BackgroundSchedulerABC):
 
     # -- registration ----------------------------------------------------
 
-    def register(self, process: BackgroundProcessABC) -> None:
+    def register(
+        self,
+        process: BackgroundProcessABC,
+        *,
+        on_handle: Optional[Callable[[SchedulerHandleABC], None]] = None,
+    ) -> None:
         if self._started:
             raise RuntimeError("cannot register after start()")
         if id(process) in self._entries_by_process:
             return
         self._entries_by_process[id(process)] = None
         self._registered.append(process)
+        if on_handle is not None:
+            self._on_handle[id(process)] = on_handle
 
     def unregister(self, process: BackgroundProcessABC) -> None:
         # Remove a process. this way we dont raise and remove all, not only first, occurences
         self._registered = [p for p in self._registered if p is not process]
         self._attached.discard(id(process))
+        self._on_handle.pop(id(process), None)
         entry = self._entries_by_process.pop(id(process), None)
         if entry is None:
             return
@@ -133,9 +142,13 @@ class BackgroundSchedulerImpl(BackgroundSchedulerABC):
         for process in self._registered:
             if id(process) in self._attached:
                 continue
-            process.attach_handle(_SchedulerHandleImpl(self, process))
+            handle = _SchedulerHandleImpl(self, process)
+            process.attach_handle(handle)
             self._attached.add(id(process))
             newly_attached.append(process)
+            callback = self._on_handle.get(id(process))
+            if callback is not None:
+                callback(handle)
         if not newly_attached:
             raise RuntimeError(
                 "attach_handles() called but no new processes were bound; "
