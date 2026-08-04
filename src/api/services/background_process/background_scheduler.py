@@ -10,9 +10,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Optional
 
 from src.api.services.background_process.background_process import BackgroundProcessABC
+from src.api.services.background_process.scheduler_handle import SchedulerHandleABC
 
 
 @dataclass
@@ -34,8 +35,23 @@ class BackgroundSchedulerABC(ABC):
     like enabling/disabling users or cleaning attachments"""
 
     @abstractmethod
-    def register(self, process: BackgroundProcessABC) -> None:
-        """Add a process. Idempotent; re-registering replaces the entry."""
+    def register(
+        self,
+        process: BackgroundProcessABC,
+        *,
+        on_handle: Optional[Callable[[SchedulerHandleABC], None]] = None,
+    ) -> None:
+        """Add a process. Idempotent; re-registering replaces the entry.
+
+        Args:
+            process: the background process to register.
+            on_handle: optional callback invoked with the
+                :class:`SchedulerHandleABC` once the scheduler binds
+                it to ``process`` in :meth:`attach_handles`.  Lets
+                external code (e.g. a notifying repo) capture the
+                handle without reaching into the process's private
+                state.  Called exactly once per registration.
+        """
 
     @abstractmethod
     def unregister(self, process: BackgroundProcessABC) -> None:
