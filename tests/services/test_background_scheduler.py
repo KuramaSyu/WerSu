@@ -13,6 +13,7 @@ from datetime import timedelta
 
 import pytest
 
+from src.api.other.undefined import UNDEFINED
 from src.services.background_process.background_scheduler import BackgroundSchedulerImpl
 from tests.stubs.background_process import (
     FakeBackgroundProcess,
@@ -296,3 +297,116 @@ async def test_attach_handles_with_no_new_process_raises() -> None:
     scheduler.attach_handles()
     with pytest.raises(RuntimeError, match="no new processes"):
         scheduler.attach_handles()
+
+async def test_register_with_on_handle_invokes_callback_on_attach(scheduler_pair) -> None:
+    """``on_handle`` is called once per process when its handle is bound.
+
+    Pins the contract that lets external code (e.g. a notifying repo)
+    capture the scheduler handle without reaching into the process's
+    private state.
+    """
+    clock, scheduler = scheduler_pair
+    process = FakeBackgroundProcess()
+    process.next_wakeup_values = [clock.now + timedelta(seconds=60)]
+
+    captured: list = []
+
+    def capture(handle) -> None:
+        captured.append(handle)
+
+    scheduler.register(process, on_handle=capture)
+    scheduler.attach_handles()
+
+    assert len(captured) == 1
+    # The handle returned is a real SchedulerHandleABC, not None.
+    from src.api.services.background_process.scheduler_handle import SchedulerHandleABC
+
+    assert isinstance(captured[0], SchedulerHandleABC)
+
+
+async def test_on_handle_wires_real_listener_to_real_process(scheduler_pair) -> None:
+    """End-to-end: ``on_handle`` binds a real listener to a real process.
+
+    Pins the wiring pattern used in :mod:`src.main`: the real
+    :class:`BackgroundSchedulerImpl` binds its real
+    :class:`UserDisableProcessImpl` to a
+    :class:`~src.db.repos.user.notifying_user_action_repo.UserActionListener`
+    via the ``on_handle`` kwarg.  Inserting a due row through the
+    notifying repo then wakes the scheduler, which fires the process
+    and marks the row as executed.
+
+    All collaborators are real except the storage layer
+    (the in-memory :class:`_FakeUserActionRepo`) and the clock
+    (a :class:`ManualClock` whose time only advances on test calls).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from src.db.entities.user.user_action import UserActionEntity
+    from src.db.repos.user.notifying_user_action_repo import (
+        NotifyingUserActionRepo,
+        UserActionListener,
+    )
+    from src.services.background_process.processes import UserDisableProcessImpl
+    from tests.stubs.user_action_repo import _FakeUserActionRepo
+
+    clock, scheduler = scheduler_pair
+    clock.set_now(datetime(2026, 1, 1, 12, tzinfo=timezone.utc))
+
+    fake_repo = _FakeUserActionRepo()
+    listener = UserActionListener(kind="disable")
+    notifying_repo = NotifyingUserActionRepo(
+        inner=fake_repo,
+        listeners=[listener],
+    )
+    process = UserDisableProcessImpl(
+        user_action_repo=notifying_repo,
+        get_now=lambda: clock.now,
+        log=silent_logger,
+    )
+
+    # The whole point of this test: ``listener.bind`` is what
+    # ``on_handle`` is wired to.  Before ``attach_handles`` the
+    # listener has no handle, so an insert is a no-op for the scheduler.
+    scheduler.register(process, on_handle=listener.bind)
+    scheduler.attach_handles()
+    scheduler.start()
+
+    past = clock.now - timedelta(seconds=1)
+    saved = await notifying_repo.add_action(
+        UserActionEntity(user_id="alice", action="disable", execute_at=past)
+    )
+
+    # No real timers; the scheduler is fired by the listener's push.
+    await scheduler.drain()
+
+    # The fake repo's row should now have executed_at set.
+    executed = fake_repo.for_user("alice")
+    assert len(executed) == 1
+    assert executed[0].executed_at is not None and executed[0].executed_at is not UNDEFINED
+    assert executed[0].id == saved.id
+
+
+async def test_on_handle_is_not_invoked_before_attach_handles(scheduler_pair) -> None:
+    """``on_handle`` fires inside ``attach_handles``, not at ``register``.
+
+    A late-binding caller can register with ``on_handle`` set and
+    still have time to mutate state on the listener object before
+    the callback fires.
+    """
+    from src.api.services.background_process.scheduler_handle import SchedulerHandleABC
+
+    clock, scheduler = scheduler_pair
+    process = FakeBackgroundProcess()
+    process.next_wakeup_values = [clock.now + timedelta(seconds=60)]
+
+    captured: list = []
+
+    def capture(handle) -> None:
+        captured.append(handle)
+
+    scheduler.register(process, on_handle=capture)
+    assert captured == [], "on_handle must not fire during register"
+
+    scheduler.attach_handles()
+    assert len(captured) == 1
+    assert isinstance(captured[0], SchedulerHandleABC)
