@@ -139,8 +139,12 @@ def count_undefined(*items: object) -> int:
     """Count how many of the provided items are :obj:`~src.api.undefined.UNDEFINED`."""
     return sum(item is UNDEFINED for item in items)
 
-def is_undefined(item: UndefinedOr[T_co] | UndefinedNoneOr[T_co]) -> bool:
-    """Return whether ``item`` is :obj:`~src.api.undefined.UNDEFINED`."""
+def is_undefined(
+    item: UndefinedOr[T_co] | UndefinedNoneOr[T_co],
+) -> typing_extensions.TypeIs[UndefinedType]:
+    """Return whether ``item`` is :obj:`~src.api.undefined.UNDEFINED`.
+    Annotated as a :data:`TypeIs` for type checkers.
+    """
     return item is UNDEFINED
 
 def unwrap_undefined(item: UndefinedOr[T_co]) -> T_co:
