@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 import asyncio
-from typing import Any, Dict
+from typing import Any, Dict, List
 import boto3  # type: ignore[reportUnknownMemberType]
 import grpc
 
@@ -54,6 +54,10 @@ from src.db.repos.attachments.attachments import (
 )
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user import RepoContextFactory
+from src.db.repos.user.notifying_user_action_repo import (
+    NotifyingUserActionRepo,
+    UserActionListener,
+)
 from src.db.repos.user.user_action import UserActionPostgresRepo
 from src.db.repos.activity.postgres import PostgresActivityRepo
 from src.db.table import Table, setup_table_logging
@@ -340,8 +344,19 @@ async def serve():
         table=shared_table,
         logging_provider=logging_provider,
     )
-    user_action_repo = UserActionPostgresRepo(
+    
+    # later in the scheduler creation, these listerners get their actual handle attached
+    user_disable_listener = UserActionListener(kind="disable")
+    user_enable_listener = UserActionListener(kind="enable")
+    user_action_repo = NotifyingUserActionRepo(
+        inner=UserActionPostgresRepo(
         table=user_action_table,
+        logging_provider=logging_provider,
+    ),
+        listeners=[
+        user_disable_listener,
+        user_enable_listener,
+    ],
         logging_provider=logging_provider,
     )
     activity_repo = PostgresActivityRepo(
@@ -536,8 +551,14 @@ async def serve():
         get_now=lambda: datetime.now(),
         log=logging_provider,
     )
-    background_scheduler.register(user_disable_process)
-    background_scheduler.register(user_enable_process)
+    background_scheduler.register(
+        user_disable_process,
+        on_handle=user_disable_listener.bind,
+    )
+    background_scheduler.register(
+        user_enable_process,
+        on_handle=user_enable_listener.bind,
+    )
     background_scheduler.attach_handles()
     background_scheduler.start()
 
