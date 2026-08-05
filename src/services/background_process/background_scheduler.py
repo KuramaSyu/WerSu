@@ -309,10 +309,15 @@ class BackgroundSchedulerImpl(BackgroundSchedulerABC):
 
             delay = self._delay_to_next(next_at)
             if delay > 0:
-                # Park on the clock for the delay.  wake_at or stop()
-                # unparks us by calling ``_clock.set``.
-                await self._clock.wait()
-                self._clock.clear()
+                # Sleep until the next deadline.  ``sleep`` is
+                # interruptible: an earlier ``wake_at`` (or
+                # ``stop()``) calls ``_clock.set`` to short-circuit
+                # the wait when a new entry moves the deadline up.
+                # The previous code used ``_clock.wait()`` here,
+                # which blocks until ``set()`` is called and never
+                # wakes on its own -- so the production loop slept
+                # past every deadline and processes never fired.
+                await self._clock.sleep(delay)
                 if self._stop_flag.is_set():
                     return
                 continue
