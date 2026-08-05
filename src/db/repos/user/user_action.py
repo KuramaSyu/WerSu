@@ -167,5 +167,4 @@ class UserActionPostgresRepo(UserActionRepoABC):
         """Convert an asyncpg record into the entity."""
         return UserActionEntity(**dict(record))
 
-
 __all__ = ["UserActionPostgresRepo"]
