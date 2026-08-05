@@ -10,7 +10,7 @@ the ``action_name`` used in the `why` payload.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Callable, List, Optional
 
 from src.api.other.types import LoggingProvider
@@ -56,7 +56,7 @@ class _UserActionByKindProcessImpl(UserActionProcessABC):
             f"{self.action_name}: executing {len(due)} action(s) "
             f"for user_id(s)={','.join(user_ids)}"
         )
-        now = self._normalise(self._get_now())
+        now = self._get_now()
         for action in due:
             action.executed_at = now
             await self._repo.update_action(action)
@@ -73,15 +73,8 @@ class _UserActionByKindProcessImpl(UserActionProcessABC):
         """Every pending action of our kind whose ``execute_at`` has passed."""
         flt = FilterUserAction(action=self.kind, executed_at=None)
         pending = await self._repo.get_actions(flt)
-        now = self._normalise(self._get_now())
+        now = self._get_now()
         return [
             a for a in pending
-            if a.execute_at
-            and self._normalise(a.execute_at) <= now  # type: ignore[arg-type,return-value]
+            if a.execute_at and a.execute_at <= now  # type: ignore[arg-type,return-value]
         ]
-
-    @staticmethod
-    def _normalise(dt: datetime) -> datetime:
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt
