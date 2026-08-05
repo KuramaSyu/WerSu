@@ -117,6 +117,8 @@ services:
       - GARAGE_DEFAULT_SECRET_KEY=${GARAGE_DEFAULT_SECRET_KEY}
       - GARAGE_DEFAULT_BUCKET=${GARAGE_DEFAULT_BUCKET}
     restart: unless-stopped
+    env_file:
+      - .env
 
   imgproxy:
     image: ghcr.io/imgproxy/imgproxy:latest
