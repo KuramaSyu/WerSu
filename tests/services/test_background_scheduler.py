@@ -410,3 +410,71 @@ async def test_on_handle_is_not_invoked_before_attach_handles(scheduler_pair) ->
     scheduler.attach_handles()
     assert len(captured) == 1
     assert isinstance(captured[0], SchedulerHandleABC)
+
+
+async def test_production_loop_fires_after_real_sleep() -> None:
+    """Pin the production loop's deadline wait: ``_run_loop`` parks on
+    :meth:`AsyncClockAsyncio.sleep` (interruptible, deadline-aware),
+    not on :meth:`AsyncClockAsyncio.wait` (which blocks until
+    ``set()`` and never wakes on its own).
+
+    The bug the test pins: the loop used ``_clock.wait()`` for the
+    "sleep until the next deadline" branch.  ``wait()`` has no
+    timeout, so once the loop parked, only a new ``wake_at`` or
+    ``stop()`` could wake it -- the deadline elapsed silently and
+    no process ever fired.  ``drain()``-based tests miss this
+    because they never start the background loop (they set
+    ``run_background_loop=False``).
+    """
+    import asyncio
+    from datetime import datetime, timedelta
+
+    from src.services.background_process.async_clock import AsyncClockAsyncio
+    from src.services.background_process.task_spawner import TaskSpawnerAsyncio
+
+    # Use naive datetimes for both sides so ``_delay_to_next``'s
+    # "naive -> UTC" interpretation produces a positive delta on
+    # any host.  An aware ``next_at`` (e.g. ``datetime.now(timezone.utc)``)
+    # paired with naive ``now`` would let the loop see ``delay == 0``
+    # on a host east of UTC, masking the bug.  Mirrors the
+    # production wiring where ``get_now`` is naive and
+    # ``UserActionEntity.execute_at`` is read back naive from
+    # ``TIMESTAMP WITHOUT TIME ZONE``.
+    scheduled_at = datetime.now() + timedelta(milliseconds=200)
+    clock = AsyncClockAsyncio()
+    stop_flag = AsyncClockAsyncio()
+    scheduler = BackgroundSchedulerImpl(
+        clock=clock,
+        task_spawner=TaskSpawnerAsyncio(),
+        stop_flag=stop_flag,
+        get_now=lambda: datetime.now(),
+        log=silent_logger,
+        run_background_loop=True,
+    )
+
+    process = FakeBackgroundProcess()
+    # First wakeup: 0.2s in the future.  Second: None so the process
+    # is removed from the heap after firing.
+    process.next_wakeup_values = [scheduled_at, None]
+
+    scheduler.register(process)
+    scheduler.attach_handles()
+    scheduler.start()
+
+    try:
+        # Wait up to 2s for the process to fire.  The deadline is
+        # 0.2s, so a healthy loop fires well within the timeout; a
+        # broken loop (parked on ``wait()``) would never fire and
+        # the deadline check would raise :exc:`AssertionError`.
+        deadline = asyncio.get_event_loop().time() + 2.0
+        while process.run_calls == 0:
+            if asyncio.get_event_loop().time() > deadline:
+                raise AssertionError(
+                    "process did not fire after the deadline elapsed; "
+                    "_run_loop is parked on _clock.wait() instead of "
+                    "_clock.sleep(delay)"
+                )
+            await asyncio.sleep(0.02)
+        assert process.run_calls == 1
+    finally:
+        await scheduler.stop()
