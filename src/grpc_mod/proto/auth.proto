@@ -1,0 +1,338 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+package proto;
+option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
+
+// Auth proto.
+//
+// Layering:
+// - The browser does not talk to gRPC. REST (`WerSu-Rest`) is the
+//   HTTP edge and runs the WebAuthn ceremony (challenge generation,
+//   attestation/assertion verification) using `go-webauthn`. It also
+//   handles password hashing, rate limiting, JWT issuance, and email
+//   delivery.
+// - gRPC is the source of truth for users and credentials. REST
+//   calls into this service to look up credentials, persist public
+//   keys, and bump counters. REST does not write to the auth tables
+//   directly.
+// - There is no session table on the backend. Every request that
+//   reaches gRPC is trusted because the REST middleware has already
+//   verified a JWT signed by `JWT_SECRET`. The JWT carries the
+//   `user_id` claim; gRPC trusts it as the caller identity.
+
+enum CredentialKind {
+    CREDENTIAL_KIND_UNSPECIFIED = 0;
+    CREDENTIAL_KIND_DISCORD = 1;
+    CREDENTIAL_KIND_PASSWORD = 2;
+    CREDENTIAL_KIND_PASSKEY = 3;
+    CREDENTIAL_KIND_GOOGLE = 4;
+}
+
+// A user as exposed to the auth layer.
+//
+// Deliberately narrower than the public `User` message in
+// `user.proto`. Auth consumers do not need Discord profile fields
+// or avatar -- add them here only when an auth endpoint actually
+// needs them.
+message UserAuth {
+    string id = 1;
+    string email = 2;
+    // Username is optional; empty string means the user has not set one.
+    string username = 3;
+    // Zero timestamp means the email has not been verified yet.
+    google.protobuf.Timestamp email_verified_at = 4;
+    bool is_active = 5;
+    google.protobuf.Timestamp created_at = 6;
+}
+
+// A stored credential. Exactly one of the `payload` oneof fields is
+// populated, enforced by the service layer. The `kind` enum tells
+// REST which one to read.
+message Credential {
+    string id = 1;
+    string user_id = 2;
+    CredentialKind kind = 3;
+    google.protobuf.Timestamp created_at = 4;
+    google.protobuf.Timestamp last_used_at = 5;
+
+    oneof payload {
+        // kind = DISCORD
+        string discord_id = 6;
+
+        // kind = PASSWORD -- argon2id encoded string
+        string password_hash = 7;
+
+        // kind = PASSKEY -- points at the row in `passkeys` table
+        string passkey_id = 8;
+
+        // kind = GOOGLE -- Google's stable user id from the `sub` claim
+        string google_id = 9;
+    }
+}
+
+// A stored WebAuthn passkey (public-key credential).
+//
+// The private key never leaves the user's device. The `public_key`
+// field holds the COSE-encoded public key produced by the
+// authenticator at registration time. `sign_count` is updated on
+// every successful login and must strictly increase; a non-monotonic
+// counter suggests an authenticator clone.
+message Passkey {
+    string id = 1;
+    string user_id = 2;
+    bytes credential_id = 3;
+    bytes public_key = 4;
+    uint64 sign_count = 5;
+    repeated string transports = 6;
+    bytes aaguid = 7;
+    bool backup_eligible = 8;
+    bool backup_state = 9;
+    bool user_verified = 10;
+    string friendly_name = 11;
+    google.protobuf.Timestamp created_at = 12;
+    google.protobuf.Timestamp last_used_at = 13;
+    google.protobuf.Timestamp revoked_at = 14;
+}
+
+// ---------- User lookup ----------
+
+// Resolve a user by one of the login identifiers. Exactly one of
+// `user_id`, `email`, or `discord_id` must be supplied. Returns
+// NOT_FOUND if no user matches.
+message GetUserAuthRequest {
+    oneof identifier {
+        string user_id = 1;
+        string email = 2;
+        int64 discord_id = 3;
+    }
+}
+
+message GetUserAuthResponse {
+    UserAuth user = 1;
+}
+
+// Create a brand-new user (email + password signup). Returns
+// ALREADY_EXISTS if a user with the email already exists. The
+// service layer also creates the credential row in the same
+// transaction. The first credential is the password; additional
+// credentials (Discord, passkeys) are added later via the
+// `LinkCredential` rpc.
+message CreateUserAuthRequest {
+    string email = 1;
+    string username = 2;
+    string password_hash = 3;
+}
+
+message CreateUserAuthResponse {
+    UserAuth user = 1;
+}
+
+// Update mutable fields on an existing user. Each field is a
+// tri-state: omitted (leave unchanged), `_set` populated (write the
+// value), or `_clear` populated (set the column to NULL). Used for
+// username/email changes and `email_verified_at`.
+//
+// `requester_id` is the actor. The service layer requires
+// `requester_id == user_id` (or an admin role on a future
+// extension) before any write. REST forwards the JWT's
+// `user_id` claim here.
+message UpdateUserAuthRequest {
+    string user_id = 1;
+    string requester_id = 2;
+
+    oneof username_change {
+        string username_set = 3;
+        google.protobuf.Empty username_clear = 4;
+    }
+
+    oneof email_change {
+        string email_set = 5;
+        google.protobuf.Empty email_clear = 6;
+    }
+
+    oneof email_verified_change {
+        google.protobuf.Timestamp email_verified_at_set = 7;
+        google.protobuf.Empty email_verified_at_clear = 8;
+    }
+}
+
+message UpdateUserAuthResponse {
+    UserAuth user = 1;
+}
+
+// ---------- Credential lookup ----------
+
+// Look up a credential of one kind. Used by REST to find the
+// Discord/Google link during an OAuth callback and the password
+// row during `/auth/login`. Returns NOT_FOUND if the credential
+// doesn't exist (treated as a generic "invalid email or password"
+// by the login endpoint).
+message FindCredentialByProviderRequest {
+    oneof identifier {
+        int64 discord_id = 1;
+        string email = 2;
+        string google_id = 3;
+    }
+    CredentialKind kind = 4;
+}
+
+message FindCredentialByProviderResponse {
+    Credential credential = 1;
+    UserAuth user = 2;
+}
+
+// Look up a passkey by its WebAuthn credential id. REST calls
+// this with the `id` from `navigator.credentials.get()` so it
+// can do the signature verification with the right public key.
+message FindPasskeyRequest {
+    bytes credential_id = 1;
+}
+
+message FindPasskeyResponse {
+    Passkey passkey = 1;
+}
+
+// List a user's passkeys for the settings page (with a friendly
+// label, last-used date, and a way to revoke each).
+message ListPasskeysRequest {
+    string user_id = 1;
+    bool include_revoked = 2;
+}
+
+message ListPasskeysResponse {
+    repeated Passkey passkeys = 1;
+}
+
+// Bump the sign counter after a successful assertion. REST
+// verifies the signature first, then calls this. The service
+// returns FAILED_PRECONDITION if the new counter is not strictly
+// greater than the stored one (cloned authenticator).
+message UpdatePasskeyCounterRequest {
+    string passkey_id = 1;
+    uint64 new_sign_count = 2;
+}
+
+message UpdatePasskeyCounterResponse {
+    Passkey passkey = 1;
+}
+
+// Store a new passkey after REST has verified the attestation.
+// `credential_id` is the raw bytes from the authenticator.
+// `public_key` is the COSE-encoded public key extracted from the
+// attestation authData. The service layer is responsible for
+// storing both in their native byte form -- they are not reshaped.
+//
+// `requester_id` is the actor. The service layer requires
+// `requester_id == user_id` before writing -- a passkey is
+// always attached to the currently authenticated user.
+message RegisterPasskeyRequest {
+    string user_id = 1;
+    string requester_id = 2;
+    bytes credential_id = 3;
+    bytes public_key = 4;
+    repeated string transports = 5;
+    bytes aaguid = 6;
+    bool backup_eligible = 7;
+    bool backup_state = 8;
+    bool user_verified = 9;
+    string friendly_name = 10;
+}
+
+message RegisterPasskeyResponse {
+    Passkey passkey = 1;
+}
+
+message RevokePasskeyRequest {
+    string passkey_id = 1;
+    string user_id = 2;
+    string requester_id = 3;
+}
+
+// ---------- Account linking ----------
+
+// Attach a new credential to an existing user. Used by:
+// - Discord/Google login adding a password/passkey to the account
+//   they just made from the OAuth callback.
+// - Password login adding a Discord/Google link from settings.
+// - Password login adding a passkey, where REST has already
+//   verified the attestation and is just persisting the result.
+//
+// `kind` selects which payload field is populated. Exactly one of
+// `discord_id`, `password_hash`, `passkey_id`, or `google_id` must
+// be set. Returns ALREADY_EXISTS if the user already has a
+// credential of that kind (with the exception of passkey, which
+// can have many).
+//
+// `requester_id` is the actor. The service layer requires
+// `requester_id == user_id` (or an admin role on a future
+// extension) before any write. The OAuth callback flow has a
+// subtle wrinkle: REST is calling on behalf of a not-yet-JWT
+// holder -- the OAuth `state` parameter holds the user identity
+// for the duration of the ceremony, and `requester_id` is
+// validated against that.
+message LinkCredentialRequest {
+    string user_id = 1;
+    string requester_id = 2;
+    CredentialKind kind = 3;
+
+    oneof payload {
+        string discord_id = 4;
+        string password_hash = 5;
+        string passkey_id = 6;
+        string google_id = 7;
+    }
+}
+
+message LinkCredentialResponse {
+    Credential credential = 1;
+}
+
+// Unlink a credential. For password and Discord/Google the
+// service layer rejects the call if the user would be left with
+// zero credentials (no way to log back in). Passkeys may always
+// be revoked.
+//
+// `requester_id` is the actor. The service layer requires
+// `requester_id == user_id` before any write.
+message UnlinkCredentialRequest {
+    string credential_id = 1;
+    string user_id = 2;
+    string requester_id = 3;
+}
+
+// Summary of every credential linked to a user, used by the
+// settings page to show "Discord: linked, Password: set, N
+// passkeys". Avoids three separate round trips from REST.
+message ListLinkedCredentialsRequest {
+    string user_id = 1;
+}
+
+message ListLinkedCredentialsResponse {
+    repeated Credential credentials = 1;
+    repeated Passkey passkeys = 2;
+}
+
+// ---------- Service ----------
+
+service AuthService {
+    // user lookup
+    rpc GetUserAuth(GetUserAuthRequest) returns (GetUserAuthResponse);
+    rpc CreateUserAuth(CreateUserAuthRequest) returns (CreateUserAuthResponse);
+    rpc UpdateUserAuth(UpdateUserAuthRequest) returns (UpdateUserAuthResponse);
+
+    // credential lookup
+    rpc FindCredentialByProvider(FindCredentialByProviderRequest) returns (FindCredentialByProviderResponse);
+    rpc FindPasskey(FindPasskeyRequest) returns (FindPasskeyResponse);
+    rpc ListPasskeys(ListPasskeysRequest) returns (ListPasskeysResponse);
+    rpc UpdatePasskeyCounter(UpdatePasskeyCounterRequest) returns (UpdatePasskeyCounterResponse);
+    rpc RegisterPasskey(RegisterPasskeyRequest) returns (RegisterPasskeyResponse);
+    rpc RevokePasskey(RevokePasskeyRequest) returns (google.protobuf.Empty);
+
+    // account linking
+    rpc LinkCredential(LinkCredentialRequest) returns (LinkCredentialResponse);
+    rpc UnlinkCredential(UnlinkCredentialRequest) returns (google.protobuf.Empty);
+    rpc ListLinkedCredentials(ListLinkedCredentialsRequest) returns (ListLinkedCredentialsResponse);
+}

@@ -29,6 +29,7 @@ message NullableTimestamp {
     }
 }
 
+
 // the permission a share can have
 enum SharePermission {
     SHARE_PERMISSION_UNSPECIFIED = 0;
