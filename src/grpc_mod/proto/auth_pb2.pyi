@@ -77,11 +77,16 @@ class UserAuth(_message.Message):
     EMAIL_VERIFIED_AT_FIELD_NUMBER: _builtins.int
     IS_ACTIVE_FIELD_NUMBER: _builtins.int
     CREATED_AT_FIELD_NUMBER: _builtins.int
+    AVATAR_URL_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     email: _builtins.str
     username: _builtins.str
     """Username is optional; empty string means the user has not set one."""
     is_active: _builtins.bool
+    avatar_url: _builtins.str
+    """Absolute URL to the user's avatar. Empty string means none
+    is configured. The frontend maps this to JSON null.
+    """
     @_builtins.property
     def email_verified_at(self) -> _timestamp_pb2.Timestamp:
         """Zero timestamp means the email has not been verified yet."""
@@ -97,10 +102,11 @@ class UserAuth(_message.Message):
         email_verified_at: _timestamp_pb2.Timestamp | None = ...,
         is_active: _builtins.bool = ...,
         created_at: _timestamp_pb2.Timestamp | None = ...,
+        avatar_url: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["created_at", b"created_at", "email_verified_at", b"email_verified_at"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["created_at", b"created_at", "email", b"email", "email_verified_at", b"email_verified_at", "id", b"id", "is_active", b"is_active", "username", b"username"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["avatar_url", b"avatar_url", "created_at", b"created_at", "email", b"email", "email_verified_at", b"email_verified_at", "id", b"id", "is_active", b"is_active", "username", b"username"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 

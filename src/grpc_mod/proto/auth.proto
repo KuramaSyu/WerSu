@@ -46,6 +46,9 @@ message UserAuth {
     google.protobuf.Timestamp email_verified_at = 4;
     bool is_active = 5;
     google.protobuf.Timestamp created_at = 6;
+    // Absolute URL to the user's avatar. Empty string means none
+    // is configured. The frontend maps this to JSON null.
+    string avatar_url = 7;
 }
 
 // A stored credential. Exactly one of the `payload` oneof fields is
