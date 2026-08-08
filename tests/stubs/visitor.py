@@ -17,7 +17,11 @@ from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.user.passkey import PasskeyEntity
+from src.db.entities.user.password import PasswordEntity
+from src.db.entities.user.third_party import ThirdPartyEntity
 from src.db.entities.user.user import UserEntity
+from src.db.entities.user.user_auth import UserAuthEntity
 from src.api.other.visitor import EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
 
@@ -145,6 +149,18 @@ class StubVisitor(EntityVisitor):
         if self._record_activity_score:
             self.activity_scores.append(score)
         return score
+
+    def visit_user_auth(self, entity: UserAuthEntity) -> UserAuthEntity:
+        return entity
+
+    def visit_passkey(self, entity: PasskeyEntity) -> PasskeyEntity:
+        return entity
+
+    def visit_third_party(self, entity: ThirdPartyEntity) -> None:
+        return None
+
+    def visit_password(self, entity: PasswordEntity) -> None:
+        return None
 
     def visit_share_user(self, access_as: str, online_until: Any) -> Any:
         self.share_users.append((access_as, online_until))

@@ -194,6 +194,18 @@ class EventMetadataVisitor(EntityVisitor):
     def visit_activity_score(self, score: typing.Any) -> Dict[str, object]:
         raise NotImplementedError
 
+    def visit_user_auth(self, entity: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
+    def visit_passkey(self, entity: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
+    def visit_third_party(self, entity: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
+    def visit_password(self, entity: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
 
 # Match: <object_type>:<object_id>#<relation>@<subject_type>:<subject_id>
 # Non-greedy on object_id and subject_id so a ``:`` inside an id

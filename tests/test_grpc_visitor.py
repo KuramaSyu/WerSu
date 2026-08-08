@@ -81,6 +81,8 @@ def test_partial_visitor_must_implement_all_visit_methods() -> None:
         def visit_note_share(self, entity): ...  # type: ignore[override]
         def visit_attachment(self, entity): ...  # type: ignore[override]
         # visit_attachment_metadata and visit_note_response are intentionally omitted
+        # visit_user_auth, visit_passkey, visit_third_party,
+        # visit_password are also intentionally omitted
 
     with pytest.raises(TypeError):
         _HalfVisitor()  # type: ignore[abstract]
