@@ -26,7 +26,7 @@ from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dsrc/grpc_mod/proto/auth.proto\x12\x05proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc5\x01\n\x08UserAuth\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05\x65mail\x18\x02 \x01(\t\x12\x10\n\x08username\x18\x03 \x01(\t\x12\x35\n\x11\x65mail_verified_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tis_active\x18\x05 \x01(\x08\x12.\n\ncreated_at\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x12\n\navatar_url\x18\x07 \x01(\t\"\x95\x02\n\nCredential\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12#\n\x04kind\x18\x03 \x01(\x0e\x32\x15.proto.CredentialKind\x12.\n\ncreated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x0clast_used_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x14\n\ndiscord_id\x18\x06 \x01(\tH\x00\x12\x17\n\rpassword_hash\x18\x07 \x01(\tH\x00\x12\x14\n\npasskey_id\x18\x08 \x01(\tH\x00\x12\x13\n\tgoogle_id\x18\t \x01(\tH\x00\x42\t\n\x07payload\"\xf8\x02\n\x07Passkey\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x15\n\rcredential_id\x18\x03 \x01(\x0c\x12\x12\n\npublic_key\x18\x04 \x01(\x0c\x12\x12\n\nsign_count\x18\x05 \x01(\x04\x12\x12\n\ntransports\x18\x06 \x03(\t\x12\x0e\n\x06\x61\x61guid\x18\x07 \x01(\x0c\x12\x17\n\x0f\x62\x61\x63kup_eligible\x18\x08 \x01(\x08\x12\x14\n\x0c\x62\x61\x63kup_state\x18\t \x01(\x08\x12\x15\n\ruser_verified\x18\n \x01(\x08\x12\x15\n\rfriendly_name\x18\x0b \x01(\t\x12.\n\ncreated_at\x18\x0c \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x0clast_used_at\x18\r \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12.\n\nrevoked_at\x18\x0e \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"\\\n\x12GetUserAuthRequest\x12\x11\n\x07user_id\x18\x01 \x01(\tH\x00\x12\x0f\n\x05\x65mail\x18\x02 \x01(\tH\x00\x12\x14\n\ndiscord_id\x18\x03 \x01(\x03H\x00\x42\x0c\n\nidentifier\"4\n\x13GetUserAuthResponse\x12\x1d\n\x04user\x18\x01 \x01(\x0b\x32\x0f.proto.UserAuth\"O\n\x15\x43reateUserAuthRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x10\n\x08username\x18\x02 \x01(\t\x12\x15\n\rpassword_hash\x18\x03 \x01(\t\"7\n\x16\x43reateUserAuthResponse\x12\x1d\n\x04user\x18\x01 \x01(\x0b\x32\x0f.proto.UserAuth\"\x80\x03\n\x15UpdateUserAuthRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x14\n\x0crequester_id\x18\x02 \x01(\t\x12\x16\n\x0cusername_set\x18\x03 \x01(\tH\x00\x12\x30\n\x0eusername_clear\x18\x04 \x01(\x0b\x32\x16.google.protobuf.EmptyH\x00\x12\x13\n\temail_set\x18\x05 \x01(\tH\x01\x12-\n\x0b\x65mail_clear\x18\x06 \x01(\x0b\x32\x16.google.protobuf.EmptyH\x01\x12;\n\x15\x65mail_verified_at_set\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.TimestampH\x02\x12\x39\n\x17\x65mail_verified_at_clear\x18\x08 \x01(\x0b\x32\x16.google.protobuf.EmptyH\x02\x42\x11\n\x0fusername_changeB\x0e\n\x0c\x65mail_changeB\x17\n\x15\x65mail_verified_change\"7\n\x16UpdateUserAuthResponse\x12\x1d\n\x04user\x18\x01 \x01(\x0b\x32\x0f.proto.UserAuth\"\x90\x01\n\x1f\x46indCredentialByProviderRequest\x12\x14\n\ndiscord_id\x18\x01 \x01(\x03H\x00\x12\x0f\n\x05\x65mail\x18\x02 \x01(\tH\x00\x12\x13\n\tgoogle_id\x18\x03 \x01(\tH\x00\x12#\n\x04kind\x18\x04 \x01(\x0e\x32\x15.proto.CredentialKindB\x0c\n\nidentifier\"h\n FindCredentialByProviderResponse\x12%\n\ncredential\x18\x01 \x01(\x0b\x32\x11.proto.Credential\x12\x1d\n\x04user\x18\x02 \x01(\x0b\x32\x0f.proto.UserAuth\"+\n\x12\x46indPasskeyRequest\x12\x15\n\rcredential_id\x18\x01 \x01(\x0c\"6\n\x13\x46indPasskeyResponse\x12\x1f\n\x07passkey\x18\x01 \x01(\x0b\x32\x0e.proto.Passkey\"?\n\x13ListPasskeysRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x17\n\x0finclude_revoked\x18\x02 \x01(\x08\"8\n\x14ListPasskeysResponse\x12 \n\x08passkeys\x18\x01 \x03(\x0b\x32\x0e.proto.Passkey\"I\n\x1bUpdatePasskeyCounterRequest\x12\x12\n\npasskey_id\x18\x01 \x01(\t\x12\x16\n\x0enew_sign_count\x18\x02 \x01(\x04\"?\n\x1cUpdatePasskeyCounterResponse\x12\x1f\n\x07passkey\x18\x01 \x01(\x0b\x32\x0e.proto.Passkey\"\xeb\x01\n\x16RegisterPasskeyRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x14\n\x0crequester_id\x18\x02 \x01(\t\x12\x15\n\rcredential_id\x18\x03 \x01(\x0c\x12\x12\n\npublic_key\x18\x04 \x01(\x0c\x12\x12\n\ntransports\x18\x05 \x03(\t\x12\x0e\n\x06\x61\x61guid\x18\x06 \x01(\x0c\x12\x17\n\x0f\x62\x61\x63kup_eligible\x18\x07 \x01(\x08\x12\x14\n\x0c\x62\x61\x63kup_state\x18\x08 \x01(\x08\x12\x15\n\ruser_verified\x18\t \x01(\x08\x12\x15\n\rfriendly_name\x18\n \x01(\t\":\n\x17RegisterPasskeyResponse\x12\x1f\n\x07passkey\x18\x01 \x01(\x0b\x32\x0e.proto.Passkey\"Q\n\x14RevokePasskeyRequest\x12\x12\n\npasskey_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x14\n\x0crequester_id\x18\x03 \x01(\t\"\xc8\x01\n\x15LinkCredentialRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x14\n\x0crequester_id\x18\x02 \x01(\t\x12#\n\x04kind\x18\x03 \x01(\x0e\x32\x15.proto.CredentialKind\x12\x14\n\ndiscord_id\x18\x04 \x01(\tH\x00\x12\x17\n\rpassword_hash\x18\x05 \x01(\tH\x00\x12\x14\n\npasskey_id\x18\x06 \x01(\tH\x00\x12\x13\n\tgoogle_id\x18\x07 \x01(\tH\x00\x42\t\n\x07payload\"?\n\x16LinkCredentialResponse\x12%\n\ncredential\x18\x01 \x01(\x0b\x32\x11.proto.Credential\"W\n\x17UnlinkCredentialRequest\x12\x15\n\rcredential_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x14\n\x0crequester_id\x18\x03 \x01(\t\"/\n\x1cListLinkedCredentialsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"i\n\x1dListLinkedCredentialsResponse\x12&\n\x0b\x63redentials\x18\x01 \x03(\x0b\x32\x11.proto.Credential\x12 \n\x08passkeys\x18\x02 \x03(\x0b\x32\x0e.proto.Passkey*\xa5\x01\n\x0e\x43redentialKind\x12\x1f\n\x1b\x43REDENTIAL_KIND_UNSPECIFIED\x10\x00\x12\x1b\n\x17\x43REDENTIAL_KIND_DISCORD\x10\x01\x12\x1c\n\x18\x43REDENTIAL_KIND_PASSWORD\x10\x02\x12\x1b\n\x17\x43REDENTIAL_KIND_PASSKEY\x10\x03\x12\x1a\n\x16\x43REDENTIAL_KIND_GOOGLE\x10\x04\x32\xe5\x07\n\x0b\x41uthService\x12\x44\n\x0bGetUserAuth\x12\x19.proto.GetUserAuthRequest\x1a\x1a.proto.GetUserAuthResponse\x12M\n\x0e\x43reateUserAuth\x12\x1c.proto.CreateUserAuthRequest\x1a\x1d.proto.CreateUserAuthResponse\x12M\n\x0eUpdateUserAuth\x12\x1c.proto.UpdateUserAuthRequest\x1a\x1d.proto.UpdateUserAuthResponse\x12k\n\x18\x46indCredentialByProvider\x12&.proto.FindCredentialByProviderRequest\x1a\'.proto.FindCredentialByProviderResponse\x12\x44\n\x0b\x46indPasskey\x12\x19.proto.FindPasskeyRequest\x1a\x1a.proto.FindPasskeyResponse\x12G\n\x0cListPasskeys\x12\x1a.proto.ListPasskeysRequest\x1a\x1b.proto.ListPasskeysResponse\x12_\n\x14UpdatePasskeyCounter\x12\".proto.UpdatePasskeyCounterRequest\x1a#.proto.UpdatePasskeyCounterResponse\x12P\n\x0fRegisterPasskey\x12\x1d.proto.RegisterPasskeyRequest\x1a\x1e.proto.RegisterPasskeyResponse\x12\x44\n\rRevokePasskey\x12\x1b.proto.RevokePasskeyRequest\x1a\x16.google.protobuf.Empty\x12M\n\x0eLinkCredential\x12\x1c.proto.LinkCredentialRequest\x1a\x1d.proto.LinkCredentialResponse\x12J\n\x10UnlinkCredential\x12\x1e.proto.UnlinkCredentialRequest\x1a\x16.google.protobuf.Empty\x12\x62\n\x15ListLinkedCredentials\x12#.proto.ListLinkedCredentialsRequest\x1a$.proto.ListLinkedCredentialsResponseB1Z/github.com/KuramaSyu/Wersu-Rest/src/proto;protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dsrc/grpc_mod/proto/auth.proto\x12\x05proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc5\x01\n\x08UserAuth\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05\x65mail\x18\x02 \x01(\t\x12\x10\n\x08username\x18\x03 \x01(\t\x12\x35\n\x11\x65mail_verified_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tis_active\x18\x05 \x01(\x08\x12.\n\ncreated_at\x18\x06 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x12\n\navatar_url\x18\x07 \x01(\t\"\x95\x02\n\nCredential\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12#\n\x04kind\x18\x03 \x01(\x0e\x32\x15.proto.CredentialKind\x12.\n\ncreated_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x0clast_used_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x14\n\ndiscord_id\x18\x06 \x01(\tH\x00\x12\x17\n\rpassword_hash\x18\x07 \x01(\tH\x00\x12\x14\n\npasskey_id\x18\x08 \x01(\tH\x00\x12\x13\n\tgoogle_id\x18\t \x01(\tH\x00\x42\t\n\x07payload\"\xf8\x02\n\x07Passkey\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x15\n\rcredential_id\x18\x03 \x01(\x0c\x12\x12\n\npublic_key\x18\x04 \x01(\x0c\x12\x12\n\nsign_count\x18\x05 \x01(\x04\x12\x12\n\ntransports\x18\x06 \x03(\t\x12\x0e\n\x06\x61\x61guid\x18\x07 \x01(\x0c\x12\x17\n\x0f\x62\x61\x63kup_eligible\x18\x08 \x01(\x08\x12\x14\n\x0c\x62\x61\x63kup_state\x18\t \x01(\x08\x12\x15\n\ruser_verified\x18\n \x01(\x08\x12\x15\n\rfriendly_name\x18\x0b \x01(\t\x12.\n\ncreated_at\x18\x0c \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x0clast_used_at\x18\r \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12.\n\nrevoked_at\x18\x0e \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"\\\n\x12GetUserAuthRequest\x12\x11\n\x07user_id\x18\x01 \x01(\tH\x00\x12\x0f\n\x05\x65mail\x18\x02 \x01(\tH\x00\x12\x14\n\ndiscord_id\x18\x03 \x01(\x03H\x00\x42\x0c\n\nidentifier\"4\n\x13GetUserAuthResponse\x12\x1d\n\x04user\x18\x01 \x01(\x0b\x32\x0f.proto.UserAuth\"c\n\x15\x43reateUserAuthRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x10\n\x08username\x18\x02 \x01(\t\x12\x15\n\rpassword_hash\x18\x03 \x01(\t\x12\x12\n\navatar_url\x18\x04 \x01(\t\"7\n\x16\x43reateUserAuthResponse\x12\x1d\n\x04user\x18\x01 \x01(\x0b\x32\x0f.proto.UserAuth\"\xe3\x03\n\x15UpdateUserAuthRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x14\n\x0crequester_id\x18\x02 \x01(\t\x12\x16\n\x0cusername_set\x18\x03 \x01(\tH\x00\x12\x30\n\x0eusername_clear\x18\x04 \x01(\x0b\x32\x16.google.protobuf.EmptyH\x00\x12\x13\n\temail_set\x18\x05 \x01(\tH\x01\x12-\n\x0b\x65mail_clear\x18\x06 \x01(\x0b\x32\x16.google.protobuf.EmptyH\x01\x12;\n\x15\x65mail_verified_at_set\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.TimestampH\x02\x12\x39\n\x17\x65mail_verified_at_clear\x18\x08 \x01(\x0b\x32\x16.google.protobuf.EmptyH\x02\x12\x18\n\x0e\x61vatar_url_set\x18\t \x01(\tH\x03\x12\x32\n\x10\x61vatar_url_clear\x18\n \x01(\x0b\x32\x16.google.protobuf.EmptyH\x03\x42\x11\n\x0fusername_changeB\x0e\n\x0c\x65mail_changeB\x17\n\x15\x65mail_verified_changeB\x13\n\x11\x61vatar_url_change\"7\n\x16UpdateUserAuthResponse\x12\x1d\n\x04user\x18\x01 \x01(\x0b\x32\x0f.proto.UserAuth\"\x90\x01\n\x1f\x46indCredentialByProviderRequest\x12\x14\n\ndiscord_id\x18\x01 \x01(\x03H\x00\x12\x0f\n\x05\x65mail\x18\x02 \x01(\tH\x00\x12\x13\n\tgoogle_id\x18\x03 \x01(\tH\x00\x12#\n\x04kind\x18\x04 \x01(\x0e\x32\x15.proto.CredentialKindB\x0c\n\nidentifier\"h\n FindCredentialByProviderResponse\x12%\n\ncredential\x18\x01 \x01(\x0b\x32\x11.proto.Credential\x12\x1d\n\x04user\x18\x02 \x01(\x0b\x32\x0f.proto.UserAuth\"+\n\x12\x46indPasskeyRequest\x12\x15\n\rcredential_id\x18\x01 \x01(\x0c\"6\n\x13\x46indPasskeyResponse\x12\x1f\n\x07passkey\x18\x01 \x01(\x0b\x32\x0e.proto.Passkey\"?\n\x13ListPasskeysRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x17\n\x0finclude_revoked\x18\x02 \x01(\x08\"8\n\x14ListPasskeysResponse\x12 \n\x08passkeys\x18\x01 \x03(\x0b\x32\x0e.proto.Passkey\"I\n\x1bUpdatePasskeyCounterRequest\x12\x12\n\npasskey_id\x18\x01 \x01(\t\x12\x16\n\x0enew_sign_count\x18\x02 \x01(\x04\"?\n\x1cUpdatePasskeyCounterResponse\x12\x1f\n\x07passkey\x18\x01 \x01(\x0b\x32\x0e.proto.Passkey\"\xeb\x01\n\x16RegisterPasskeyRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x14\n\x0crequester_id\x18\x02 \x01(\t\x12\x15\n\rcredential_id\x18\x03 \x01(\x0c\x12\x12\n\npublic_key\x18\x04 \x01(\x0c\x12\x12\n\ntransports\x18\x05 \x03(\t\x12\x0e\n\x06\x61\x61guid\x18\x06 \x01(\x0c\x12\x17\n\x0f\x62\x61\x63kup_eligible\x18\x07 \x01(\x08\x12\x14\n\x0c\x62\x61\x63kup_state\x18\x08 \x01(\x08\x12\x15\n\ruser_verified\x18\t \x01(\x08\x12\x15\n\rfriendly_name\x18\n \x01(\t\":\n\x17RegisterPasskeyResponse\x12\x1f\n\x07passkey\x18\x01 \x01(\x0b\x32\x0e.proto.Passkey\"Q\n\x14RevokePasskeyRequest\x12\x12\n\npasskey_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x14\n\x0crequester_id\x18\x03 \x01(\t\"\xc8\x01\n\x15LinkCredentialRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x14\n\x0crequester_id\x18\x02 \x01(\t\x12#\n\x04kind\x18\x03 \x01(\x0e\x32\x15.proto.CredentialKind\x12\x14\n\ndiscord_id\x18\x04 \x01(\tH\x00\x12\x17\n\rpassword_hash\x18\x05 \x01(\tH\x00\x12\x14\n\npasskey_id\x18\x06 \x01(\tH\x00\x12\x13\n\tgoogle_id\x18\x07 \x01(\tH\x00\x42\t\n\x07payload\"?\n\x16LinkCredentialResponse\x12%\n\ncredential\x18\x01 \x01(\x0b\x32\x11.proto.Credential\"W\n\x17UnlinkCredentialRequest\x12\x15\n\rcredential_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\x14\n\x0crequester_id\x18\x03 \x01(\t\"/\n\x1cListLinkedCredentialsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"i\n\x1dListLinkedCredentialsResponse\x12&\n\x0b\x63redentials\x18\x01 \x03(\x0b\x32\x11.proto.Credential\x12 \n\x08passkeys\x18\x02 \x03(\x0b\x32\x0e.proto.Passkey*\xa5\x01\n\x0e\x43redentialKind\x12\x1f\n\x1b\x43REDENTIAL_KIND_UNSPECIFIED\x10\x00\x12\x1b\n\x17\x43REDENTIAL_KIND_DISCORD\x10\x01\x12\x1c\n\x18\x43REDENTIAL_KIND_PASSWORD\x10\x02\x12\x1b\n\x17\x43REDENTIAL_KIND_PASSKEY\x10\x03\x12\x1a\n\x16\x43REDENTIAL_KIND_GOOGLE\x10\x04\x32\xe5\x07\n\x0b\x41uthService\x12\x44\n\x0bGetUserAuth\x12\x19.proto.GetUserAuthRequest\x1a\x1a.proto.GetUserAuthResponse\x12M\n\x0e\x43reateUserAuth\x12\x1c.proto.CreateUserAuthRequest\x1a\x1d.proto.CreateUserAuthResponse\x12M\n\x0eUpdateUserAuth\x12\x1c.proto.UpdateUserAuthRequest\x1a\x1d.proto.UpdateUserAuthResponse\x12k\n\x18\x46indCredentialByProvider\x12&.proto.FindCredentialByProviderRequest\x1a\'.proto.FindCredentialByProviderResponse\x12\x44\n\x0b\x46indPasskey\x12\x19.proto.FindPasskeyRequest\x1a\x1a.proto.FindPasskeyResponse\x12G\n\x0cListPasskeys\x12\x1a.proto.ListPasskeysRequest\x1a\x1b.proto.ListPasskeysResponse\x12_\n\x14UpdatePasskeyCounter\x12\".proto.UpdatePasskeyCounterRequest\x1a#.proto.UpdatePasskeyCounterResponse\x12P\n\x0fRegisterPasskey\x12\x1d.proto.RegisterPasskeyRequest\x1a\x1e.proto.RegisterPasskeyResponse\x12\x44\n\rRevokePasskey\x12\x1b.proto.RevokePasskeyRequest\x1a\x16.google.protobuf.Empty\x12M\n\x0eLinkCredential\x12\x1c.proto.LinkCredentialRequest\x1a\x1d.proto.LinkCredentialResponse\x12J\n\x10UnlinkCredential\x12\x1e.proto.UnlinkCredentialRequest\x1a\x16.google.protobuf.Empty\x12\x62\n\x15ListLinkedCredentials\x12#.proto.ListLinkedCredentialsRequest\x1a$.proto.ListLinkedCredentialsResponseB1Z/github.com/KuramaSyu/Wersu-Rest/src/proto;protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,8 +34,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'src.grpc_mod.proto.auth_pb2
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z/github.com/KuramaSyu/Wersu-Rest/src/proto;proto'
-  _globals['_CREDENTIALKIND']._serialized_start=3203
-  _globals['_CREDENTIALKIND']._serialized_end=3368
+  _globals['_CREDENTIALKIND']._serialized_start=3322
+  _globals['_CREDENTIALKIND']._serialized_end=3487
   _globals['_USERAUTH']._serialized_start=103
   _globals['_USERAUTH']._serialized_end=300
   _globals['_CREDENTIAL']._serialized_start=303
@@ -47,45 +47,45 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_GETUSERAUTHRESPONSE']._serialized_start=1055
   _globals['_GETUSERAUTHRESPONSE']._serialized_end=1107
   _globals['_CREATEUSERAUTHREQUEST']._serialized_start=1109
-  _globals['_CREATEUSERAUTHREQUEST']._serialized_end=1188
-  _globals['_CREATEUSERAUTHRESPONSE']._serialized_start=1190
-  _globals['_CREATEUSERAUTHRESPONSE']._serialized_end=1245
-  _globals['_UPDATEUSERAUTHREQUEST']._serialized_start=1248
-  _globals['_UPDATEUSERAUTHREQUEST']._serialized_end=1632
-  _globals['_UPDATEUSERAUTHRESPONSE']._serialized_start=1634
-  _globals['_UPDATEUSERAUTHRESPONSE']._serialized_end=1689
-  _globals['_FINDCREDENTIALBYPROVIDERREQUEST']._serialized_start=1692
-  _globals['_FINDCREDENTIALBYPROVIDERREQUEST']._serialized_end=1836
-  _globals['_FINDCREDENTIALBYPROVIDERRESPONSE']._serialized_start=1838
-  _globals['_FINDCREDENTIALBYPROVIDERRESPONSE']._serialized_end=1942
-  _globals['_FINDPASSKEYREQUEST']._serialized_start=1944
-  _globals['_FINDPASSKEYREQUEST']._serialized_end=1987
-  _globals['_FINDPASSKEYRESPONSE']._serialized_start=1989
-  _globals['_FINDPASSKEYRESPONSE']._serialized_end=2043
-  _globals['_LISTPASSKEYSREQUEST']._serialized_start=2045
-  _globals['_LISTPASSKEYSREQUEST']._serialized_end=2108
-  _globals['_LISTPASSKEYSRESPONSE']._serialized_start=2110
-  _globals['_LISTPASSKEYSRESPONSE']._serialized_end=2166
-  _globals['_UPDATEPASSKEYCOUNTERREQUEST']._serialized_start=2168
-  _globals['_UPDATEPASSKEYCOUNTERREQUEST']._serialized_end=2241
-  _globals['_UPDATEPASSKEYCOUNTERRESPONSE']._serialized_start=2243
-  _globals['_UPDATEPASSKEYCOUNTERRESPONSE']._serialized_end=2306
-  _globals['_REGISTERPASSKEYREQUEST']._serialized_start=2309
-  _globals['_REGISTERPASSKEYREQUEST']._serialized_end=2544
-  _globals['_REGISTERPASSKEYRESPONSE']._serialized_start=2546
-  _globals['_REGISTERPASSKEYRESPONSE']._serialized_end=2604
-  _globals['_REVOKEPASSKEYREQUEST']._serialized_start=2606
-  _globals['_REVOKEPASSKEYREQUEST']._serialized_end=2687
-  _globals['_LINKCREDENTIALREQUEST']._serialized_start=2690
-  _globals['_LINKCREDENTIALREQUEST']._serialized_end=2890
-  _globals['_LINKCREDENTIALRESPONSE']._serialized_start=2892
-  _globals['_LINKCREDENTIALRESPONSE']._serialized_end=2955
-  _globals['_UNLINKCREDENTIALREQUEST']._serialized_start=2957
-  _globals['_UNLINKCREDENTIALREQUEST']._serialized_end=3044
-  _globals['_LISTLINKEDCREDENTIALSREQUEST']._serialized_start=3046
-  _globals['_LISTLINKEDCREDENTIALSREQUEST']._serialized_end=3093
-  _globals['_LISTLINKEDCREDENTIALSRESPONSE']._serialized_start=3095
-  _globals['_LISTLINKEDCREDENTIALSRESPONSE']._serialized_end=3200
-  _globals['_AUTHSERVICE']._serialized_start=3371
-  _globals['_AUTHSERVICE']._serialized_end=4368
+  _globals['_CREATEUSERAUTHREQUEST']._serialized_end=1208
+  _globals['_CREATEUSERAUTHRESPONSE']._serialized_start=1210
+  _globals['_CREATEUSERAUTHRESPONSE']._serialized_end=1265
+  _globals['_UPDATEUSERAUTHREQUEST']._serialized_start=1268
+  _globals['_UPDATEUSERAUTHREQUEST']._serialized_end=1751
+  _globals['_UPDATEUSERAUTHRESPONSE']._serialized_start=1753
+  _globals['_UPDATEUSERAUTHRESPONSE']._serialized_end=1808
+  _globals['_FINDCREDENTIALBYPROVIDERREQUEST']._serialized_start=1811
+  _globals['_FINDCREDENTIALBYPROVIDERREQUEST']._serialized_end=1955
+  _globals['_FINDCREDENTIALBYPROVIDERRESPONSE']._serialized_start=1957
+  _globals['_FINDCREDENTIALBYPROVIDERRESPONSE']._serialized_end=2061
+  _globals['_FINDPASSKEYREQUEST']._serialized_start=2063
+  _globals['_FINDPASSKEYREQUEST']._serialized_end=2106
+  _globals['_FINDPASSKEYRESPONSE']._serialized_start=2108
+  _globals['_FINDPASSKEYRESPONSE']._serialized_end=2162
+  _globals['_LISTPASSKEYSREQUEST']._serialized_start=2164
+  _globals['_LISTPASSKEYSREQUEST']._serialized_end=2227
+  _globals['_LISTPASSKEYSRESPONSE']._serialized_start=2229
+  _globals['_LISTPASSKEYSRESPONSE']._serialized_end=2285
+  _globals['_UPDATEPASSKEYCOUNTERREQUEST']._serialized_start=2287
+  _globals['_UPDATEPASSKEYCOUNTERREQUEST']._serialized_end=2360
+  _globals['_UPDATEPASSKEYCOUNTERRESPONSE']._serialized_start=2362
+  _globals['_UPDATEPASSKEYCOUNTERRESPONSE']._serialized_end=2425
+  _globals['_REGISTERPASSKEYREQUEST']._serialized_start=2428
+  _globals['_REGISTERPASSKEYREQUEST']._serialized_end=2663
+  _globals['_REGISTERPASSKEYRESPONSE']._serialized_start=2665
+  _globals['_REGISTERPASSKEYRESPONSE']._serialized_end=2723
+  _globals['_REVOKEPASSKEYREQUEST']._serialized_start=2725
+  _globals['_REVOKEPASSKEYREQUEST']._serialized_end=2806
+  _globals['_LINKCREDENTIALREQUEST']._serialized_start=2809
+  _globals['_LINKCREDENTIALREQUEST']._serialized_end=3009
+  _globals['_LINKCREDENTIALRESPONSE']._serialized_start=3011
+  _globals['_LINKCREDENTIALRESPONSE']._serialized_end=3074
+  _globals['_UNLINKCREDENTIALREQUEST']._serialized_start=3076
+  _globals['_UNLINKCREDENTIALREQUEST']._serialized_end=3163
+  _globals['_LISTLINKEDCREDENTIALSREQUEST']._serialized_start=3165
+  _globals['_LISTLINKEDCREDENTIALSREQUEST']._serialized_end=3212
+  _globals['_LISTLINKEDCREDENTIALSRESPONSE']._serialized_start=3214
+  _globals['_LISTLINKEDCREDENTIALSRESPONSE']._serialized_end=3319
+  _globals['_AUTHSERVICE']._serialized_start=3490
+  _globals['_AUTHSERVICE']._serialized_end=4487
 # @@protoc_insertion_point(module_scope)

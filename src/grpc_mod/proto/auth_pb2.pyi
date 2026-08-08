@@ -85,7 +85,8 @@ class UserAuth(_message.Message):
     is_active: _builtins.bool
     avatar_url: _builtins.str
     """Absolute URL to the user's avatar. Empty string means none
-    is configured. The frontend maps this to JSON null.
+    is configured. The REST controller maps this to JSON null
+    on the frontend.
     """
     @_builtins.property
     def email_verified_at(self) -> _timestamp_pb2.Timestamp:
@@ -308,19 +309,26 @@ class CreateUserAuthRequest(_message.Message):
     EMAIL_FIELD_NUMBER: _builtins.int
     USERNAME_FIELD_NUMBER: _builtins.int
     PASSWORD_HASH_FIELD_NUMBER: _builtins.int
+    AVATAR_URL_FIELD_NUMBER: _builtins.int
     email: _builtins.str
     username: _builtins.str
     password_hash: _builtins.str
+    avatar_url: _builtins.str
+    """Optional. Absolute URL to the user's avatar (resolved by the
+    REST controller via Discord/Google/Gravatar fallbacks). Empty
+    string means none. The frontend maps empty to JSON null.
+    """
     def __init__(
         self,
         *,
         email: _builtins.str = ...,
         username: _builtins.str = ...,
         password_hash: _builtins.str = ...,
+        avatar_url: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["email", b"email", "password_hash", b"password_hash", "username", b"username"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["avatar_url", b"avatar_url", "email", b"email", "password_hash", b"password_hash", "username", b"username"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -369,10 +377,13 @@ class UpdateUserAuthRequest(_message.Message):
     EMAIL_CLEAR_FIELD_NUMBER: _builtins.int
     EMAIL_VERIFIED_AT_SET_FIELD_NUMBER: _builtins.int
     EMAIL_VERIFIED_AT_CLEAR_FIELD_NUMBER: _builtins.int
+    AVATAR_URL_SET_FIELD_NUMBER: _builtins.int
+    AVATAR_URL_CLEAR_FIELD_NUMBER: _builtins.int
     user_id: _builtins.str
     requester_id: _builtins.str
     username_set: _builtins.str
     email_set: _builtins.str
+    avatar_url_set: _builtins.str
     @_builtins.property
     def username_clear(self) -> _empty_pb2.Empty: ...
     @_builtins.property
@@ -381,6 +392,8 @@ class UpdateUserAuthRequest(_message.Message):
     def email_verified_at_set(self) -> _timestamp_pb2.Timestamp: ...
     @_builtins.property
     def email_verified_at_clear(self) -> _empty_pb2.Empty: ...
+    @_builtins.property
+    def avatar_url_clear(self) -> _empty_pb2.Empty: ...
     def __init__(
         self,
         *,
@@ -392,17 +405,23 @@ class UpdateUserAuthRequest(_message.Message):
         email_clear: _empty_pb2.Empty | None = ...,
         email_verified_at_set: _timestamp_pb2.Timestamp | None = ...,
         email_verified_at_clear: _empty_pb2.Empty | None = ...,
+        avatar_url_set: _builtins.str = ...,
+        avatar_url_clear: _empty_pb2.Empty | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["email_change", b"email_change", "email_clear", b"email_clear", "email_set", b"email_set", "email_verified_at_clear", b"email_verified_at_clear", "email_verified_at_set", b"email_verified_at_set", "email_verified_change", b"email_verified_change", "username_change", b"username_change", "username_clear", b"username_clear", "username_set", b"username_set"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["avatar_url_change", b"avatar_url_change", "avatar_url_clear", b"avatar_url_clear", "avatar_url_set", b"avatar_url_set", "email_change", b"email_change", "email_clear", b"email_clear", "email_set", b"email_set", "email_verified_at_clear", b"email_verified_at_clear", "email_verified_at_set", b"email_verified_at_set", "email_verified_change", b"email_verified_change", "username_change", b"username_change", "username_clear", b"username_clear", "username_set", b"username_set"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["email_change", b"email_change", "email_clear", b"email_clear", "email_set", b"email_set", "email_verified_at_clear", b"email_verified_at_clear", "email_verified_at_set", b"email_verified_at_set", "email_verified_change", b"email_verified_change", "requester_id", b"requester_id", "user_id", b"user_id", "username_change", b"username_change", "username_clear", b"username_clear", "username_set", b"username_set"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["avatar_url_change", b"avatar_url_change", "avatar_url_clear", b"avatar_url_clear", "avatar_url_set", b"avatar_url_set", "email_change", b"email_change", "email_clear", b"email_clear", "email_set", b"email_set", "email_verified_at_clear", b"email_verified_at_clear", "email_verified_at_set", b"email_verified_at_set", "email_verified_change", b"email_verified_change", "requester_id", b"requester_id", "user_id", b"user_id", "username_change", b"username_change", "username_clear", b"username_clear", "username_set", b"username_set"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType_avatar_url_change: _TypeAlias = _typing.Literal["avatar_url_set", "avatar_url_clear"]  # noqa: Y015
+    _WhichOneofArgType_avatar_url_change: _TypeAlias = _typing.Literal["avatar_url_change", b"avatar_url_change"]  # noqa: Y015
     _WhichOneofReturnType_email_change: _TypeAlias = _typing.Literal["email_set", "email_clear"]  # noqa: Y015
     _WhichOneofArgType_email_change: _TypeAlias = _typing.Literal["email_change", b"email_change"]  # noqa: Y015
     _WhichOneofReturnType_email_verified_change: _TypeAlias = _typing.Literal["email_verified_at_set", "email_verified_at_clear"]  # noqa: Y015
     _WhichOneofArgType_email_verified_change: _TypeAlias = _typing.Literal["email_verified_change", b"email_verified_change"]  # noqa: Y015
     _WhichOneofReturnType_username_change: _TypeAlias = _typing.Literal["username_set", "username_clear"]  # noqa: Y015
     _WhichOneofArgType_username_change: _TypeAlias = _typing.Literal["username_change", b"username_change"]  # noqa: Y015
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_avatar_url_change) -> _WhichOneofReturnType_avatar_url_change | None: ...
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType_email_change) -> _WhichOneofReturnType_email_change | None: ...
     @_typing.overload
