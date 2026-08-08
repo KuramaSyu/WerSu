@@ -25,6 +25,7 @@ from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_se
 from src.grpc_mod.sharing_service import GrpcSharingService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.services import PermissionServiceImpl, UserServiceImpl, DirectoryActivityServiceImpl, AttachmentFacadeImpl, share_access
+from src.services.user_auth_service import UserAuthServiceImpl
 from src.services.background_process import (
     AsyncClockAsyncio,
     BackgroundSchedulerImpl,
@@ -52,8 +53,9 @@ from src.db.repos.attachments.attachments import (
     AttachmentRepoABC,
     AttachmentS3Repo,
 )
-from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user import RepoContextFactory
+from src.db.repos.user.user import UserPostgresRepo
+from src.db.repos.user.user_auth_postgres import PostgresUserAuthRepoImpl
 from src.db.repos.user.notifying_user_action_repo import (
     NotifyingUserActionRepo,
     UserActionListener,
@@ -72,6 +74,7 @@ from src.grpc_mod.proto.thirdparty_migrations_pb2_grpc import (
     add_ThirdpartyMigrationsServiceServicer_to_server,  # type: ignore[attr-defined]
 )
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server  # type: ignore[attr-defined]
+from src.grpc_mod.proto.auth_pb2_grpc import add_AuthServiceServicer_to_server  # type: ignore[attr-defined]
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note_facade import NoteFacadeImpl
@@ -83,6 +86,7 @@ from src.grpc_mod.note_version_service import GrpcNoteVersionService
 from src.grpc_mod.permission_service import GrpcPermissionService
 from src.grpc_mod.thirdparty_migrations_service import GrpcThirdpartyMigrationsService
 from src.grpc_mod.user_service import GrpcUserService
+from src.grpc_mod.auth_service import GrpcAuthService
 from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.services.auth import PyJwtProvider
 from src.utils.spicedb_client import create_spicedb_async_client
@@ -209,9 +213,24 @@ async def serve():
         id_fields=["id"],
     )
 
-    users_table = Table(
+    auth_user_table = Table(
         **common_table_kwargs,
-        table_name="users",
+        table_name="auth.user",
+        id_fields=["id"],
+    )
+    auth_password_table = Table(
+        **common_table_kwargs,
+        table_name="auth.password",
+        id_fields=["user_id"],
+    )
+    auth_passkey_table = Table(
+        **common_table_kwargs,
+        table_name="auth.passkey",
+        id_fields=["id"],
+    )
+    auth_third_party_table = Table(
+        **common_table_kwargs,
+        table_name="auth.third_party",
         id_fields=["id"],
     )
     activity_table = Table(
@@ -281,7 +300,14 @@ async def serve():
 
     ### Setup Repos ###
     user_repo = UserPostgresRepo(
-        table=users_table,
+        table=auth_user_table,
+        logging_provider=logging_provider,
+    )
+    user_auth_repo = PostgresUserAuthRepoImpl(
+        user_table=auth_user_table,
+        password_table=auth_password_table,
+        passkey_table=auth_passkey_table,
+        third_party_table=auth_third_party_table,
         logging_provider=logging_provider,
     )
 
@@ -508,6 +534,18 @@ async def serve():
     app_user_service = UserServiceImpl(user_repo=user_repo, directory_facade=directory_facade, context_factory=user_context_factory)
     grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider, to_grpc=grpc_visitor)
     add_UserServiceServicer_to_server(grpc_user_service, server)
+
+    # setup gRPC auth service (updateting credentials of any sort)
+    app_user_auth_service = UserAuthServiceImpl(
+        repo=user_auth_repo,
+        logging_provider=logging_provider,
+    )
+    grpc_auth_service = GrpcAuthService(
+        user_auth_service=app_user_auth_service,
+        log=logging_provider,
+        to_grpc=grpc_visitor,
+    )
+    add_AuthServiceServicer_to_server(grpc_auth_service, server)
 
     # setup gRPC attachment service
     grpc_attachment_service = GrpcAttachmentService(
