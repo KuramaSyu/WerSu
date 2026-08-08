@@ -118,13 +118,19 @@ async def db(dsn):
     await db.execute(
         """
         TRUNCATE TABLE
-            users,
+            auth.user,
+            auth.password,
+            auth.passkey,
+            auth.third_party,
             note.attachment,
             note.attachment_note_link,
             note.directory,
             note.content,
             note.version_snapshot,
-            note.version_delta
+            note.version_delta,
+            shared,
+            user_action,
+            activity
         CASCADE;
         """
     )
@@ -211,7 +217,7 @@ async def user_repo(db: Database) -> UserRepoABC:
     return UserPostgresRepo(
         table=Table(
             db=db,
-            table_name="users",
+            table_name="auth.user",
             id_fields=["id"],
             logging_provider=logging_provider,
         ),

@@ -207,7 +207,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
         user_repo = UserPostgresRepo(
             table=Table(
                 db=db,
-                table_name="users",
+                table_name="auth.user",
                 id_fields=["id"],
                 logging_provider=logging_provider,
             ),
