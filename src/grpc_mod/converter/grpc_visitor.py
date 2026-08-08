@@ -26,7 +26,11 @@ from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.user.passkey import PasskeyEntity
+from src.db.entities.user.password import PasswordEntity
+from src.db.entities.user.third_party import ThirdPartyEntity
 from src.db.entities.user.user import UserEntity
+from src.db.entities.user.user_auth import UserAuthEntity
 from src.api.other.visitor import EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
 from src.grpc_mod.proto.activity_pb2 import (
@@ -61,6 +65,12 @@ from src.grpc_mod.proto.sharing_pb2 import (
     NullableString,
     NullableTimestamp,
     SharePermission,
+)
+from src.grpc_mod.proto.auth_pb2 import (
+    Credential,
+    CredentialKind,
+    Passkey,
+    UserAuth,
 )
 from src.grpc_mod.proto.user_pb2 import User
 from src.utils import asdict
@@ -193,7 +203,7 @@ class ConvertToGrpcVisitor(EntityVisitor):
         # permissions are deprecated
         # assert isinstance(entity.permissions, list)
         # basic_args["permissions"] = _convert_permissions(entity.permissions)
-        basic_args["permissions"]: List[PermissionRelationship] = []
+        basic_args["permissions"] = []
 
         # ``directory_ids``, ``tag_ids``, and ``attachment_ids`` land
         # on the proto only when the entity actually populated them
@@ -401,6 +411,123 @@ class ConvertToGrpcVisitor(EntityVisitor):
             username=entity.username,
             discriminator=entity.discriminator or "",
             email=entity.email,
+        )
+
+    # ---- user auth ---------------------------------------------------
+
+    @staticmethod
+    def _is_url(value: str) -> bool:
+        """Return ``True`` if `value` already looks like a URL.
+
+        Kept deliberately cheap: any ``http://`` or ``https://``
+        prefix is enough.  Discord hashes are short alphanumeric
+        strings without a scheme, so this never collides.
+        """
+        return value.startswith("http://") or value.startswith("https://")
+
+    @staticmethod
+    def _discord_avatar_url(entity: UserAuthEntity) -> str:
+        """Build a Discord CDN URL for `entity`, or return `avatar` as-is.
+
+        Three cases:
+
+        1. ``avatar`` is empty -- return the empty string.
+        2. ``avatar`` already looks like a URL (starts with
+           ``http://`` / ``https://``) -- return it unchanged.
+        3. ``avatar`` looks like a Discord hash AND the user has a
+           linked Discord id -- stitch the canonical
+           ``https://cdn.discordapp.com/avatars/{id}/{hash}``
+           template together.
+        4. Anything else (raw hash but no discord id, or some
+           other opaque value) -- return it unchanged.
+        """
+        raw = entity.avatar or ""
+        if not raw:
+            return ""
+        if ConvertToGrpcVisitor._is_url(raw):
+            return raw
+        discord_id = entity.discord_id()
+        if discord_id is None:
+            return raw
+        return f"https://cdn.discordapp.com/avatars/{discord_id}/{raw}"
+
+    def visit_user_auth(self, entity: UserAuthEntity) -> UserAuth:
+        """Convert a :class:`~src.db.entities.user.user_auth.UserAuthEntity` to a ``UserAuth`` message.
+
+        ``email_verified_at`` / ``created_at`` default to zero
+        :class:`Timestamp`; the auth schema has no backing columns
+        yet.  ``is_active`` defaults to ``True`` for any row the
+        repo returned.  ``avatar_url`` is built from
+        :meth:`_discord_avatar_url` so linked Discord users get a
+        CDN URL without callers having to assemble it.
+        """
+        return UserAuth(
+            id=str(entity.id or ""),
+            email=entity.email or "",
+            username=entity.username or "",
+            email_verified_at=Timestamp(),
+            is_active=True,
+            created_at=Timestamp(),
+            avatar_url=self._discord_avatar_url(entity),
+        )
+
+    # ---- passkey ----------------------------------------------------
+
+    def visit_passkey(self, entity: PasskeyEntity) -> Passkey:
+        """Convert a :class:`~src.db.entities.user.passkey.PasskeyEntity` to a ``Passkey`` message."""
+        return Passkey(
+            id=str(entity.id or ""),
+            user_id=entity.user_id,
+            credential_id=entity.credential_id,
+            public_key=entity.public_key,
+            sign_count=entity.sign_count,
+            transports=list(entity.transports),
+            aaguid=entity.aaguid or b"",
+            backup_eligible=entity.backup_eligible,
+            backup_state=entity.backup_state,
+            user_verified=entity.user_verified,
+            friendly_name=entity.friendly_name or "",
+            created_at=Timestamp(),
+            last_used_at=Timestamp(),
+            revoked_at=Timestamp(),
+        )
+
+    # ---- third party ------------------------------------------------
+
+    def visit_third_party(self, entity: ThirdPartyEntity) -> Credential:
+        """Convert a :class:`~src.db.entities.user.third_party.ThirdPartyEntity` to a ``Credential`` message."""
+        created_ts = Timestamp()
+        if entity.created_at:
+            created_ts.FromDatetime(entity.created_at)
+        kwargs: dict[str, Any] = {
+            "id": str(entity.id or ""),
+            "user_id": entity.user_id,
+            "kind": (
+                CredentialKind.CREDENTIAL_KIND_DISCORD
+                if entity.provider == "discord"
+                else CredentialKind.CREDENTIAL_KIND_GOOGLE
+            ),
+            "created_at": created_ts,
+        }
+        if entity.provider == "discord":
+            kwargs["discord_id"] = entity.provider_user_id
+        else:
+            kwargs["google_id"] = entity.provider_user_id
+        return Credential(**kwargs)
+
+    # ---- password ----------------------------------------------------
+
+    def visit_password(self, entity: PasswordEntity) -> Credential:
+        """Convert a :class:`~src.db.entities.user.password.PasswordEntity` to a ``Credential`` message."""
+        created_ts = Timestamp()
+        if entity.created_at:
+            created_ts.FromDatetime(entity.created_at)
+        return Credential(
+            id=f"pw-{entity.user_id}",
+            user_id=entity.user_id,
+            kind=CredentialKind.CREDENTIAL_KIND_PASSWORD,
+            created_at=created_ts,
+            password_hash=entity.password_hash,
         )
 
     # ---- note share ----------------------------------------------------

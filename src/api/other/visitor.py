@@ -20,7 +20,11 @@ if TYPE_CHECKING:
     from src.db.entities.directory.directory import DirectoryEntity
     from src.db.entities.note.metadata import NoteEntity
     from src.db.entities.note.sharing import NoteShareEntity
+    from src.db.entities.user.passkey import PasskeyEntity
+    from src.db.entities.user.password import PasswordEntity
+    from src.db.entities.user.third_party import ThirdPartyEntity
     from src.db.entities.user.user import UserEntity
+    from src.db.entities.user.user_auth import UserAuthEntity
     from src.db.repos.attachments.attachments import Attachment
 
 
@@ -174,5 +178,45 @@ class EntityVisitor(ABC):
 
         Raises:
             NotImplementedError: If the visitor does not support activity scores.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_user_auth(self, entity: "UserAuthEntity") -> Any:
+        """Handle a :class:`~src.db.entities.user.user_auth.UserAuthEntity`.
+
+        Used by the gRPC layer to render ``UserAuth`` messages for
+        the auth service.  Discord lives on the entity's
+        :attr:`third_parties` list; the visitor walks it.
+
+        Raises:
+            NotImplementedError: If the visitor does not support auth users.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_passkey(self, entity: "PasskeyEntity") -> Any:
+        """Handle a :class:`~src.db.entities.user.passkey.PasskeyEntity`.
+
+        Raises:
+            NotImplementedError: If the visitor does not support passkeys.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_third_party(self, entity: "ThirdPartyEntity") -> Any:
+        """Handle a :class:`~src.db.entities.user.third_party.ThirdPartyEntity`.
+
+        Raises:
+            NotImplementedError: If the visitor does not support third-party links.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_password(self, entity: "PasswordEntity") -> Any:
+        """Handle a :class:`~src.db.entities.user.password.PasswordEntity`.
+
+        Raises:
+            NotImplementedError: If the visitor does not support passwords.
         """
         raise NotImplementedError
