@@ -1,9 +1,18 @@
 """Postgres-backed implementation of :class:`UserRepoABC`.
 
-The repo is a thin wrapper over the ``users`` table created by the
-``initial-schema`` migration.  It deliberately performs no
-permission or business validation: user lifecycle concerns belong to
-the service layer (:class:`src.services.user_service.UserServiceImpl`).
+The repo is a thin wrapper over ``auth.user`` (renamed from
+``public.users`` by the ``20260807-auth-schema`` migration).  It
+deliberately performs no permission or business validation: user
+lifecycle concerns belong to the service layer
+(:class:`src.services.user_service.UserServiceImpl`).
+
+The Discord identity (``discord_id`` + ``discriminator``) used to
+live on the user row; the auth schema moved it to
+``auth.third_party``.  :class:`UserPostgresRepo` therefore strips
+those columns from INSERT/UPDATE payloads and refuses methods that
+require a Discord join (e.g. :meth:`select_by_discord_id`) --
+callers that need Discord lookups should switch to
+:class:`src.db.repos.user.user_auth_postgres.PostgresUserAuthRepoImpl`.
 """
 
 from __future__ import annotations
@@ -18,6 +27,13 @@ from src.db.entities import UserEntity
 from src.db.table import TableABC
 from src.utils import asdict, drop_undefined
 from src.utils.logging import logging_provider as default_logging_provider
+
+
+# ``discord_id`` and ``discriminator`` moved to ``auth.third_party``
+# in the auth-schema migration.  Keep them out of the INSERT/UPDATE
+# payload so the SQL doesn't reference columns that no longer exist
+# on ``auth.user``.
+_FIELDS_NOT_ON_AUTH_USER = frozenset({"discord_id", "discriminator"})
 
 
 class UserRepoABC(ABC):
@@ -52,7 +68,7 @@ class UserPostgresRepo(UserRepoABC):
     """Provides an implementation using Postgres (more or less - other systems are not tested yet)
     """
 
-    _returning = "id, discord_id, avatar, username, discriminator, email, type"
+    _returning = "id, avatar, username, email, type"
 
     def __init__(
         self,
@@ -62,14 +78,31 @@ class UserPostgresRepo(UserRepoABC):
         self._table = table
         self.log = (logging_provider or default_logging_provider)(__name__, self)
 
+    @staticmethod
+    def _strip_moved_fields(payload: dict) -> dict:
+        """Drop columns that moved to ``auth.third_party``.
+
+        ``discord_id`` and ``discriminator`` were renamed off the
+        user row by the auth-schema migration.  Strip them so the
+        INSERT/UPDATE doesn't reference columns that no longer
+        exist on ``auth.user``.
+        """
+        return {
+            k: v
+            for k, v in payload.items()
+            if k not in _FIELDS_NOT_ON_AUTH_USER
+        }
+
     async def insert(self, user: UserEntity) -> UserEntity:
         """Insert a new user and return the created entity with ID.
 
         UNDEFINED fields are dropped from the payload so the column
         defaults (``id`` -> ``uuidv7()``, ``type`` -> ``human``) apply.
+        Discord identity fields are stripped -- they live on
+        ``auth.third_party`` now.
         """
         records = await self._table.insert(
-            drop_undefined(asdict(user)),
+            self._strip_moved_fields(drop_undefined(asdict(user))),
             returning=self._returning,
         )
         if not records:
@@ -85,7 +118,7 @@ class UserPostgresRepo(UserRepoABC):
         if not user.id:
             raise ValueError("User ID is required for update operation")
 
-        set_values = drop_undefined(asdict(user))
+        set_values = self._strip_moved_fields(drop_undefined(asdict(user)))
         set_values.pop("id", None)
         if not set_values:
             current = await self._table.select_row(
@@ -108,34 +141,15 @@ class UserPostgresRepo(UserRepoABC):
     async def upsert(self, user: UserEntity) -> UserEntity:
         """Insert or update a user based on ``discord_id``.
 
-        ``id`` and ``type`` are intentionally excluded from the SET
-        clause so the original uuid is preserved across updates and a
-        Discord re-link cannot silently downgrade an account.
+        ``discord_id`` now lives on ``auth.third_party``; the
+        legacy single-table upsert is no longer reachable from this
+        repo.  Callers should drive the auth schema directly via
+        :class:`src.db.repos.user.user_auth_postgres.PostgresUserAuthRepoImpl`.
         """
-        set_values = drop_undefined(asdict(user))
-        set_values.pop("id", None)
-        set_values.pop("type", None)
-        if not set_values:
-            if not user.discord_id:
-                raise ValueError(
-                    "User discord_id is required for upsert operation"
-                )
-            existing = await self.select_by_discord_id(user.discord_id)
-            if existing is None:
-                raise ValueError(
-                    f"User not found by discord_id: {user.discord_id}"
-                )
-            return existing
-
-        records = await self._table.upsert(
-            drop_undefined(asdict(user)),
-            returning=self._returning,
+        raise NotImplementedError(
+            "UserPostgresRepo.upsert is not supported after the auth-schema "
+            "migration; use PostgresUserAuthRepoImpl instead."
         )
-        if not records:
-            raise RuntimeError("Failed to upsert user; no row returned")
-        # ``upsert`` may return a list -- normalize to the first record.
-        first = records[0] if isinstance(records, list) else records
-        return self._from_record(first)
 
     async def select(self, user_id: str) -> Optional[UserEntity]:
         """Select a user by ID."""
@@ -148,14 +162,16 @@ class UserPostgresRepo(UserRepoABC):
         return self._from_record(record)
 
     async def select_by_discord_id(self, discord_id: int) -> Optional[UserEntity]:
-        """Select a user by discord_id."""
-        record = await self._table.select_row(
-            where={"discord_id": discord_id},
-            select=self._returning,
+        """Select a user by ``discord_id``.
+
+        ``discord_id`` lives on ``auth.third_party`` now, so the
+        legacy single-table select is gone.  Callers should switch
+        to :class:`PostgresUserAuthRepoImpl` for Discord lookups.
+        """
+        raise NotImplementedError(
+            "UserPostgresRepo.select_by_discord_id is not supported after the "
+            "auth-schema migration; use PostgresUserAuthRepoImpl instead."
         )
-        if record is None:
-            return None
-        return self._from_record(record)
 
     async def delete(self, user_id: str) -> bool:
         """Delete a user by ID."""
@@ -171,9 +187,15 @@ class UserPostgresRepo(UserRepoABC):
 
         The ``type`` column comes back as the ``user_kind`` enum string;
         :class:`UserEntity` accepts the free-form :class:`UserTypeT`
-        string so no further conversion is required.
+        string so no further conversion is required.  ``discord_id``
+        and ``discriminator`` are filled with ``None`` because they
+        no longer live on the user row -- callers that need them
+        must go through the auth schema.
         """
-        return UserEntity(**dict(record))
+        data = dict(record)
+        data.setdefault("discord_id", None)
+        data.setdefault("discriminator", None)
+        return UserEntity(**data)
 
 
 __all__ = ["UserRepoABC", "UserPostgresRepo"]
