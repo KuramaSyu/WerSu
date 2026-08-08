@@ -125,6 +125,7 @@ services:
     # port 8080 is internally used
     ports:
       - "8083:8080"
+    restart: unless-stopped
     environment:
       IMGPROXY_USE_S3: true
       IMGPROXY_S3_REGION: ${GARAGE_DEFAULT_BUCKET}
