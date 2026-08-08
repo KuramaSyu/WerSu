@@ -59,5 +59,15 @@ class UserServiceImpl(UserServiceABC):
 
         return created_user
 
+    async def update_user(self, user: UserEntity) -> UserEntity:
+        """Persist partial updates without touching the directory bootstrap.
+
+        Forwards directly to the repo so the gRPC auth adapter
+        can write a single column (e.g. ``avatar``) without
+        re-running the directory creation side effects of
+        :meth:`create_user`.
+        """
+        return await self._user_repo.update(user)
+
 
 __all__ = ["UserServiceImpl"]
