@@ -21,23 +21,21 @@ pytestmark = pytest.mark.integration
 
 
 async def test_create_user(user_repo: UserRepoABC, test_user: UserEntity):
-    """Creates a test user and retrieves it by discord_id"""
-    await user_repo.insert(test_user)
-    ret_user = await user_repo.select_by_discord_id(test_user.discord_id)
+    """Creates a test user and retrieves it by id."""
+    inserted = await user_repo.insert(test_user)
+    ret_user = await user_repo.select(inserted.id)
     assert ret_user
     assert ret_user.avatar == test_user.avatar
 
 async def test_update_user(db: Database, user_repo: UserRepoABC, test_user: UserEntity):
-    """Creates a test user, updates it, and retrieves it once by discord_id and once by id"""
+    """Creates a test user, updates it, and retrieves it twice by id."""
     inserted = await user_repo.insert(test_user)
     updated_user = replace(inserted, avatar="http://somewere")
     ret_user_update = await user_repo.update(updated_user)
-    ret_user_discord = await user_repo.select_by_discord_id(updated_user.discord_id)
-    assert ret_user_discord and ret_user_discord.id
-    assert ret_user_discord == ret_user_update  # assert that update returns same as select
-    assert ret_user_discord == updated_user  # now also id should match
-    ret_user_by_id = await user_repo.select(ret_user_discord.id)
-    assert ret_user_by_id == ret_user_discord  # both selects should return same user
+    ret_user_by_id = await user_repo.select(ret_user_update.id)
+    assert ret_user_by_id and ret_user_by_id.id
+    assert ret_user_by_id == ret_user_update  # assert that update returns same as select
+    assert ret_user_by_id.avatar == "http://somewere"
 
 async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_repo_facade: NoteFacadeABC, test_user: UserEntity):
     """
