@@ -18,10 +18,10 @@ class Config(ABC):
         combines 2 configs into one. 
 
         Args:
-            other: an object of the same type as `` `self` ``
+            other: an object of the same type as `self`
 
         Note: 
-            Use `` `other` `` to refer to the `other` Parameter
+            Use <other> to refer to the `other` Parameter
         """
 class Json(Config):
     """does something"""
@@ -65,7 +65,7 @@ What to document and how heavily:
 
 type | description
 -----|--------------
-Abstract Base Classes | These most often life in the :mod:`api` directory. Here every single arg should be documented as well as errors. In the class doc string also add which implementations it has with the `` :class:`ClassName` `` way.
+Abstract Base Classes | These most often life in the :mod:`api` directory. Here every single arg should be documented as well as errors. In the class doc string also add which implementations it has with the :class:`ClassName` way.
 Class doc strings | Always document them. Especially what the class is used for
 Implementations | Generally keep it simple there. If it does nothing special, then don't write them at all. Only Class docstrings. In case, there is a `_private_method`, then document what is does. Only methods which belong to a documented abstract method can be simple. 
 Helper functions | Just what they do
