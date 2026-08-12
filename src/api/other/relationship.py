@@ -8,7 +8,7 @@ to translate between these domain objects and a concrete backend
 
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, Optional, TypeAlias
 
 from src.api.other.undefined import UNDEFINED, UndefinedOr
 
@@ -20,6 +20,7 @@ class ObjectTypeEnum(StrEnum):
     DIRECTORY = "directory"
     USER = "user"
     ATTACHMENT = "attachment"
+    ROLE = "role"
 
 
 class NoteRelationEnum(StrEnum):
@@ -37,6 +38,7 @@ class NoteRelationEnum(StrEnum):
     WRITE = "write"
     DELETE = "delete"
     EDIT_PERMISSIONS = "edit_permissions"
+    MANAGE = "manage"
 
 
 class AttachmentRelationEnum(StrEnum):
@@ -44,6 +46,7 @@ class AttachmentRelationEnum(StrEnum):
 
     # relations
     PARENT_NOTE = "parent_note"
+    PARENT_USER = "parent_user"
 
     # permissions
     VIEW = "view"
@@ -67,10 +70,27 @@ class DirectoryRelationEnum(StrEnum):
     EDIT_PERMISSIONS = "edit_permissions"
 
 
-ObjectType: TypeAlias = Literal["note", "directory", "user", "attachment"]
+class UserRelationEnum(StrEnum):
+    """SpiceDB relations on user objects (currently membership edges only)."""
+
+    MEMBER_OF = "member_of"
+
+
+class RoleRelationEnum(StrEnum):
+    """SpiceDB relations and permissions on role objects."""
+
+    # relations
+    ADMINISTRATOR = "administrator"
+    MEMBER = "member"
+
+    # permissions
+    MANAGE = "manage"
+
+
+ObjectType: TypeAlias = Literal["note", "directory", "user", "attachment", "role"]
 """String-literal union of every :class:`ObjectTypeEnum` value."""
 
-SubjectType: TypeAlias = Literal["user", "directory"]
+SubjectType: TypeAlias = Literal["user", "directory", "role"]
 """String-literal union of every valid subject type."""
 
 NoteRelationName: TypeAlias = Literal[
@@ -83,6 +103,7 @@ NoteRelationName: TypeAlias = Literal[
     "edit_permissions",
     "parent_directory",
     "owner",
+    "manage",
 ]
 """String-literal union of every :class:`NoteRelationEnum` value."""
 
@@ -105,10 +126,28 @@ AttachmentRelationName: TypeAlias = Literal[
 ]
 """String-literal union of every :class:`AttachmentRelationEnum` value."""
 
-RelationName: TypeAlias = NoteRelationName | DirectoryRelationName | AttachmentRelationName
+UserRelationName: TypeAlias = Literal["member_of"]
+"""String-literal union of every :class:`UserRelationEnum` value."""
+
+RoleRelationName: TypeAlias = Literal["administrator", "member", "manage"]
+"""String-literal union of every :class:`RoleRelationEnum` value."""
+
+RelationName: TypeAlias = (
+    NoteRelationName
+    | DirectoryRelationName
+    | AttachmentRelationName
+    | UserRelationName
+    | RoleRelationName
+)
 """Union of every relation-name literal across all resource types."""
 
-RelationEnum: TypeAlias = NoteRelationEnum | DirectoryRelationEnum | AttachmentRelationEnum
+RelationEnum: TypeAlias = (
+    NoteRelationEnum
+    | DirectoryRelationEnum
+    | AttachmentRelationEnum
+    | UserRelationEnum
+    | RoleRelationEnum
+)
 """Union of every relation :class:`enum.StrEnum` across all resource types."""
 
 
@@ -156,14 +195,44 @@ class ObjectRef:
 
 
 class SubjectRef(ObjectRef):
-    """Reference to a SpiceDB subject (the right-hand side of a relationship)."""
+    """Reference to a SpiceDB subject (the right-hand side of a relationship).
+
+    Supports both bare-object subjects (``user:alice``) and userset
+    subjects (``role:eng#member``).  The userset form is how
+    ``note#reader: user | role#member`` style relations are written:
+    the subject is a role, qualified by the relation that resolves
+    "members of this role".
+
+    Args:
+        object_type: subject's SpiceDB object type, e.g. ``"user"`` or
+            ``"role"``.
+        object_id: subject's id.  :obj:`~src.api.undefined.UNDEFINED` is
+            legal for wildcard lookups but never for inserts.
+        optional_relation: optional relation that turns this
+            subject into a userset reference (``role:eng#member``
+            when set to ``"member"``).  Defaults to ``None`` which
+            means a plain object subject.
+    """
 
     def __init__(
         self,
         object_type: SubjectType | ObjectTypeEnum,
         object_id: UndefinedOr[str],
+        optional_relation: Optional[RelationName | RelationEnum] = None,
     ) -> None:
         super().__init__(object_type=object_type, object_id=object_id)
+        self.optional_relation = optional_relation
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SubjectRef):
+            return NotImplemented
+        return (
+            super().__eq__(other)
+            and str(self.optional_relation or "") == str(other.optional_relation or "")
+        )
+
+    def __hash__(self) -> int:
+        return hash((str(self.object_type), self.object_id, str(self.optional_relation or "")))
 
 
 class PartialRelationship:

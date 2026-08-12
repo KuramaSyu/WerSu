@@ -22,6 +22,10 @@ if TYPE_CHECKING:
     from src.db.entities.note.sharing import NoteShareEntity
     from src.db.entities.user.passkey import PasskeyEntity
     from src.db.entities.user.password import PasswordEntity
+    from src.db.entities.user.role import (
+        RoleEntity,
+        UserRoleMembershipEntity,
+    )
     from src.db.entities.user.third_party import ThirdPartyEntity
     from src.db.entities.user.user import UserEntity
     from src.db.entities.user.user_auth import UserAuthEntity
@@ -218,5 +222,30 @@ class EntityVisitor(ABC):
 
         Raises:
             NotImplementedError: If the visitor does not support passwords.
+        """
+        raise NotImplementedError
+    @abstractmethod
+    def visit_role(self, entity: RoleEntity) -> Any:
+        """Handle a :class:`~src.db.entities.user.role.RoleEntity`.
+
+        Roles are SpiceDB-side grouping objects plus optional Postgres
+        metadata (name, description). The visitor renders the entity
+        to a role-shaped proto message.
+
+        Raises:
+            NotImplementedError: If the visitor does not support roles.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_user_role_membership(self, entity: UserRoleMembershipEntity) -> Any:
+        """Handle a :class:`~src.db.entities.user.role.UserRoleMembershipEntity`.
+
+        A membership row represents one ``user#member_of@role`` edge
+        -- either the raw tuple itself or a row enriched with a
+        ``granted_at`` timestamp from the audit log.
+
+        Raises:
+            NotImplementedError: If the visitor does not support memberships.
         """
         raise NotImplementedError
