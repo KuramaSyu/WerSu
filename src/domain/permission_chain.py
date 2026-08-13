@@ -275,6 +275,60 @@ class HasNoteEditPermissionsPerm(PermissionCheckChain):
         return f"user has no permission to edit permissions for note {self._note_id}"
 
 
+class HasNoteManagePerm(PermissionCheckChain):
+    """Permission check for attaching/detaching roles on a note.
+
+    ``note#manage`` is granted to direct note admins and to admins of
+    the parent directory.  See ``schema.zed`` for the cascade rule.
+    """
+    OBJECT_TYPE: ObjectType = "note"
+    RELATION_TYPE: NoteRelationName = NoteRelationEnum.MANAGE
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, note_id: str) -> None:
+        super().__init__()
+        self._note_id = note_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        # `manage` is a computed permission in SpiceDB; check the
+        # effective permission rather than expecting a direct tuple.
+        return await self._get_permission_repo().has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._note_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no 'manage' permission on note {self._note_id}"
+
+
+class HasRoleManagePerm(PermissionCheckChain):
+    """Permission check for changing a role's membership.
+
+    ``role#manage`` is granted to direct role administrators.  Note
+    admins and directory admins do *not* inherit it -- attaching a
+    role to a resource is a separate capability from changing who
+    belongs to the role.
+    """
+    OBJECT_TYPE: ObjectType = "role"
+    RELATION_TYPE: RoleRelationName = RoleRelationEnum.MANAGE
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, role_id: str) -> None:
+        super().__init__()
+        self._role_id = role_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        return await self._get_permission_repo().has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._role_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no 'manage' permission on role {self._role_id}"
+
+
 class HasDirectoryViewPerm(PermissionCheckChain):
     """Permission check for viewing a directory."""
     OBJECT_TYPE: ObjectType = "directory"

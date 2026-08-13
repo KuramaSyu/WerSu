@@ -28,7 +28,7 @@ from src.api import (
     UNDEFINED,
     UserContextABC,
 )
-from src.api.services.attachment_facade import AttachmentFacadeABC
+from src.api.services.attachment_facade import AttachmentFacadeABC, LinkTargetType
 from src.db.repos.attachments.attachments import (
     Attachment,
     AttachmentMetadataRepoABC,
@@ -52,6 +52,7 @@ class AttachmentFacadeImpl(AttachmentFacadeABC):
         metadata_repo: AttachmentMetadataRepoABC,
         permission_repo: PermissionRepoABC,
         attachments_note_link_table: TableABC,
+        attachments_user_link_table: TableABC,
         log: LoggingProvider,
         get_now: Callable[[], datetime] = lambda: datetime.now(),
     ) -> None:
@@ -59,6 +60,7 @@ class AttachmentFacadeImpl(AttachmentFacadeABC):
         self._attachment_repo = attachment_repo
         self._metadata_repo = metadata_repo
         self._attachments_note_link_table = attachments_note_link_table
+        self._attachments_user_link_table = attachments_user_link_table
         self.log = log(__name__, self)
         self.get_now = get_now
 
