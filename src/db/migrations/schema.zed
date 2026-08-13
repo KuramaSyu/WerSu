@@ -1,41 +1,52 @@
 definition user {}
+
+definition role {
+    relation administrator: user | role#member
+    relation member: user
+
+    permission manage = administrator
+}
+
 definition directory {
     relation parent: directory
-    relation owner: user
-    relation admin: user
-    relation writer: user
-    relation reader: user
+    relation owner: user | role#member
+    relation admin: user | role#member
+    relation writer: user | role#member
+    relation reader: user | role#member
 
     permission delete = admin
     permission write = writer + admin
     permission view = reader + write
     permission edit_permissions = admin + owner
-
-
 }
+
 definition note {
-    relation owner: user
-    relation admin: user
-    relation writer: user
-    relation reader: user
+    relation owner: user | role#member
+    relation admin: user | role#member
+    relation writer: user | role#member
+    relation reader: user | role#member
     relation parent_directory: directory
 
     /**
-    * permission delete is granted to admins or parent 
+    * permission delete is granted to admins or parent
     * directory users with delete permission
     */
     permission delete = owner + admin + parent_directory->delete
     permission write = owner + writer + admin + parent_directory->write
     permission view = reader + write
     permission edit_permissions = owner + admin + parent_directory->edit_permissions
+    permission manage = admin + parent_directory->admin
 }
 
 definition attachment {
     relation parent_note: note
+    relation parent_user: user
 
-    // each user who can view any note where the attachment is in, can also view this attachment.
-    // there are no separate relations here
-    permission delete = parent_note->delete
-    permission write = parent_note->write
-    permission view = parent_note->view
+    // each user who can view any note (of this attachment), can also view this attachment.
+    // there are no separate relations here, that a user can see some of the attachments of a note.
+    // parent_user grants the owner of an attachment full CRUD on it, even when it has no
+    // parent note (orphaned attachments).
+    permission delete = parent_note->delete + parent_user
+    permission write = parent_note->write + parent_user
+    permission view = parent_note->view + parent_user
 }
