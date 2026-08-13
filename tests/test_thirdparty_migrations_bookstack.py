@@ -364,9 +364,9 @@ async def test_images_array_links_to_note() -> None:
     # pic-a.png was referenced inline AND via images[], but link
     # calls are deduped by key.
     note_id = ns.inserted[0].note_id
-    linked_keys = {key for key, nid, _uid in af.links}
+    linked_keys = {key for key, _sub_type, nid, _uid in af.links}
     assert "att-2" in linked_keys
-    assert all(nid == note_id for _key, nid, _uid in af.links)
+    assert all(nid == note_id for _key, _sub_type, nid, _uid in af.links)
 
 
 @pytest.mark.asyncio
@@ -439,7 +439,7 @@ async def test_non_image_attachment_inline_ref_becomes_link() -> None:
     # attachment linking pass picks it up.
     xml_keys = {a.key for a in af.posted if a.filename == "data.xml"}
     assert xml_keys
-    linked_keys = {key for key, _nid, _uid in af.links}
+    linked_keys = {key for key, _sub_type, _nid, _uid in af.links}
     assert xml_keys & linked_keys
 
 
