@@ -1378,24 +1378,26 @@ class _StubAttachmentFacade(AttachmentFacadeABC):
     async def delete_attachment(self, key: str, user_ctx: UserContextABC) -> None:
         self.deleted.append(str(key))
 
-    async def link_attachment_to_note(
+    async def link_attachment(
         self,
         attachment_key: str,
-        note_id: str,
+        sub_type: str,
+        sub_id: str,
         user_ctx: UserContextABC,
     ) -> None:
-        self.links.append((str(attachment_key), str(note_id)))
+        self.links.append((str(attachment_key), sub_type, str(sub_id)))
 
-    async def unlink_attachment_from_note(
+    async def unlink_attachment(
         self,
         attachment_key: str,
-        note_id: str,
+        sub_type: str,
+        sub_id: str,
         user_ctx: UserContextABC,
     ) -> None:  # pragma: no cover - unused
         raise NotImplementedError
 
-    async def list_attachments_for_note(
-        self, note_id: str, user_ctx: UserContextABC
+    async def list_attachments(
+        self, sub_type: str, sub_id: str, user_ctx: UserContextABC
     ) -> List[Attachment]:  # pragma: no cover - unused
         raise NotImplementedError
 
