@@ -122,6 +122,36 @@ class _FakeLinkTable(TableABC):
         ]
 
 
+class _FakeUserLinkTable(TableABC):
+    """In-memory :class:`TableABC` for the ``note.attachment_user_link`` table."""
+
+    def __init__(self) -> None:
+        self.rows: List[dict] = []
+
+    async def insert(self, record: dict) -> None:
+        key = (record["user_id"], record["attachment_key"])
+        if not any(
+            (r["user_id"], r["attachment_key"]) == key for r in self.rows
+        ):
+            self.rows.append(record)
+
+    async def delete(self, where: dict) -> None:
+        self.rows = [
+            r
+            for r in self.rows
+            if not all(r.get(k) == v for k, v in where.items())
+        ]
+
+    async def select(self, where: Optional[dict] = None) -> List[dict]:
+        if not where:
+            return list(self.rows)
+        return [
+            r
+            for r in self.rows
+            if all(r.get(k) == v for k, v in where.items())
+        ]
+
+
 # ---------------------------------------------------------------------------
 # Service wiring helpers
 # ---------------------------------------------------------------------------
@@ -220,6 +250,7 @@ def _wire_real_services(
         metadata_repo=InMemoryAttachmentMetadataRepo(),
         permission_repo=permission_repo,
         attachments_note_link_table=_FakeLinkTable(),
+        attachments_user_link_table=_FakeUserLinkTable(),
         log=silent_logger,
     )
     directory_service = DirectoryServiceImpl(

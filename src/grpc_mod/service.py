@@ -15,6 +15,7 @@ from src.grpc_mod.directory_service import GrpcDirectoryService
 from src.grpc_mod.note_service import GrpcNoteService
 from src.grpc_mod.note_version_service import GrpcNoteVersionService
 from src.grpc_mod.permission_service import GrpcPermissionService
+from src.grpc_mod.role_service import GrpcRoleService
 from src.grpc_mod.user_service import GrpcUserService
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "GrpcNoteService",
     "GrpcNoteVersionService",
     "GrpcPermissionService",
+    "GrpcRoleService",
     "GrpcUserService",
     "log_service_call",
 ]

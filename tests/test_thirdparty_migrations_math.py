@@ -234,13 +234,13 @@ class _StubAttachmentFacade(AttachmentFacadeABC):
     async def delete_attachment(self, key, user_ctx):
         raise NotImplementedError
 
-    async def link_attachment_to_note(self, attachment_key, note_id, user_ctx):
+    async def link_attachment(self, attachment_key, sub_type, sub_id, user_ctx):
         return None
 
-    async def unlink_attachment_from_note(self, attachment_key, note_id, user_ctx):
+    async def unlink_attachment(self, attachment_key, sub_type, sub_id, user_ctx):
         raise NotImplementedError
 
-    async def list_attachments_for_note(self, note_id, user_ctx):
+    async def list_attachments(self, sub_type, sub_id, user_ctx):
         raise NotImplementedError
 
 

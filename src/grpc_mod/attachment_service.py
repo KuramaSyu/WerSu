@@ -134,9 +134,10 @@ class GrpcAttachmentService(AttachmentServiceServicer):
     @log_service_call()
     async def PostAttachmentLink(self, request: PostAttachmentLinkRequest, context: ServicerContext) -> Empty:
         try:
-            await self.attachment_service.link_attachment_to_note(
+            await self.attachment_service.link_attachment(
                 attachment_key=request.attachment_key,
-                note_id=request.note_id,
+                sub_type="note",
+                sub_id=request.note_id,
                 user_ctx=await self._context.create(request.user_id),
             )
         except Exception:
@@ -167,9 +168,10 @@ class GrpcAttachmentService(AttachmentServiceServicer):
     @log_service_call()
     async def DeleteAttachmentLink(self, request: DeleteAttachmentLinkRequest, context: ServicerContext) -> Empty:
         try:
-            await self.attachment_service.unlink_attachment_from_note(
+            await self.attachment_service.unlink_attachment(
                 attachment_key=request.attachment_key,
-                note_id=request.note_id,
+                sub_type="note",
+                sub_id=request.note_id,
                 user_ctx=await self._context.create(request.user_id),
             )
         except Exception:

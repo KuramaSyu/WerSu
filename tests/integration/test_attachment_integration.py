@@ -65,6 +65,13 @@ async def test_attachment_facade_with_postgres_and_garage(
         id_fields=["attachment_key", "note_id"],
         error_log=True,
     )
+    attachment_user_link_table = Table(
+        table_name="note.attachment_user_link",
+        logging_provider=logging_provider,
+        db=db,
+        id_fields=["attachment_key", "user_id"],
+        error_log=True,
+    )
 
     metadata_repo = AttachmentMetadataPostgresRepo(attachment_table)
     object_repo = AttachmentS3Repo(client=s3_client, bucket=garage_config["bucket"])
@@ -73,6 +80,7 @@ async def test_attachment_facade_with_postgres_and_garage(
         metadata_repo=metadata_repo,
         permission_repo=permission_repo,
         attachments_note_link_table=attachment_note_link_table,
+        attachments_user_link_table=attachment_user_link_table,
         log=logging_provider,
     )
 
@@ -117,7 +125,7 @@ async def test_attachment_facade_with_postgres_and_garage(
 
     stored = await facade.post_attachment(attachment, user_ctx)
 
-    # Pre-link in SpiceDB so the subsequent `link_attachment_to_note` call
+    # Pre-link in SpiceDB so the subsequent `link_attachment` call
     # passes its permission check. The facade inserts this same relationship
     # itself, but does so AFTER the permission check, so without this
     # pre-insert the check would always deny the call on a freshly uploaded
@@ -132,8 +140,8 @@ async def test_attachment_facade_with_postgres_and_garage(
         ]
     )
 
-    await facade.link_attachment_to_note(stored.key, note_id="note-123", user_ctx=user_ctx)
-    attachments = await facade.list_attachments_for_note("note-123", user_ctx)
+    await facade.link_attachment(stored.key, sub_type="note", sub_id="note-123", user_ctx=user_ctx)
+    attachments = await facade.list_attachments(sub_type="note", sub_id="note-123", user_ctx=user_ctx)
     assert len(attachments) == 1
     assert attachments[0].key == stored.key
 

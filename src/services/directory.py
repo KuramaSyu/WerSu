@@ -498,8 +498,8 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         """Updates the README and links the attachment if provided. """
         # now we have the ID -> link the attachment key to the note
         if attachment_key:
-            await self._attachment_facade.link_attachment_to_note(
-                attachment_key, unwrap_undefined(readme.note_id), user_ctx
+            await self._attachment_facade.link_attachment(
+                attachment_key, "note", unwrap_undefined(readme.note_id), user_ctx
             )
 
         # miss use ParseReadme to create one

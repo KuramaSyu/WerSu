@@ -388,12 +388,12 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
 
         for key in referenced:
             try:
-                await self._attachment_facade.link_attachment_to_note(
-                    key, note_id, user_ctx
+                await self._attachment_facade.link_attachment(
+                    key, "note", note_id, user_ctx
                 )
             except Exception as exc:
                 self.log.warning(
-                    "link_attachment_to_note failed key=%s note=%s: %s",
+                    "link_attachment failed key=%s note=%s: %s",
                     key,
                     note_id,
                     exc,

@@ -124,6 +124,7 @@ async def db(dsn):
             auth.third_party,
             note.attachment,
             note.attachment_note_link,
+            note.attachment_user_link,
             note.directory,
             note.content,
             note.version_snapshot,
