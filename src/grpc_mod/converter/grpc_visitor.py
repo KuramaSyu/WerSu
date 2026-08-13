@@ -28,6 +28,10 @@ from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.passkey import PasskeyEntity
 from src.db.entities.user.password import PasswordEntity
+from src.db.entities.user.role import (
+    RoleEntity,
+    UserRoleMembershipEntity,
+)
 from src.db.entities.user.third_party import ThirdPartyEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_auth import UserAuthEntity
@@ -72,6 +76,10 @@ from src.grpc_mod.proto.auth_pb2 import (
     Passkey,
     UserAuth,
 )
+from src.grpc_mod.proto.role_pb2 import (
+    Role,
+    UserRoleMembership as GrpcUserRoleMembership,
+)
 from src.grpc_mod.proto.user_pb2 import User
 from src.utils import asdict
 from src.utils.dict_helper import drop_except_keys, drop_undefined
@@ -86,6 +94,8 @@ def _to_permission_object_type(object_type: str) -> PermissionObjectType.ValueTy
         return PermissionObjectType.PERMISSION_OBJECT_TYPE_USER
     if object_type == ObjectTypeEnum.ATTACHMENT.value:
         return PermissionObjectType.PERMISSION_OBJECT_TYPE_ATTACHMENT
+    if object_type == ObjectTypeEnum.ROLE.value:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_ROLE
     return PermissionObjectType.PERMISSION_OBJECT_TYPE_UNSPECIFIED
 
 
@@ -528,6 +538,46 @@ class ConvertToGrpcVisitor(EntityVisitor):
             kind=CredentialKind.CREDENTIAL_KIND_PASSWORD,
             created_at=created_ts,
             password_hash=entity.password_hash,
+        )
+
+    # ---- roles -------------------------------------------------------
+
+    def visit_role(self, entity: RoleEntity) -> Role:
+        """Convert a :class:`~src.db.entities.user.role.RoleEntity` to a ``Role`` message.
+
+        Args:
+            entity: The role entity to convert.
+
+        Returns:
+            The equivalent gRPC ``Role`` message.  ``description`` is
+            mapped through the nullable string wrapper so omitted
+            fields stay unset.
+        """
+        created_ts = _to_proto_timestamp(entity.created_at)
+        return Role(
+            id=unwrap_undefined(entity.id),
+            name=unwrap_undefined(entity.name),
+            description=_to_proto_nullable_string(entity.description),
+            created_at=created_ts if created_ts is not None else Timestamp(),
+        )
+
+    def visit_user_role_membership(self, entity: UserRoleMembershipEntity) -> GrpcUserRoleMembership:
+        """Convert a :class:`~src.db.entities.user.role.UserRoleMembershipEntity` to a ``UserRoleMembership`` message.
+
+        Args:
+            entity: The membership edge to convert.
+
+        Returns:
+            The equivalent gRPC ``UserRoleMembership`` message.
+            ``granted_at`` falls back to an empty ``Timestamp`` when
+            the entity did not populate it (raw SpiceDB tuples have
+            no timestamp).
+        """
+        granted_at_ts = _to_proto_timestamp(entity.granted_at)
+        return GrpcUserRoleMembership(
+            user_id=unwrap_undefined(entity.user_id),
+            role_id=unwrap_undefined(entity.role_id),
+            granted_at=granted_at_ts if granted_at_ts is not None else Timestamp(),
         )
 
     # ---- note share ----------------------------------------------------
