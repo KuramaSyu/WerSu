@@ -2,7 +2,6 @@ syntax = "proto3";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
-import "sharing.proto";
 
 package proto;
 option go_package = "github.com/KuramaSyu/WerSu-Rest/src/proto;proto";
@@ -14,7 +13,7 @@ option go_package = "github.com/KuramaSyu/WerSu-Rest/src/proto;proto";
 message Role {
     string id = 1;
     string name = 2;
-    NullableString description = 3;
+    string description = 3;
     google.protobuf.Timestamp created_at = 4;
 }
 
@@ -41,7 +40,7 @@ message RoleFilter {
 message CreateRoleRequest {
     string user_id = 1;
     string name = 2;
-    NullableString description = 3;
+    string description = 3;
 }
 
 // Update a role's metadata (name and/or description).  Membership
@@ -51,7 +50,7 @@ message UpdateRoleRequest {
     string user_id = 1;
     string id = 2;
     optional string name = 3;
-    NullableString description = 4;
+    string description = 4;
 }
 
 // Delete a role.  Membership edges become dangling references in

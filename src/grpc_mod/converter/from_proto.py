@@ -165,7 +165,7 @@ def grpc_role_to_domain(role: Role) -> RoleEntity:
     return RoleEntity(
         id=role.id or UNDEFINED,
         name=role.name or UNDEFINED,
-        description=from_nullable_string(role, "description"),
+        description=role.description or UNDEFINED,
         created_at=from_timestamp_field(role, "created_at"),
     )
 
@@ -174,7 +174,7 @@ def grpc_create_role_to_entity(request: CreateRoleRequest) -> RoleEntity:
     """Convert a ``CreateRoleRequest`` into a :class:`RoleEntity` for the service layer."""
     return RoleEntity(
         name=unwrap_undefined(request.name),
-        description=from_nullable_string(request, "description"),
+        description=request.description or UNDEFINED,
     )
 
 
@@ -183,7 +183,7 @@ def grpc_update_role_to_entity(request: UpdateRoleRequest) -> RoleEntity:
     return RoleEntity(
         id=unwrap_undefined(request.id),
         name=request.name if request.HasField("name") else UNDEFINED,
-        description=from_nullable_string(request, "description"),
+        description=request.description or UNDEFINED,
     )
 
 

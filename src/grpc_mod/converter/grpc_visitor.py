@@ -550,14 +550,15 @@ class ConvertToGrpcVisitor(EntityVisitor):
 
         Returns:
             The equivalent gRPC ``Role`` message.  ``description`` is
-            mapped through the nullable string wrapper so omitted
-            fields stay unset.
+            an empty string when the entity left it :obj:`UNDEFINED`,
+            so callers can't distinguish "unset" from "" on the wire.
         """
         created_ts = _to_proto_timestamp(entity.created_at)
+        description = "" if is_undefined(entity.description) else str(entity.description)
         return Role(
             id=unwrap_undefined(entity.id),
             name=unwrap_undefined(entity.name),
-            description=_to_proto_nullable_string(entity.description),
+            description=description,
             created_at=created_ts if created_ts is not None else Timestamp(),
         )
 
