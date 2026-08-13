@@ -30,8 +30,10 @@ from src.api.other.relationship import (
     RelationEnum,
     RelationName,
     Relationship,
+    RoleRelationEnum,
     SubjectRef,
     SubjectType,
+    UserRelationEnum,
 )
 
 # shared / cross-layer types
@@ -66,6 +68,7 @@ from src.api.repos.directory_repo import (
     DirectoryHierarchyType,
     DirectoryRepoABC,
 )
+from src.api.repos.role_repo import RoleRepoABC
 
 # composite repo contracts (facades)
 from src.api.facades.directory_facade import (
@@ -99,13 +102,14 @@ from src.api.services.activity_statistics_service import (
     ActivityStatisticsServiceABC,
     Algorithm,
 )
-from src.api.services.attachment_facade import AttachmentFacadeABC
+from src.api.services.attachment_facade import AttachmentFacadeABC, LinkTargetType
 from src.api.services.directory_activity_service import DirectoryActivityServiceABC
 from src.api.services.sharing import (
     ShareAccessServiceABC,
     SharingRepoABC,
     SharingServiceABC,
 )
+from src.api.services.role import RoleServiceABC
 from src.api.services.user_service import UserServiceABC
 from src.api.services.jwt_provider import (
     AttachmentTokenClaims,
@@ -127,7 +131,10 @@ __all__ = [
     "Relationship",
     "DirectoryChildType",
     "DirectoryHierarchyType",
+    "LinkTargetType",
+    "RoleRelationEnum",
     "SubjectRef",
+    "UserRelationEnum",
     # shared
     "LoggingProvider",
     "Pagination",
@@ -152,6 +159,7 @@ __all__ = [
     "CombinedNoteRepoABC",
     "DirectoryHelperMixin",
     "DirectoryRepoABC",
+    "RoleRepoABC",
     # facades
     "DefaultDirectorySpec",
     "DirectoryFacadeABC",
@@ -179,6 +187,7 @@ __all__ = [
     "ShareAccessServiceABC",
     "SharingRepoABC",
     "SharingServiceABC",
+    "RoleServiceABC",
     "UserServiceABC",
     "AttachmentTokenClaims",
     "JwtError",
