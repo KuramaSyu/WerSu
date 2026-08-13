@@ -13,8 +13,15 @@ from typing import Any, Literal
 
 from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
+from src.db.entities.user.role import RoleEntity, RoleFilter
 from src.db.repos.note.note_facade import SearchType
 from src.grpc_mod.proto.note_pb2 import GetSearchNotesRequest
+from src.grpc_mod.proto.role_pb2 import (
+    CreateRoleRequest,
+    Role,
+    RoleFilter as GrpcRoleFilter,
+    UpdateRoleRequest,
+)
 from src.grpc_mod.proto.sharing_pb2 import (
     CreateShareRequest,
     NoteShare,
@@ -148,3 +155,41 @@ def to_search_type(
     ):
         return SearchType.CONTEXT
     raise ValueError(f"Unknown SearchType value: {proto_value}")
+
+
+# --- roles ---------------------------------------------------------
+
+
+def grpc_role_to_domain(role: Role) -> RoleEntity:
+    """Convert a protobuf ``Role`` into a domain :class:`RoleEntity`."""
+    return RoleEntity(
+        id=role.id or UNDEFINED,
+        name=role.name or UNDEFINED,
+        description=from_nullable_string(role, "description"),
+        created_at=from_timestamp_field(role, "created_at"),
+    )
+
+
+def grpc_create_role_to_entity(request: CreateRoleRequest) -> RoleEntity:
+    """Convert a ``CreateRoleRequest`` into a :class:`RoleEntity` for the service layer."""
+    return RoleEntity(
+        name=unwrap_undefined(request.name),
+        description=from_nullable_string(request, "description"),
+    )
+
+
+def grpc_update_role_to_entity(request: UpdateRoleRequest) -> RoleEntity:
+    """Convert an ``UpdateRoleRequest`` into a :class:`RoleEntity` for the service layer."""
+    return RoleEntity(
+        id=unwrap_undefined(request.id),
+        name=request.name if request.HasField("name") else UNDEFINED,
+        description=from_nullable_string(request, "description"),
+    )
+
+
+def to_role_filter_entity(filter: GrpcRoleFilter) -> RoleFilter:
+    """Convert a protobuf ``RoleFilter`` into the domain filter entity."""
+    return RoleFilter(
+        name=filter.name if filter.HasField("name") else UNDEFINED,
+        member_id=filter.member_id if filter.HasField("member_id") else UNDEFINED,
+    )
