@@ -422,3 +422,236 @@ class TestErrorWrapping:
         logger = ActivityLoggerServiceImpl(activity_repo=_BoomRepo())
         with pytest.raises(ActivityLoggerError, match="failed to record"):
             await logger.note_viewed("n-1", alice)
+
+
+# Per-event snapshot tests: every event kind persists the entity's
+# human-readable name under ``metadata`` so an audit-log reader does
+# not have to do a follow-up lookup just to render the row.
+#
+# Convention: the caller builds the metadata dict via
+# :class:`EventMetadataVisitor` (or by hand) and passes it as the
+# ``metadata=`` kwarg.  These tests verify the service forwards
+# that dict to the repo unchanged.
+
+
+class TestNoteNameInMetadata:
+    """``note_*`` events persist ``note_name`` in metadata."""
+
+    @pytest.fixture
+    def note(self) -> NoteEntity:
+        return NoteEntity(
+            note_id="n-1", title="Daily standup", content="",
+            author_id="alice",
+        )
+
+    @pytest.mark.asyncio
+    async def test_note_viewed_carries_note_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, note: NoteEntity,
+    ) -> None:
+        await logger.note_viewed(
+            "n-1", alice, metadata=note.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {"note_name": "Daily standup"}
+
+    @pytest.mark.asyncio
+    async def test_note_created_carries_note_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, note: NoteEntity,
+    ) -> None:
+        await logger.note_created(
+            "n-1", alice, metadata=note.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {"note_name": "Daily standup"}
+
+    @pytest.mark.asyncio
+    async def test_note_edited_carries_note_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, note: NoteEntity,
+    ) -> None:
+        await logger.note_edited(
+            "n-1", alice, metadata=note.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {"note_name": "Daily standup"}
+
+    @pytest.mark.asyncio
+    async def test_note_deleted_carries_note_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, note: NoteEntity,
+    ) -> None:
+        await logger.note_deleted(
+            "n-1", alice, metadata=note.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {"note_name": "Daily standup"}
+
+    @pytest.mark.asyncio
+    async def test_note_published_carries_note_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, note: NoteEntity,
+    ) -> None:
+        await logger.note_published(
+            "n-1", alice, metadata=note.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {"note_name": "Daily standup"}
+
+    @pytest.mark.asyncio
+    async def test_note_shared_carries_note_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, note: NoteEntity,
+    ) -> None:
+        await logger.note_shared(
+            "n-1", alice, metadata=note.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {"note_name": "Daily standup"}
+
+    @pytest.mark.asyncio
+    async def test_note_unshared_carries_note_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, note: NoteEntity,
+    ) -> None:
+        await logger.note_unshared(
+            "n-1", alice, metadata=note.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {"note_name": "Daily standup"}
+
+    @pytest.mark.asyncio
+    async def test_note_restored_carries_note_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, note: NoteEntity,
+    ) -> None:
+        await logger.note_restored(
+            "n-1", alice, metadata=note.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {"note_name": "Daily standup"}
+
+    @pytest.mark.asyncio
+    async def test_note_archived_carries_note_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, note: NoteEntity,
+    ) -> None:
+        await logger.note_archived(
+            "n-1", alice, metadata=note.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {"note_name": "Daily standup"}
+
+
+class TestDirectoryNameInMetadata:
+    """``directory_*`` events persist ``directory_name`` and ``directory_slug``."""
+
+    @pytest.fixture
+    def directory(self) -> DirectoryEntity:
+        return DirectoryEntity(slug="projects", display_name="Projects")
+
+    @pytest.mark.asyncio
+    async def test_directory_created_carries_directory_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, directory: DirectoryEntity,
+    ) -> None:
+        await logger.directory_created(
+            "d-1", alice, metadata=directory.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {
+            "directory_slug": "projects",
+            "directory_name": "Projects",
+        }
+
+    @pytest.mark.asyncio
+    async def test_directory_viewed_carries_directory_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, directory: DirectoryEntity,
+    ) -> None:
+        await logger.directory_viewed(
+            "d-1", alice, metadata=directory.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {
+            "directory_slug": "projects",
+            "directory_name": "Projects",
+        }
+
+    @pytest.mark.asyncio
+    async def test_directory_edited_carries_directory_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, directory: DirectoryEntity,
+    ) -> None:
+        await logger.directory_edited(
+            "d-1", alice, metadata=directory.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {
+            "directory_slug": "projects",
+            "directory_name": "Projects",
+        }
+
+    @pytest.mark.asyncio
+    async def test_directory_deleted_carries_directory_name(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext, directory: DirectoryEntity,
+    ) -> None:
+        await logger.directory_deleted(
+            "d-1", alice, metadata=directory.convert(EventMetadataVisitor()),
+        )
+        assert repo.added[0].metadata == {
+            "directory_slug": "projects",
+            "directory_name": "Projects",
+        }
+
+
+class TestRoleEvents:
+    """Role events persist their structured metadata payload verbatim.
+
+    Caller-side composition: each role event has a dedicated metadata
+    dataclass (``RoleGrantMetadata`` / ``RoleRevokeMetadata`` /
+    ``RoleChangeMetadata``).  These tests verify the service
+    forwards the dataclass as a plain dict so the JSONB column
+    stays queryable.
+    """
+
+    @pytest.mark.asyncio
+    async def test_role_granted_records_role_name_and_subject(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext,
+    ) -> None:
+        await logger.role_granted(
+            alice,
+            role_id="r-1",
+            metadata=RoleGrantMetadata(subject_id="bob", role_name="engineering"),
+        )
+        e = repo.added[0]
+        assert e.action == "role_grant"
+        assert e.role_id == "r-1"
+        assert e.metadata == {"subject_id": "bob", "role_name": "engineering"}
+
+    @pytest.mark.asyncio
+    async def test_role_revoked_records_role_name_and_subject(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext,
+    ) -> None:
+        await logger.role_revoked(
+            alice,
+            role_id="r-1",
+            metadata=RoleRevokeMetadata(subject_id="bob", role_name="engineering"),
+        )
+        e = repo.added[0]
+        assert e.action == "role_revoke"
+        assert e.role_id == "r-1"
+        assert e.metadata == {"subject_id": "bob", "role_name": "engineering"}
+
+    @pytest.mark.asyncio
+    async def test_role_changed_records_added_and_removed_lists(
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        alice: _FakeUserContext,
+    ) -> None:
+        await logger.role_changed(
+            alice,
+            role_id="r-1",
+            metadata=RoleChangeMetadata(
+                added=["note:abc#admin@user:def"],
+                removed=["directory:xyz#writer@user:def"],
+            ),
+        )
+        e = repo.added[0]
+        assert e.action == "role_change"
+        assert e.role_id == "r-1"
+        assert e.metadata == {
+            "added": ["note:abc#admin@user:def"],
+            "removed": ["directory:xyz#writer@user:def"],
+        }
