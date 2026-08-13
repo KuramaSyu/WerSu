@@ -12,16 +12,21 @@ import grpc
 from src.api.services.activity_statistics_service import ActivityStatisticsServiceABC
 from src.api.services.jwt_provider import JwtProvider
 from src.api.services.sharing import ShareAccessServiceABC, SharingRepoABC
+from src.api.services.role import RoleServiceABC
+from src.api.repos.role_repo import RoleRepoABC
 from src.api.other.undefined import UNDEFINED, UndefinedOr, UndefinedType
 from src.db.repos.directory.directory import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos import SpicedbPermissionRepo
+from src.db.repos.permissions.spicedb_role_repo import SpicedbRoleRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.grpc_mod.activity_statistics_service import GrpcActivityStatisticsService
 from src.grpc_mod.proto.activity_pb2_grpc import add_ActivityStatisticsServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_server  # type: ignore[attr-defined]
+from src.grpc_mod.proto.role_pb2_grpc import add_RoleServiceServicer_to_server  # type: ignore[attr-defined]
+from src.grpc_mod.role_service import GrpcRoleService
 from src.grpc_mod.sharing_service import GrpcSharingService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.services import PermissionServiceImpl, UserServiceImpl, DirectoryActivityServiceImpl, AttachmentFacadeImpl, share_access
@@ -38,6 +43,7 @@ from src.services.background_process.processes import (
 from src.services.activity_logger_service import ActivityLoggerServiceImpl
 from src.services.activity_statistics_service import ActivityStatisticsServiceImpl
 from src.services.sharing import SharingServiceImpl
+from src.services.role_service import RoleServiceImpl
 from src.services.note import NoteServiceImpl
 from src.services.directory import DirectoryServiceImpl
 from src.services.thirdparty_migrations import (
@@ -201,10 +207,20 @@ async def serve():
         table_name="note.attachment_note_link",
         id_fields=["note_id", "attachment_key"],
     )
+    attachments_user_link_table = Table(
+        **common_table_kwargs,
+        table_name="note.attachment_user_link",
+        id_fields=["user_id", "attachment_key"],
+    )
 
     shared_table = Table(
         **common_table_kwargs,
         table_name="shared",
+        id_fields=["id"],
+    )
+    roles_table = Table(
+        **common_table_kwargs,
+        table_name="roles",
         id_fields=["id"],
     )
     user_action_table = Table(
@@ -370,6 +386,12 @@ async def serve():
         table=shared_table,
         logging_provider=logging_provider,
     )
+
+    role_repo: RoleRepoABC = SpicedbRoleRepo(
+        table=roles_table,
+        permission_repo=permission_repo,
+        logging_provider=logging_provider,
+    )
     
     # later in the scheduler creation, these listerners get their actual handle attached
     user_disable_listener = UserActionListener(kind="disable")
@@ -397,6 +419,7 @@ async def serve():
         metadata_repo=metadata_repo,
         permission_repo=permission_repo,
         attachments_note_link_table=attachments_note_link_table,
+        attachments_user_link_table=attachments_user_link_table,
         log=logging_provider,
     )
 
@@ -529,6 +552,19 @@ async def serve():
         context_factory=user_context_factory,
     )
     add_SharingServiceServicer_to_server(grpc_sharing_service, server)
+
+    role_service: RoleServiceABC = RoleServiceImpl(
+        role_repo=role_repo,
+        permission_repo=permission_repo,
+        logging_provider=logging_provider,
+    )
+    grpc_role_service = GrpcRoleService(
+        role_service=role_service,
+        log=logging_provider,
+        to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
+    )
+    add_RoleServiceServicer_to_server(grpc_role_service, server)
 
     # setup gRPC user service
     app_user_service = UserServiceImpl(user_repo=user_repo, directory_facade=directory_facade, context_factory=user_context_factory)
