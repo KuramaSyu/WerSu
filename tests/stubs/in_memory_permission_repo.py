@@ -39,21 +39,25 @@ class InMemoryPermissionRepo(PermissionRepoABC):
 
     _relation_implied_permissions = {
         "note": {
-            "admin": {"admin", "delete", "write", "view", "edit_permissions"},
+            "admin": {"admin", "delete", "write", "view", "edit_permissions", "manage"},
             "writer": {"writer", "write", "view"},
             "reader": {"reader", "view"},
-            "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions"},
+            "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions", "manage"},
         },
         "directory": {
             "admin": {"admin", "delete", "write", "view", "edit_permissions"},
             "writer": {"writer", "write", "view"},
             "reader": {"reader", "view"},
+            "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions"},
         },
         "attachment": {
             "admin": {"admin", "delete", "write", "view", "edit_permissions"},
             "writer": {"writer", "write", "view"},
             "reader": {"reader", "view"},
             "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions"},
+        },
+        "role": {
+            "administrator": {"administrator", "manage"},
         },
     }
 
@@ -274,15 +278,30 @@ class InMemoryPermissionRepo(PermissionRepoABC):
     async def get_permissions(self, user: UserContextABC, resource: ObjectRef) -> List[str]:
         assert resource.object_id != UNDEFINED, "object_id must be provided for permission checks"
 
+        # Roles the user belongs to (``role:<id>#member@user:<id>``
+        # tuples).  In production SpiceDB, ``CheckPermission(...@user:<id>)``
+        # walks ``role#member`` automatically; we mirror that here so
+        # tests that grant a role and then assert the user's
+        # effective permission see the expected ``True``.
+        member_role_ids = self._role_ids_for_user(user.user_id)
+
         # Collect direct relationships for this user-resource pair,
-        # then expand to effective permissions via the static implication map.
+        # then expand to effective permissions via the static
+        # implication map.  We also collect tuples whose subject is a
+        # role the user is a member of, so role grants resolve to the
+        # user's effective permissions.
         direct_relations: List[str] = []
         for stored in self._store:
             if (
-                stored.resource.object_type == resource.object_type
-                and stored.resource.object_id == resource.object_id
-                and stored.subject.object_type == "user"
-                and stored.subject.object_id == user.user_id
+                stored.resource.object_type != resource.object_type
+                or stored.resource.object_id != resource.object_id
+            ):
+                continue
+            if stored.subject.object_type == "user" and stored.subject.object_id == user.user_id:
+                direct_relations.append(stored.relation)
+            elif (
+                stored.subject.object_type == "role"
+                and stored.subject.object_id in member_role_ids
             ):
                 direct_relations.append(stored.relation)
 
@@ -293,6 +312,27 @@ class InMemoryPermissionRepo(PermissionRepoABC):
             permissions.update(implied_map.get(relation, {relation}))
 
         return sorted(permissions)
+
+    def _role_ids_for_user(self, user_id: str) -> set[str]:
+        """Return every role id ``user_id`` is a member of.
+
+        Walks ``role:<id>#member@user:<id>`` tuples in
+        ``self._store``.  Pure helper, no SpiceDB dependency, so
+        tests using ``InMemoryPermissionRepo`` can both insert
+        memberships and resolve them without spinning up a real
+        SpiceDB container.
+        """
+        roles: set[str] = set()
+        for stored in self._store:
+            if (
+                stored.resource.object_type == "role"
+                and stored.relation == "member"
+                and stored.subject.object_type == "user"
+                and stored.subject.object_id == user_id
+                and stored.resource.object_id is not UNDEFINED
+            ):
+                roles.add(str(stored.resource.object_id))
+        return roles
 
     async def resolve_children(
         self,

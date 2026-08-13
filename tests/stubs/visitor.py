@@ -19,6 +19,10 @@ from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.passkey import PasskeyEntity
 from src.db.entities.user.password import PasswordEntity
+from src.db.entities.user.role import (
+    RoleEntity,
+    UserRoleMembershipEntity,
+)
 from src.db.entities.user.third_party import ThirdPartyEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_auth import UserAuthEntity
@@ -161,6 +165,12 @@ class StubVisitor(EntityVisitor):
 
     def visit_password(self, entity: PasswordEntity) -> None:
         return None
+
+    def visit_role(self, entity: RoleEntity) -> RoleEntity:
+        return entity
+
+    def visit_user_role_membership(self, entity: UserRoleMembershipEntity) -> UserRoleMembershipEntity:
+        return entity
 
     def visit_share_user(self, access_as: str, online_until: Any) -> Any:
         self.share_users.append((access_as, online_until))

@@ -28,6 +28,7 @@ from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.db.repos.tag.postgres import PostgresTagRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
+from src.db.repos.permissions.spicedb_role_repo import SpicedbRoleRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user import RepoContextFactory
@@ -36,6 +37,7 @@ from src.db.repos.activity.postgres import PostgresActivityRepo
 from src.db.table import Table
 from src.services.activity_logger_service import ActivityLoggerServiceImpl
 from src.services.permissions import PermissionServiceImpl
+from src.services.role_service import RoleServiceImpl
 from src.services.sharing import SharingServiceImpl
 from src.facades.share_action_facade import ShareActionFacade
 from src.services.user_service import UserServiceImpl
@@ -84,6 +86,8 @@ class IntegrationEnv:
     permission_service: PermissionServiceImpl
     sharing_repo: SharingPostgresRepo
     sharing_service: SharingServiceImpl
+    role_repo: SpicedbRoleRepo
+    role_service: RoleServiceImpl
 
 
 @pytest.fixture(scope="function")
@@ -269,6 +273,27 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             ),
         )
 
+        # Roles: metadata in Postgres (``roles`` table), membership
+        # edges in SpiceDB (``user#member_of@role``).  Reuses the
+        # existing ``SpicedbPermissionRepo`` for the membership
+        # writes so we share the same SpiceDB client + consistency
+        # model as the rest of the permission system.
+        role_repo = SpicedbRoleRepo(
+            table=Table(
+                db=db,
+                table_name="roles",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            permission_repo=permission_repo,
+            logging_provider=logging_provider,
+        )
+        role_service = RoleServiceImpl(
+            role_repo=role_repo,
+            permission_repo=permission_repo,
+            logging_provider=logging_provider,
+        )
+
         try:
             yield IntegrationEnv(
                 db=db,
@@ -282,6 +307,8 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
                 permission_service=permission_service,
                 sharing_repo=sharing_repo,
                 sharing_service=sharing_service,
+                role_repo=role_repo,
+                role_service=role_service,
             )
         finally:
             await db.close()
