@@ -48,8 +48,15 @@ class SpicedbPermissionConverter(PermissionConverterABC):
         )
 
     def convert_subject_ref(self, subject_ref: SubjectRef) -> SubjectReference:
+        # Optional userset qualifier (``role:eng#member``).  When the
+        # caller passes an ``optional_relation`` on the ``SubjectRef``
+        # we propagate it onto the proto so SpiceDB can resolve the
+        # userset as the subject of the relationship; otherwise the
+        # subject is a plain object reference.
+        optional_relation = getattr(subject_ref, "optional_relation", None)
         return SubjectReference(
-            object=self.convert_object_ref(subject_ref)
+            object=self.convert_object_ref(subject_ref),
+            optional_relation=optional_relation if optional_relation else None,
         )
     
     def convert_relationship(self, relationship: Relationship) -> SpicedbRelationship:
