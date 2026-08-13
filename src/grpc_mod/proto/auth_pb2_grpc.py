@@ -27,9 +27,7 @@ if _version_not_supported:
 
 
 class AuthServiceStub:
-    """---------- Service ----------
-
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -100,9 +98,7 @@ class AuthServiceStub:
 
 
 class AuthServiceServicer:
-    """---------- Service ----------
-
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def GetUserAuth(self, request, context):
         """user lookup
@@ -251,9 +247,7 @@ def add_AuthServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class AuthService:
-    """---------- Service ----------
-
-    """
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def GetUserAuth(request,

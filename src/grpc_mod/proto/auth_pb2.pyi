@@ -48,8 +48,7 @@ class CredentialKind(_CredentialKind, metaclass=_CredentialKindEnumTypeWrapper):
       directly.
     - There is no session table on the backend. Every request that
       reaches gRPC is trusted because the REST middleware has already
-      verified a JWT signed by `JWT_SECRET`. The JWT carries the
-      `user_id` claim; gRPC trusts it as the caller identity.
+      verified a JWT or session.
     """
 
 CREDENTIAL_KIND_UNSPECIFIED: CredentialKind.ValueType  # 0
@@ -61,13 +60,7 @@ Global___CredentialKind: _TypeAlias = CredentialKind  # noqa: Y015
 
 @_typing.final
 class UserAuth(_message.Message):
-    """A user as exposed to the auth layer.
-
-    Deliberately narrower than the public `User` message in
-    `user.proto`. Auth consumers do not need Discord profile fields
-    or avatar -- add them here only when an auth endpoint actually
-    needs them.
-    """
+    """A user as exposed to the auth layer."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -242,11 +235,10 @@ Global___Passkey: _TypeAlias = Passkey  # noqa: Y015
 
 @_typing.final
 class GetUserAuthRequest(_message.Message):
-    """---------- User lookup ----------
-
-    Resolve a user by one of the login identifiers. Exactly one of
-    `user_id`, `email`, or `discord_id` must be supplied. Returns
-    NOT_FOUND if no user matches.
+    """Lookup a user by id/email/discord id
+    Often used by frontend: useUser() hook resolves to this.
+    REST takes user id from session, and checks against this endpoint
+    if information is correct.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -296,12 +288,8 @@ Global___GetUserAuthResponse: _TypeAlias = GetUserAuthResponse  # noqa: Y015
 
 @_typing.final
 class CreateUserAuthRequest(_message.Message):
-    """Create a brand-new user (email + password signup). Returns
-    ALREADY_EXISTS if a user with the email already exists. The
-    service layer also creates the credential row in the same
-    transaction. The first credential is the password; additional
-    credentials (Discord, passkeys) are added later via the
-    `LinkCredential` rpc.
+    """Create a user (email + password signup). Returns
+    ALREADY_EXISTS if a user with the email already exists.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -360,11 +348,6 @@ class UpdateUserAuthRequest(_message.Message):
     tri-state: omitted (leave unchanged), `_set` populated (write the
     value), or `_clear` populated (set the column to NULL). Used for
     username/email changes and `email_verified_at`.
-
-    `requester_id` is the actor. The service layer requires
-    `requester_id == user_id` (or an admin role on a future
-    extension) before any write. REST forwards the JWT's
-    `user_id` claim here.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -381,6 +364,7 @@ class UpdateUserAuthRequest(_message.Message):
     AVATAR_URL_CLEAR_FIELD_NUMBER: _builtins.int
     user_id: _builtins.str
     requester_id: _builtins.str
+    """the actor on which we will check permissions"""
     username_set: _builtins.str
     email_set: _builtins.str
     avatar_url_set: _builtins.str
@@ -453,14 +437,7 @@ Global___UpdateUserAuthResponse: _TypeAlias = UpdateUserAuthResponse  # noqa: Y0
 
 @_typing.final
 class FindCredentialByProviderRequest(_message.Message):
-    """---------- Credential lookup ----------
-
-    Look up a credential of one kind. Used by REST to find the
-    Discord/Google link during an OAuth callback and the password
-    row during `/auth/login`. Returns NOT_FOUND if the credential
-    doesn't exist (treated as a generic "invalid email or password"
-    by the login endpoint).
-    """
+    """Search a user by email/discord id/google id"""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -659,10 +636,6 @@ class RegisterPasskeyRequest(_message.Message):
     `public_key` is the COSE-encoded public key extracted from the
     attestation authData. The service layer is responsible for
     storing both in their native byte form -- they are not reshaped.
-
-    `requester_id` is the actor. The service layer requires
-    `requester_id == user_id` before writing -- a passkey is
-    always attached to the currently authenticated user.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -679,6 +652,7 @@ class RegisterPasskeyRequest(_message.Message):
     FRIENDLY_NAME_FIELD_NUMBER: _builtins.int
     user_id: _builtins.str
     requester_id: _builtins.str
+    """actor on which we will check permissions"""
     credential_id: _builtins.bytes
     public_key: _builtins.bytes
     aaguid: _builtins.bytes
@@ -757,28 +731,14 @@ Global___RevokePasskeyRequest: _TypeAlias = RevokePasskeyRequest  # noqa: Y015
 
 @_typing.final
 class LinkCredentialRequest(_message.Message):
-    """---------- Account linking ----------
-
-    Attach a new credential to an existing user. Used by:
-    - Discord/Google login adding a password/passkey to the account
-      they just made from the OAuth callback.
-    - Password login adding a Discord/Google link from settings.
-    - Password login adding a passkey, where REST has already
-      verified the attestation and is just persisting the result.
+    """Account Linking: Attach a new credential to an existing user (Passkey
+    Discord OAuth, Google OAuth, or password)
 
     `kind` selects which payload field is populated. Exactly one of
     `discord_id`, `password_hash`, `passkey_id`, or `google_id` must
     be set. Returns ALREADY_EXISTS if the user already has a
     credential of that kind (with the exception of passkey, which
     can have many).
-
-    `requester_id` is the actor. The service layer requires
-    `requester_id == user_id` (or an admin role on a future
-    extension) before any write. The OAuth callback flow has a
-    subtle wrinkle: REST is calling on behalf of a not-yet-JWT
-    holder -- the OAuth `state` parameter holds the user identity
-    for the duration of the ceremony, and `requester_id` is
-    validated against that.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -840,14 +800,7 @@ Global___LinkCredentialResponse: _TypeAlias = LinkCredentialResponse  # noqa: Y0
 
 @_typing.final
 class UnlinkCredentialRequest(_message.Message):
-    """Unlink a credential. For password and Discord/Google the
-    service layer rejects the call if the user would be left with
-    zero credentials (no way to log back in). Passkeys may always
-    be revoked.
-
-    `requester_id` is the actor. The service layer requires
-    `requester_id == user_id` before any write.
-    """
+    """Unlink a credential. Removing the last credential should raise"""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -857,6 +810,7 @@ class UnlinkCredentialRequest(_message.Message):
     credential_id: _builtins.str
     user_id: _builtins.str
     requester_id: _builtins.str
+    """the actor on which we will check permissions"""
     def __init__(
         self,
         *,
@@ -874,10 +828,7 @@ Global___UnlinkCredentialRequest: _TypeAlias = UnlinkCredentialRequest  # noqa: 
 
 @_typing.final
 class ListLinkedCredentialsRequest(_message.Message):
-    """Summary of every credential linked to a user, used by the
-    settings page to show "Discord: linked, Password: set, N
-    passkeys". Avoids three separate round trips from REST.
-    """
+    """Summary of every credential linked to a user (Google, Discord, Passkey, Password)"""
 
     DESCRIPTOR: _descriptor.Descriptor
 

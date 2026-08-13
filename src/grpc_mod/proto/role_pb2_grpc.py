@@ -4,9 +4,9 @@ import grpc
 import warnings
 
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
-from src.grpc_mod.proto import role_pb2 as role__pb2
+from src.grpc_mod.proto import role_pb2 as src_dot_grpc__mod_dot_proto_dot_role__pb2
 
-GRPC_GENERATED_VERSION = '1.76.0'
+GRPC_GENERATED_VERSION = '1.81.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -19,14 +19,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in role_pb2_grpc.py depends on'
+        + ' but the generated code in src/grpc_mod/proto/role_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class RoleServiceStub(object):
+class RoleServiceStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -37,52 +37,52 @@ class RoleServiceStub(object):
         """
         self.CreateRole = channel.unary_unary(
                 '/proto.RoleService/CreateRole',
-                request_serializer=role__pb2.CreateRoleRequest.SerializeToString,
-                response_deserializer=role__pb2.Role.FromString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.CreateRoleRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.FromString,
                 _registered_method=True)
         self.UpdateRole = channel.unary_unary(
                 '/proto.RoleService/UpdateRole',
-                request_serializer=role__pb2.UpdateRoleRequest.SerializeToString,
-                response_deserializer=role__pb2.Role.FromString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.UpdateRoleRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.FromString,
                 _registered_method=True)
         self.DeleteRole = channel.unary_unary(
                 '/proto.RoleService/DeleteRole',
-                request_serializer=role__pb2.DeleteRoleRequest.SerializeToString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.DeleteRoleRequest.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 _registered_method=True)
         self.GetRole = channel.unary_unary(
                 '/proto.RoleService/GetRole',
-                request_serializer=role__pb2.GetRoleRequest.SerializeToString,
-                response_deserializer=role__pb2.Role.FromString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.GetRoleRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.FromString,
                 _registered_method=True)
         self.GetRoles = channel.unary_stream(
                 '/proto.RoleService/GetRoles',
-                request_serializer=role__pb2.GetRolesRequest.SerializeToString,
-                response_deserializer=role__pb2.Role.FromString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.GetRolesRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.FromString,
                 _registered_method=True)
         self.AddUserToRole = channel.unary_unary(
                 '/proto.RoleService/AddUserToRole',
-                request_serializer=role__pb2.AddUserToRoleRequest.SerializeToString,
-                response_deserializer=role__pb2.UserRoleMembership.FromString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.AddUserToRoleRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.UserRoleMembership.FromString,
                 _registered_method=True)
         self.RemoveUserFromRole = channel.unary_unary(
                 '/proto.RoleService/RemoveUserFromRole',
-                request_serializer=role__pb2.RemoveUserFromRoleRequest.SerializeToString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.RemoveUserFromRoleRequest.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 _registered_method=True)
         self.GetRolesForUser = channel.unary_stream(
                 '/proto.RoleService/GetRolesForUser',
-                request_serializer=role__pb2.GetRolesForUserRequest.SerializeToString,
-                response_deserializer=role__pb2.Role.FromString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.GetRolesForUserRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.FromString,
                 _registered_method=True)
         self.GetUsersForRole = channel.unary_stream(
                 '/proto.RoleService/GetUsersForRole',
-                request_serializer=role__pb2.GetUsersForRoleRequest.SerializeToString,
-                response_deserializer=role__pb2.UserRoleMembership.FromString,
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.GetUsersForRoleRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.UserRoleMembership.FromString,
                 _registered_method=True)
 
 
-class RoleServiceServicer(object):
+class RoleServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
     def CreateRole(self, request, context):
@@ -144,48 +144,48 @@ def add_RoleServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'CreateRole': grpc.unary_unary_rpc_method_handler(
                     servicer.CreateRole,
-                    request_deserializer=role__pb2.CreateRoleRequest.FromString,
-                    response_serializer=role__pb2.Role.SerializeToString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.CreateRoleRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.SerializeToString,
             ),
             'UpdateRole': grpc.unary_unary_rpc_method_handler(
                     servicer.UpdateRole,
-                    request_deserializer=role__pb2.UpdateRoleRequest.FromString,
-                    response_serializer=role__pb2.Role.SerializeToString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.UpdateRoleRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.SerializeToString,
             ),
             'DeleteRole': grpc.unary_unary_rpc_method_handler(
                     servicer.DeleteRole,
-                    request_deserializer=role__pb2.DeleteRoleRequest.FromString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.DeleteRoleRequest.FromString,
                     response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             ),
             'GetRole': grpc.unary_unary_rpc_method_handler(
                     servicer.GetRole,
-                    request_deserializer=role__pb2.GetRoleRequest.FromString,
-                    response_serializer=role__pb2.Role.SerializeToString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.GetRoleRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.SerializeToString,
             ),
             'GetRoles': grpc.unary_stream_rpc_method_handler(
                     servicer.GetRoles,
-                    request_deserializer=role__pb2.GetRolesRequest.FromString,
-                    response_serializer=role__pb2.Role.SerializeToString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.GetRolesRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.SerializeToString,
             ),
             'AddUserToRole': grpc.unary_unary_rpc_method_handler(
                     servicer.AddUserToRole,
-                    request_deserializer=role__pb2.AddUserToRoleRequest.FromString,
-                    response_serializer=role__pb2.UserRoleMembership.SerializeToString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.AddUserToRoleRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.UserRoleMembership.SerializeToString,
             ),
             'RemoveUserFromRole': grpc.unary_unary_rpc_method_handler(
                     servicer.RemoveUserFromRole,
-                    request_deserializer=role__pb2.RemoveUserFromRoleRequest.FromString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.RemoveUserFromRoleRequest.FromString,
                     response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             ),
             'GetRolesForUser': grpc.unary_stream_rpc_method_handler(
                     servicer.GetRolesForUser,
-                    request_deserializer=role__pb2.GetRolesForUserRequest.FromString,
-                    response_serializer=role__pb2.Role.SerializeToString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.GetRolesForUserRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.SerializeToString,
             ),
             'GetUsersForRole': grpc.unary_stream_rpc_method_handler(
                     servicer.GetUsersForRole,
-                    request_deserializer=role__pb2.GetUsersForRoleRequest.FromString,
-                    response_serializer=role__pb2.UserRoleMembership.SerializeToString,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.GetUsersForRoleRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_role__pb2.UserRoleMembership.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -195,7 +195,7 @@ def add_RoleServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class RoleService(object):
+class RoleService:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
@@ -213,8 +213,8 @@ class RoleService(object):
             request,
             target,
             '/proto.RoleService/CreateRole',
-            role__pb2.CreateRoleRequest.SerializeToString,
-            role__pb2.Role.FromString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.CreateRoleRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.FromString,
             options,
             channel_credentials,
             insecure,
@@ -240,8 +240,8 @@ class RoleService(object):
             request,
             target,
             '/proto.RoleService/UpdateRole',
-            role__pb2.UpdateRoleRequest.SerializeToString,
-            role__pb2.Role.FromString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.UpdateRoleRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.FromString,
             options,
             channel_credentials,
             insecure,
@@ -267,7 +267,7 @@ class RoleService(object):
             request,
             target,
             '/proto.RoleService/DeleteRole',
-            role__pb2.DeleteRoleRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.DeleteRoleRequest.SerializeToString,
             google_dot_protobuf_dot_empty__pb2.Empty.FromString,
             options,
             channel_credentials,
@@ -294,8 +294,8 @@ class RoleService(object):
             request,
             target,
             '/proto.RoleService/GetRole',
-            role__pb2.GetRoleRequest.SerializeToString,
-            role__pb2.Role.FromString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.GetRoleRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.FromString,
             options,
             channel_credentials,
             insecure,
@@ -321,8 +321,8 @@ class RoleService(object):
             request,
             target,
             '/proto.RoleService/GetRoles',
-            role__pb2.GetRolesRequest.SerializeToString,
-            role__pb2.Role.FromString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.GetRolesRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.FromString,
             options,
             channel_credentials,
             insecure,
@@ -348,8 +348,8 @@ class RoleService(object):
             request,
             target,
             '/proto.RoleService/AddUserToRole',
-            role__pb2.AddUserToRoleRequest.SerializeToString,
-            role__pb2.UserRoleMembership.FromString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.AddUserToRoleRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.UserRoleMembership.FromString,
             options,
             channel_credentials,
             insecure,
@@ -375,7 +375,7 @@ class RoleService(object):
             request,
             target,
             '/proto.RoleService/RemoveUserFromRole',
-            role__pb2.RemoveUserFromRoleRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.RemoveUserFromRoleRequest.SerializeToString,
             google_dot_protobuf_dot_empty__pb2.Empty.FromString,
             options,
             channel_credentials,
@@ -402,8 +402,8 @@ class RoleService(object):
             request,
             target,
             '/proto.RoleService/GetRolesForUser',
-            role__pb2.GetRolesForUserRequest.SerializeToString,
-            role__pb2.Role.FromString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.GetRolesForUserRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.Role.FromString,
             options,
             channel_credentials,
             insecure,
@@ -429,8 +429,8 @@ class RoleService(object):
             request,
             target,
             '/proto.RoleService/GetUsersForRole',
-            role__pb2.GetUsersForRoleRequest.SerializeToString,
-            role__pb2.UserRoleMembership.FromString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.GetUsersForRoleRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_role__pb2.UserRoleMembership.FromString,
             options,
             channel_credentials,
             insecure,
