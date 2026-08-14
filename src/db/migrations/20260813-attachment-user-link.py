@@ -18,7 +18,7 @@ class Migration(MigrationABC):
         """Create ``note.attachment_user_link``.
 
         Mirrors ``note.attachment_note_link`` but references the
-        ``users`` table instead of ``note.content``.  Used by
+        ``auth.user`` table instead of ``note.content``.  Used by
         :class:`src.services.attachment_facade.AttachmentFacadeImpl`
         when :meth:`~src.api.services.attachment_facade.AttachmentFacadeABC.link_attachment`
         is called with ``sub_type == "user"``.
@@ -32,7 +32,7 @@ class Migration(MigrationABC):
                 linked_at TIMESTAMP NOT NULL,
 
                 PRIMARY KEY (user_id, attachment_key),
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES auth.user(id) ON DELETE CASCADE ON UPDATE CASCADE,
                 FOREIGN KEY (attachment_key) REFERENCES note.attachment(key) ON DELETE CASCADE ON UPDATE CASCADE
             );
             """
