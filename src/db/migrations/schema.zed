@@ -35,7 +35,7 @@ definition note {
     permission write = owner + writer + admin + parent_directory->write
     permission view = reader + write
     permission edit_permissions = owner + admin + parent_directory->edit_permissions
-    permission manage = admin + parent_directory->admin
+    permission manage = owner + admin + parent_directory->admin
 }
 
 definition attachment {
