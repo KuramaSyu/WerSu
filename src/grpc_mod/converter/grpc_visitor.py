@@ -26,6 +26,7 @@ from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.rule import RuleEntity
 from src.db.entities.user.passkey import PasskeyEntity
 from src.db.entities.user.password import PasswordEntity
 from src.db.entities.user.role import (
@@ -37,6 +38,7 @@ from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_auth import UserAuthEntity
 from src.api.other.visitor import EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
+from src.grpc_mod.proto.rule_pb2 import Rule as GrpcRule
 from src.grpc_mod.proto.activity_pb2 import (
     ACCESSED_AS_SYSTEM,
     ACCESSED_AS_UNSPECIFIED,
@@ -809,3 +811,78 @@ class ConvertToGrpcVisitor(EntityVisitor):
             return json.dumps(merged)
         except (TypeError, ValueError):
             return json.dumps({})
+
+    # ---- rules ----------------------------------------------------------
+
+    def visit_rule(self, entity: RuleEntity) -> GrpcRule:
+        """Convert a :class:`RuleEntity` to the gRPC ``Rule`` message.
+
+        Mirrors the round-trip performed by
+        :mod:`src.grpc_mod.converter.rule_converter`:
+
+        * ``attached_entity_type`` is empty when the rule is global.
+        * ``condition`` and ``action_context`` are emitted as JSON
+          strings on the ``metadata_json`` field (the proto's
+          ``google.protobuf.Struct`` is serialised to ``dict``
+          via :func:`google.protobuf.json_format.Parse`).
+        * ``created_at`` / ``updated_at`` ride on the existing
+          ``Timestamp`` field -- both default to the proto
+          zero value when the entity did not populate them.
+        """
+        created_at = Timestamp()
+        updated_at = Timestamp()
+        if not is_undefined(entity.created_at) and entity.created_at:
+            created_at.FromDatetime(entity.created_at)
+        if not is_undefined(entity.updated_at) and entity.updated_at:
+            updated_at.FromDatetime(entity.updated_at)
+
+        return GrpcRule(
+            id=str(entity.id) if not is_undefined(entity.id) else "",
+            event_type=str(entity.event_type or ""),
+            attached_entity_type=(
+                str(entity.attached_entity_type)
+                if not is_undefined(entity.attached_entity_type)
+                and entity.attached_entity_type
+                else ""
+            ),
+            attached_entity_id=(
+                str(entity.attached_entity_id)
+                if not is_undefined(entity.attached_entity_id)
+                and entity.attached_entity_id
+                else ""
+            ),
+            condition=self._json_to_struct(entity.condition),
+            action_type=str(entity.action_type or ""),
+            action_context=self._json_to_struct(entity.action_context),
+            enabled=bool(entity.enabled) if not is_undefined(entity.enabled) else False,
+            creator_id=str(entity.creator_id or ""),
+            created_at=created_at,
+            updated_at=updated_at,
+        )
+
+    @staticmethod
+    def _json_to_struct(payload: Any) -> "Struct":
+        """Convert a JSON / dict payload to a gRPC ``Struct``.
+
+        Mirrors the same JSON-string-or-dict normalisation as
+        :meth:`_metadata_to_json` -- the rule column comes back
+        from Postgres as a JSON string in the in-memory tests and
+        as a dict when the rule was just constructed in Python;
+        either shape must produce a valid ``Struct``.
+        """
+        from google.protobuf.struct_pb2 import Struct
+        from google.protobuf.json_format import Parse
+
+        if payload is None or is_undefined(payload):
+            return Struct()
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except (TypeError, ValueError):
+                return Struct()
+        if not isinstance(payload, dict):
+            return Struct()
+        try:
+            return Parse(json.dumps(payload), Struct())
+        except (TypeError, ValueError):
+            return Struct()
