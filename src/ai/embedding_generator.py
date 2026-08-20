@@ -127,10 +127,41 @@ class EmbeddingGeneratorABC(ABC):
 
 
 class EmbeddingGenerator(EmbeddingGeneratorABC):
-    """Generates embeddings for given text using specified model."""
+    """Generates embeddings for given text using specified model.
+    the model is downloaded from the given model name. first it tries 
+    to load from cache, then it falls back to download from hugging face
+    """
+
     def __init__(self, model_name: Models, logging_provider: LoggingProvider):
         from sentence_transformers import SentenceTransformer
-        self.model = SentenceTransformer(model_name.value, cache_folder=os.path.expanduser("~/models"), )
+
+        cache_folder = os.path.expanduser("~/models")
+        model_path = model_name.value
+
+        # 1. try to load model from cache
+        try:
+            self.model = SentenceTransformer(
+                model_path,
+                cache_folder=cache_folder,
+                local_files_only=True,
+            )
+        except Exception as cache_err:
+            # 2. download model - network connection required
+            try:
+                self.model = SentenceTransformer(
+                    model_path,
+                    cache_folder=cache_folder,
+                    local_files_only=False,
+                )
+            except RuntimeError as e:
+                if "Cannot send a request, as the client has been closed." in str(e):
+                    raise RuntimeError(
+                        f"Failed to load embedding model '{model_path}'. "
+                        f"It is not present in the cache '{cache_folder}' "
+                        f"and no network connection is available to download it. "
+                    ) from e
+                raise
+
         self.model_enum = model_name
         self.log = logging_provider(__name__, self)
 
