@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+package proto;
+option go_package = "github.com/KuramaSyu/WerSu-Rest/src/proto;proto";
+
+// A rule is a stored if x then do y event. attached_entity describes
+// an entity, where this rule is attached to. e.g. if event type
+// is note_created and attached_entity is a directory, then the rule
+// will only fire if the note is created in that directory.
+// action type, describes the then action, e.g. add note to a directory etc
+//
+// The ``condition`` and ``action_context`` fields are carried as
+// ``google.protobuf.Struct`` so the shape can evolve without breaking
+// the gRPC contract.  Valid ``condition.type`` values:
+//
+//   - "always_true"
+//   - "note_content_contains"   (with ``substring``)
+//   - "note_title_contains"     (with ``substring``)
+//
+// Valid ``action_type`` values:
+//
+//   - "add_to_directory"        (with ``directory_id``)
+//   - "add_tag"                 (with ``tag_id``)
+message Rule {
+    string id = 1;
+    string event_type = 2;
+
+    // Optional scope anchor.  When both are unset the rule is
+    // "global" -- it matches every event of its ``event_type``.
+    // When set, the rule fires only for events whose primary
+    // entity is this anchor (or, in the directory case, a
+    // descendant of it).
+    string attached_entity_type = 3;  // "directory" | "note" | ""
+    string attached_entity_id = 4;
+
+    // Condition dataclass, serialised as a Struct:
+    //   { "type": "note_content_contains", "substring": "linux" }
+    google.protobuf.Struct condition = 5;
+
+    // Action split into a discriminator + parameters so the
+    // discriminator is indexable and round-trips cleanly.
+    string action_type = 6;            // "add_to_directory" | "add_tag" | ...
+    google.protobuf.Struct action_context = 7;
+
+    bool enabled = 8;
+    string creator_id = 9;
+    google.protobuf.Timestamp created_at = 10;
+    google.protobuf.Timestamp updated_at = 11;
+}
+
+// Used by GetRules to scope the list.  All fields optional.
+message RuleFilter {
+    string event_type = 1;
+    string attached_entity_type = 2;  // "directory" | "note" | ""
+    string attached_entity_id = 3;
+    bool enabled_only = 4;
+    string creator_id = 5;
+}
+
+// ===== Requests ===========================================================
+
+message CreateRuleRequest {
+    string user_id = 1;
+    string event_type = 2;
+    string attached_entity_type = 3;
+    string attached_entity_id = 4;
+    google.protobuf.Struct condition = 5;
+    string action_type = 6;
+    google.protobuf.Struct action_context = 7;
+    optional bool enabled = 8;
+    // creator_id defaults to user_id when unset.
+    string creator_id = 9;
+}
+
+message GetRuleRequest {
+    string user_id = 1;
+    string id = 2;
+}
+
+message GetRulesRequest {
+    string user_id = 1;
+    RuleFilter filter = 2;
+}
+
+message UpdateRuleRequest {
+    string user_id = 1;
+    string id = 2;
+    optional string event_type = 3;
+    optional string attached_entity_type = 4;
+    optional string attached_entity_id = 5;
+    google.protobuf.Struct condition = 6;
+    optional string action_type = 7;
+    google.protobuf.Struct action_context = 8;
+    optional bool enabled = 9;
+}
+
+message DeleteRuleRequest {
+    string user_id = 1;
+    string id = 2;
+}
+
+// ===== Responses ==========================================================
+
+message CreateRuleResponse {
+    Rule rule = 1;
+}
+
+message GetRuleResponse {
+    Rule rule = 1;
+}
+
+message GetRulesResponse {
+    repeated Rule rules = 1;
+}
+
+message UpdateRuleResponse {
+    Rule rule = 1;
+}
+
+message DeleteRuleResponse {
+    // Empty for now; kept so the response shape can grow
+    // without breaking clients.
+    google.protobuf.Empty empty = 1;
+}
+
+// ===== Service ============================================================
+
+service RuleService {
+    rpc CreateRule(CreateRuleRequest) returns (CreateRuleResponse);
+    rpc GetRule(GetRuleRequest) returns (GetRuleResponse);
+    rpc GetRules(GetRulesRequest) returns (GetRulesResponse);
+    rpc UpdateRule(UpdateRuleRequest) returns (UpdateRuleResponse);
+    rpc DeleteRule(DeleteRuleRequest) returns (DeleteRuleResponse);
+}
