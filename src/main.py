@@ -26,6 +26,7 @@ from src.grpc_mod.activity_statistics_service import GrpcActivityStatisticsServi
 from src.grpc_mod.proto.activity_pb2_grpc import add_ActivityStatisticsServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.role_pb2_grpc import add_RoleServiceServicer_to_server  # type: ignore[attr-defined]
+from src.grpc_mod.proto.rule_pb2_grpc import add_RuleServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.role_service import GrpcRoleService
 from src.grpc_mod.sharing_service import GrpcSharingService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
@@ -84,17 +85,23 @@ from src.grpc_mod.proto.auth_pb2_grpc import add_AuthServiceServicer_to_server  
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note_facade import NoteFacadeImpl
+from src.db.repos.rule import PostgresRuleRepo
 from src.db.repos.tag.postgres import PostgresTagRepo
 from src.grpc_mod.attachment_service import GrpcAttachmentService
 from src.grpc_mod.directory_service import GrpcDirectoryService
 from src.grpc_mod.note_service import GrpcNoteService
 from src.grpc_mod.note_version_service import GrpcNoteVersionService
 from src.grpc_mod.permission_service import GrpcPermissionService
+from src.grpc_mod.rule_service import GrpcRuleService
 from src.grpc_mod.thirdparty_migrations_service import GrpcThirdpartyMigrationsService
 from src.grpc_mod.user_service import GrpcUserService
 from src.grpc_mod.auth_service import GrpcAuthService
+from src.api.events.rule_dispatcher import RuleDispatcher
 from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.services.auth import PyJwtProvider
+from src.services.event_bus import InMemoryEventBus
+from src.services.event_context import InMemoryEventContext
+from src.services.rule_service import RuleServiceImpl
 from src.utils.spicedb_client import create_spicedb_async_client
 
 
@@ -252,6 +259,11 @@ async def serve():
     activity_table = Table(
         **common_table_kwargs,
         table_name="activity",
+        id_fields=["id"],
+    )
+    rules_table = Table(
+        **common_table_kwargs,
+        table_name="rules",
         id_fields=["id"],
     )
     directory_table = Table(
@@ -412,6 +424,10 @@ async def serve():
         directory_repo=directory_facade,
         logging_provider=logging_provider,
     )
+    rule_repo = PostgresRuleRepo(
+        table=rules_table,
+        logging_provider=logging_provider,
+    )
 
     ### Setup services and inject repos ###
     attachment_service = AttachmentFacadeImpl(
@@ -448,9 +464,45 @@ async def serve():
         context_factory=user_context_factory,
     )
 
+    # rule subsystem with event bus and dispatcher
+    event_bus = InMemoryEventBus(
+        context=InMemoryEventContext(
+            note_content_repo=note_content_repo,
+            directory_repo=directory_facade,
+        ),
+    )
+
+    # group of listeners which get context injected
+    rule_dispatcher = RuleDispatcher(
+        rule_repo=rule_repo,
+        directory_repo=directory_facade,
+        tag_repo=tag_repo,
+        context=event_bus._context,  # type: ignore[attr-defined]
+        logging_provider=logging_provider,
+    )
+
+    # subscribe per-event listeners to the bus
+    for listener in (
+        rule_dispatcher.note_created_listener,
+        rule_dispatcher.note_updated_listener,
+        rule_dispatcher.directory_created_listener,
+        rule_dispatcher.directory_updated_listener,
+    ):
+        await event_bus.subscribe(listener)
+
+    # service layer for rules API
+    rule_service = RuleServiceImpl(
+        rule_repo=rule_repo,
+        permission_repo=permission_repo,
+        directory_facade=directory_facade,
+        logging_provider=logging_provider,
+    )
+
+    # service layer for activity API
     activity_logger_service = ActivityLoggerServiceImpl(
         activity_repo=activity_repo,
         logging_provider=logging_provider,
+        event_bus=event_bus,
     )
 
     app_note_service = NoteServiceImpl(
@@ -565,6 +617,14 @@ async def serve():
         context_factory=user_context_factory,
     )
     add_RoleServiceServicer_to_server(grpc_role_service, server)
+
+    grpc_rule_service = GrpcRuleService(
+        rule_service=rule_service,
+        log=logging_provider,
+        to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
+    )
+    add_RuleServiceServicer_to_server(grpc_rule_service, server)
 
     # setup gRPC user service
     app_user_service = UserServiceImpl(user_repo=user_repo, directory_facade=directory_facade, context_factory=user_context_factory)
