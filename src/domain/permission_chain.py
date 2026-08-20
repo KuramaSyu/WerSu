@@ -413,3 +413,105 @@ class HasDirectoryEditPermissionsPerm(PermissionCheckChain):
         return f"user has no permission to edit permissions for directory {self._directory_id}"
 
 
+class HasAnyDirectoryEditPermissionPerms(PermissionCheckChain):
+    """Permission check: user has ``directory#edit_permissions`` on at least one directory.
+
+    Used by the rules subsystem to gate creation of *global* rules
+    (rules with no attached entity).  The user has to be able to
+    manage at least one directory, otherwise they are effectively
+    a pure viewer and the rules subsystem should not let them
+    create rules that affect every event of a kind.
+
+    Args:
+        directory_facade: the directory facade used to enumerate
+            the user's viewable directories. 
+        max_candidates: cap on the number of directories to
+            probe; defaults to 25. 
+    """
+    OBJECT_TYPE: ObjectType = "directory"
+    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.EDIT_PERMISSIONS
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(
+        self,
+        directory_facade: Any,  # DirectoryFacadeABC; kept loose to avoid a cycle
+        max_candidates: int = 25,
+    ) -> None:
+        super().__init__()
+        self._directory_facade = directory_facade
+        self._max_candidates = max_candidates
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        directory_ids = await self._directory_facade.list_user_directory_ids(
+            user_ctx,
+        )
+        for directory_id in directory_ids[: self._max_candidates]:
+            probe = (
+                HasDirectoryEditPermissionsPerm(str(directory_id))
+                .set_permission_repo(self._get_permission_repo())
+            )
+            ok = await probe._check(user_ctx)  # noqa: SLF001 -- intentional delegation
+            if ok:
+                return True
+        return False
+
+    def _get_error_message(self) -> str:
+        return (
+            "user has no 'edit_permissions' on any directory they can view"
+        )
+
+
+class HasAnyNoteManagePerm(PermissionCheckChain):
+    """Permission check: user has ``note#manage`` on at least one note.
+
+    Counterpart to :class:`HasAnyDirectoryEditPermissionsPerm` for
+    the note side.  Probes the user's viewable notes and checks 
+    ``note#manage`` on each.  Bounded by ``max_candidates`` (default 25)
+    """
+    OBJECT_TYPE: ObjectType = "note"
+    RELATION_TYPE: NoteRelationName = NoteRelationEnum.MANAGE
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(
+        self,
+        directory_facade: Any,  # DirectoryFacadeABC; loose typing
+        max_candidates: int = 25,
+    ) -> None:
+        super().__init__()
+        self._directory_facade = directory_facade
+        self._max_candidates = max_candidates
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        # Enumerate the user's viewable directories, then pull
+        # the direct child notes under them, and probe ``manage``
+        # on each.  This is intentionally less precise than a
+        # dedicated ``list_user_note_ids`` would be, but the
+        # project does not have that on the directory facade
+        # yet and adding it would balloon the surface area of
+        # this change.  The candidate cap still bounds the
+        # worst case.
+        directory_ids = await self._directory_facade.list_user_directory_ids(
+            user_ctx,
+        )
+        candidate_note_ids: list[str] = []
+        for directory_id in directory_ids:
+            children = await self._directory_facade.get_children_of(
+                "note", directory_id, depth=1,
+            )
+            candidate_note_ids.extend(children)
+            if len(candidate_note_ids) >= self._max_candidates:
+                break
+        for note_id in candidate_note_ids[: self._max_candidates]:
+            probe = (
+                HasNoteManagePerm(str(note_id))
+                .set_permission_repo(self._get_permission_repo())
+            )
+            ok = await probe._check(user_ctx)  # noqa: SLF001
+            if ok:
+                return True
+        return False
+
+    def _get_error_message(self) -> str:
+        return "user has no 'manage' on any note they can view"
+
+
