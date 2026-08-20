@@ -16,6 +16,13 @@ import json
 from dataclasses import asdict
 from typing import Mapping, Optional
 
+from src.api.events.event_bus import EventBus
+from src.api.events.events import (
+    DirectoryCreated,
+    DirectoryUpdated,
+    NoteCreated,
+    NoteUpdated,
+)
 from src.api.repos.activity_repo import ActivityRepoABC
 from src.api.services.activity_logger_service import (
     ActivityLoggerError,
@@ -29,6 +36,7 @@ from src.api.other.types import LoggingProvider
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import UserContextABC
 from src.db.entities.activity import ActivityEntity
+from src.services.event_bus import NoopEventBus
 from src.utils import logging_provider as default_logging_provider
 
 
@@ -45,9 +53,31 @@ class ActivityLoggerServiceImpl(ActivityLoggerServiceABC):
         self,
         activity_repo: ActivityRepoABC,
         logging_provider: Optional[LoggingProvider] = None,
+        event_bus: Optional[EventBus] = None,
     ) -> None:
         self._activity_repo = activity_repo
+        self._event_bus: EventBus = event_bus or NoopEventBus()
         self.log = (logging_provider or default_logging_provider)(__name__, self)
+
+
+    async def _publish(self, event: object) -> None:
+        """Forward ``event`` to the bus; failures are logged, not raised.
+
+        The bus is awaited so the in-memory implementation can
+        complete before the caller continues, but a slow listener
+        can never bubble an exception out of an ``ActivityLogger``
+        method -- this logger must remain a write-only sidecar.
+        Any exception raised by the bus is logged at warning and
+        swallowed.
+        """
+        try:
+            await self._event_bus.notify(event)  # type: ignore[arg-type]
+        except Exception as exc:  # noqa: BLE001 -- logger must not raise
+            self.log.warning(
+                "event bus notify failed",
+                extra={"event": type(event).__name__},
+                exc_info=exc,
+            )
 
 
     @staticmethod
@@ -137,6 +167,9 @@ class ActivityLoggerServiceImpl(ActivityLoggerServiceABC):
             target={"note_id": note_id},
             metadata=self._meta(metadata),
         )
+        await self._publish(
+            NoteCreated(note_id=note_id, actor_id=self._actor_id(actor))
+        )
 
     async def note_edited(
         self, note_id: str, actor: UserContextABC, *,
@@ -147,6 +180,9 @@ class ActivityLoggerServiceImpl(ActivityLoggerServiceABC):
             actor=actor,
             target={"note_id": note_id},
             metadata=self._meta(metadata),
+        )
+        await self._publish(
+            NoteUpdated(note_id=note_id, actor_id=self._actor_id(actor))
         )
 
     async def note_deleted(
@@ -252,6 +288,9 @@ class ActivityLoggerServiceImpl(ActivityLoggerServiceABC):
             target={"directory_id": directory_id},
             metadata=self._meta(metadata),
         )
+        await self._publish(
+            DirectoryCreated(directory_id=directory_id, actor_id=self._actor_id(actor))
+        )
 
     async def directory_viewed(
         self, directory_id: str, actor: UserContextABC, *,
@@ -273,6 +312,9 @@ class ActivityLoggerServiceImpl(ActivityLoggerServiceABC):
             actor=actor,
             target={"directory_id": directory_id},
             metadata=self._meta(metadata),
+        )
+        await self._publish(
+            DirectoryUpdated(directory_id=directory_id, actor_id=self._actor_id(actor))
         )
 
     async def directory_deleted(
