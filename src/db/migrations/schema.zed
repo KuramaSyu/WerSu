@@ -7,8 +7,31 @@ definition role {
     permission manage = administrator
 }
 
+/**
+ * A shelf is a flat (non-hierarchical) grouping of books (directories).
+ *
+ * Rules can attach to a shelf; they fire for every event whose primary
+ * entity is a book sitting on this shelf (or a note inside such a book,
+ * for note events).  Shelves have the same role set as directories so
+ * the existing permission helpers carry over.
+ */
+definition shelf {
+    relation owner: user | role#member
+    relation admin: user | role#member
+    relation writer: user | role#member
+    relation reader: user | role#member
+
+    permission delete = admin
+    permission write = writer + admin
+    permission view = reader + write
+    permission edit_permissions = admin + owner
+}
+
 definition directory {
-    relation parent: directory
+    // A book (directory) can be nested inside other books or attached
+    // to one or more shelves.  Multiple parents are supported: a book
+    // may have several book-parents (DAG) and several shelf-parents.
+    relation parent: directory | shelf
     relation owner: user | role#member
     relation admin: user | role#member
     relation writer: user | role#member
