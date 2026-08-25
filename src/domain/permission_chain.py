@@ -413,6 +413,31 @@ class HasDirectoryEditPermissionsPerm(PermissionCheckChain):
         return f"user has no permission to edit permissions for directory {self._directory_id}"
 
 
+class HasShelfEditPermissionsPerm(PermissionCheckChain):
+    """Permission check for managing a shelf's sharing and permission settings.
+
+    Shelves use the same role set as directories, so the gate
+    is identical -- only the resource type differs.
+    """
+    OBJECT_TYPE: ObjectType = "shelf"
+    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.EDIT_PERMISSIONS
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, shelf_id: str) -> None:
+        super().__init__()
+        self._shelf_id = shelf_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        return await self._get_permission_repo().has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._shelf_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no permission to edit permissions for shelf {self._shelf_id}"
+
+
 class HasAnyDirectoryEditPermissionPerms(PermissionCheckChain):
     """Permission check: user has ``directory#edit_permissions`` on at least one directory.
 

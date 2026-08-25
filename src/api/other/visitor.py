@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from src.db.entities.directory.directory import DirectoryEntity
     from src.db.entities.note.metadata import NoteEntity
     from src.db.entities.note.sharing import NoteShareEntity
+    from src.db.entities.shelf import ShelfEntity
     from src.db.entities.user.passkey import PasskeyEntity
     from src.db.entities.user.password import PasswordEntity
     from src.db.entities.user.role import (
@@ -106,6 +107,15 @@ class EntityVisitor(ABC):
 
         Raises:
             NotImplementedError: If the visitor does not support directories.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_shelf(self, entity: ShelfEntity) -> Any:
+        """Handle a :class:`~src.db.entities.shelf.ShelfEntity`.
+
+        Raises:
+            NotImplementedError: If the visitor does not support shelves.
         """
         raise NotImplementedError
 

@@ -63,6 +63,28 @@ class EventContext(ABC):
         """
         ...
 
+    @abstractmethod
+    async def shelf_contains_book(
+        self,
+        shelf_id: str,
+        book_id: str,
+    ) -> bool:
+        """Return ``True`` when ``book_id`` is one of the books on
+        ``shelf_id``.
+
+        Used by the dispatcher to evaluate shelf-scoped rule
+        scope: a shelf rule with ``event_type == "NoteUpdated"``
+        matches every note whose parent book sits on the shelf,
+        and every book that sits on the shelf for directory
+        events.
+
+        Returns:
+            bool: ``True`` when ``book_id`` is in ``shelf_id``'s
+            book set; ``False`` otherwise (including when either
+            id is unknown).
+        """
+        ...
+
 
 class NoopEventContext(EventContext):
     """Event context that returns ``None`` / empty for every call.
@@ -86,6 +108,13 @@ class NoopEventContext(EventContext):
 
     async def note_parent_directory_id(self, note_id: str) -> Optional[str]:
         return None
+
+    async def shelf_contains_book(
+        self,
+        shelf_id: str,
+        book_id: str,
+    ) -> bool:
+        return False
 
 
 __all__ = ["EventContext", "NoopEventContext"]

@@ -21,6 +21,7 @@ class ObjectTypeEnum(StrEnum):
     USER = "user"
     ATTACHMENT = "attachment"
     ROLE = "role"
+    SHELF = "shelf"
 
 
 class NoteRelationEnum(StrEnum):
