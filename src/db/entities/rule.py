@@ -8,14 +8,24 @@ from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.api.other.visitor import AcceptsVisitor
 
 
-AttachedEntityType = Literal["directory", "note"]
+AttachedEntityType = Literal["directory", "note", "shelf"]
 """Allowed values for :attr:`RuleEntity.attached_entity_type`.
 
 When ``attached_entity_type`` is set, the matching scope is
-computed by the dispatcher (e.g. a directory rule with
-``event_type == "NoteUpdated"`` matches every note update inside
-the directory or any of its descendants).  When unset, the rule
-matches every event of its ``event_type``.
+computed by the dispatcher:
+
+* ``"directory"`` -- the rule matches events whose primary
+  entity is this directory or any of its descendants.
+* ``"note"`` -- the rule matches events whose primary entity is
+  this note.
+* ``"shelf"`` -- the rule matches events whose primary entity is
+  a book sitting on this shelf (or, for note events, a note
+  inside such a book).
+
+``attached_entity_type`` and ``attached_entity_id`` are both
+required -- "global" rules (one or both unset) are no longer
+accepted.  The dispatcher rejects any rule whose attached-entity
+fields are not both set.
 """
 
 

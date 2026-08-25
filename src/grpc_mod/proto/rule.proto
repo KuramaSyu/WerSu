@@ -29,12 +29,11 @@ message Rule {
     string id = 1;
     string event_type = 2;
 
-    // Optional scope anchor.  When both are unset the rule is
-    // "global" -- it matches every event of its ``event_type``.
-    // When set, the rule fires only for events whose primary
-    // entity is this anchor (or, in the directory case, a
-    // descendant of it).
-    string attached_entity_type = 3;  // "directory" | "note" | ""
+    // Required scope anchor.  The rule fires only for events
+    // whose primary entity matches this anchor (or, in the
+    // directory / shelf case, a descendant / contained book of
+    // it).  Global rules are no longer supported.
+    string attached_entity_type = 3;  // "directory" | "note" | "shelf"
     string attached_entity_id = 4;
 
     // Condition dataclass, serialised as a Struct:
@@ -55,7 +54,7 @@ message Rule {
 // Used by GetRules to scope the list.  All fields optional.
 message RuleFilter {
     string event_type = 1;
-    string attached_entity_type = 2;  // "directory" | "note" | ""
+    string attached_entity_type = 2;  // "directory" | "note" | "shelf"
     string attached_entity_id = 3;
     bool enabled_only = 4;
     string creator_id = 5;

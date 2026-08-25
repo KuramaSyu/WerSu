@@ -5,17 +5,16 @@ permission check via the
 :class:`~src.domain.permission_chain.PermissionCheckChain`
 machinery -- no bespoke permission logic in this file.
 
-Permission policy:
+Permission policy (rules are entity-attached only; global rules
+were removed when shelves landed):
 
-* **Entity-attached rule** -- the caller must hold
-  ``directory#edit_permissions`` (admin or owner) for
-  ``attached_entity_type == "directory"``, or ``note#manage``
-  (owner, admin, or admin-on-parent-directory) for
-  ``attached_entity_type == "note"``.
-* **Global rule** (no attached entity) -- the caller must hold
-  ``directory#edit_permissions`` on at least one directory they
-  can view.  This is the "global = everything the user can
-  manage" gate requested for the subsystem.
+* ``attached_entity_type == "directory"`` -- the caller must
+  hold ``directory#edit_permissions`` (admin or owner).
+* ``attached_entity_type == "note"`` -- the caller must hold
+  ``note#manage`` (owner, admin, or admin-on-parent-directory).
+* ``attached_entity_type == "shelf"`` -- the caller must hold
+  ``shelf#edit_permissions`` (admin or owner).  Shelves share
+  the directory role set.
 
 Payload validation runs here, not in the repo, so the repo
 stays a thin wrapper.  The service re-uses the
@@ -48,9 +47,9 @@ from src.api.services.rule_service import (
 )
 from src.db.entities.rule import AttachedEntityType, RuleEntity
 from src.domain.permission_chain import (
-    HasAnyDirectoryEditPermissionPerms,
     HasDirectoryEditPermissionsPerm,
     HasNoteManagePerm,
+    HasShelfEditPermissionsPerm,
     PermissionCheckChainStart,
 )
 from src.utils import logging_provider as default_logging_provider
@@ -292,14 +291,9 @@ class RuleServiceImpl(RuleServiceABC):
         rule: RuleEntity,
         actor: UserContextABC,
     ) -> None:
-        """Gate create on the attached entity (or any manageable directory)."""
-        if _is_attached(rule):
-            chain = self._attached_entity_chain(
-                rule.attached_entity_type,  # type: ignore[arg-type]
-                rule.attached_entity_id,   # type: ignore[arg-type]
-            )
-        else:
-            chain = self._global_chain()
+        """Gate create on the attached entity (only -- no global rules)."""
+        entity_type, entity_id = _require_attached(rule)
+        chain = self._attached_entity_chain(entity_type, entity_id)
         result = await chain.check(actor)
         if not result:
             raise RulePermissionError(str(result.error))
@@ -310,13 +304,8 @@ class RuleServiceImpl(RuleServiceABC):
         actor: UserContextABC,
     ) -> None:
         """Read / update / delete all share the same gate as create."""
-        if _is_attached(rule):
-            chain = self._attached_entity_chain(
-                rule.attached_entity_type,  # type: ignore[arg-type]
-                rule.attached_entity_id,   # type: ignore[arg-type]
-            )
-        else:
-            chain = self._global_chain()
+        entity_type, entity_id = _require_attached(rule)
+        chain = self._attached_entity_chain(entity_type, entity_id)
         result = await chain.check(actor)
         if not result:
             raise RulePermissionError(str(result.error))
@@ -330,27 +319,20 @@ class RuleServiceImpl(RuleServiceABC):
 
         * ``directory`` -> ``HasDirectoryEditPermissionsPerm``
         * ``note``      -> ``HasNoteManagePerm``
+        * ``shelf``     -> ``HasShelfEditPermissionsPerm``
         """
         if entity_type == "directory":
-            head = HasDirectoryEditPermissionsPerm(entity_id)
+            head: Any = HasDirectoryEditPermissionsPerm(entity_id)
         elif entity_type == "note":
             head = HasNoteManagePerm(entity_id)
+        elif entity_type == "shelf":
+            head = HasShelfEditPermissionsPerm(entity_id)
         else:
-            # ``_is_attached`` already filtered unknown entity
-            # types, but keep the type checker honest.
+            # ``_require_attached`` already filtered unknown
+            # entity types, but keep the type checker honest.
             raise ValueError(
                 f"unsupported attached entity type: {entity_type!r}"
             )
-        return PermissionCheckChainStart(self._permission_repo).set_next(head)
-
-    def _global_chain(self) -> Any:
-        """Build the chain for a global (unattached) rule.
-
-        The user must hold ``directory#edit_permissions`` on at
-        least one directory they can view.  This is the "global
-        = everything the user can manage" gate.
-        """
-        head = HasAnyDirectoryEditPermissionPerms(self._directory_facade)
         return PermissionCheckChainStart(self._permission_repo).set_next(head)
 
 
@@ -364,6 +346,28 @@ def _is_attached(rule: RuleEntity) -> bool:
         and rule.attached_entity_type is not None
         and not is_undefined(rule.attached_entity_id)
         and rule.attached_entity_id is not None
+    )
+
+
+def _require_attached(
+    rule: RuleEntity,
+) -> tuple[AttachedEntityType, str]:
+    """Return ``(attached_entity_type, attached_entity_id)`` or raise.
+
+    Global rules (one or both attached fields unset) are no
+    longer supported -- the migration that introduces shelves
+    deleted every pre-existing global rule, and the rule
+    service rejects any new payload that doesn't carry both
+    fields.
+    """
+    if not _is_attached(rule):
+        raise ValueError(
+            "rule.attached_entity_type and rule.attached_entity_id "
+            "are required (global rules are no longer supported)"
+        )
+    return (
+        rule.attached_entity_type,  # type: ignore[return-value]
+        rule.attached_entity_id,    # type: ignore[return-value]
     )
 
 
