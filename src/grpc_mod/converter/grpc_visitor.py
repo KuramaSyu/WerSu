@@ -399,6 +399,22 @@ class ConvertToGrpcVisitor(EntityVisitor):
 
         return Directory(**kwargs)
 
+    # ---- shelf ---------------------------------------------------------
+
+    def visit_shelf(self, entity):  # type: ignore[override]
+        """Convert a :class:`~src.db.entities.shelf.ShelfEntity` to a gRPC message.
+
+        NOTE: there is no ``Shelf`` proto yet -- the gRPC surface
+        for shelves is not in scope for this change.  Until that
+        proto lands, the entity visits but the visitor returns
+        ``None``; the entity itself is still discoverable through
+        :class:`StubVisitor` in tests, so the dispatch chain does
+        not break.  Once a ``Shelf`` proto is added this method
+        should mirror :meth:`visit_directory` and return the new
+        message.
+        """
+        return None
+
     # ---- user ----------------------------------------------------------
 
     def visit_user(self, entity: UserEntity) -> User:

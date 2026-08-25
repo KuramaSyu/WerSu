@@ -173,6 +173,35 @@ class EventMetadataVisitor(EntityVisitor):
     def visit_note_minimal(self, entity: "NoteEntity") -> Dict[str, object]:
         raise NotImplementedError
 
+    def visit_shelf(self, entity: "ShelfEntity") -> Dict[str, object]:
+        """Snapshot the shelf's slug and display_name.
+
+        Mirrors :meth:`visit_directory` -- activity log rows for
+        shelf-targeted actions land here.  An unknown shelf returns
+        ``{}`` so callers can ``.update`` the result without a
+        None-guard.
+
+        Args:
+            entity: shelf the action targeted.  When ``None``, an
+                empty dict is returned.
+
+        Returns:
+            Dict[str, object]: ``{"shelf_slug": ...,
+            "shelf_name": ...}`` with only the keys that were
+            actually known.
+        """
+        if entity is None:
+            return {}
+        out: Dict[str, object] = {}
+        if not is_undefined(entity.slug) and entity.slug is not None:
+            out["shelf_slug"] = entity.slug
+        if (
+            not is_undefined(entity.display_name)
+            and entity.display_name is not None
+        ):
+            out["shelf_name"] = entity.display_name
+        return out
+
     def visit_user(self, entity: typing.Any) -> Dict[str, object]:
         raise NotImplementedError
 
