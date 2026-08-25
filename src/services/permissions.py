@@ -3,7 +3,7 @@ from typing import List, Sequence
 
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import UserContextABC
-from src.db.repos.directory.directory import DirectoryFacadeABC
+from src.db.repos.directory.directory_facade import DirectoryFacadeABC
 from src.api.facades.note_facade import NoteFacadeABC
 from src.api import (
     DirectoryRelationEnum,

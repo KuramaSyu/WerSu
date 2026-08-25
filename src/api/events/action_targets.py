@@ -3,7 +3,7 @@
 The rule dispatcher calls only two methods on its injected
 collaborators:
 
-* ``add_child_to_directory`` on the directory facade (for
+* ``add_child_to`` on the directory facade (for
   :class:`~src.api.events.actions.AddToDirectory` actions).
 * ``assign_tag_to`` on the tag repo (for
   :class:`~src.api.events.actions.AddTag` actions).
@@ -21,22 +21,21 @@ class AddChildToDirectoryCapable(Protocol):
     """Structural type for any object the dispatcher can ask to
     add a note (or directory) as a child of a directory.
 
-    Mirrors :meth:`src.api.repos.directory_repo.DirectoryHelperMixin.add_child_to_directory`.
-    The literal ``"note"`` is used for note->directory bindings
-    and ``"directory"`` for directory->directory bindings; the
-    dispatcher's :class:`AddToDirectory` action only emits the
-    ``"note"`` form, but the protocol matches the full mixin
-    signature so the existing facade implementation qualifies
-    without an adapter.
+    Mirrors :meth:`src.api.repos.directory_repo.DirectoryHelperMixin.add_child_to`.
+    The ``parent_type`` literal is always ``"directory"`` for
+    dispatcher's :class:`AddToDirectory` action; the protocol
+    matches the full mixin signature so the existing facade
+    implementation qualifies without an adapter.
     """
 
-    async def add_child_to_directory(
+    async def add_child_to(
         self,
-        type: str,
-        directory_id: str,
+        parent_type: str,
+        parent_id: str,
+        child_type: str,
         child_id: str,
     ) -> None:
-        """Add ``child_id`` as a child of ``directory_id``."""
+        """Add ``child_id`` as a child of ``parent_id``."""
         ...
 
 

@@ -41,7 +41,11 @@ from src.api.other.undefined import (
     is_undefined,
     unwrap_undefined_or,
 )
-from src.api.repos.directory_repo import DirectoryChildType, DirectoryHierarchyType
+from src.api.repos.directory_repo import (
+    DirectoryChildType,
+    DirectoryHierarchyType,
+    DirectoryParentType,
+)
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.table import TableABC
 
@@ -470,262 +474,347 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         records = await self._directory_table.delete({"id": str(id)})
         return bool(records)
 
-    # ---- parent / child / tag bindings -------------------------------
+    # ---- parent / child bindings (new API: parent_type + child_type) -
 
-    async def set_parent_directories_of(
+    async def set_parents_of(
         self,
-        subject_type: DirectoryChildType,
-        subject_id: str,
+        child_type: DirectoryChildType,
+        child_id: str,
+        parent_type: DirectoryParentType,
         parent_ids: List[str],
     ) -> None:
-        """Firstly a set match is performed to avaoid dublicate writes. Then changes are inserted/deleted"""
-        # current parents of subject id
-        current: Set[str]
-        if subject_type == "directory":
-            current = set(await self.get_parent_of("directory", subject_id))
-        else:
-            current = set(await self.get_parent_of("note", subject_id))
+        """Replace the entire parent set of ``child_id`` (typed).
 
-        # given, new parents for subject id
+        Uses a set-match (current vs desired) so a no-op call is
+        cheap.  For directory<->directory writes the cycle check
+        runs first; for shelf<->directory or shelf/book writes
+        the check is a no-op because shelves are flat.
+
+        ``parent_type`` is the type of every id in ``parent_ids``;
+        mixing directory and shelf parents in one call is not
+        supported -- callers must issue separate calls per type.
+        """
+        if child_type == "directory" and parent_type == "directory":
+            # Cycle check: walking the descendants of each new
+            # parent must NOT include ``child_id``; otherwise the
+            # new edge would close a loop in the directory DAG.
+            descendants_of_child = set(
+                await self.get_children_of(
+                    "directory", str(child_id), "directory", depth=10
+                )
+            )
+            for new_parent in parent_ids:
+                if (
+                    str(new_parent) == str(child_id)
+                    or str(new_parent) in descendants_of_child
+                ):
+                    raise ValueError(
+                        f"adding parent {new_parent!r} for directory "
+                        f"{child_id!r} would create a cycle"
+                    )
+
+        current = set(
+            await self.get_parents_of(
+                child_type, str(child_id), parent_type
+            )
+        )
         desired = {str(p) for p in parent_ids if p}
 
-        # Drop parents that are no longer wanted.
         for old in current - desired:
-            if subject_type == "directory":
-                await self._subdirectory_table.delete(
-                    {
-                        "directory_id": old,
-                        "child_directory_id": subject_id,
-                    }
-                )
-            else:
-                await self._directory_note_table.delete(
-                    {
-                        "directory_id": old,
-                        "note_id": subject_id,
-                    }
-                )
-
-        # Insert the new ones.
+            await self._delete_binding(parent_type, old, child_type, str(child_id))
         for new_parent in desired.difference(current):
-            if subject_type == "directory":
-                await self._subdirectory_table.insert(
-                    {
-                        "directory_id": new_parent,
-                        "child_directory_id": subject_id,
-                    },
-                    on_conflict="DO NOTHING",
-                )
-            else:
-                await self._directory_note_table.insert(
-                    {
-                        "directory_id": new_parent,
-                        "note_id": subject_id,
-                    },
-                    on_conflict="DO NOTHING",
-                )
+            await self._insert_binding(
+                parent_type, new_parent, child_type, str(child_id)
+            )
 
-    async def get_parent_of(
+    async def get_parents_of(
         self,
-        type: DirectoryHierarchyType,
-        directory_id: str,
+        child_type: DirectoryChildType,
+        child_id: str,
+        parent_type: DirectoryParentType,
     ) -> List[str]:
-        """Return parent directory ids for the requested child type.
+        """Return parent ids of ``child_id`` filtered by ``parent_type``.
 
-        ``type`` defines the type of `directory_id`:
-
-        * ``"directory"`` / ``"both"`` -- read
-          ``note.directory_subdirectory`` on
-          ``child_directory_id = directory_id`` and return the
-          matching ``directory_id``s (parent dir of a dir).
-        * ``"note"`` / ``"both"`` -- read ``note.directory_note``
-          on ``note_id = directory_id`` and return the matching
-          ``directory_id``s (parent dir of a note).
+        ``child_type`` selects which child table to scan; the
+        ``parent_type`` argument exists for symmetry with the
+        other helpers -- for child="directory" the parent is
+        always a directory (or shelf); the implementation below
+        dispatches on the parent_type because the shelf path
+        lives on :class:`ShelfRepoABC`.  This method only owns
+        the directory<->directory + directory<->note lookups;
+        for shelf parents callers should ask the shelf repo.
         """
-        parent_ids: set[str] = set()
-        if type in ("directory", "both"):
+        if parent_type == "shelf":
+            # Shelves are not visible from the directory repo.
+            return []
+        # parent_type == "directory"
+        if child_type == "directory":
             records = await self._subdirectory_table.select(
-                where={"child_directory_id": directory_id},
+                where={"child_directory_id": str(child_id)},
                 select="directory_id",
             )
-            parent_ids.update(
-                str(r.get("directory_id"))
+            return sorted(
+                str(self._row_get(r, "directory_id"))
                 for r in records or []
-                if r.get("directory_id")
+                if self._row_get(r, "directory_id")
             )
-        if type in ("note", "both"):
+        if child_type == "note":
             records = await self._directory_note_table.select(
-                where={"note_id": directory_id},
+                where={"note_id": str(child_id)},
                 select="directory_id",
             )
-            parent_ids.update(
-                str(r.get("directory_id"))
+            return sorted(
+                str(self._row_get(r, "directory_id"))
                 for r in records or []
-                if r.get("directory_id")
+                if self._row_get(r, "directory_id")
             )
-        return sorted(parent_ids)
+        raise ValueError(f"invalid child_type: {child_type!r}")
 
     async def get_children_of(
         self,
-        type: DirectoryHierarchyType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> List[str]:
-        """Return child ids under ``directory_id`` up to ``depth`` levels.
+        """Return child ids under ``parent_id`` (typed parents + children).
 
-        ``type`` defines the type of children to return:
-        ``"note"`` -> ``note_id``s, ``"directory"`` ->
-        ``child_directory_id``s, ``"both"`` -> union.
+        Args:
+            parent_type: kind of ``parent_id``.
+            parent_id: starting parent id.
+            child_type: kind of children to return
+                (``"note"`` / ``"directory"`` / ``"both"``).
+            depth: recursion depth; ``1`` means direct children
+                only (the parent itself is never returned).
+                ``depth=0`` returns ``[]``.
 
-        ``depth=0`` visits the starting directory itself (1 level);
-        ``depth=N`` visits ``N+1`` levels -- the starting
-        directory plus ``N`` levels of children beneath it.
+        Returns:
+            List[str]: matching child ids, deduplicated and sorted.
+
+        Raises:
+            ValueError: invalid depth / parent_type / child_type
+            combination.
         """
         if depth < 0:
             raise ValueError("depth must be >= 0")
+        if parent_type == "shelf":
+            # Shelves are flat: a single hop.  ``depth`` is
+            # honoured as an upper bound (depth=0 -> ``[]``,
+            # depth>=1 -> the books).
+            if child_type == "directory" or child_type == "both":
+                # Caller should use ShelfRepoABC.get_books_of for
+                # a focused book listing, but we forward here for
+                # the bulk paths (e.g. ``get_children_for``).
+                records = await self._directory_table.fetch(
+                    f"""
+                    SELECT s.book_id
+                    FROM note.shelf_book s
+                    WHERE s.shelf_id = $1
+                    """,
+                    str(parent_id),
+                )
+                book_ids = sorted(
+                    str(self._row_get(r, "book_id"))
+                    for r in records or []
+                    if self._row_get(r, "book_id")
+                )
+                if child_type == "directory":
+                    return book_ids
+                return book_ids  # 'both' on a shelf == directories
+            raise ValueError(
+                f"shelves cannot have notes as children "
+                f"(child_type={child_type!r})"
+            )
 
+        # parent_type == "directory"
+        if depth == 0:
+            return []
         visited: set[str] = set()
-        queued: set[str] = {str(directory_id)}
-        queue: list[tuple[str, int]] = [(str(directory_id), 0)]
+        queued: set[str] = {str(parent_id)}
+        queue: list[tuple[str, int]] = [(str(parent_id), 0)]
         note_ids: set[str] = set()
         directory_ids: set[str] = set()
 
         while queue:
             current_id, current_depth = queue.pop(0)
-            if current_id in visited or current_depth > depth:
+            if current_id in visited or current_depth >= depth:
                 continue
             visited.add(current_id)
 
-            if type in ("note", "both"):
+            if child_type in ("note", "both"):
                 records = await self._directory_note_table.select(
                     where={"directory_id": current_id},
                     select="note_id",
                 )
                 note_ids.update(
-                    str(r.get("note_id"))
+                    str(self._row_get(r, "note_id"))
                     for r in records or []
-                    if r.get("note_id")
+                    if self._row_get(r, "note_id")
                 )
             records = await self._subdirectory_table.select(
                 where={"directory_id": current_id},
                 select="child_directory_id",
             )
             child_directory_ids = [
-                str(r.get("child_directory_id"))
+                str(self._row_get(r, "child_directory_id"))
                 for r in records or []
-                if r.get("child_directory_id")
+                if self._row_get(r, "child_directory_id")
             ]
-            if type in ("directory", "both"):
+            if child_type in ("directory", "both"):
                 directory_ids.update(child_directory_ids)
-            if current_depth + 1 <= depth:
+            if current_depth + 1 < depth:
                 for child_id in child_directory_ids:
                     if child_id not in queued:
                         queued.add(child_id)
                         queue.append((child_id, current_depth + 1))
 
-        if type == "note":
+        if child_type == "note":
             return sorted(note_ids)
-        if type == "directory":
+        if child_type == "directory":
             return sorted(directory_ids)
         return sorted(note_ids | directory_ids)
 
     async def get_children_for(
         self,
-        child_type: DirectoryChildType,
-        directory_ids: List[str],
+        parent_type: DirectoryParentType,
+        parent_ids: List[str],
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> Dict[str, List[str]]:
-        """Return child ids per input directory.
-
-        Args:
-            child_type: ``"note"`` or ``"directory"`` -- selects
-                which child table to scan for each input directory.
-            directory_ids: starting directory ids.
-            depth: recursion depth; ``1`` means direct children only.
-
-        Returns:
-            Dict[str, List[str]]: mapping from each input
-            ``directory_id`` to its matching child ids,
-            deduplicated and sorted. ``directory_id``s without
-            children map to ``[]``.
-        """
+        """Per-input-parent children from the typed hierarchy tables."""
         result: Dict[str, List[str]] = {}
-        for directory_id in directory_ids:
-            result[str(directory_id)] = await self.get_children_of(
-                child_type, str(directory_id), depth=depth
+        for parent_id in parent_ids:
+            result[str(parent_id)] = await self.get_children_of(
+                parent_type, str(parent_id), child_type, depth=depth
             )
         return result
 
-    async def get_parent_for(
+    async def get_parents_for(
         self,
         child_type: DirectoryChildType,
         child_ids: List[str],
+        parent_type: DirectoryParentType,
     ) -> Dict[str, List[str]]:
-        """Return parent ids per input child id.
-
-        Args:
-            child_type: ``"note"`` or ``"directory"`` -- selects
-                which child table to scan for each input id.
-            child_ids: ids of the child objects to inspect.
-
-        Returns:
-            Dict[str, List[str]]: mapping from each input
-            ``child_id`` to its matching parent ids,
-            deduplicated and sorted. ``child_id``s without
-            parents map to ``[]``.
-        """
+        """Per-input-child parents of the requested parent type."""
         result: Dict[str, List[str]] = {}
         for child_id in child_ids:
-            result[str(child_id)] = await self.get_parent_of(
-                child_type, str(child_id)
+            result[str(child_id)] = await self.get_parents_of(
+                child_type, str(child_id), parent_type
             )
         return result
 
-    async def add_child_to_directory(
+    async def add_child_to(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
-        """Add a note or child directory binding."""
-        if type == "note":
-            await self._directory_note_table.insert(
-                {"directory_id": str(directory_id), "note_id": str(child_id)},
-                on_conflict="DO NOTHING",
-            )
-            return
-        if type == "directory":
-            await self._subdirectory_table.insert(
-                {
-                    "directory_id": str(directory_id),
-                    "child_directory_id": str(child_id),
-                },
-                on_conflict="DO NOTHING",
-            )
-            return
-        raise ValueError("type must be 'note' or 'directory'")
+        """Add a single typed parent<->child binding.
 
-    async def remove_child_from_directory(
+        For directory<->directory edges this runs the cycle
+        check before writing -- refusing to write if the new
+        edge would close a loop in the DAG.
+
+        For ``(parent_type="shelf", child_type="directory")`` we
+        validate the pair but the shelf repo owns the actual
+        row -- the caller must use :class:`ShelfRepoABC` for
+        shelf writes.  This method raises ``ValueError`` to
+        make the split explicit.
+        """
+        if parent_type == "shelf" and child_type == "note":
+            raise ValueError(
+                "shelves cannot host notes directly "
+                "(parent_type='shelf', child_type='note')"
+            )
+        if parent_type == "shelf":
+            raise ValueError(
+                "shelf bindings are owned by ShelfRepoABC; "
+                "use ShelfRepoABC.add_book()"
+            )
+        if parent_type == "directory" and child_type == "directory":
+            # Cycle check: parent_id must not be a descendant of
+            # child_id (otherwise parent_id -> ... -> child_id
+            # -> parent_id closes a loop).
+            descendants = set(
+                await self.get_children_of(
+                    "directory", str(child_id), "directory", depth=10
+                )
+            )
+            if (
+                str(parent_id) == str(child_id)
+                or str(parent_id) in descendants
+            ):
+                raise ValueError(
+                    f"adding directory parent {parent_id!r} for "
+                    f"directory {child_id!r} would create a cycle"
+                )
+        await self._insert_binding(parent_type, str(parent_id), child_type, str(child_id))
+
+    async def remove_child_from(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
-        """Remove a note or child directory binding."""
-        if type == "note":
-            await self._directory_note_table.delete(
-                {"directory_id": str(directory_id), "note_id": str(child_id)}
+        """Remove a single typed parent<->child binding."""
+        if parent_type == "shelf":
+            raise ValueError(
+                "shelf bindings are owned by ShelfRepoABC; "
+                "use ShelfRepoABC.remove_book()"
+            )
+        await self._delete_binding(parent_type, str(parent_id), child_type, str(child_id))
+
+    # ---- typed binding helpers ----------------------------------------
+
+    async def _insert_binding(
+        self,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
+        child_id: str,
+    ) -> None:
+        """Insert one parent<->child row into the matching table."""
+        if parent_type == "directory" and child_type == "directory":
+            await self._subdirectory_table.insert(
+                {"directory_id": str(parent_id), "child_directory_id": str(child_id)},
+                on_conflict="DO NOTHING",
             )
             return
-        if type == "directory":
+        if parent_type == "directory" and child_type == "note":
+            await self._directory_note_table.insert(
+                {"directory_id": str(parent_id), "note_id": str(child_id)},
+                on_conflict="DO NOTHING",
+            )
+            return
+        raise ValueError(
+            f"unsupported parent/child type pair: "
+            f"parent={parent_type!r}, child={child_type!r}"
+        )
+
+    async def _delete_binding(
+        self,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
+        child_id: str,
+    ) -> None:
+        """Delete one parent<->child row from the matching table."""
+        if parent_type == "directory" and child_type == "directory":
             await self._subdirectory_table.delete(
-                {
-                    "directory_id": str(directory_id),
-                    "child_directory_id": str(child_id),
-                }
+                {"directory_id": str(parent_id), "child_directory_id": str(child_id)}
             )
             return
-        raise ValueError("type must be 'note' or 'directory'")
+        if parent_type == "directory" and child_type == "note":
+            await self._directory_note_table.delete(
+                {"directory_id": str(parent_id), "note_id": str(child_id)}
+            )
+            return
+        raise ValueError(
+            f"unsupported parent/child type pair: "
+            f"parent={parent_type!r}, child={child_type!r}"
+        )
 
     async def get_descendants(
         self,
@@ -734,7 +823,7 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         *,
         max_depth: int = 10,
     ) -> List[str]:
-        return await self.get_children_of(type, root_id, depth=max_depth)
+        return await self.get_children_of("directory", root_id, type, depth=max_depth)
 
     # --- helpers -------------------------------------------------------
 
@@ -751,6 +840,21 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         if value is None:
             return None
         return str(value)
+
+    @staticmethod
+    def _row_get(row: object, key: str) -> object:
+        """Read ``key`` from an :class:`asyncpg.Record` or a plain ``dict``.
+
+        The :class:`Table` machinery may surface either depending
+        on the dialect / table wrapper, so the helper covers both
+        uniformly without leaking the driver-specific type into
+        the rest of the stack.
+        """
+        if isinstance(row, asyncpg.Record):
+            return row.get(key)  # type: ignore[dict-item]
+        if isinstance(row, dict):
+            return row.get(key)
+        raise TypeError(f"Unsupported row type: {type(row)}")
 
     @staticmethod
     def _row_to_entity(row: object) -> DirectoryEntity:

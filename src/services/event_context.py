@@ -6,8 +6,10 @@ each event.  This module is the production implementation: it
 fetches note content / title via
 :class:`~src.db.repos.note.content.NoteContentRepo` and walks
 the directory tree via the directory facade's
-:meth:`~src.api.repos.directory_repo.DirectoryHelperMixin.get_parent_of`
-helper.
+:meth:`~src.api.repos.directory_repo.DirectoryHelperMixin.get_parents_of`
+helper.  Shelf lookups go through the
+:class:`~src.api.repos.shelf_repo.ShelfRepoABC` so rules can
+match on the shelf<->book relation too.
 
 The context is intentionally narrow: it exposes *only* the
 operations a rule listener is allowed to perform.  Adding a new
@@ -28,12 +30,13 @@ from __future__ import annotations
 from typing import List, Optional
 
 from src.api.events.event_context import EventContext
-from src.db.repos.note.content import NoteContentRepo
 from src.api.repos.directory_repo import DirectoryHelperMixin
+from src.api.repos.shelf_repo import ShelfRepoABC
+from src.db.repos.note.content import NoteContentRepo
 
 
 class InMemoryEventContext(EventContext):
-    """Event context backed by the live note + directory repos.
+    """Event context backed by the live note + directory + shelf repos.
 
     Args:
         note_content_repo: repo used by :meth:`note_content` and
@@ -44,8 +47,10 @@ class InMemoryEventContext(EventContext):
             is accepted (the production wiring passes the
             :class:`~src.db.repos.directory.directory.DirectoryFacadeImpl`
             which itself wraps the Postgres / SpiceDB pair).
+        shelf_repo: shelf repo used by :meth:`shelf_contains_book`.
+            Required.
 
-    Both dependencies are eagerly required; there is no point
+    All dependencies are eagerly required; there is no point
     constructing this context without a way to fetch data.  The
     no-op :class:`~src.api.events.event_context.NoopEventContext`
     covers the "rules disabled" path.
@@ -55,9 +60,11 @@ class InMemoryEventContext(EventContext):
         self,
         note_content_repo: NoteContentRepo,
         directory_repo: DirectoryHelperMixin,
+        shelf_repo: ShelfRepoABC,
     ) -> None:
         self._note_content_repo = note_content_repo
         self._directory_repo = directory_repo
+        self._shelf_repo = shelf_repo
 
 
     async def note_content(self, note_id: str) -> Optional[str]:
@@ -109,12 +116,12 @@ class InMemoryEventContext(EventContext):
         current = directory_id
         try:
             while True:
-                parents = await self._directory_repo.get_parent_of(
-                    "directory", current
+                parents = await self._directory_repo.get_parents_of(
+                    "directory", current, "directory",
                 )
                 if not parents:
                     break
-                # ``get_parent_of`` returns the direct parents;
+                # ``get_parents_of`` returns the direct parents;
                 # the next iteration digs one level higher.
                 # The first parent is treated as the "next"
                 # ancestor; the rest (multi-parenting is possible
@@ -147,14 +154,34 @@ class InMemoryEventContext(EventContext):
         database failure out to the bus.
         """
         try:
-            parents = await self._directory_repo.get_parent_of(
-                "note", note_id
+            parents = await self._directory_repo.get_parents_of(
+                "note", note_id, "directory"
             )
         except Exception:  # noqa: BLE001 -- rule path is best-effort
             return None
         if not parents:
             return None
         return str(parents[0])
+
+
+    async def shelf_contains_book(
+        self,
+        shelf_id: str,
+        book_id: str,
+    ) -> bool:
+        """Return ``True`` when ``book_id`` sits on ``shelf_id``.
+
+        Asks the shelf repo for the shelf's book set; the repo
+        owns the ``note.shelf_book`` table so the answer is the
+        source of truth.  Errors from the underlying repo are
+        swallowed and treated as "no match" -- rule dispatch
+        is best-effort.
+        """
+        try:
+            books = await self._shelf_repo.get_books_of(str(shelf_id))
+        except Exception:  # noqa: BLE001 -- rule path is best-effort
+            return False
+        return str(book_id) in set(books)
 
 
 __all__ = ["InMemoryEventContext"]

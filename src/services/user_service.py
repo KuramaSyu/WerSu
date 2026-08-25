@@ -9,7 +9,7 @@ from src.api.other.user_context import ContextFactory, UserContextABC
 from src.api.services.user_service import UserServiceABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
-from src.db.repos.directory.directory import DirectoryFacadeABC
+from src.db.repos.directory.directory_facade import DirectoryFacadeABC
 from src.db.repos.user.user import UserRepoABC
 
 

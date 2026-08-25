@@ -7,177 +7,232 @@ from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.api.services.directory_service import DirectoryIncludeOptions
 from src.db.entities.directory.directory import DirectoryEntity
 
+
+# ---- type aliases ---------------------------------------------------------
+
 DirectoryHierarchyType: TypeAlias = Literal["note", "directory", "both"]
-"""Child/parent query scope for directory hierarchy lookups."""
+"""Child/parent query scope for directory hierarchy lookups.
+
+Used by the **read** helpers
+(:meth:`DirectoryHelperMixin.get_children_of`,
+:meth:`DirectoryHelperMixin.get_parents_of`,
+:meth:`DirectoryHelperMixin.get_children_for`,
+:meth:`DirectoryHelperMixin.get_parents_for`) where the caller
+may be querying "notes, directories, or both" as children /
+parents.
+"""
 
 DirectoryChildType: TypeAlias = Literal["note", "directory"]
-"""Child relation scope for add/remove operations."""
+"""Child-kind scope for add/remove/binding operations.
+
+Notes are not allowed as children of a shelf; see
+:class:`DirectoryParentType`.
+"""
+
+DirectoryParentType: TypeAlias = Literal["directory", "shelf"]
+"""Parent-kind scope for add/remove/binding operations.
+
+A parent can be a book (directory) or a shelf.  Shelves are
+flat -- they cannot be nested -- so a shelf only ever hosts
+books, never notes or other shelves.
+"""
+
+
+# ---- hierarchy helpers ----------------------------------------------------
 
 
 class DirectoryHelperMixin(ABC):
-    """Hierarchy helpers for directories.
+    """Hierarchy helpers for directories and shelves.
 
     Consumers:
     * :class:`DirectoryRepoABC` low-level Postgres storage.
     * :class:`~src.api.facades.directory_facade.DirectoryFacadeABC`
         higher-level facade composing Postgres + SpiceDB.
+
+    Naming convention:
+
+    * ``*_parents_*`` -- the parents of a child
+      (``child_type -> parent_type``).
+    * ``*_children_*`` -- the children of a parent
+      (``parent_type -> child_type``).
+
+    Every method takes the type(s) explicitly so callers never
+    have to guess what an id refers to.
     """
 
     @abstractmethod
-    async def set_parent_directories_of(
+    async def set_parents_of(
         self,
-        subject_type: DirectoryChildType,
-        subject_id: str,
+        child_type: DirectoryChildType,
+        child_id: str,
+        parent_type: DirectoryParentType,
         parent_ids: List[str],
     ) -> None:
         """Replace the entire parent set for a note or directory.
 
         Args:
-            subject_type: the type of the child object whose parents
-                are being rewritten.
-            subject_id: id of the child directory whose parents
-                are being rewritten.
-            parent_ids: full list of parent directory ids; an
-                empty list removes every parent binding.
-                Idempotent.
+            child_type: the type of the child whose parents are
+                being rewritten (``"note"`` or ``"directory"``).
+            child_id: id of the child.
+            parent_type: the parent kind (``"directory"`` or
+                ``"shelf"``); every id in ``parent_ids`` must be
+                of this type.  Mixing directory + shelf parents
+                in a single call is **not** supported -- use two
+                separate calls.
+            parent_ids: full list of parent ids; an empty list
+                removes every binding.  Idempotent.
         """
         ...
 
     @abstractmethod
-    async def get_parent_of(
+    async def get_parents_of(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_id: str,
+        parent_type: DirectoryParentType,
     ) -> List[str]:
-        """Return the parent directory ids of ``child_id``.
+        """Return the parent ids of ``child_id`` (of the given type).
 
         Args:
-            type: defines the type of `child_id` -- ``"note"``
-                or ``"directory"`` or ``"both"``.
+            child_type: the type of ``child_id`` (``"note"`` or
+                ``"directory"``).
             child_id: id whose parents to enumerate.
+            parent_type: the parent kind to filter on
+                (``"directory"`` or ``"shelf"``).
 
         Returns:
-            List[str]: parent directory ids, deduplicated and
-            sorted. ``[]`` when there are no parents.
+            List[str]: parent ids of the requested type,
+            deduplicated and sorted.  ``[]`` when there are none.
         """
         ...
 
     @abstractmethod
     async def get_children_of(
         self,
-        type: DirectoryHierarchyType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> List[str]:
-        """Return the child ids under ``directory_id``.
+        """Return the child ids under ``parent_id``.
 
         Args:
-            type: defines the type of children to return --
+            parent_type: kind of ``parent_id`` (``"directory"`` or
+                ``"shelf"``).
+            parent_id: id of the starting parent.
+            child_type: kind of children to return --
                 ``"note"`` / ``"directory"`` / ``"both"``.
-            directory_id: id of the starting directory.
             depth: recursion depth; ``1`` means direct children
-                only (``directory_id`` itself is never returned).
+                only.  ``depth=0`` returns ``[]`` (the parent
+                itself is never returned).
 
         Returns:
             List[str]: matching child ids, deduplicated and
-            sorted. ``[]`` when there are none.
+            sorted.  ``[]`` when there are none.
 
         Raises:
-            ValueError: ``depth`` is negative.
+            ValueError: ``depth`` is negative, or
+            ``(parent_type, child_type)`` is invalid
+            (e.g. ``("shelf", "note")`` -- shelves do not host
+            notes directly).
         """
         ...
 
     @abstractmethod
     async def get_children_for(
         self,
-        child_type: DirectoryChildType,
-        directory_ids: List[str],
+        parent_type: DirectoryParentType,
+        parent_ids: List[str],
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> Dict[str, List[str]]:
-        """Return child ids for multiple directories, keyed by input id.
-
-        ``child_type`` describes the type of children to return
-        (the entire input batch is treated as one type). With
-        ``"note"`` the result lists the note children of every
-        input directory; with ``"directory"`` it lists the child
-        directories.
+        """Return child ids for multiple parents, keyed by input id.
 
         Args:
-            child_type: ``"note"`` or ``"directory"``.
-            directory_ids: starting directory ids.
+            parent_type: kind of every id in ``parent_ids``.
+            parent_ids: starting parent ids.
+            child_type: kind of children to return.
             depth: recursion depth; ``1`` means direct children only.
 
         Returns:
             Dict[str, List[str]]: mapping from each input
-            ``directory_id`` to its matching child ids,
-            deduplicated and sorted. ``directory_id``s without
-            children map to ``[]``. Empty input returns ``{}``.
+            ``parent_id`` to its matching child ids,
+            deduplicated and sorted.  Parents without children
+            map to ``[]``.  Empty input returns ``{}``.
 
         Raises:
-            ValueError: ``depth`` is negative.
+            ValueError: ``depth`` is negative, or the
+            ``(parent_type, child_type)`` pair is invalid.
         """
         ...
 
     @abstractmethod
-    async def get_parent_for(
+    async def get_parents_for(
         self,
         child_type: DirectoryChildType,
         child_ids: List[str],
+        parent_type: DirectoryParentType,
     ) -> Dict[str, List[str]]:
         """Return parent ids for multiple child ids, keyed by input id.
 
-        ``child_type`` describes the type of every id in
-        ``child_ids`` (the entire input batch is treated as one
-        type). With ``"note"`` the result lists the parent
-        directories of every note id; with ``"directory"`` it
-        lists the parents of every directory id.
-
         Args:
-            child_type: ``"note"`` or ``"directory"``.
+            child_type: kind of every id in ``child_ids``.
             child_ids: ids of the child objects to inspect.
+            parent_type: parent kind to filter on.
 
         Returns:
             Dict[str, List[str]]: mapping from each input
             ``child_id`` to its matching parent ids,
-            deduplicated and sorted. ``child_id``s without
-            parents map to ``[]``. Empty input returns ``{}``.
+            deduplicated and sorted.  ``child_id``s without
+            parents map to ``[]``.  Empty input returns ``{}``.
         """
         ...
 
     @abstractmethod
-    async def add_child_to_directory(
+    async def add_child_to(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
-        """Add a note or child directory to ``directory_id``.
+        """Add a note or directory as a child of a directory or shelf.
 
         Args:
-            type: the child relation to create.
-            directory_id: id of the parent directory.
+            parent_type: ``"directory"`` or ``"shelf"``.
+            parent_id: id of the parent.
+            child_type: ``"note"`` or ``"directory"``.
             child_id: id of the child note or directory.
 
         Note:
             Idempotent: a no-op when the binding already exists.
+
+        Raises:
+            ValueError: ``(parent_type, child_type)`` is invalid
+            (e.g. ``("shelf", "note")``).
         """
         ...
 
     @abstractmethod
-    async def remove_child_from_directory(
+    async def remove_child_from(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
-        """Remove a note or child directory from ``directory_id``.
+        """Remove a note or directory binding from a directory or shelf.
 
         Args:
-            type: the child relation to delete.
-            directory_id: id of the parent directory.
+            parent_type: ``"directory"`` or ``"shelf"``.
+            parent_id: id of the parent.
+            child_type: ``"note"`` or ``"directory"``.
             child_id: id of the child note or directory.
         """
         ...
+
+
+# ---- directory repo ABC ---------------------------------------------------
 
 
 class DirectoryRepoABC(DirectoryHelperMixin):
@@ -185,12 +240,18 @@ class DirectoryRepoABC(DirectoryHelperMixin):
 
     Implements:
         * :class:`DirectoryHelperMixin` -- the hierarchy helpers
-          (``set_parent_directories_of``, ``get_parent_of``,
-          ``get_children_of`` / ``_for``, ``add_child_to_directory``,
-          ``remove_child_from_directory``).
+          (``set_parents_of``, ``get_parents_of`` /
+          ``_for``, ``get_children_of`` / ``_for``,
+          ``add_child_to``, ``remove_child_from``).
 
     Concrete:
         * :class:`src.db.repos.directory.postgres.PostgresDirectoryRepo`
+
+    Note:
+        Shelf CRUD + shelf<->book bindings live on
+        :class:`src.api.repos.shelf_repo.ShelfRepoABC`.  This
+        class only covers directory rows and the
+        directory/directory + directory/note graphs.
     """
 
     @abstractmethod
@@ -246,7 +307,7 @@ class DirectoryRepoABC(DirectoryHelperMixin):
 
         Returns:
             Optional[DirectoryEntity]: the entity, or ``None``
-            when no row matches ``id``. Row columns are always
+            when no row matches ``id``.  Row columns are always
             populated; list / count fields are populated iff their
             flag was set.
         """
@@ -260,7 +321,7 @@ class DirectoryRepoABC(DirectoryHelperMixin):
         """Fetch multiple directory rows in one query (no enrichment).
 
         Args:
-            ids: directory ids to load. Empty list returns the
+            ids: directory ids to load.  Empty list returns the
                 empty list (no query is issued).
 
         Returns:
@@ -327,6 +388,7 @@ class DirectoryRepoABC(DirectoryHelperMixin):
 __all__ = [
     "DirectoryChildType",
     "DirectoryHierarchyType",
+    "DirectoryParentType",
     "DirectoryHelperMixin",
     "DirectoryRepoABC",
 ]

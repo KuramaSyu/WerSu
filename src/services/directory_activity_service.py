@@ -8,7 +8,7 @@ from src.api import LoggingProvider
 from src.api.other.user_context import UserContextABC
 from src.api.services.directory_activity_service import DirectoryActivityServiceABC
 from src.db.entities.note.versioning import NoteVersionEntry
-from src.db.repos.directory.directory import DirectoryFacadeABC
+from src.db.repos.directory.directory_facade import DirectoryFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 
 

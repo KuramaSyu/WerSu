@@ -26,6 +26,7 @@ from src.api.repos.permission_repo import PermissionRepoABC
 from src.api.repos.directory_repo import (
     DirectoryChildType,
     DirectoryHierarchyType,
+    DirectoryParentType,
     DirectoryRepoABC,
 )
 from src.api.other.relationship import (
@@ -202,114 +203,140 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
 
     # ---- DirectoryHelperMixin: hierarchy helpers ---------------------
 
-    async def set_parent_directories_of(
+    async def set_parents_of(
         self,
-        subject_type: DirectoryChildType,
-        subject_id: str,
+        child_type: DirectoryChildType,
+        child_id: str,
+        parent_type: DirectoryParentType,
         parent_ids: List[str],
     ) -> None:
-        """Replace every parent of ``directory_id`` with ``parent_ids``.
+        """Replace every parent of ``child_id`` (typed) with ``parent_ids``.
 
-        Delegates to the underlying
-        :class:`~src.api.repos.directory_repo.DirectoryRepoABC`
-        so the Postgres hierarchy table is the single source of
-        truth.
+        For ``parent_type="directory"`` writes both the Postgres
+        hierarchy row and the matching SpiceDB
+        ``parent_directory`` / ``parent`` relation so visibility
+        checks against the directory pick up the new parents.
+
+        For ``parent_type="shelf"`` only the Postgres row is
+        written -- shelves own their own binding table
+        (``note.shelf_book``) and the
+        :class:`~src.api.repos.shelf_repo.ShelfRepoABC` is the
+        source of truth for shelf<->book edges.
         """
-        # replace in DB
-        await self._dir_repo.set_parent_directories_of(
-            subject_type, subject_id, parent_ids
-        )
-        # delete all note -> directory relations in spicedb
-        await self._perm_repo.delete(
-            Relationship(
-                resource=ObjectRef("note", subject_id),
-                relation=NoteRelationEnum.PARENT_DIRECTORY,
-                subject=SubjectRef("directory", UNDEFINED),
+        if parent_type == "shelf":
+            raise ValueError(
+                "shelf parents are owned by ShelfRepoABC.set_books_of()"
             )
+        # Postgres write
+        await self._dir_repo.set_parents_of(
+            child_type, str(child_id), parent_type, parent_ids
         )
-        # insert new ones into spicedb
-        for p in parent_ids:
-            await self._perm_repo.insert([
+        # SpiceDB mirror: clear stale edges and write the new set.
+        if child_type == "note":
+            await self._perm_repo.delete(
                 Relationship(
-                    resource=ObjectRef("note", subject_id),
+                    resource=ObjectRef("note", str(child_id)),
                     relation=NoteRelationEnum.PARENT_DIRECTORY,
-                    subject=SubjectRef("directory", p),
-                )]
+                    subject=SubjectRef("directory", UNDEFINED),
+                )
             )
+            for p in parent_ids:
+                await self._perm_repo.insert([
+                    Relationship(
+                        resource=ObjectRef("note", str(child_id)),
+                        relation=NoteRelationEnum.PARENT_DIRECTORY,
+                        subject=SubjectRef("directory", str(p)),
+                    )]
+                )
+        elif child_type == "directory":
+            await self._perm_repo.delete(
+                Relationship(
+                    resource=ObjectRef("directory", str(child_id)),
+                    relation=DirectoryRelationEnum.PARENT,
+                    subject=SubjectRef("directory", UNDEFINED),
+                )
+            )
+            for p in parent_ids:
+                await self._perm_repo.insert([
+                    Relationship(
+                        resource=ObjectRef("directory", str(child_id)),
+                        relation=DirectoryRelationEnum.PARENT,
+                        subject=SubjectRef("directory", str(p)),
+                    )]
+                )
 
 
 
-    async def get_parent_of(
+    async def get_parents_of(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_id: str,
+        parent_type: DirectoryParentType,
     ) -> List[str]:
-        """Return parent directory ids of ``child_id``.
-
-        See :meth:`DirectoryHelperMixin.get_parent_of`.
-        """
-        return await self._dir_repo.get_parent_of(type, str(child_id))
+        """Return parent ids of ``child_id`` (typed)."""
+        return await self._dir_repo.get_parents_of(
+            child_type, str(child_id), parent_type
+        )
 
     async def get_children_of(
         self,
-        type: DirectoryHierarchyType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> List[str]:
-        """Return child ids under ``directory_id``.
-
-        See :meth:`DirectoryHelperMixin.get_children_of`.
-        """
+        """Return child ids under ``parent_id`` (typed)."""
         return await self._dir_repo.get_children_of(
-            type, str(directory_id), depth=depth
+            parent_type, str(parent_id), child_type, depth=depth
         )
 
     async def get_children_for(
         self,
-        child_type: DirectoryChildType,
-        directory_ids: List[str],
+        parent_type: DirectoryParentType,
+        parent_ids: List[str],
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> Dict[str, List[str]]:
-        """Return child ids for multiple ``directory_ids``.
-
-        See :meth:`DirectoryHelperMixin.get_children_for`.
-        """
+        """Return child ids for multiple ``parent_ids`` (typed)."""
         return await self._dir_repo.get_children_for(
-            child_type, [str(d) for d in directory_ids], depth=depth
+            parent_type, [str(d) for d in parent_ids], child_type, depth=depth
         )
 
-    async def get_parent_for(
+    async def get_parents_for(
         self,
         child_type: DirectoryChildType,
         child_ids: List[str],
+        parent_type: DirectoryParentType,
     ) -> Dict[str, List[str]]:
-        """Return parent ids for multiple ``child_ids``.
-
-        See :meth:`DirectoryHelperMixin.get_parent_for`.
-        """
-        return await self._dir_repo.get_parent_for(
-            child_type, [str(c) for c in child_ids]
+        """Return parent ids for multiple ``child_ids`` (typed)."""
+        return await self._dir_repo.get_parents_for(
+            child_type, [str(c) for c in child_ids], parent_type
         )
 
-    async def add_child_to_directory(
+    async def add_child_to(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
-        """Add a note or child directory to ``directory_id``.
+        """Add a note or directory as a child of a directory or shelf.
 
-        Writes both the Postgres hierarchy row and the matching
-        SpiceDB ``parent_directory`` / ``parent`` relation so
-        visibility checks against the directory pick up the new
-        child.
+        For ``parent_type="directory"`` writes both the Postgres
+        hierarchy row and the matching SpiceDB relation.  For
+        ``parent_type="shelf"`` raises -- shelf bindings live on
+        :class:`ShelfRepoABC.add_book`.
         """
-        # add db row
-        await self._dir_repo.add_child_to_directory(
-            type, str(directory_id), str(child_id)
+        if parent_type == "shelf":
+            raise ValueError(
+                "shelf bindings are owned by ShelfRepoABC.add_book()"
+            )
+        # Postgres write
+        await self._dir_repo.add_child_to(
+            parent_type, str(parent_id), child_type, str(child_id)
         )
-        # add spicedb relation
-        if type == "note":
+        # SpiceDB mirror
+        if child_type == "note":
             await self._perm_repo.insert(
                 [
                     Relationship(
@@ -320,12 +347,12 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
                         relation=NoteRelationEnum.PARENT_DIRECTORY,
                         subject=SubjectRef(
                             object_type=ObjectTypeEnum.DIRECTORY,
-                            object_id=str(directory_id),
+                            object_id=str(parent_id),
                         ),
                     )
                 ]
             )
-        elif type == "directory":
+        elif child_type == "directory":
             await self._perm_repo.insert(
                 [
                     Relationship(
@@ -336,30 +363,30 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
                         relation=DirectoryRelationEnum.PARENT,
                         subject=SubjectRef(
                             object_type=ObjectTypeEnum.DIRECTORY,
-                            object_id=str(directory_id),
+                            object_id=str(parent_id),
                         ),
                     )
                 ]
             )
 
-    async def remove_child_from_directory(
+    async def remove_child_from(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
-        """Remove a note or child directory from ``directory_id``.
-
-        Drops both the Postgres hierarchy row and the matching
-        SpiceDB relation so visibility checks no longer surface
-        the child under this directory.
-        """
-        # remove db row
-        await self._dir_repo.remove_child_from_directory(
-            type, str(directory_id), str(child_id)
+        """Remove a binding (mirror)."""
+        if parent_type == "shelf":
+            raise ValueError(
+                "shelf bindings are owned by ShelfRepoABC.remove_book()"
+            )
+        # Postgres write
+        await self._dir_repo.remove_child_from(
+            parent_type, str(parent_id), child_type, str(child_id)
         )
-        # remove spicedb relation
-        if type == "note":
+        # SpiceDB mirror
+        if child_type == "note":
             await self._perm_repo.delete(
                 Relationship(
                     resource=ObjectRef(
@@ -369,11 +396,11 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
                     relation=NoteRelationEnum.PARENT_DIRECTORY,
                     subject=SubjectRef(
                         object_type=ObjectTypeEnum.DIRECTORY,
-                        object_id=str(directory_id),
+                        object_id=str(parent_id),
                     ),
                 )
             )
-        elif type == "directory":
+        elif child_type == "directory":
             await self._perm_repo.delete(
                 Relationship(
                     resource=ObjectRef(
@@ -383,7 +410,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
                     relation=DirectoryRelationEnum.PARENT,
                     subject=SubjectRef(
                         object_type=ObjectTypeEnum.DIRECTORY,
-                        object_id=str(directory_id),
+                        object_id=str(parent_id),
                     ),
                 )
             )
@@ -415,7 +442,7 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         for start in start_directories:
             note_ids.update(
                 await self._dir_repo.get_children_of(
-                    "note", start, depth=max_depth
+                    "directory", start, "note", depth=max_depth
                 )
             )
         return sorted(note_ids)
@@ -429,12 +456,12 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         if max_depth < 0:
             raise ValueError("max_depth must be >= 0")
         notes = await self._dir_repo.get_children_of(
-            "note", directory_id, depth=max_depth
+            "directory", directory_id, "note", depth=max_depth
         )
         directories = [directory_id]
         directories.extend(
             await self._dir_repo.get_children_of(
-                "directory", directory_id, depth=max_depth
+                "directory", directory_id, "directory", depth=max_depth
             )
         )
         return notes, sorted(set(directories))
@@ -479,7 +506,9 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             return
         if populate_parents:
             entity.parent_directory_ids = (
-                await self._dir_repo.get_parent_of("directory", directory_id)
+                await self._dir_repo.get_parents_of(
+                    "directory", directory_id, "directory"
+                )
             )
         # deprecated
         # entity.relations = await self._fetch_user_relations_for_directory(
@@ -518,7 +547,9 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         Empty ``new_parent_ids`` clears the directory of every parent.
         """
         existing = set(
-            await self._dir_repo.get_parent_of("directory", directory_id)
+            await self._dir_repo.get_parents_of(
+                "directory", directory_id, "directory"
+            )
         )
         desired = {str(p) for p in new_parent_ids if p}
 
@@ -557,8 +588,8 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             )
 
         # Mirror the bind in the Postgres hierarchy table.
-        await self._dir_repo.set_parent_directories_of(
-            "directory", directory_id, sorted(desired)
+        await self._dir_repo.set_parents_of(
+            "directory", directory_id, "directory", sorted(desired)
         )
 
     async def _create_user_admin_relation(

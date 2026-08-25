@@ -34,7 +34,7 @@ from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefine
 from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
-from src.db.repos.directory.directory import DirectoryFacadeABC
+from src.db.repos.directory.directory_facade import DirectoryFacadeABC
 from src.api.facades.note_facade import NoteFacadeABC
 from src.domain.permission_chain import (
     HasDirectoryDeletePerm,

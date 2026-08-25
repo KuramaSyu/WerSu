@@ -32,7 +32,7 @@ from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefine
 from src.api.other.user_context import UserContextABC
 from src.db import Database
 from src.db.entities import NoteEntity
-from src.db.repos.directory.directory import DirectoryFacadeABC
+from src.db.repos.directory.directory_facade import DirectoryFacadeABC
 from src.db.repos.note.content import NoteContentRepo
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.db.repos.note.search_strategy import (
@@ -183,8 +183,8 @@ class NoteFacadeImpl(NoteFacadeABC):
         Returns:
             NoteEntity: updated version (same object)
         """
-        note.directory_ids = await self._directory_facade.get_parent_of(
-            "note", note_id,
+        note.directory_ids = await self._directory_facade.get_parents_of(
+            "note", note_id, "directory",
         )
         note.tag_ids = await self._tag_repo.list_tags_of("note", note_id)
         return note
@@ -238,8 +238,8 @@ class NoteFacadeImpl(NoteFacadeABC):
         # repopulate it to ensure consistency if one call would fail.
         note.directory_ids = []
         for directory_id in resolved_dirs:
-            await self._directory_facade.add_child_to_directory(
-                "note", str(directory_id), str(note_id),
+            await self._directory_facade.add_child_to(
+                "directory", str(directory_id), "note", str(note_id),
             )
             note.directory_ids.append(directory_id)
 
@@ -317,7 +317,12 @@ class NoteFacadeImpl(NoteFacadeABC):
         # replace dirs when given
         if note.directory_ids:
             directory_ids: List[str] = note.directory_ids or []
-            await self._directory_facade.set_parent_directories_of("note", unwrap_undefined(note.note_id), directory_ids)
+            await self._directory_facade.set_parents_of(
+                "note",
+                unwrap_undefined(note.note_id),
+                "directory",
+                directory_ids,
+            )
 
         # `permissions` deprecated; the returned `updated` therefore comes back with the
         # dataclass default `UNDEFINED`

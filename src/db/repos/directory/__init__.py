@@ -1,1 +1,1 @@
-from .directory import *
+from .directory_facade import *

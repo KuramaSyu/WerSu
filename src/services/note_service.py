@@ -39,7 +39,7 @@ from src.api.other.types import LoggingProvider, Pagination
 from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
-from src.db.repos.directory.directory import DirectoryFacadeABC
+from src.db.repos.directory.directory_facade import DirectoryFacadeABC
 from src.domain.permission_chain import  HasNoteDeletePerm, HasNoteViewPerm, HasNoteWritePerm
 from src.utils.extract_attachments import extract_attachment_ids
 
@@ -320,8 +320,8 @@ class NoteServiceImpl(NoteServiceABC):
         if not notes:
             return
         note_ids = [unwrap_undefined(n.note_id) for n in notes]
-        parents_by_note = await self._directory_repo.get_parent_for(
-            "note", note_ids
+        parents_by_note = await self._directory_repo.get_parents_for(
+            "note", note_ids, "directory",
         )
         for note, note_id in zip(notes, note_ids):
             note.directory_ids = parents_by_note.get(note_id, [])

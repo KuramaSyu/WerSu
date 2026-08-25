@@ -15,8 +15,9 @@ from src.api.services.sharing import ShareAccessServiceABC, SharingRepoABC
 from src.api.services.role import RoleServiceABC
 from src.api.repos.role_repo import RoleRepoABC
 from src.api.other.undefined import UNDEFINED, UndefinedOr, UndefinedType
-from src.db.repos.directory.directory import DirectoryFacadeImpl
+from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
+from src.db.repos.shelf.postgres import PostgresShelfRepo
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos import SpicedbPermissionRepo
@@ -281,6 +282,16 @@ async def serve():
         table_name="note.directory_note",
         id_fields=["id"],
     )
+    shelf_table = Table(
+        **common_table_kwargs,
+        table_name="note.shelf",
+        id_fields=["id"],
+    )
+    shelf_book_table = Table(
+        **common_table_kwargs,
+        table_name="note.shelf_book",
+        id_fields=["id"],
+    )
     tags_table = Table(
         **common_table_kwargs,
         table_name="note.tag",
@@ -364,6 +375,11 @@ async def serve():
         permission_repo=permission_repo,
         tag_repo=tag_repo,
         log=logging_provider,
+    )
+
+    shelf_repo = PostgresShelfRepo(
+        shelf_table=shelf_table,
+        shelf_book_table=shelf_book_table,
     )
 
     version_repo = NoteVersionPostgresRepo(
@@ -469,6 +485,7 @@ async def serve():
         context=InMemoryEventContext(
             note_content_repo=note_content_repo,
             directory_repo=directory_facade,
+            shelf_repo=shelf_repo,
         ),
     )
 
