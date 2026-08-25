@@ -30,7 +30,7 @@ from src.api.other.relationship import (
 )
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
-from src.db.repos.directory.directory import DirectoryEntity
+from src.db.repos.directory.directory_facade import DirectoryEntity
 from src.services.directory import DirectoryServiceImpl, README_TITLE
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests._fixtures_pkg.fakes import _FakeNoteRepoFacade, _TestDirectoryRepo

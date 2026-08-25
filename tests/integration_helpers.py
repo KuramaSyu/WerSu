@@ -39,7 +39,7 @@ from src.api import (
 )
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
-from src.db.repos.directory.directory import DirectoryFacadeImpl
+from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.db.repos.user import RepoUserContext

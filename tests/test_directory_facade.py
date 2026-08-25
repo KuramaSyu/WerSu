@@ -12,9 +12,9 @@ are about *which* calls were made on which repo -- not about
 implementation details of the underlying Postgres or SpiceDB.
 
 The :class:`_RecordingDirectoryRepo` follows the
-:class:`DirectoryRepoABC` contract (3-arg
-:meth:`set_parent_directories_of`) so any mismatch between the
-facade's call signature and the repo contract surfaces as a
+:class:`DirectoryRepoABC` contract (typed parent/child args on
+:meth:`set_parents_of`) so any mismatch between the facade's
+call signature and the repo contract surfaces as a
 :exc:`TypeError` at test time.
 """
 
@@ -35,12 +35,13 @@ from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.api.repos.directory_repo import (
     DirectoryChildType,
     DirectoryHierarchyType,
+    DirectoryParentType,
     DirectoryRepoABC,
 )
 from src.api.repos.tag_repo import TagRepoABC
 from src.api.services.directory_service import DirectoryIncludeOptions
 from src.db.entities.directory.directory import DirectoryEntity
-from src.db.repos.directory.directory import DirectoryFacadeImpl
+from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.user_context import _UserContext
 
@@ -75,19 +76,21 @@ class _UpdateCall:
 
 @dataclass
 class _SetParentCall:
-    """Recorded :meth:`DirectoryRepoABC.set_parent_directories_of` invocation."""
+    """Recorded :meth:`DirectoryRepoABC.set_parents_of` invocation."""
 
-    subject_type: DirectoryChildType
-    subject_id: str
+    child_type: DirectoryChildType
+    child_id: str
+    parent_type: DirectoryParentType
     parent_ids: List[str]
 
 
 @dataclass
 class _ChildCall:
-    """Recorded :meth:`DirectoryRepoABC.add/remove_child_to_directory` invocation."""
+    """Recorded :meth:`DirectoryRepoABC.add/remove_child_to` invocation."""
 
-    type: DirectoryChildType
-    directory_id: str
+    parent_type: DirectoryParentType
+    parent_id: str
+    child_type: DirectoryChildType
     child_id: str
 
 
@@ -102,7 +105,7 @@ class _RecordingDirectoryRepo(DirectoryRepoABC):
     The hierarchy helpers are implemented against an internal
     ``(child_type, child_id) -> {parent_id}`` map and a
     ``(parent_type, parent_id) -> {child_id}`` map so
-    :meth:`get_parent_of` and :meth:`get_children_of` mirror the
+    :meth:`get_parents_of` and :meth:`get_children_of` mirror the
     production Postgres semantics used by the facade.
     """
 
@@ -124,10 +127,10 @@ class _RecordingDirectoryRepo(DirectoryRepoABC):
         self.update_calls: List[_UpdateCall] = []
         self.delete_calls: List[str] = []
         self.set_parent_calls: List[_SetParentCall] = []
-        self.get_parent_calls: List[Tuple[DirectoryHierarchyType, str]] = []
-        self.get_children_calls: List[Tuple[DirectoryHierarchyType, str, int]] = []
-        self.get_children_for_calls: List[Tuple[DirectoryChildType, List[str], int]] = []
-        self.get_parent_for_calls: List[Tuple[DirectoryChildType, List[str]]] = []
+        self.get_parent_calls: List[Tuple[DirectoryChildType, str, DirectoryParentType]] = []
+        self.get_children_calls: List[Tuple[DirectoryParentType, str, DirectoryHierarchyType, int]] = []
+        self.get_children_for_calls: List[Tuple[DirectoryParentType, List[str], DirectoryHierarchyType, int]] = []
+        self.get_parent_for_calls: List[Tuple[DirectoryChildType, List[str], DirectoryParentType]] = []
         self.add_child_calls: List[_ChildCall] = []
         self.remove_child_calls: List[_ChildCall] = []
 
@@ -250,113 +253,141 @@ class _RecordingDirectoryRepo(DirectoryRepoABC):
 
     # ---- DirectoryHelperMixin -----------------------------------------
 
-    async def set_parent_directories_of(
+    async def set_parents_of(
         self,
-        subject_type: DirectoryChildType,
-        subject_id: str,
+        child_type: DirectoryChildType,
+        child_id: str,
+        parent_type: DirectoryParentType,
         parent_ids: List[str],
     ) -> None:
         self.set_parent_calls.append(
             _SetParentCall(
-                subject_type=subject_type,
-                subject_id=str(subject_id),
+                child_type=child_type,
+                child_id=str(child_id),
+                parent_type=parent_type,
                 parent_ids=list(parent_ids),
             )
         )
-        # Replace the parent set on this (subject_type, subject_id) row.
+        # Replace the parent set on this (child_type, child_id) row.
         cleaned = {str(p) for p in parent_ids if p}
-        self._parents[(subject_type, str(subject_id))] = cleaned
+        self._parents[(child_type, str(child_id))] = cleaned
         # Mirror the inverse edge: parent -> child.
         for existing_parent in list(self._children):
             if (
-                existing_parent[0] == subject_type
-                and str(subject_id) in self._children[existing_parent]
+                existing_parent[0] == child_type
+                and str(child_id) in self._children[existing_parent]
                 and existing_parent[1] not in cleaned
             ):
-                self._children[existing_parent].discard(str(subject_id))
+                self._children[existing_parent].discard(str(child_id))
         for parent_id in cleaned:
             self._children.setdefault(
-                (subject_type, parent_id), set()
-            ).add(str(subject_id))
+                (child_type, parent_id), set()
+            ).add(str(child_id))
 
-    async def get_parent_of(
+    async def get_parents_of(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_id: str,
+        parent_type: DirectoryParentType,
     ) -> List[str]:
-        self.get_parent_calls.append((type, str(child_id)))
-        if type == "both":
+        self.get_parent_calls.append((child_type, str(child_id), parent_type))
+        if parent_type == "shelf":
+            return []
+        if child_type == "both":
             union = set()
-            for child_type in ("note", "directory"):
-                union |= self._parents_of(child_type, child_id)  # type: ignore[arg-type]
+            for ct in ("note", "directory"):
+                union |= self._parents_of(ct, child_id)  # type: ignore[arg-type]
             return sorted(union)
-        return sorted(self._parents_of(type, child_id))  # type: ignore[arg-type]
+        return sorted(self._parents_of(child_type, child_id))  # type: ignore[arg-type]
 
     async def get_children_of(
         self,
-        type: DirectoryHierarchyType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> List[str]:
         if depth < 0:
             raise ValueError("depth must be >= 0")
-        self.get_children_calls.append((type, str(directory_id), depth))
-        return sorted(self._children_of(type, directory_id))  # type: ignore[arg-type]
+        self.get_children_calls.append((parent_type, str(parent_id), child_type, depth))
+        if parent_type == "shelf":
+            # shelves own no children in this fake; the tests
+            # only exercise the directory path.
+            return []
+        return sorted(self._children_of(child_type, parent_id))  # type: ignore[arg-type]
 
     async def get_children_for(
         self,
-        child_type: DirectoryChildType,
-        directory_ids: List[str],
+        parent_type: DirectoryParentType,
+        parent_ids: List[str],
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> Dict[str, List[str]]:
         if depth < 0:
             raise ValueError("depth must be >= 0")
         self.get_children_for_calls.append(
-            (child_type, [str(d) for d in directory_ids], depth)
+            (parent_type, [str(d) for d in parent_ids], child_type, depth)
         )
         result: Dict[str, List[str]] = {}
-        for d in directory_ids:
+        if parent_type == "shelf":
+            return {str(d): [] for d in parent_ids}
+        for d in parent_ids:
             result[str(d)] = sorted(self._children_of(child_type, str(d)))  # type: ignore[arg-type]
         return result
 
-    async def get_parent_for(
+    async def get_parents_for(
         self,
         child_type: DirectoryChildType,
         child_ids: List[str],
+        parent_type: DirectoryParentType,
     ) -> Dict[str, List[str]]:
         self.get_parent_for_calls.append(
-            (child_type, [str(c) for c in child_ids])
+            (child_type, [str(c) for c in child_ids], parent_type)
         )
+        if parent_type == "shelf":
+            return {str(c): [] for c in child_ids}
         result: Dict[str, List[str]] = {}
         for c in child_ids:
             result[str(c)] = sorted(self._parents_of(child_type, str(c)))  # type: ignore[arg-type]
         return result
 
-    async def add_child_to_directory(
+    async def add_child_to(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
         self.add_child_calls.append(
-            _ChildCall(type=type, directory_id=str(directory_id), child_id=str(child_id))
+            _ChildCall(
+                parent_type=parent_type,
+                parent_id=str(parent_id),
+                child_type=child_type,
+                child_id=str(child_id),
+            )
         )
-        self._parents.setdefault((type, str(child_id)), set()).add(str(directory_id))
-        self._children.setdefault((type, str(directory_id)), set()).add(str(child_id))
+        self._parents.setdefault((child_type, str(child_id)), set()).add(str(parent_id))
+        self._children.setdefault((child_type, str(parent_id)), set()).add(str(child_id))
 
-    async def remove_child_from_directory(
+    async def remove_child_from(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
         self.remove_child_calls.append(
-            _ChildCall(type=type, directory_id=str(directory_id), child_id=str(child_id))
+            _ChildCall(
+                parent_type=parent_type,
+                parent_id=str(parent_id),
+                child_type=child_type,
+                child_id=str(child_id),
+            )
         )
-        if (type, str(child_id)) in self._parents:
-            self._parents[(type, str(child_id))].discard(str(directory_id))
-        if (type, str(directory_id)) in self._children:
-            self._children[(type, str(directory_id))].discard(str(child_id))
+        if (child_type, str(child_id)) in self._parents:
+            self._parents[(child_type, str(child_id))].discard(str(parent_id))
+        if (child_type, str(parent_id)) in self._children:
+            self._children[(child_type, str(parent_id))].discard(str(child_id))
 
 
 class _RecordingTagRepo(TagRepoABC):
@@ -524,12 +555,13 @@ async def test_create_directory_with_parents_writes_to_both_repos() -> None:
     )
     created = await facade.create_directory(entity, _UserContext("alice"))
 
-    # dir_repo: row insert + parent hierarchy write via set_parent_directories_of
+    # dir_repo: row insert + parent hierarchy write via set_parents_of
     assert len(dir_repo.insert_calls) == 1
     assert len(dir_repo.set_parent_calls) == 1
     parent_write = dir_repo.set_parent_calls[0]
-    assert parent_write.subject_type == "directory"
-    assert parent_write.subject_id == str(created.id)
+    assert parent_write.child_type == "directory"
+    assert parent_write.child_id == str(created.id)
+    assert parent_write.parent_type == "directory"
     assert sorted(parent_write.parent_ids) == ["parent-1", "parent-2"]
 
     # perm_repo: admin relation + two `dir#parent@dir` relations
@@ -604,7 +636,7 @@ async def test_update_directory_with_parents_replaces_at_both_repos() -> None:
     Seeds an existing parent (`old-parent`), then updates the entity
     to point at a different parent (`new-parent`).  After the call:
 
-    * the dir_repo received `set_parent_directories_of("directory",
+    * the dir_repo received `set_parents_of("directory",
       created.id, ["new-parent"])`,
     * the perm_repo dropped the `old-parent` relation and added the
       `new-parent` relation,
@@ -642,8 +674,9 @@ async def test_update_directory_with_parents_replaces_at_both_repos() -> None:
     assert len(dir_repo.update_calls) == 1
     assert len(dir_repo.set_parent_calls) == 1
     rewrite = dir_repo.set_parent_calls[0]
-    assert rewrite.subject_type == "directory"
-    assert rewrite.subject_id == str(created.id)
+    assert rewrite.child_type == "directory"
+    assert rewrite.child_id == str(created.id)
+    assert rewrite.parent_type == "directory"
     assert rewrite.parent_ids == ["new-parent"]
 
     # perm_repo dropped old-parent, added new-parent
@@ -726,7 +759,7 @@ async def test_update_directory_requires_id() -> None:
 
 
 # ---------------------------------------------------------------------------
-# add_child_to_directory / remove_child_from_directory
+# add_child_to / remove_child_from
 # ---------------------------------------------------------------------------
 
 
@@ -734,10 +767,10 @@ async def test_add_child_note_writes_to_both_repos() -> None:
     """Adding a child note touches both stores with `parent_directory` semantics."""
     facade, dir_repo, perm_repo, _tags = _build_facade()
 
-    await facade.add_child_to_directory("note", "dir-1", "note-7")
+    await facade.add_child_to("directory", "dir-1", "note", "note-7")
 
     assert dir_repo.add_child_calls == [
-        _ChildCall(type="note", directory_id="dir-1", child_id="note-7")
+        _ChildCall(parent_type="directory", parent_id="dir-1", child_type="note", child_id="note-7")
     ]
     rels = _relations_of(
         perm_repo,
@@ -753,12 +786,13 @@ async def test_add_child_directory_writes_to_both_repos() -> None:
     """Adding a child directory touches both stores with `directory#parent` semantics."""
     facade, dir_repo, perm_repo, _tags = _build_facade()
 
-    await facade.add_child_to_directory("directory", "dir-parent", "dir-child")
+    await facade.add_child_to("directory", "dir-parent", "directory", "dir-child")
 
     assert dir_repo.add_child_calls == [
         _ChildCall(
-            type="directory",
-            directory_id="dir-parent",
+            parent_type="directory",
+            parent_id="dir-parent",
+            child_type="directory",
             child_id="dir-child",
         )
     ]
@@ -776,11 +810,11 @@ async def test_remove_child_note_writes_to_both_repos() -> None:
     """Removing a child note drops both the hierarchy row and the perm relation."""
     facade, dir_repo, perm_repo, _tags = _build_facade()
 
-    await facade.add_child_to_directory("note", "dir-1", "note-7")
-    await facade.remove_child_from_directory("note", "dir-1", "note-7")
+    await facade.add_child_to("directory", "dir-1", "note", "note-7")
+    await facade.remove_child_from("directory", "dir-1", "note", "note-7")
 
     assert dir_repo.remove_child_calls == [
-        _ChildCall(type="note", directory_id="dir-1", child_id="note-7")
+        _ChildCall(parent_type="directory", parent_id="dir-1", child_type="note", child_id="note-7")
     ]
     rels = _relations_of(
         perm_repo,
@@ -794,13 +828,14 @@ async def test_remove_child_directory_writes_to_both_repos() -> None:
     """Removing a child directory drops the perm relation with `directory#parent`."""
     facade, dir_repo, perm_repo, _tags = _build_facade()
 
-    await facade.add_child_to_directory("directory", "dir-parent", "dir-child")
-    await facade.remove_child_from_directory("directory", "dir-parent", "dir-child")
+    await facade.add_child_to("directory", "dir-parent", "directory", "dir-child")
+    await facade.remove_child_from("directory", "dir-parent", "directory", "dir-child")
 
     assert dir_repo.remove_child_calls == [
         _ChildCall(
-            type="directory",
-            directory_id="dir-parent",
+            parent_type="directory",
+            parent_id="dir-parent",
+            child_type="directory",
             child_id="dir-child",
         )
     ]
@@ -813,23 +848,24 @@ async def test_remove_child_directory_writes_to_both_repos() -> None:
 
 
 # ---------------------------------------------------------------------------
-# set_parent_directories_of (low-level facade helper)
+# set_parents_of (low-level facade helper)
 # ---------------------------------------------------------------------------
 
 
-async def test_set_parent_directories_of_note_writes_to_both_repos() -> None:
-    """`set_parent_directories_of` for a note drives both the hierarchy and the perm repo."""
+async def test_set_parents_of_note_writes_to_both_repos() -> None:
+    """`set_parents_of` for a note drives both the hierarchy and the perm repo."""
     facade, dir_repo, perm_repo, _tags = _build_facade()
 
-    await facade.set_parent_directories_of(
-        "note", "note-1", ["dir-a", "dir-b"]
+    await facade.set_parents_of(
+        "note", "note-1", "directory", ["dir-a", "dir-b"]
     )
 
     # dir_repo: full parent rewrite on (note, note-1)
     assert len(dir_repo.set_parent_calls) == 1
     call = dir_repo.set_parent_calls[0]
-    assert call.subject_type == "note"
-    assert call.subject_id == "note-1"
+    assert call.child_type == "note"
+    assert call.child_id == "note-1"
+    assert call.parent_type == "directory"
     assert sorted(call.parent_ids) == ["dir-a", "dir-b"]
 
     # perm_repo: one bulk delete (clearing prior) + two inserts
@@ -843,7 +879,7 @@ async def test_set_parent_directories_of_note_writes_to_both_repos() -> None:
     assert all(str(r.resource.object_id) == "note-1" for r in rels)
 
 
-async def test_set_parent_directories_of_clears_existing_relations() -> None:
+async def test_set_parents_of_clears_existing_relations() -> None:
     """Replacing with an empty list removes every prior `parent_directory` relation.
 
     Seeds two parents first, then replaces them with `[]`; the
@@ -852,14 +888,14 @@ async def test_set_parent_directories_of_clears_existing_relations() -> None:
     """
     facade, dir_repo, perm_repo, _tags = _build_facade()
 
-    await facade.set_parent_directories_of("note", "note-1", ["dir-a", "dir-b"])
+    await facade.set_parents_of("note", "note-1", "directory", ["dir-a", "dir-b"])
     assert len(_relations_of(
         perm_repo,
         resource_type=ObjectTypeEnum.NOTE,
         relation=str(NoteRelationEnum.PARENT_DIRECTORY),
     )) == 2
 
-    await facade.set_parent_directories_of("note", "note-1", [])
+    await facade.set_parents_of("note", "note-1", "directory", [])
 
     rels = _relations_of(
         perm_repo,
@@ -869,7 +905,9 @@ async def test_set_parent_directories_of_clears_existing_relations() -> None:
     assert rels == []
 
     last_write = dir_repo.set_parent_calls[-1]
-    assert last_write.subject_id == "note-1"
+    assert last_write.child_id == "note-1"
+    assert last_write.child_type == "note"
+    assert last_write.parent_type == "directory"
     assert last_write.parent_ids == []
 
 

@@ -29,6 +29,7 @@ from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.api.repos.directory_repo import (
     DirectoryChildType,
     DirectoryHierarchyType,
+    DirectoryParentType,
 )
 from src.api.repos.permission_repo import PermissionRepoABC
 from src.api.other.relationship import (
@@ -153,7 +154,7 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
         # these in the ``note.directory_note`` /
         # ``note.directory_subdirectory`` tables; this fake mirrors the
         # shape the production code expects from those tables so the
-        # ``add_child_to_directory`` + ``get_parent_of`` /
+        # ``add_child_to`` + ``get_parents_of`` /
         # ``get_children_of`` round-trip works end-to-end.
         self._directory_note: set[tuple[str, str]] = set()
         self._directory_child: set[tuple[str, str]] = set()
@@ -407,120 +408,148 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
         """
         return self.subtree_by_root.get(directory_id, ([], [directory_id]))
 
-    # ---- DirectoryHelperMixin: hierarchy helpers (no-op stubs) ------
+    # ---- DirectoryHelperMixin: hierarchy helpers (typed) ------
 
-    async def set_parent_directories_of(
+    async def set_parents_of(
         self,
-        subject_type: DirectoryChildType,
-        subject_id: str,
+        child_type: DirectoryChildType,
+        child_id: str,
+        parent_type: DirectoryParentType,
         parent_ids: List[str],
     ) -> None:
-        """Replace every parent of ``subject_id`` with ``parent_ids``."""
-        subject_id = str(subject_id)
-        if subject_type == "note":
+        """Replace every parent of ``child_id`` with ``parent_ids``.
+
+        Only ``parent_type="directory"`` is modelled in this fake
+        (the only parent type the directory helper actually owns);
+        shelf parents raise because the fake doesn't carry a
+        shelf store.
+        """
+        if parent_type == "shelf":
+            raise ValueError(
+                "shelf bindings are owned by ShelfRepoABC; "
+                "shelf parents not modelled in this fake"
+            )
+        child_id = str(child_id)
+        if child_type == "note":
             self._directory_note = {
                 (parent, note) for (parent, note) in self._directory_note
-                if note != subject_id
+                if note != child_id
             }
             for parent in parent_ids:
-                self._directory_note.add((str(parent), subject_id))
-        elif subject_type == "directory":
+                self._directory_note.add((str(parent), child_id))
+        elif child_type == "directory":
             self._directory_child = {
-                (parent, child) for (parent, child) in self._directory_child
-                if child != subject_id
+                (parent, ch) for (parent, ch) in self._directory_child
+                if ch != child_id
             }
             for parent in parent_ids:
-                self._directory_child.add((str(parent), subject_id))
+                self._directory_child.add((str(parent), child_id))
 
-    async def get_parent_of(
+    async def get_parents_of(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_id: str,
+        parent_type: DirectoryParentType,
     ) -> List[str]:
-        """Return parent ids of ``child_id`` from the in-memory store."""
+        """Return parent ids of ``child_id`` filtered by ``parent_type``."""
+        if parent_type == "shelf":
+            return []
         child_id = str(child_id)
         parents: set[str] = set()
-        if type in ("note", "both"):
+        if child_type == "note":
             for parent, note_id in self._directory_note:
                 if note_id == child_id:
                     parents.add(parent)
-        if type in ("directory", "both"):
-            for parent, child in self._directory_child:
-                if child == child_id:
+        elif child_type == "directory":
+            for parent, ch in self._directory_child:
+                if ch == child_id:
                     parents.add(parent)
         return sorted(parents)
 
     async def get_children_of(
         self,
-        type: DirectoryHierarchyType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> List[str]:
-        """Return child ids of ``directory_id`` from the in-memory store."""
+        """Return child ids of ``parent_id`` filtered by ``child_type``."""
         if depth <= 0:
             return []
-        directory_id = str(directory_id)
+        if parent_type == "shelf":
+            # Shelf children aren't modelled here.  The caller
+            # should ask the shelf repo for the books.
+            if child_type in ("directory", "both"):
+                return []
+            raise ValueError(
+                "shelves cannot have notes as children"
+            )
+        parent_id = str(parent_id)
         note_ids: set[str] = set()
         child_dir_ids: set[str] = set()
-        visited: set[str] = {directory_id}
-        queue: list[tuple[str, int]] = [(directory_id, 0)]
+        visited: set[str] = {parent_id}
+        queue: list[tuple[str, int]] = [(parent_id, 0)]
         while queue:
             current, current_depth = queue.pop(0)
-            if type in ("note", "both"):
+            if child_type in ("note", "both"):
                 for parent, note_id in self._directory_note:
                     if parent == current and current_depth + 1 <= depth:
                         note_ids.add(note_id)
             for parent, child in self._directory_child:
                 if parent == current and child not in visited:
-                    if type in ("directory", "both"):
+                    if child_type in ("directory", "both"):
                         child_dir_ids.add(child)
                     if current_depth + 1 < depth:
                         visited.add(child)
                         queue.append((child, current_depth + 1))
-        if type == "note":
+        if child_type == "note":
             return sorted(note_ids)
-        if type == "directory":
+        if child_type == "directory":
             return sorted(child_dir_ids)
         return sorted(note_ids | child_dir_ids)
 
     async def get_children_for(
         self,
-        child_type: DirectoryChildType,
-        directory_ids: List[str],
+        parent_type: DirectoryParentType,
+        parent_ids: List[str],
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> Dict[str, List[str]]:
-        """Return per-input-directory children from the in-memory store.
+        """Return per-input-parent children from the in-memory store.
 
-        The in-memory store is mirrored by the permission repo --
-        tests that only populate the permission repo still see the
-        child set here.
+        Mirrors the production ``get_children_for`` semantics
+        plus the permission-repo fallback for tests that only
+        populate the SpiceDB side.
         """
         if depth <= 0:
-            return {str(d): [] for d in directory_ids}
+            return {str(d): [] for d in parent_ids}
         result: Dict[str, List[str]] = {}
-        for directory_id in directory_ids:
-            directory_id = str(directory_id)
+        for parent_id in parent_ids:
+            parent_id = str(parent_id)
             note_ids: set[str] = set()
             child_dir_ids: set[str] = set()
-            visited: set[str] = {directory_id}
-            queue: list[tuple[str, int]] = [(directory_id, 0)]
+            visited: set[str] = {parent_id}
+            queue: list[tuple[str, int]] = [(parent_id, 0)]
             while queue:
                 current, current_depth = queue.pop(0)
-                if child_type == "note":
+                if parent_type == "shelf":
+                    # Shelf children aren't modelled here.
+                    pass
+                elif child_type in ("note", "both"):
                     for parent, note_id in self._directory_note:
                         if parent == current and current_depth + 1 <= depth:
                             note_ids.add(note_id)
-                elif child_type == "directory":
-                    for parent, child in self._directory_child:
-                        if parent == current and child not in visited:
+                for parent, child in self._directory_child:
+                    if parent == current and child not in visited:
+                        if child_type in ("directory", "both") and parent_type == "directory":
                             child_dir_ids.add(child)
-                            if current_depth + 1 < depth:
-                                visited.add(child)
-                                queue.append((child, current_depth + 1))
+                        if current_depth + 1 < depth and parent_type == "directory":
+                            visited.add(child)
+                            queue.append((child, current_depth + 1))
             # Fallback: read from the permission repo for tests that
             # only populate the SpiceDB side.  Production keeps both
             # stores in sync, so this is purely a unit-test aid.
-            if child_type == "note" and self._permission_repo is not None:
+            if child_type in ("note", "both") and parent_type == "directory" and self._permission_repo is not None:
                 note_ids.update(
                     await self._permission_repo.lookup(
                         Relationship(
@@ -531,12 +560,12 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
                             relation=NoteRelationEnum.PARENT_DIRECTORY,
                             subject=SubjectRef(
                                 object_type=ObjectTypeEnum.DIRECTORY,
-                                object_id=directory_id,
+                                object_id=parent_id,
                             ),
                         )
                     )
                 )
-            elif child_type == "directory" and self._permission_repo is not None:
+            elif child_type in ("directory", "both") and parent_type == "directory" and self._permission_repo is not None:
                 child_dir_ids.update(
                     await self._permission_repo.lookup(
                         Relationship(
@@ -547,31 +576,29 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
                             relation=DirectoryRelationEnum.PARENT,
                             subject=SubjectRef(
                                 object_type=ObjectTypeEnum.DIRECTORY,
-                                object_id=directory_id,
+                                object_id=parent_id,
                             ),
                         )
                     )
                 )
             if child_type == "note":
-                result[directory_id] = sorted(note_ids)
+                result[parent_id] = sorted(note_ids)
             elif child_type == "directory":
-                result[directory_id] = sorted(child_dir_ids)
+                result[parent_id] = sorted(child_dir_ids)
             else:
-                result[directory_id] = sorted(note_ids | child_dir_ids)
+                result[parent_id] = sorted(note_ids | child_dir_ids)
         return result
 
-    async def get_parent_for(
+    async def get_parents_for(
         self,
         child_type: DirectoryChildType,
         child_ids: List[str],
+        parent_type: DirectoryParentType,
     ) -> Dict[str, List[str]]:
-        """Return per-input-id parents from the in-memory store.
-
-        The in-memory store is mirrored by the permission repo --
-        tests that only populate the permission repo still see the
-        parent set here.
-        """
+        """Return per-input-id parents from the in-memory store."""
         result: Dict[str, List[str]] = {}
+        if parent_type == "shelf":
+            return {str(c): [] for c in child_ids}
         for child_id in child_ids:
             child_id = str(child_id)
             parents: set[str] = set()
@@ -580,12 +607,11 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
                     if note_id == child_id:
                         parents.add(parent)
             elif child_type == "directory":
-                for parent, child in self._directory_child:
-                    if child == child_id:
+                for parent, ch in self._directory_child:
+                    if ch == child_id:
                         parents.add(parent)
             # Fallback: read from the permission repo for tests that
-            # only populate the SpiceDB side.  Production keeps both
-            # stores in sync, so this is purely a unit-test aid.
+            # only populate the SpiceDB side.
             if child_type == "note" and self._permission_repo is not None:
                 parents.update(
                     await self._permission_repo.lookup(
@@ -621,33 +647,45 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
             result[child_id] = sorted(parents)
         return result
 
-    async def add_child_to_directory(
+    async def add_child_to(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
-        """Add a note or child directory binding to the in-memory store."""
-        directory_id = str(directory_id)
+        """Add a note or child directory binding."""
+        if parent_type == "shelf":
+            raise ValueError(
+                "shelf bindings are owned by ShelfRepoABC; "
+                "shelf parents not modelled in this fake"
+            )
+        parent_id = str(parent_id)
         child_id = str(child_id)
-        if type == "note":
-            self._directory_note.add((directory_id, child_id))
-        elif type == "directory":
-            self._directory_child.add((directory_id, child_id))
+        if child_type == "note":
+            self._directory_note.add((parent_id, child_id))
+        elif child_type == "directory":
+            self._directory_child.add((parent_id, child_id))
 
-    async def remove_child_from_directory(
+    async def remove_child_from(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
         """Remove a note or child directory binding."""
-        directory_id = str(directory_id)
+        if parent_type == "shelf":
+            raise ValueError(
+                "shelf bindings are owned by ShelfRepoABC; "
+                "shelf parents not modelled in this fake"
+            )
+        parent_id = str(parent_id)
         child_id = str(child_id)
-        if type == "note":
-            self._directory_note.discard((directory_id, child_id))
-        elif type == "directory":
-            self._directory_child.discard((directory_id, child_id))
+        if child_type == "note":
+            self._directory_note.discard((parent_id, child_id))
+        elif child_type == "directory":
+            self._directory_child.discard((parent_id, child_id))
 
 
 class _FakeNoteRepoFacade(NoteFacadeABC):

@@ -78,38 +78,42 @@ class FakeDirectoryFacade(DirectoryFacadeABC):
 
     # ---- abstract methods on the mixin (stubs) ----------------------
 
-    async def set_parent_directories_of(
-        self, subject_type, subject_id: str, parent_ids: List[str],
+    async def set_parents_of(
+        self,
+        child_type,
+        child_id: str,
+        parent_type,
+        parent_ids: List[str],
     ) -> None:
         raise NotImplementedError
 
-    async def get_parent_of(
-        self, type, child_id: str,
+    async def get_parents_of(
+        self, child_type, child_id: str, parent_type,
     ) -> List[str]:
         raise NotImplementedError
 
     async def get_children_of(
-        self, type, directory_id: str, depth: int = 1,
+        self, parent_type, parent_id: str, child_type, depth: int = 1,
     ) -> List[str]:
         raise NotImplementedError
 
     async def get_children_for(
-        self, child_type, directory_ids: List[str], depth: int = 1,
+        self, parent_type, parent_ids: List[str], child_type, depth: int = 1,
     ) -> dict[str, List[str]]:
         raise NotImplementedError
 
-    async def get_parent_for(
-        self, child_type, child_ids: List[str],
+    async def get_parents_for(
+        self, child_type, child_ids: List[str], parent_type,
     ) -> dict[str, List[str]]:
         raise NotImplementedError
 
-    async def add_child_to_directory(
-        self, type, directory_id: str, child_id: str,
+    async def add_child_to(
+        self, parent_type, parent_id: str, child_type, child_id: str,
     ) -> None:
         raise NotImplementedError
 
-    async def remove_child_from_directory(
-        self, type, directory_id: str, child_id: str,
+    async def remove_child_from(
+        self, parent_type, parent_id: str, child_type, child_id: str,
     ) -> None:
         raise NotImplementedError
 
@@ -151,6 +155,17 @@ def _dir_rel(user_id: str, dir_id: str, relation) -> Relationship:
     return Relationship(
         resource=ObjectRef(
             object_type=ObjectTypeEnum.DIRECTORY, object_id=dir_id,
+        ),
+        relation=relation,
+        subject=SubjectRef(object_type=ObjectTypeEnum.USER, object_id=user_id),
+    )
+
+
+def _shelf_rel(user_id: str, shelf_id: str, relation) -> Relationship:
+    """Build a ``shelf#<relation>@user:<user_id>`` relationship."""
+    return Relationship(
+        resource=ObjectRef(
+            object_type=ObjectTypeEnum.SHELF, object_id=shelf_id,
         ),
         relation=relation,
         subject=SubjectRef(object_type=ObjectTypeEnum.USER, object_id=user_id),
@@ -206,12 +221,16 @@ def _dir_attached_rule(
     )
 
 
-def _global_rule(creator_id: str = "u-creator") -> RuleEntity:
+def _shelf_attached_rule(
+    shelf_id: str = "s1",
+    creator_id: str = "u-creator",
+) -> RuleEntity:
+    """Rule attached to a shelf (used by the global-rule-shaped tests)."""
     return RuleEntity(
         id=UNDEFINED,
         event_type="NoteCreated",
-        attached_entity_type=None,
-        attached_entity_id=None,
+        attached_entity_type="shelf",
+        attached_entity_id=shelf_id,
         condition={"type": "always_true"},
         action_type="add_tag",
         action_context={"tag_id": "t1"},
@@ -280,50 +299,40 @@ async def test_create_directory_attached_rule_rejects_writer_only():
 
 
 @pytest.mark.asyncio
-async def test_create_global_rule_succeeds_when_user_manages_any_directory():
-    """Global = user can edit_permissions on at least one viewable directory."""
+async def test_create_shelf_attached_rule_succeeds_for_owner():
+    """Shelf permission is gated on ``shelf#edit_permissions``."""
     service, _, perm_repo, _ = await _service(
-        viewable_directories={"alice": ["d1", "d2"]},
+        viewable_directories={"alice": ["s1"]},
     )
-    await perm_repo.insert([_dir_rel("alice", "d1", "owner")])
-    created = await service.create_rule(_global_rule(), _UserCtx("alice"))
+    await perm_repo.insert([_shelf_rel("alice", "s1", "owner")])
+    created = await service.create_rule(_shelf_attached_rule(), _UserCtx("alice"))
     assert created.id is not None
 
 
 @pytest.mark.asyncio
-async def test_create_global_rule_succeeds_when_user_manages_any_directory_other_than_first():
-    """Probe skips non-matching candidates and accepts a later match."""
+async def test_create_shelf_attached_rule_rejects_writer_only():
+    """A writer (no edit_permissions) cannot create shelf rules."""
     service, _, perm_repo, _ = await _service(
-        viewable_directories={"alice": ["d1", "d2"]},
+        viewable_directories={"alice": ["s1"]},
     )
-    await perm_repo.insert([
-        _dir_rel("alice", "d1", "reader"),
-        _dir_rel("alice", "d2", "owner"),
-    ])
-    created = await service.create_rule(_global_rule(), _UserCtx("alice"))
-    assert created.id is not None
+    await perm_repo.insert([_shelf_rel("alice", "s1", "writer")])
+    with pytest.raises(RulePermissionError):
+        await service.create_rule(_shelf_attached_rule(), _UserCtx("alice"))
 
 
 @pytest.mark.asyncio
-async def test_create_global_rule_rejects_pure_viewer():
-    """A user with no edit_permissions on any viewable directory is rejected."""
+async def test_create_rule_rejects_missing_attached_entity():
+    """Global rules are no longer supported: a payload missing the
+    attached-entity fields must raise ``ValueError`` at create time."""
     service, _, perm_repo, _ = await _service(
-        viewable_directories={"alice": ["d1", "d2"]},
+        viewable_directories={"alice": ["d1"]},
     )
-    await perm_repo.insert([
-        _dir_rel("alice", "d1", "reader"),
-        _dir_rel("alice", "d2", "writer"),
-    ])
-    with pytest.raises(RulePermissionError):
-        await service.create_rule(_global_rule(), _UserCtx("alice"))
-
-
-@pytest.mark.asyncio
-async def test_create_global_rule_rejects_user_with_no_viewable_directories():
-    """A user with no viewable directories at all is rejected."""
-    service, _, _, _ = await _service(viewable_directories={})
-    with pytest.raises(RulePermissionError):
-        await service.create_rule(_global_rule(), _UserCtx("alice"))
+    await perm_repo.insert([_note_rel("alice", "n1", NoteRelationEnum.OWNER)])
+    rule = _note_attached_rule()
+    rule.attached_entity_type = None
+    rule.attached_entity_id = None
+    with pytest.raises(ValueError):
+        await service.create_rule(rule, _UserCtx("alice"))
 
 
 @pytest.mark.asyncio
@@ -430,17 +439,17 @@ async def test_list_rules_filters_by_read_permission():
 
 
 @pytest.mark.asyncio
-async def test_list_rules_includes_global_when_user_has_any_directory_manage():
-    # Both alice and admin can manage some directory; alice
-    # creates the global rule, admin sees it in the list.
+async def test_list_rules_includes_shelf_rule_when_user_owns_shelf():
+    # Both alice and admin own the shelf; alice creates the rule,
+    # admin sees it in the list (manage permission on shelf).
     service, _, perm_repo, _ = await _service(
-        viewable_directories={"alice": ["d-alice"], "admin": ["d-admin"]},
+        viewable_directories={"alice": ["s1"], "admin": ["s1"]},
     )
     await perm_repo.insert([
-        _dir_rel("alice", "d-alice", "owner"),
-        _dir_rel("admin", "d-admin", "owner"),
+        _shelf_rel("alice", "s1", "owner"),
+        _shelf_rel("admin", "s1", "owner"),
     ])
-    created = await service.create_rule(_global_rule(), _UserCtx("alice"))
+    created = await service.create_rule(_shelf_attached_rule(), _UserCtx("alice"))
     rules = await service.list_rules(_UserCtx("admin"))
     assert any(r.id == created.id for r in rules)
 

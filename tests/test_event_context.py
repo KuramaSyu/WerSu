@@ -42,10 +42,22 @@ class FakeDirectoryRepo:
         self._parents = parents or {}
         self.raise_on: set[str] = set()
 
-    async def get_parent_of(self, type, child_id: str):
+    async def get_parents_of(self, child_type, child_id: str, parent_type):
         if child_id in self.raise_on:
             raise RuntimeError("boom")
         return list(self._parents.get(child_id, []))
+
+
+class FakeShelfRepo:
+    def __init__(self, books: dict[str, list[str]] | None = None) -> None:
+        # ``books[shelf_id] = [book_id_1, ...]``
+        self._books = books or {}
+        self.raise_on: set[str] = set()
+
+    async def get_books_of(self, shelf_id: str) -> list[str]:
+        if shelf_id in self.raise_on:
+            raise RuntimeError("boom")
+        return list(self._books.get(shelf_id, []))
 
 
 # ---- note_content / note_title -------------------------------------------
@@ -55,7 +67,7 @@ class FakeDirectoryRepo:
 async def test_note_content_returns_content_when_present():
     ctx = InMemoryEventContext(
         note_content_repo=FakeNoteContentRepo({"n1": _E(content="hello")}),
-        directory_repo=FakeDirectoryRepo(),
+        directory_repo=FakeDirectoryRepo(), shelf_repo=FakeShelfRepo(),
     )
     assert await ctx.note_content("n1") == "hello"
 
@@ -64,7 +76,7 @@ async def test_note_content_returns_content_when_present():
 async def test_note_content_returns_none_for_unknown_note():
     ctx = InMemoryEventContext(
         note_content_repo=FakeNoteContentRepo(),
-        directory_repo=FakeDirectoryRepo(),
+        directory_repo=FakeDirectoryRepo(), shelf_repo=FakeShelfRepo(),
     )
     assert await ctx.note_content("n1") is None
 
@@ -73,7 +85,7 @@ async def test_note_content_returns_none_for_unknown_note():
 async def test_note_content_swallows_exceptions():
     repo = FakeNoteContentRepo()
     repo.raise_on.add("n1")
-    ctx = InMemoryEventContext(note_content_repo=repo, directory_repo=FakeDirectoryRepo())
+    ctx = InMemoryEventContext(note_content_repo=repo, directory_repo=FakeDirectoryRepo(), shelf_repo=FakeShelfRepo())
     assert await ctx.note_content("n1") is None
 
 
@@ -81,7 +93,7 @@ async def test_note_content_swallows_exceptions():
 async def test_note_title_returns_title_when_present():
     ctx = InMemoryEventContext(
         note_content_repo=FakeNoteContentRepo({"n1": _E(title="T")}),
-        directory_repo=FakeDirectoryRepo(),
+        directory_repo=FakeDirectoryRepo(), shelf_repo=FakeShelfRepo(),
     )
     assert await ctx.note_title("n1") == "T"
 
@@ -90,7 +102,7 @@ async def test_note_title_returns_title_when_present():
 async def test_note_title_returns_none_for_unknown_note():
     ctx = InMemoryEventContext(
         note_content_repo=FakeNoteContentRepo(),
-        directory_repo=FakeDirectoryRepo(),
+        directory_repo=FakeDirectoryRepo(), shelf_repo=FakeShelfRepo(),
     )
     assert await ctx.note_title("n1") is None
 
@@ -99,7 +111,7 @@ async def test_note_title_returns_none_for_unknown_note():
 async def test_note_title_swallows_exceptions():
     repo = FakeNoteContentRepo()
     repo.raise_on.add("n1")
-    ctx = InMemoryEventContext(note_content_repo=repo, directory_repo=FakeDirectoryRepo())
+    ctx = InMemoryEventContext(note_content_repo=repo, directory_repo=FakeDirectoryRepo(), shelf_repo=FakeShelfRepo())
     assert await ctx.note_title("n1") is None
 
 
@@ -112,7 +124,7 @@ async def test_directory_ancestor_ids_walks_chain():
     repo = FakeDirectoryRepo({"d1": ["d2"], "d2": ["d3"], "d3": []})
     ctx = InMemoryEventContext(
         note_content_repo=FakeNoteContentRepo(),
-        directory_repo=repo,  # type: ignore[arg-type]
+        directory_repo=repo, shelf_repo=FakeShelfRepo(),  # type: ignore[arg-type]
     )
     out = await ctx.directory_ancestor_ids("d1")
     assert out == ["d2", "d3"]
@@ -123,7 +135,7 @@ async def test_directory_ancestor_ids_returns_empty_for_root():
     repo = FakeDirectoryRepo()
     ctx = InMemoryEventContext(
         note_content_repo=FakeNoteContentRepo(),
-        directory_repo=repo,  # type: ignore[arg-type]
+        directory_repo=repo, shelf_repo=FakeShelfRepo(),  # type: ignore[arg-type]
     )
     assert await ctx.directory_ancestor_ids("d1") == []
 
@@ -137,7 +149,7 @@ async def test_directory_ancestor_ids_handles_cycle():
     repo = FakeDirectoryRepo({"d1": ["d2"], "d2": ["d1"]})
     ctx = InMemoryEventContext(
         note_content_repo=FakeNoteContentRepo(),
-        directory_repo=repo,  # type: ignore[arg-type]
+        directory_repo=repo, shelf_repo=FakeShelfRepo(),  # type: ignore[arg-type]
     )
     out = await ctx.directory_ancestor_ids("d1")
     # The walker visits d2 (chain entry), then walks to d1 (its
@@ -152,6 +164,6 @@ async def test_directory_ancestor_ids_swallows_exceptions():
     repo.raise_on.add("d1")
     ctx = InMemoryEventContext(
         note_content_repo=FakeNoteContentRepo(),
-        directory_repo=repo,  # type: ignore[arg-type]
+        directory_repo=repo, shelf_repo=FakeShelfRepo(),  # type: ignore[arg-type]
     )
     assert await ctx.directory_ancestor_ids("d1") == []

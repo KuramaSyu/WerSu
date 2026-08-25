@@ -20,7 +20,7 @@ from tests._fixtures_pkg.fakes import (
     _FakeTagRepo,
 )
 from src.api import ObjectRef, Relationship, SubjectRef
-from src.db.repos.directory.directory import DirectoryFacadeImpl
+from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 

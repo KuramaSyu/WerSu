@@ -17,6 +17,7 @@ from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.shelf import ShelfEntity
 from src.db.entities.user.passkey import PasskeyEntity
 from src.db.entities.user.password import PasswordEntity
 from src.db.entities.user.role import (
@@ -64,6 +65,7 @@ class StubVisitor(EntityVisitor):
         record_note_response: bool = True,
         record_activity: bool = True,
         record_activity_score: bool = True,
+        record_shelf: bool = True,
     ) -> None:
         """Initialize empty record lists and the per-handler `record_*` flags.
 
@@ -81,10 +83,12 @@ class StubVisitor(EntityVisitor):
             record_activity: record entities in :meth:`visit_activity`.
             record_activity_score: record scores in
                 :meth:`visit_activity_score`.
+            record_shelf: record entities in :meth:`visit_shelf`.
         """
         self.notes: List[NoteEntity] = []
         self.note_minimals: List[NoteEntity] = []
         self.directories: List[DirectoryEntity] = []
+        self.shelves: List[ShelfEntity] = []
         self.users: List[UserEntity] = []
         self.note_shares: List[NoteShareEntity] = []
         self.attachments: List[Attachment] = []
@@ -103,6 +107,7 @@ class StubVisitor(EntityVisitor):
         self._record_note_response = record_note_response
         self._record_activity = record_activity
         self._record_activity_score = record_activity_score
+        self._record_shelf = record_shelf
 
     def visit_note(self, entity: NoteEntity) -> NoteEntity:
         if self._record_note:
@@ -117,6 +122,11 @@ class StubVisitor(EntityVisitor):
     def visit_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
         if self._record_directory:
             self.directories.append(entity)
+        return entity
+
+    def visit_shelf(self, entity: ShelfEntity) -> ShelfEntity:
+        if self._record_shelf:
+            self.shelves.append(entity)
         return entity
 
     def visit_user(self, entity: UserEntity) -> UserEntity:

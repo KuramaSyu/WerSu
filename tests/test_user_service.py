@@ -10,6 +10,7 @@ from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.api.repos.directory_repo import (
     DirectoryChildType,
     DirectoryHierarchyType,
+    DirectoryParentType,
 )
 from src.api.other.relationship import ObjectRef, Relationship, SubjectRef
 from src.db.repos.note.permission import DirectoryRelationEnum, ObjectTypeEnum
@@ -127,55 +128,63 @@ class _InMemoryDirectoryRepo(DirectoryFacadeABC):
 
     # ---- DirectoryHelperMixin: hierarchy helpers (no-op stubs) ------
 
-    async def set_parent_directories_of(
+    async def set_parents_of(
         self,
-        directory_id: str,
+        child_type: DirectoryChildType,
+        child_id: str,
+        parent_type: DirectoryParentType,
         parent_ids: List[str],
     ) -> None:
         return None
 
-    async def get_parent_of(
+    async def get_parents_of(
         self,
-        type: DirectoryHierarchyType,
+        child_type: DirectoryChildType,
         child_id: str,
+        parent_type: DirectoryParentType,
     ) -> List[str]:
         return []
 
     async def get_children_of(
         self,
-        type: DirectoryHierarchyType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> List[str]:
         return []
 
     async def get_children_for(
         self,
-        child_type: DirectoryChildType,
-        directory_ids: List[str],
+        parent_type: DirectoryParentType,
+        parent_ids: List[str],
+        child_type: DirectoryHierarchyType,
         depth: int = 1,
     ) -> Dict[str, List[str]]:
-        return {str(d): [] for d in directory_ids}
+        return {str(d): [] for d in parent_ids}
 
-    async def get_parent_for(
+    async def get_parents_for(
         self,
         child_type: DirectoryChildType,
         child_ids: List[str],
+        parent_type: DirectoryParentType,
     ) -> Dict[str, List[str]]:
         return {str(c): [] for c in child_ids}
 
-    async def add_child_to_directory(
+    async def add_child_to(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
         return None
 
-    async def remove_child_from_directory(
+    async def remove_child_from(
         self,
-        type: DirectoryChildType,
-        directory_id: str,
+        parent_type: DirectoryParentType,
+        parent_id: str,
+        child_type: DirectoryChildType,
         child_id: str,
     ) -> None:
         return None

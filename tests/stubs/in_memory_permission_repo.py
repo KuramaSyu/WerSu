@@ -59,6 +59,12 @@ class InMemoryPermissionRepo(PermissionRepoABC):
         "role": {
             "administrator": {"administrator", "manage"},
         },
+        "shelf": {
+            "admin": {"admin", "delete", "write", "view", "edit_permissions"},
+            "writer": {"writer", "write", "view"},
+            "reader": {"reader", "view"},
+            "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions"},
+        },
     }
 
     def __init__(self) -> None:

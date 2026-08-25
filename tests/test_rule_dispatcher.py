@@ -33,15 +33,19 @@ from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
 
 
 class FakeDirectoryRepo:
-    """Records every ``add_child_to_directory`` call for assertions."""
+    """Records every ``add_child_to`` call for assertions."""
 
     def __init__(self) -> None:
-        self.calls: list[tuple[str, str, str]] = []
+        self.calls: list[tuple[str, str, str, str]] = []
 
-    async def add_child_to_directory(
-        self, type, directory_id: str, child_id: str,
+    async def add_child_to(
+        self,
+        parent_type: str,
+        parent_id: str,
+        child_type: str,
+        child_id: str,
     ) -> None:
-        self.calls.append((str(type), directory_id, child_id))
+        self.calls.append((parent_type, parent_id, child_type, child_id))
 
 
 class FakeTagRepo:
@@ -126,16 +130,17 @@ def _rule(
 
 
 @pytest.mark.asyncio
-async def test_global_rule_matches_every_event_of_its_type():
+async def test_unattached_rule_is_ignored():
+    """Rules with neither attached_entity_type nor attached_entity_id
+    are defensive no-ops.  Global rules were removed when shelves
+    landed; the dispatcher refuses to evaluate any legacy rows that
+    still carry ``None``."""
     dispatcher, _, _, _ = await _build(
         rules=[_rule(event_type="NoteCreated", condition={"type": "always_true"})],
     )
+    # Should not raise; the rule is just skipped.
     await dispatcher._dispatch(NoteCreated(note_id="n1", actor_id="u"))
-
-    # (No actions fire; global+add_to_directory needs a note event)
-    # We exercise the scope match by trying with a different note id:
     await dispatcher._dispatch(NoteCreated(note_id="n2", actor_id="u"))
-    # No exceptions means the dispatcher handled both.
 
 
 @pytest.mark.asyncio
@@ -155,7 +160,9 @@ async def test_attached_rule_matches_only_matching_id():
     await dispatcher._dispatch(NoteCreated(note_id="n2", actor_id="u"))
 
     assert len(directory_repo.calls) == 1
-    assert directory_repo.calls[0][2] == "n1"
+    _parent_type, _parent_id, child_type, child_id = directory_repo.calls[0]
+    assert child_type == "note"
+    assert child_id == "n1"
 
 
 @pytest.mark.asyncio
@@ -182,6 +189,8 @@ async def test_note_content_contains_only_fires_on_match():
     await rule_repo.create_rule(_rule(
         event_type="NoteUpdated",
         condition={"type": "note_content_contains", "substring": "linux"},
+        attached_entity_type="note",
+        attached_entity_id="n1",
     ))
 
     directory_repo = FakeDirectoryRepo()
@@ -192,6 +201,7 @@ async def test_note_content_contains_only_fires_on_match():
         async def note_title(self, note_id): return (await note_repo.select_by_id(note_id)).title
         async def directory_ancestor_ids(self, directory_id): return []
         async def note_parent_directory_id(self, note_id): return None
+        async def shelf_contains_book(self, shelf_id, book_id): return False
     ctx = _Ctx()
 
     dispatcher = RuleDispatcher(
@@ -205,7 +215,9 @@ async def test_note_content_contains_only_fires_on_match():
     await dispatcher._dispatch(NoteUpdated(note_id="n2", actor_id="u"))  # unknown note -> no fire
 
     assert len(directory_repo.calls) == 1
-    assert directory_repo.calls[0][2] == "n1"
+    _parent_type, _parent_id, child_type, child_id = directory_repo.calls[0]
+    assert child_type == "note"
+    assert child_id == "n1"
 
 
 @pytest.mark.asyncio
@@ -234,13 +246,16 @@ async def test_add_to_directory_fires_for_note_events():
             event_type="NoteCreated",
             condition={"type": "always_true"},
             action_context={"directory_id": "d-target"},
+            attached_entity_type="note",
+            attached_entity_id="n1",
         )],
     )
     await dispatcher._dispatch(NoteCreated(note_id="n1", actor_id="u"))
     assert len(directory_repo.calls) == 1
-    type_, dir_id, child_id = directory_repo.calls[0]
-    assert type_ == "note"
-    assert dir_id == "d-target"
+    parent_type, parent_id, child_type, child_id = directory_repo.calls[0]
+    assert parent_type == "directory"
+    assert parent_id == "d-target"
+    assert child_type == "note"
     assert child_id == "n1"
 
 
@@ -250,6 +265,8 @@ async def test_add_tag_fires_for_note_event_with_note_subject():
         rules=[_rule(
             event_type="NoteCreated",
             condition={"type": "always_true"},
+            attached_entity_type="note",
+            attached_entity_id="n1",
             action_type="add_tag",
             action_context={"tag_id": "t1"},
         )],
@@ -264,6 +281,8 @@ async def test_add_tag_fires_for_directory_event_with_directory_subject():
         rules=[_rule(
             event_type="DirectoryCreated",
             condition={"type": "always_true"},
+            attached_entity_type="directory",
+            attached_entity_id="d1",
             action_type="add_tag",
             action_context={"tag_id": "t1"},
         )],
@@ -279,6 +298,8 @@ async def test_add_tag_fires_for_directory_event_with_directory_subject():
 async def test_bus_dispatch_runs_matching_rule():
     rule_repo = InMemoryRuleRepo()
     await rule_repo.create_rule(_rule(
+        attached_entity_type="note",
+        attached_entity_id="n1",
         event_type="NoteCreated",
         condition={"type": "always_true"},
         action_type="add_tag",
