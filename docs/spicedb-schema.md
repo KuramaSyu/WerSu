@@ -4,10 +4,17 @@ This document describes the authorization model used by WerSu. The authorization
 
 ## Overview
 
-The schema defines three primary objects:
+The schema defines four primary objects:
 
 - **User** — Represents a user in the system
-- **Directory** — Represents a folder/collection of notes, as well as tags, since a note can have multiple directories where it belongs to
+- **Role** — RBAC role that bundles users together (managed by
+  the role subsystem; see [`roles.md`](./roles.md) when present)
+- **Shelf** — Flat (non-nested) grouping of books.  Rules can
+  attach to a shelf to fire for every event whose primary
+  entity is a book sitting on this shelf
+- **Directory** — Represents a folder/collection of notes ("book"),
+  as well as tags, since a note can have multiple directories
+  where it belongs to
 - **Note** — Represents a document, in context of WerSu called Note
 
 Relationships define how users relate to directories and notes, and permissions determine what actions users can perform.
@@ -32,19 +39,26 @@ definition user {}
 
 ---
 
-### Directory
+### Shelf
 
-A container for organizing notes. Supports hierarchical structure (parent directory) and role-based access control.
+A flat (non-hierarchical) grouping of books (directories).
+Shelves own no children of their own and host only books; a book
+can sit on multiple shelves at once.
+
+Rules can attach to a shelf -- they fire for every event whose
+primary entity is a book sitting on this shelf (or, for note
+events, a note inside such a book).  Rules no longer support a
+"global" mode; every rule has both `attached_entity_type` and
+`attached_entity_id` set.
 
 **Definition:**
 
 ```zed
-definition directory {
-    relation parent: directory
-    relation owner: user
-    relation admin: user
-    relation writer: user
-    relation reader: user
+definition shelf {
+    relation owner: user | role#member
+    relation admin: user | role#member
+    relation writer: user | role#member
+    relation reader: user | role#member
 
     permission delete = admin
     permission write = writer + admin
@@ -57,7 +71,52 @@ definition directory {
 
 | Relation | Type      | Description                                                              |
 | -------- | --------- | ------------------------------------------------------------------------ |
-| `parent` | directory | The parent directory of this directory (hierarchical structure)          |
+| `owner`  | user      | The owner of the shelf; has full control                                 |
+| `admin`  | user      | Administrator with delete, write, view, and edit_permissions permissions |
+| `writer` | user      | Can add/remove books on the shelf and view its contents                  |
+| `reader` | user      | Can only view the shelf                                                  |
+
+**Permissions:**
+
+| Permission         | Granted To    | Description | |
+| ------------------ | ------------- | ------------------------------------------- |
+| `view`             | reader, write | Can view the shelf and its books            |
+| `write`            | writer, admin | Can add/remove books on the shelf           |
+| `delete`           | admin         | Can delete the shelf                        |
+| `edit_permissions` | admin, owner  | Can modify access control for the shelf     |
+
+---
+
+### Directory
+
+A container for organizing notes ("books"). Supports hierarchical
+structure (parent book) **and** attachment to one or more shelves,
+so a book can simultaneously sit on multiple shelves and nest
+inside other books.
+
+**Definition:**
+
+```zed
+definition directory {
+    relation parent: directory | shelf
+    relation owner: user | role#member
+    relation admin: user | role#member
+    relation writer: user | role#member
+    relation reader: user | role#member
+
+    permission delete = admin
+    permission write = writer + admin
+    permission view = reader + write
+    permission edit_permissions = admin + owner
+}
+```
+
+**Relations:**
+
+| Relation | Type            | Description                                                              |
+| -------- | --------------- | ------------------------------------------------------------------------ |
+| `parent` | directory/shelf | The parent(s) of this book.  Multi-parent: a book may have several        |
+|          |                 | book-parents (DAG) and several shelf-parents simultaneously.              |
 | `owner`  | user      | The owner of the directory; has full control                             |
 | `admin`  | user      | Administrator with delete, write, view, and edit_permissions permissions |
 | `writer` | user      | Can write and view the directory and its contents                        |
@@ -83,6 +142,11 @@ definition directory {
 - `directory:my-fleeting-notes#owner@user:alice` — Alice owns this directory
 - `directory:my-fleeting-notes#admin@user:bob` — Bob is an admin of this directory
 - `directory:my-fleeting-notes#parent@directory:root` — "my-fleeting-notes" is a subdirectory of "root"
+- `directory:my-fleeting-notes#parent@shelf:on-this-shelf` — "my-fleeting-notes" also sits on the "on-this-shelf" shelf
+
+**Note:** A shelf cannot be the parent of a note -- only books
+(directories) can host notes.  Notes still hang off a single
+directory tree (`note#parent_directory` is unchanged).
 - Check: Can alice write to directory:my-fleeting-notes? → **YES** (owner has write)
 
 ---
