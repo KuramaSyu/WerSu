@@ -60,12 +60,12 @@ def _coerce_attached_entity_type(raw: str) -> Optional[AttachedEntityType]:
     """Coerce a ``RuleFilter.attached_entity_type`` string to a literal.
 
     Empty string -> ``None`` (no filter).  ``"directory"`` /
-    ``"note"`` pass through.  Anything else is treated as
-    ``None`` to avoid an opaque filter value.
+    ``"note"`` / ``"shelf"`` pass through.  Anything else is
+    treated as ``None`` to avoid an opaque filter value.
     """
     if not raw:
         return None
-    if raw in ("directory", "note"):
+    if raw in ("directory", "note", "shelf"):
         return raw  # type: ignore[return-value]
     return None
 

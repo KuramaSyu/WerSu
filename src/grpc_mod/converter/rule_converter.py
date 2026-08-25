@@ -53,14 +53,16 @@ def _struct_to_dict(struct: Optional[Struct]) -> dict:
 def _attached_entity_type(raw: str) -> UndefinedOr[AttachedEntityType]:
     """Coerce the proto string into the typed literal.
 
-    Empty string -> ``UNDEFINED`` (no attached entity; rule is
-    global).  ``"directory"`` / ``"note"`` pass through.  Any
-    other value is treated as ``UNDEFINED`` to avoid a
-    "valid" proto message that breaks the service validation.
+    Empty string -> ``UNDEFINED`` (caller did not supply;
+    rejected at the service layer since global rules are no
+    longer supported).  ``"directory"`` / ``"note"`` / ``"shelf"``
+    pass through.  Any other value is treated as ``UNDEFINED`` to
+    avoid a "valid" proto message that breaks the service
+    validation.
     """
     if not raw:
         return UNDEFINED
-    if raw in ("directory", "note"):
+    if raw in ("directory", "note", "shelf"):
         return raw  # type: ignore[return-value]
     return UNDEFINED
 
