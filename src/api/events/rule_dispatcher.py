@@ -223,7 +223,15 @@ class RuleDispatcher:
 
         event_type_name = type(event).__name__
         rules = await self._rule_repo.list_rules_for_event(event_type_name)
-        candidates = [r for r in rules if await self._scope_matches(r, event)]
+        # Global rules no longer exist: rules whose
+        # attached_entity_* fields are not both set cannot match.
+        # Drop them defensively (the rule service rejects such
+        # payloads upstream, but a belt-and-braces check here keeps
+        # the dispatch loop robust against legacy rows).
+        candidates = [
+            r for r in rules
+            if await self._scope_matches(r, event)
+        ]
         for rule in candidates:
             await self._evaluate_and_execute(rule, event)
 
@@ -231,76 +239,116 @@ class RuleDispatcher:
     async def _scope_matches(self, rule: RuleEntity, event: Event) -> bool:
         """Return ``True`` when the rule's scope covers this event.
 
-        A global rule (``attached_entity_*`` both unset) matches
-        every event of its ``event_type``.
+        Rules are entity-attached only -- both
+        ``attached_entity_type`` and ``attached_entity_id`` must
+        be set.  A rule whose attached fields are not both set
+        never matches (the rule service rejects the create/update
+        payload upstream).
 
-        An entity-attached rule matches when:
+        Match logic by ``attached_entity_type``:
 
-        * the event's primary entity type matches the rule's
-          ``attached_entity_type``; AND
-        * the event's primary entity id equals the rule's
-          ``attached_entity_id`` (the direct case); OR
-        * the event's primary entity is a *descendant* of the
-          rule's attached entity (the ancestor case).
+        * ``"directory"`` -- the event's primary entity is the
+          attached directory itself, or a directory descendant
+          of it (directory events), or a note whose parent
+          directory is in that ancestor chain (note events).
+        * ``"note"`` -- the event's primary entity id equals
+          the attached note id.
+        * ``"shelf"`` -- the event's primary entity is a book
+          sitting on the attached shelf (directory/note events),
+          or, for note events, a note whose parent book sits on
+          the shelf.
 
-        The descendant case is what lets a directory rule with
-        ``event_type == "NoteUpdated"`` fire for every note
-        inside that directory (or any nested directory).  The
-        walk is delegated to the
-        :class:`~src.api.events.event_context.EventContext` --
-        :meth:`EventContext.directory_ancestor_ids` returns the
-        parent chain for a directory; for a note we look up
-        the note's parent directory id first and then walk.
+        The descendant walks for ``directory`` and ``shelf``
+        rules are delegated to
+        :class:`~src.api.events.event_context.EventContext`.
 
-        The event context is best-effort: any failure inside
-        the walk degrades to "no ancestor match" rather than
-        blocking dispatch.
+        Best-effort: any failure inside the walk degrades to "no
+        match" rather than blocking dispatch.
         """
-        if rule.attached_entity_id is None or rule.attached_entity_type is None:
-            return True  # global rule
+        if (
+            rule.attached_entity_id is None
+            or rule.attached_entity_type is None
+        ):
+            # Global rules no longer exist; defensive fallback.
+            return False
 
         primary_type = event_primary_entity_type(event)
         primary_id = event_primary_entity_id(event)
         if primary_type is None or primary_id is None:
             return False
-        if primary_type != rule.attached_entity_type:
-            return False
+
+        attached_type = rule.attached_entity_type
+        attached_id = rule.attached_entity_id
 
         # Direct match: the rule is attached to the event's
         # primary entity itself.
-        if primary_id == rule.attached_entity_id:
+        if primary_type == attached_type and primary_id == attached_id:
             return True
 
-        # Descendant match: only meaningful when the event
-        # primary entity is in a directory hierarchy and the
-        # rule is attached to a directory.  For note events
-        # we resolve the note's parent directory first (a
-        # single hop, via the context's lazy ``note_parent_directory``
-        # helper when present; fall back to "no ancestor match"
-        # otherwise).
-        if rule.attached_entity_type != "directory":
-            return False
-
-        if primary_type == "note":
-            parent_dir_id = await self._context.note_parent_directory_id(
-                primary_id,
+        # Scope-specific walks.
+        if attached_type == "directory":
+            return await self._directory_scope_matches(
+                primary_type, primary_id, attached_id,
             )
-            if parent_dir_id is None:
-                return False
-            # If the rule is attached to the note's parent
-            # directory itself, that's a direct match (already
-            # covered above), so check from the parent's
-            # parent onwards.
+        if attached_type == "shelf":
+            return await self._shelf_scope_matches(
+                primary_type, primary_id, attached_id,
+            )
+        # attached_type == "note": only the direct-match path above
+        # can succeed (notes do not have descendants).
+        return False
+
+
+    async def _directory_scope_matches(
+        self,
+        primary_type: str,
+        primary_id: str,
+        attached_directory_id: str,
+    ) -> bool:
+        """Return ``True`` when ``primary_id`` (note or directory) sits
+        inside the directory ``attached_directory_id`` or one of its
+        descendants.
+        """
+        if primary_type == "directory":
             return await self._directory_ancestor_chain_contains(
-                parent_dir_id, rule.attached_entity_id,
+                primary_id, attached_directory_id,
             )
-
-        # primary_type == "directory": the event is a directory
-        # event and the rule is attached to a different
-        # directory -- check whether the event's directory is
-        # a descendant of the rule's attached directory.
+        # primary_type == "note"
+        parent_dir_id = await self._context.note_parent_directory_id(
+            primary_id,
+        )
+        if parent_dir_id is None:
+            return False
+        # If the rule is attached to the note's parent directory
+        # itself, that's a direct match (already covered above), so
+        # check from the parent's parent onwards.
         return await self._directory_ancestor_chain_contains(
-            primary_id, rule.attached_entity_id,
+            parent_dir_id, attached_directory_id,
+        )
+
+
+    async def _shelf_scope_matches(
+        self,
+        primary_type: str,
+        primary_id: str,
+        attached_shelf_id: str,
+    ) -> bool:
+        """Return ``True`` when ``primary_id`` is a book on the shelf
+        ``attached_shelf_id`` (directory events) or a note inside such
+        a book (note events).
+        """
+        if primary_type == "directory":
+            return await self._context.shelf_contains_book(
+                attached_shelf_id, primary_id,
+            )
+        # primary_type == "note"
+        parent_dir_id = await self._context.note_parent_directory_id(
+            primary_id,
+        )
+        if parent_dir_id is None:
+            return False
+        return await self._context.shelf_contains_book(
+            attached_shelf_id, parent_dir_id,
         )
 
 
@@ -427,12 +475,13 @@ class RuleDispatcher:
         note_id = event.note_id
         if not note_id:
             return
-        # No lazy import needed: the dispatcher's
-        # ``directory_repo`` is typed as ``AddChildToDirectoryCapable``
-        # so the call is statically guaranteed.
-        await self._directory_repo.add_child_to_directory(
-            "note",
+        # ``add_child_to`` is the new (typed) entry point on
+        # the directory facade ABC.  parent_type is always
+        # "directory" for AddToDirectory actions.
+        await self._directory_repo.add_child_to(
+            "directory",
             action.directory_id,
+            "note",
             note_id,
         )
 
