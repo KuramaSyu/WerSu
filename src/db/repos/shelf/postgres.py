@@ -42,7 +42,7 @@ class PostgresShelfRepo(ShelfRepoABC):
     """
 
     _SHELF_COLUMNS = (
-        "id, slug, display_name, description, image_url, readme_note_id"
+        "id, user_id, slug, display_name, description, image_url, readme_note_id"
     )
 
     def __init__(
@@ -69,6 +69,7 @@ class PostgresShelfRepo(ShelfRepoABC):
         self,
         *,
         slug: str,
+        user_id: UndefinedNoneOr[str] = UNDEFINED,
         display_name: UndefinedNoneOr[str] = UNDEFINED,
         description: UndefinedNoneOr[str] = UNDEFINED,
         image_url: UndefinedNoneOr[str] = UNDEFINED,
@@ -77,6 +78,7 @@ class PostgresShelfRepo(ShelfRepoABC):
         """Insert a shelf row and return the persisted entity."""
         rows = await self._shelf_table.insert(
             {
+                "user_id": self._resolve_undefined_none(user_id),
                 "slug": slug,
                 "display_name": self._resolve_undefined_none(display_name),
                 "description": self._resolve_undefined_none(description),
@@ -266,6 +268,11 @@ class PostgresShelfRepo(ShelfRepoABC):
                 str(_row_get(row, "id"))
                 if _row_get(row, "id") is not None
                 else UNDEFINED
+            ),
+            user_id=(
+                str(_row_get(row, "user_id"))
+                if _row_get(row, "user_id") is not None
+                else None
             ),
             slug=(
                 str(_row_get(row, "slug"))
