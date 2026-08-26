@@ -71,6 +71,29 @@ class DirectoryRelationEnum(StrEnum):
     EDIT_PERMISSIONS = "edit_permissions"
 
 
+class ShelfRelationEnum(StrEnum):
+    """SpiceDB relations and permissions for shelf objects.
+
+    Mirrors :class:`DirectoryRelationEnum` -- shelves share the
+    same role set (owner / admin / writer / reader) because
+    the rules subsystem treats shelf-attached rules as
+    equivalent to directory-attached rules for permission
+    gating.
+    """
+
+    # relations
+    ADMIN = "admin"
+    WRITER = "writer"
+    READER = "reader"
+    OWNER = "owner"
+
+    # permissions
+    VIEW = "view"
+    WRITE = "write"
+    DELETE = "delete"
+    EDIT_PERMISSIONS = "edit_permissions"
+
+
 class UserRelationEnum(StrEnum):
     """SpiceDB relations on user objects (currently membership edges only)."""
 

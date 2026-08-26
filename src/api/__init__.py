@@ -31,6 +31,7 @@ from src.api.other.relationship import (
     RelationName,
     Relationship,
     RoleRelationEnum,
+    ShelfRelationEnum,
     SubjectRef,
     SubjectType,
     UserRelationEnum,
@@ -133,6 +134,7 @@ __all__ = [
     "DirectoryHierarchyType",
     "LinkTargetType",
     "RoleRelationEnum",
+    "ShelfRelationEnum",
     "SubjectRef",
     "UserRelationEnum",
     # shared
