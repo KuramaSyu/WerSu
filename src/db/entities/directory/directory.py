@@ -44,6 +44,11 @@ class DirectoryEntity(AcceptsVisitor):
             `len(child_note_ids)` once those lists are populated.
         tag_ids: tag ids this directory carries, sourced from
             `note.directory_tag`.  Empty list when none.
+        shelf_ids: ids of every shelf (from `note.shelf_book`)
+            that contains this directory as a book.  Empty list
+            when the directory is not on any shelf.  Populated
+            by the directory facade when callers opt in via
+            :class:`DirectoryIncludeOptions` ``include_shelves``.
         relations: user-facing relations such as `admin`, `writer`,
             and `reader`.  Deprecated; kept for internal use only.
     """
@@ -58,6 +63,7 @@ class DirectoryEntity(AcceptsVisitor):
     child_directory_ids: UndefinedOr[List[str]] = UNDEFINED
     child_note_ids: UndefinedOr[List[str]] = UNDEFINED
     tag_ids: UndefinedOr[List[str]] = UNDEFINED
+    shelf_ids: UndefinedOr[List[str]] = UNDEFINED
     # deprecated -- dont use this anymore. Only for internal usage
     relations: UndefinedOr[List[Relationship]] = UNDEFINED
 

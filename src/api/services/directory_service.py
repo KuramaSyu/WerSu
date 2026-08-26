@@ -29,6 +29,11 @@ class DirectoryIncludeOptions(TypedDict, total=False):
     * `include_child_notes` -- populates
       `directory.child_note_ids` via ``note.directory_note``
       (``directory_id = directory.id``).
+    * `include_shelves` -- populates `directory.shelf_ids` via
+      ``note.shelf_book`` (every row where ``book_id =
+      directory.id``).  Drives the shelf -> book direction
+      in reverse: this lists the shelves that hold *this*
+      directory as one of their books.
 
     Note:
         The cheaper "row only" read is what happens with an empty
@@ -42,6 +47,7 @@ class DirectoryIncludeOptions(TypedDict, total=False):
     include_parents: bool
     include_child_dirs: bool
     include_child_notes: bool
+    include_shelves: bool
 
 
 def resolve_directory_include_options(
@@ -53,6 +59,7 @@ def resolve_directory_include_options(
         include_parents=bool(raw.get("include_parents", False)),
         include_child_dirs=bool(raw.get("include_child_dirs", False)),
         include_child_notes=bool(raw.get("include_child_notes", False)),
+        include_shelves=bool(raw.get("include_shelves", False)),
     )
 
 
