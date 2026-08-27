@@ -34,6 +34,8 @@ from src.api.facades.note_facade import NoteFacadeABC
 from src.api.repos.tag_repo import TagRepoABC
 from src.db.repos.tag.postgres import PostgresTagRepo
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
+from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.user.user import UserRepoABC
 from src.db.table import Table
@@ -209,6 +211,8 @@ def note_repo_facade(
         tag_repo=tag_repo,
         logging_provider=logging_provider,
         version_repo=version_repo,
+        shelf_repo=NoopShelfRepo(),
+        rule_repo=InMemoryRuleRepo(),
     )
 
 
@@ -250,4 +254,74 @@ async def tag_repo(db: Database) -> TagRepoABC:
             error_log=True,
         ),
         db=db,
+    )
+
+
+@pytest.fixture(scope="function")
+async def user_service(
+    db: Database,
+    user_repo: UserRepoABC,
+    note_repo_facade: NoteFacadeABC,
+    directory_repo: _TestDirectoryRepo,
+    tag_repo: TagRepoABC,
+):
+    """Return a :class:`UserServiceImpl` wired against real DB + in-memory fakes.
+
+    Uses the Postgres-backed shelf repo (rows live in the DB and
+    ``create_user`` must persist them) and the same in-memory
+    permission + rule repos that :func:`note_repo_facade`
+    consults.  The directory facade's ``directory_repo`` is the
+    in-memory :class:`_TestDirectoryRepo` -- it accepts the
+    bootstrap inserts and its
+    :meth:`_TestDirectoryRepo.list_user_directory_ids` falls
+    back to scanning the shared permission repo for
+    ``directory#admin@user`` relations, so the rule's resolved
+    ``directory_id`` is accepted as visible to the user.  The
+    test directory repo is wired to the shared permission repo
+    so the fallback kicks in.
+
+    Tests that need the full bootstrap (shelf + 3 books +
+    default-fleeting rule) call
+    :meth:`UserServiceImpl.create_user` instead of poking at
+    the user repo + facade rule repo + facade permission repo
+    individually.
+    """
+    from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
+    from src.db.repos.shelf.postgres import PostgresShelfRepo
+    from src.db.repos.user import RepoContextFactory
+    from src.services.user_service import UserServiceImpl
+    permission_repo = note_repo_facade._permission_repo  # type: ignore[attr-defined]
+    rule_repo = note_repo_facade._rule_repo  # type: ignore[attr-defined]
+    directory_repo._permission_repo = permission_repo
+    shelf_repo = PostgresShelfRepo(
+        shelf_table=Table(
+            db=db,
+            table_name="note.shelf",
+            id_fields=["id"],
+            error_log=True,
+            logging_provider=logging_provider,
+        ),
+        shelf_book_table=Table(
+            db=db,
+            table_name="note.shelf_book",
+            id_fields=["shelf_id", "book_id"],
+            error_log=True,
+            logging_provider=logging_provider,
+        ),
+    )
+    directory_facade = DirectoryFacadeImpl(
+        directory_repo=directory_repo,
+        permission_repo=permission_repo,
+        tag_repo=tag_repo,
+        log=logging_provider,
+        shelf_repo=shelf_repo,
+    )
+    context_factory = RepoContextFactory(user_repo=user_repo)
+    return UserServiceImpl(
+        user_repo=user_repo,
+        directory_facade=directory_facade,
+        context_factory=context_factory,
+        shelf_repo=shelf_repo,
+        rule_repo=rule_repo,
+        permission_repo=permission_repo,
     )

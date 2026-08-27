@@ -11,7 +11,7 @@ from src.api.other.types import Pagination
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.directory.directory import DirectoryEntity
-from src.db.repos.note.permission import NoteRelationEnum, ObjectTypeEnum
+from src.db.repos.note.permission import DirectoryRelationEnum, NoteRelationEnum, ObjectTypeEnum
 from src.db.repos.note.content import NoteContentPostgresRepo, NoteContentRepo
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.api.facades.note_facade import NoteFacadeABC, SearchType
@@ -22,24 +22,27 @@ from src.db.repos.user.user import UserRepoABC
 import src.api
 from src.db.repos import UserPostgresRepo, Database
 from src.utils import logging_provider
-from tests.fixtures import db, note_repo_facade, tag_repo, user_repo, dsn, test_user
+from tests.fixtures import (
+    db, note_repo_facade, tag_repo, user_repo, dsn, test_user,
+    _TestDirectoryRepo,
+)
 
 pytestmark = pytest.mark.integration
 
 # each test recreates user and note to keep readability per test
 
-async def test_create_note(db: Database, note_repo_facade: NoteFacadeABC, user_repo: UserRepoABC, test_user: UserEntity):
+async def test_create_note(db: Database, note_repo_facade: NoteFacadeABC, user_service, test_user: UserEntity):
     """Creates a test user, and creates a note for this user"""
     log = logging_provider(__name__)
-    user = await user_repo.insert(test_user)
+    user = await user_service.create_user(test_user)
     assert user.id
     ctx = UserContext(user_id=user.id)
 
     updated_at = datetime(2024, 1, 1, 12, 0, 0)
     test_note = NoteEntity(
-        title="Test Note", 
-        content="This is a test note.", 
-        updated_at=updated_at, 
+        title="Test Note",
+        content="This is a test note.",
+        updated_at=updated_at,
         author_id=user.id
     )
     ret_note = await note_repo_facade.insert(test_note, ctx)
@@ -48,17 +51,17 @@ async def test_create_note(db: Database, note_repo_facade: NoteFacadeABC, user_r
     log.debug(f"Created note: {ret_note}; expected: {test_note}")
     assert ret_note == test_note
 
-async def test_update_note(db: Database, note_repo_facade: NoteFacadeABC, user_repo: UserRepoABC, test_user: UserEntity):
+async def test_update_note(db: Database, note_repo_facade: NoteFacadeABC, user_service, test_user: UserEntity):
     """Creates a test user, and creates a note for this user"""
-    user = await user_repo.insert(test_user)
+    user = await user_service.create_user(test_user)
     assert user.id
     ctx = UserContext(user_id=user.id)
 
     updated_at = datetime(2024, 1, 1, 12, 0, 0)
     test_note = NoteEntity(
-        title="Test Note", 
-        content="This is a test note.", 
-        updated_at=updated_at, 
+        title="Test Note",
+        content="This is a test note.",
+        updated_at=updated_at,
         author_id=user.id
     )
     test_note = await note_repo_facade.insert(test_note, ctx)
@@ -206,12 +209,12 @@ async def test_create_and_remove_note(
     assert test_note_select_after_delete is None
 
 async def test_search_by_context(
-    note_repo_facade: NoteFacadeABC, 
-    user_repo: UserRepoABC,
-    test_user: UserEntity
+    note_repo_facade: NoteFacadeABC,
+    user_service,
+    test_user: UserEntity,
 ):
     """Creates a test user, and creates multiple notes for this user, then searches by context"""
-    user = await user_repo.insert(test_user)
+    user = await user_service.create_user(test_user)
     assert user.id
     ctx = UserContext(user_id=user.id)
     notes_contents = [
@@ -266,12 +269,12 @@ async def test_search_by_context(
     ) == True
 
 async def test_search_by_web_lexme_matching(
-    note_repo_facade: NoteFacadeABC, 
-    user_repo: UserRepoABC,
-    test_user: UserEntity
+    note_repo_facade: NoteFacadeABC,
+    user_service,
+    test_user: UserEntity,
 ):
     """Creates a test user, and creates multiple notes for this user, then searches by fuzzy matching"""
-    user = await user_repo.insert(test_user)
+    user = await user_service.create_user(test_user)
     assert user.id
     ctx = UserContext(user_id=user.id)
 
@@ -341,16 +344,16 @@ async def test_search_by_web_lexme_matching(
 
 
 async def test_search_by_similarity(
-    note_repo_facade: NoteFacadeABC, 
-    user_repo: UserRepoABC,
-    test_user: UserEntity
+    note_repo_facade: NoteFacadeABC,
+    user_service,
+    test_user: UserEntity,
 ):
     """
-    Creates a test user, 
-    and creates multiple notes for this user, 
+    Creates a test user,
+    and creates multiple notes for this user,
     then searches by similarity
     """
-    user = await user_repo.insert(test_user)
+    user = await user_service.create_user(test_user)
     assert user.id
     ctx = UserContext(user_id=user.id)
 
@@ -392,16 +395,16 @@ async def test_search_by_similarity(
     ) == True
 
 async def test_search_no_filter(
-    note_repo_facade: NoteFacadeABC, 
-    user_repo: UserRepoABC,
-    test_user: UserEntity
+    note_repo_facade: NoteFacadeABC,
+    user_service,
+    test_user: UserEntity,
 ):
-    """Creates a test user, 
-    and creates multiple notes for this user, 
+    """Creates a test user,
+    and creates multiple notes for this user,
     then searches without filter
     which should return notes in creation order
     """
-    user = await user_repo.insert(test_user)
+    user = await user_service.create_user(test_user)
     assert user.id
     ctx = UserContext(user_id=user.id)
 
@@ -434,12 +437,12 @@ async def test_search_no_filter(
 
 async def test_search_assigns_parent_directories(
     note_repo_facade: NoteFacadeABC,
-    user_repo: UserRepoABC,
+    user_service,
     test_user: UserEntity,
 ):
-    """Test if inserted notes, which should automatically get a directory, have 
+    """Test if inserted notes, which should automatically get a directory, have
     a directory relation within the permissions of the searched notes"""
-    user = await user_repo.insert(test_user)
+    user = await user_service.create_user(test_user)
     ctx = UserContext(user_id=user.id)
 
     inserted = await note_repo_facade.insert(
@@ -473,11 +476,11 @@ async def test_search_assigns_parent_directories(
 
 async def test_search_only_assigns_permissions_for_returned_notes(
     note_repo_facade: NoteFacadeABC,
-    user_repo: UserRepoABC,
+    user_service,
     test_user: UserEntity,
 ):
     """Tests that the permissions returned in the search results are related to the note id"""
-    user = await user_repo.insert(test_user)
+    user = await user_service.create_user(test_user)
     ctx = UserContext(user_id=user.id)
 
     await note_repo_facade.insert(
