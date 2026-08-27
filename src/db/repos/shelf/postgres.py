@@ -28,6 +28,7 @@ from src.api.other.undefined import (
     unwrap_undefined_or,
 )
 from src.api.repos.shelf_repo import ShelfRepoABC
+from api import LoggingProvider
 from src.db.entities.shelf import ShelfEntity
 from src.db.table import TableABC
 
@@ -42,16 +43,24 @@ class PostgresShelfRepo(ShelfRepoABC):
     """
 
     _SHELF_COLUMNS = (
-        "id, user_id, slug, display_name, description, image_url, readme_note_id"
+        "id, slug, display_name, description, image_url, readme_note_id"
     )
+
+    #: How many collision-retry attempts the slug-suffixer
+    #: gets before giving up.  ``-2`` through ``-N`` so the
+    #: default behaviour handles up to 100 simultaneous users
+    #: sharing a slug; bump when you actually need more.
+    MAX_SLUG_RETRY = 100
 
     def __init__(
         self,
         shelf_table: TableABC,
         shelf_book_table: TableABC,
+        logging_provider: LoggingProvider,
     ) -> None:
         self._shelf_table = shelf_table
         self._shelf_book_table = shelf_book_table
+        self.log = logging_provider.get_logger(__name__)
 
     @property
     def shelf_table(self) -> TableABC:
@@ -69,27 +78,46 @@ class PostgresShelfRepo(ShelfRepoABC):
         self,
         *,
         slug: str,
-        user_id: UndefinedNoneOr[str] = UNDEFINED,
         display_name: UndefinedNoneOr[str] = UNDEFINED,
         description: UndefinedNoneOr[str] = UNDEFINED,
         image_url: UndefinedNoneOr[str] = UNDEFINED,
         readme_note_id: UndefinedNoneOr[str] = UNDEFINED,
     ) -> ShelfEntity:
-        """Insert a shelf row and return the persisted entity."""
-        rows = await self._shelf_table.insert(
-            {
-                "user_id": self._resolve_undefined_none(user_id),
-                "slug": slug,
-                "display_name": self._resolve_undefined_none(display_name),
-                "description": self._resolve_undefined_none(description),
-                "image_url": self._resolve_undefined_none(image_url),
-                "readme_note_id": self._resolve_undefined_none(readme_note_id),
-            },
-            returning=self._SHELF_COLUMNS,
+        """Insert a shelf row and return the persisted entity.
+
+        Slugs are unique per-deployment.  When a collision
+        occurs (e.g. two users with the same username), the
+        insert retries with ``<slug>-2``, ``<slug>-3``, ... up
+        to :data:`MAX_SLUG_RETRY` attempts before raising.
+        """
+        import asyncpg  # local import keeps the module top-level clean
+        candidate = slug
+        for attempt in range(1, self.MAX_SLUG_RETRY + 1):
+            try:
+                rows = await self._shelf_table.insert(
+                    {
+                        "slug": candidate,
+                        "display_name": self._resolve_undefined_none(display_name),
+                        "description": self._resolve_undefined_none(description),
+                        "image_url": self._resolve_undefined_none(image_url),
+                        "readme_note_id": self._resolve_undefined_none(readme_note_id),
+                    },
+                    returning=self._SHELF_COLUMNS,
+                )
+                self.log.debug(f"DEBUG shelf insert attempt={attempt} candidate={candidate!r} rows={rows}")
+            except Exception as exc:
+                self.log.debug(f"DEBUG shelf EXC attempt={attempt} candidate={candidate!r} exc={type(exc).__name__}: {exc}")
+                if isinstance(exc, asyncpg.UniqueViolationError):
+                    candidate = f"{slug}-{attempt + 1}"
+                    continue
+                raise
+            if not rows:
+                raise RuntimeError("Failed to create shelf")
+            return self._row_to_entity(rows[0])
+        raise RuntimeError(
+            f"Could not insert shelf: slug {slug!r} collided "
+            f"with {self.MAX_SLUG_RETRY} attempts"
         )
-        if not rows:
-            raise RuntimeError("Failed to create shelf")
-        return self._row_to_entity(rows[0])
 
     async def fetch_shelf(
         self,
@@ -268,11 +296,6 @@ class PostgresShelfRepo(ShelfRepoABC):
                 str(_row_get(row, "id"))
                 if _row_get(row, "id") is not None
                 else UNDEFINED
-            ),
-            user_id=(
-                str(_row_get(row, "user_id"))
-                if _row_get(row, "user_id") is not None
-                else None
             ),
             slug=(
                 str(_row_get(row, "slug"))

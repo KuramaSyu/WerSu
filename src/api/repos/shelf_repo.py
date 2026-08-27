@@ -32,7 +32,6 @@ class ShelfRepoABC(ABC):
         self,
         *,
         slug: str,
-        user_id: UndefinedNoneOr[str] = UNDEFINED,
         display_name: UndefinedNoneOr[str] = UNDEFINED,
         description: UndefinedNoneOr[str] = UNDEFINED,
         image_url: UndefinedNoneOr[str] = UNDEFINED,
@@ -41,14 +40,7 @@ class ShelfRepoABC(ABC):
         """Insert a new shelf row and return the persisted entity.
 
         Args:
-            slug: machine-readable shelf slug (required; unique
-                per ``user_id`` via the
-                ``note.shelf.user_id + slug`` index).
-            user_id: id of the user that owns this shelf.
-                ``None`` and :obj:`~src.api.undefined.UNDEFINED`
-                both default to SQL NULL (legacy shelves owned
-                by no specific user).  When supplied the
-                ``(user_id, slug)`` pair must be unique.
+            slug: machine-readable shelf slug (required; unique).
             display_name: optional display name; ``None`` clears
                 it, :obj:`~src.api.undefined.UNDEFINED` is treated
                 as "not supplied" and defaults to SQL NULL.

@@ -118,7 +118,6 @@ class Migration(MigrationABC):
             """
             CREATE TABLE IF NOT EXISTS note.shelf (
                 id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                user_id           text,
                 slug              text NOT NULL,
                 display_name      text,
                 description       text,
@@ -128,15 +127,9 @@ class Migration(MigrationABC):
                 updated_at        timestamptz NOT NULL DEFAULT now()
             );
 
-            -- A shelf belongs to exactly one user; the
-            -- ``(user_id, slug)`` tuple must be unique so two
-            -- users can both have a ``users_shelf`` without
-            -- colliding on the slug column.
-            CREATE UNIQUE INDEX IF NOT EXISTS shelf_user_slug_unique
-                ON note.shelf (user_id, slug);
-
-            CREATE INDEX IF NOT EXISTS shelf_user_idx
-                ON note.shelf (user_id);
+            -- Ownership lives in SpiceDB (``shelf#owner@user``);
+            CREATE UNIQUE INDEX IF NOT EXISTS shelf_slug_unique
+                ON note.shelf (slug);
 
             CREATE TABLE IF NOT EXISTS note.shelf_book (
                 id        BIGSERIAL PRIMARY KEY,

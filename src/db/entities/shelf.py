@@ -24,13 +24,12 @@ from src.api.other.visitor import AcceptsVisitor
 class ShelfEntity(AcceptsVisitor):
     """One row of ``note.shelf``.
 
+    Ownership lives in SpiceDB (``shelf#owner@user:<id>``);
+    Postgres only stores the row + its metadata + the
+    ``note.shelf_book`` bindings.
+
     Attributes:
         id: server-generated UUID primary key.
-        user_id: id of the user that owns this shelf.
-            ``note.shelf.user_id`` is nullable for legacy
-            single-tenant rows but every shelf the user
-            service creates carries the owning user's id so the
-            ``(user_id, slug)`` unique index is well-defined.
         slug: machine-readable shelf slug.  Mirrors the
             ``note.shelf.slug`` column.
         display_name: optional display name for the shelf.
@@ -48,7 +47,6 @@ class ShelfEntity(AcceptsVisitor):
     """
 
     id: UndefinedOr[str] = UNDEFINED
-    user_id: UndefinedNoneOr[str] = UNDEFINED
     slug: UndefinedNoneOr[str] = UNDEFINED
     display_name: UndefinedNoneOr[str] = UNDEFINED
     description: UndefinedNoneOr[str] = UNDEFINED
