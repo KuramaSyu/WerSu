@@ -366,6 +366,11 @@ async def serve():
         db=db,
     )
 
+    shelf_repo = PostgresShelfRepo(
+        shelf_table=shelf_table,
+        shelf_book_table=shelf_book_table,
+    )
+
     directory_facade = DirectoryFacadeImpl(
         directory_repo=PostgresDirectoryRepo(  # this is not indented to be used by other parties
             directory_table=directory_table,
@@ -375,11 +380,7 @@ async def serve():
         permission_repo=permission_repo,
         tag_repo=tag_repo,
         log=logging_provider,
-    )
-
-    shelf_repo = PostgresShelfRepo(
-        shelf_table=shelf_table,
-        shelf_book_table=shelf_book_table,
+        shelf_repo=shelf_repo,
     )
 
     version_repo = NoteVersionPostgresRepo(
@@ -402,6 +403,8 @@ async def serve():
         tag_repo=tag_repo,
         logging_provider=logging_provider,
         version_repo=version_repo,
+        shelf_repo=shelf_repo,
+        rule_repo=rule_repo,
     )
     attachments_repo: AttachmentRepoABC = AttachmentS3Repo(
         client=s3_client,  # type:ignore
@@ -644,7 +647,14 @@ async def serve():
     add_RuleServiceServicer_to_server(grpc_rule_service, server)
 
     # setup gRPC user service
-    app_user_service = UserServiceImpl(user_repo=user_repo, directory_facade=directory_facade, context_factory=user_context_factory)
+    app_user_service = UserServiceImpl(
+        user_repo=user_repo,
+        directory_facade=directory_facade,
+        context_factory=user_context_factory,
+        shelf_repo=shelf_repo,
+        rule_repo=rule_repo,
+        permission_repo=permission_repo,
+    )
     grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider, to_grpc=grpc_visitor)
     add_UserServiceServicer_to_server(grpc_user_service, server)
 
