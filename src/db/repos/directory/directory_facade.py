@@ -17,6 +17,7 @@ import asyncio
 from typing import Dict, List, Optional, Tuple
 
 from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.repos.shelf_repo import ShelfRepoABC
 from src.api.repos.tag_repo import TagRepoABC
 from src.api.services.directory_service import (
     DirectoryIncludeOptions,
@@ -54,10 +55,12 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         permission_repo: PermissionRepoABC,
         tag_repo: TagRepoABC,
         log: LoggingProvider,
+        shelf_repo: ShelfRepoABC,
     ) -> None:
         self._dir_repo = directory_repo
         self._perm_repo = permission_repo
         self._tag_repo = tag_repo
+        self._shelf_repo = shelf_repo
         self._log = log(self)
 
     # ---- public contract ---------------------------------------------
@@ -133,7 +136,28 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         #     entity,
         #     populate_parents=bool(resolved.get("include_parents")),
         # )
+        if resolved.get("include_shelves"):
+            await self._populate_shelf_ids(entity)
         return entity
+
+    async def _populate_shelf_ids(
+        self,
+        entity: DirectoryEntity,
+    ) -> None:
+        """Populate ``entity.shelf_ids`` from the shelf repo.
+
+        Errors from the shelf repo are swallowed and the entity
+        ends up with an empty list so the read path never fails
+        just because the shelf layer had a hiccup.
+        """
+        if entity.id is None or entity.id is UNDEFINED:
+            return
+        try:
+            shelf_ids = await self._shelf_repo.get_shelves_of_book(str(entity.id))
+        except Exception:  # noqa: BLE001 -- best-effort enrichment
+            entity.shelf_ids = []
+            return
+        entity.shelf_ids = [str(s) for s in shelf_ids if s]
 
     async def update_directory(
         self,
@@ -489,7 +513,40 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             return entity
 
         hydrated = await asyncio.gather(*(_hydrate(e) for e in entities))
-        return list(hydrated)
+        result = list(hydrated)
+        # Best-effort shelf_ids hydration.  Errors are swallowed;
+        # an empty shelf_ids list is fine.
+        await self._hydrate_shelf_ids_for(result)
+        return result
+
+    async def _hydrate_shelf_ids_for(
+        self,
+        entities: List[DirectoryEntity],
+    ) -> None:
+        """Populate ``shelf_ids`` for a batch of directories in one query.
+
+        The :class:`ShelfRepoABC` exposes
+        :meth:`ShelfRepoABC.get_shelves_of_book` per id, so we
+        fan out in parallel for the batch.  Each call is one
+        indexed SQL lookup against ``note.shelf_book``, which is
+        cheap enough for the directories a single user can see.
+        """
+        if not entities:
+            return
+
+        async def _load(d: DirectoryEntity) -> None:
+            if d.id is None or d.id is UNDEFINED:
+                return
+            try:
+                shelf_ids = await self._shelf_repo.get_shelves_of_book(
+                    str(d.id)
+                )
+            except Exception:  # noqa: BLE001 -- best-effort
+                d.shelf_ids = []
+                return
+            d.shelf_ids = [str(s) for s in shelf_ids if s]
+
+        await asyncio.gather(*(_load(d) for d in entities))
 
     async def _hydrate_parents(
         self,
