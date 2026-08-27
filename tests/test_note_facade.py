@@ -22,7 +22,9 @@ import pytest
 
 from src.api.other.types import Pagination
 from src.api.other.undefined import UNDEFINED
+from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
+from src.db.entities.rule import RuleEntity
 from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.db.repos.note import note_facade as note_module
 from src.db.repos.note.note_facade import NoteFacadeImpl
@@ -38,6 +40,8 @@ from tests._fixtures_pkg.fakes import (
     _TestDirectoryRepo,
 )
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
+from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
 from tests.stubs.user_context import _UserContext as UserContext
 
 
@@ -50,6 +54,8 @@ def _make_facade(
     tag_repo: Optional[_FakeTagRepo] = None,
     permission_repo: Optional[InMemoryPermissionRepo] = None,
     directory_repo: Optional[DirectoryFacadeABC] = None,
+    shelf_repo=None,
+    rule_repo=None,
 ) -> tuple[NoteFacadeImpl, _FakeDatabase, _FakeNoteContentRepo, _FakeEmbeddingRepo, DirectoryFacadeABC, _FakeCombinedNoteRepo, _FakeTagRepo, _FakeVersionRepo]:
     """Build a :class:`NoteFacadeImpl` wired against the in-memory fakes."""
     fake_db = db or _FakeDatabase()
@@ -70,6 +76,8 @@ def _make_facade(
         tag_repo=fake_tags,
         logging_provider=_log_provider,
         version_repo=fake_version_repo,
+        shelf_repo=shelf_repo if shelf_repo is not None else InMemoryShelfRepo(),
+        rule_repo=rule_repo if rule_repo is not None else InMemoryRuleRepo(),
     )
     return facade, fake_db, fake_content, fake_embedding, fake_directory, fake_combined, fake_tags, fake_version_repo
 
@@ -96,6 +104,16 @@ async def test_insert_without_content_skips_embedding() -> None:
     """`insert` does not generate an embedding when `content` is empty."""
     facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade()
     fake_db.fetchrow_responses.append({"id": "note-empty"})
+    # Seed a default directory + default-fleeting rule so the
+    # insert resolves a parent directory.
+    default_dir = DirectoryEntity(
+        id="dir-default", slug="fleeting_notes",
+    )
+    fake_directory.directories_by_id["dir-default"] = default_dir
+    fake_directory.user_to_directory_ids["user-1"] = ["dir-default"]
+    await _seed_default_fleeting_rule_for(
+        facade, "user-1", "dir-default", "shelf-1",  # type: ignore[arg-type]
+    )
 
     note = NoteEntity(
         title="",
@@ -115,6 +133,15 @@ async def test_insert_records_initial_snapshot_when_version_repo_present() -> No
     """`insert` records an initial version snapshot via the version repo."""
     facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade(version_repo=_FakeVersionRepo())
     fake_db.fetchrow_responses.append({"id": "note-snap"})
+    # Seed default directory + rule so insert resolves a parent.
+    default_dir = DirectoryEntity(
+        id="dir-default", slug="fleeting_notes",
+    )
+    fake_directory.directories_by_id["dir-default"] = default_dir
+    fake_directory.user_to_directory_ids["user-1"] = ["dir-default"]
+    await _seed_default_fleeting_rule_for(
+        facade, "user-1", "dir-default", "shelf-1",  # type: ignore[arg-type]
+    )
 
     note = NoteEntity(
         title="Snap title",
@@ -268,4 +295,145 @@ async def test_search_notes_raises_for_unknown_search_type() -> None:
             ctx=UserContext("user-1"),
             pagination=Pagination(limit=10, offset=0),
         )
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+async def _seed_default_fleeting_rule_for(
+    facade: NoteFacadeImpl,
+    user_id: str,
+    directory_id: str,
+    shelf_id: str,
+) -> None:
+    """Insert a default-fleeting rule and an admin shelf relation.
+
+    The :meth:`NoteFacadeImpl._resolve_directory_ids` walks
+    SpiceDB to find the user's shelves, then asks the rule repo
+    for an enabled ``NoteCreated`` rule per shelf.  The tests
+    above only need to assert that ``insert`` resolves a parent
+    directory, so the smallest helper that satisfies both
+    lookups is enough.
+
+    Note that we reach into ``facade._rule_repo`` and
+    ``facade._permission_repo`` directly because the tests
+    don't own the rule/permission wiring -- it lives on the
+    facade constructor.  This is intentional and limited to
+    the test scaffolding.
+    """
+    rule_repo = facade._rule_repo  # type: ignore[attr-defined]
+    permission_repo = facade._permission_repo  # type: ignore[attr-defined]
+    await rule_repo.create_rule(
+        RuleEntity(
+            id=UNDEFINED,
+            event_type="NoteCreated",
+            attached_entity_type="shelf",
+            attached_entity_id=shelf_id,
+            condition={"type": "always_true"},
+            action_type="add_to_directory",
+            action_context={"directory_id": directory_id},
+            enabled=True,
+            creator_id=user_id,
+        )
+    )
+    # Make the user admin on the shelf so the lookup returns it.
+    from src.api.other.relationship import (
+        ObjectRef,
+        ObjectTypeEnum,
+        Relationship,
+        ShelfRelationEnum,
+        SubjectRef,
+    )
+    await permission_repo.insert([
+        Relationship(
+            resource=ObjectRef(
+                object_type=ObjectTypeEnum.SHELF,
+                object_id=shelf_id,
+            ),
+            relation=ShelfRelationEnum.ADMIN,
+            subject=SubjectRef(
+                object_type=ObjectTypeEnum.USER,
+                object_id=user_id,
+            ),
+        )
+    ])
+
+
+# ---------------------------------------------------------------------------
+# Default-directory resolution via rule (no parent supplied)
+# ---------------------------------------------------------------------------
+
+
+async def test_insert_note_without_directory_uses_rule_default() -> None:
+    """When no parent is given the facade resolves the default rule's target."""
+    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade()
+    fake_db.fetchrow_responses.append({"id": "note-rule"})
+    # Seed: user has a default rule pointing at "dir-fleeting".
+    fake_directory.directories_by_id["dir-fleeting"] = DirectoryEntity(
+        id="dir-fleeting", slug="fleeting_notes",
+    )
+    fake_directory.user_to_directory_ids["user-1"] = ["dir-fleeting"]
+    await _seed_default_fleeting_rule_for(
+        facade, "user-1", "dir-fleeting", "shelf-1",  # type: ignore[arg-type]
+    )
+
+    note = NoteEntity(
+        title="Inbox",
+        content="body",
+        updated_at=datetime(2026, 7, 3, 12, 0, 0),
+        author_id="user-1",
+    )
+    result = await facade.insert(note, UserContext("user-1"))
+
+    # The note picks up the rule's directory_id.
+    assert result.directory_ids == ["dir-fleeting"]
+
+
+async def test_insert_note_without_directory_raises_when_no_rule() -> None:
+    """No parent + no rule -> ``ValueError``."""
+    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade()
+    fake_db.fetchrow_responses.append({"id": "note-no-rule"})
+
+    note = NoteEntity(
+        title="Inbox",
+        content="body",
+        updated_at=datetime(2026, 7, 3, 12, 0, 0),
+        author_id="user-1",
+    )
+    with pytest.raises(ValueError, match="no default-fleeting rule"):
+        await facade.insert(note, UserContext("user-1"))
+
+
+async def test_insert_note_with_explicit_directory_bypasses_rule() -> None:
+    """Explicit ``directory_ids`` are honoured even when a rule exists."""
+    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade()
+    fake_db.fetchrow_responses.append({"id": "note-explicit"})
+    # Seed: user has a default rule pointing at "dir-fleeting",
+    # but the user is explicitly inserting into "dir-custom".
+    fake_directory.directories_by_id["dir-fleeting"] = DirectoryEntity(
+        id="dir-fleeting", slug="fleeting_notes",
+    )
+    fake_directory.directories_by_id["dir-custom"] = DirectoryEntity(
+        id="dir-custom", slug="custom",
+    )
+    fake_directory.user_to_directory_ids["user-1"] = [
+        "dir-fleeting", "dir-custom",
+    ]
+    await _seed_default_fleeting_rule_for(
+        facade, "user-1", "dir-fleeting", "shelf-1",  # type: ignore[arg-type]
+    )
+
+    note = NoteEntity(
+        title="Custom",
+        content="body",
+        updated_at=datetime(2026, 7, 3, 12, 0, 0),
+        author_id="user-1",
+        directory_ids=["dir-custom"],
+    )
+    result = await facade.insert(note, UserContext("user-1"))
+
+    # The note ends up in dir-custom, NOT in the rule's target.
+    assert result.directory_ids == ["dir-custom"]
 

@@ -39,6 +39,8 @@ from src.api.repos.directory_repo import (
     DirectoryRepoABC,
 )
 from src.api.repos.tag_repo import TagRepoABC
+from src.api.repos.shelf_repo import ShelfRepoABC
+from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
 from src.api.services.directory_service import DirectoryIncludeOptions
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
@@ -479,6 +481,7 @@ def _build_facade(
     directory_repo: Optional[_RecordingDirectoryRepo] = None,
     permission_repo: Optional[InMemoryPermissionRepo] = None,
     tag_repo: Optional[TagRepoABC] = None,
+    shelf_repo: Optional[ShelfRepoABC] = None,
 ) -> Tuple[
     DirectoryFacadeImpl,
     _RecordingDirectoryRepo,
@@ -489,11 +492,13 @@ def _build_facade(
     dir_repo = directory_repo or _RecordingDirectoryRepo()
     perm_repo = permission_repo or InMemoryPermissionRepo()
     tags = tag_repo if tag_repo is not None else _RecordingTagRepo()
+    shelves = shelf_repo if shelf_repo is not None else NoopShelfRepo()
     facade = DirectoryFacadeImpl(
         directory_repo=dir_repo,
         permission_repo=perm_repo,
         tag_repo=tags,
         log=lambda *_args, **_kwargs: None,
+        shelf_repo=shelves,
     )
     return facade, dir_repo, perm_repo, tags
 
@@ -976,6 +981,101 @@ async def test_fetch_directory_only_reads_dir_repo() -> None:
     assert dir_repo.fetch_calls[0][0] == str(created.id)
     # perm_repo unchanged
     assert _perm_relations(perm_repo) == perm_snapshot
+
+
+# ---------------------------------------------------------------------------
+# shelf_ids -- read path enrichment
+# ---------------------------------------------------------------------------
+
+
+async def test_fetch_directory_default_omits_shelf_ids() -> None:
+    """Without ``include_shelves`` the shelf repo is not consulted."""
+    class _CountingShelfRepo(NoopShelfRepo):
+        def __init__(self) -> None:
+            super().__init__()
+            self.get_shelves_of_book_calls = 0
+
+        async def get_shelves_of_book(self, book_id):
+            self.get_shelves_of_book_calls += 1
+            return await super().get_shelves_of_book(book_id)
+
+    shelf_repo = _CountingShelfRepo()
+    facade, dir_repo, _perm, _tags = _build_facade(shelf_repo=shelf_repo)
+
+    created = await facade.create_directory(
+        DirectoryEntity(slug="x", display_name="X"),
+        _UserContext("alice"),
+    )
+
+    # Default include options: shelf lookup must NOT happen.
+    result = await facade.fetch_directory(created.id)
+    assert result is not None
+    assert shelf_repo.get_shelves_of_book_calls == 0
+    # The entity's shelf_ids stays at the UNDEFINED default;
+    # gRPC visitors check `if entity.shelf_ids:` so an
+    # undefined placeholder doesn't leak into the proto.
+    assert result.shelf_ids in (UNDEFINED, None) or not result.shelf_ids
+
+
+async def test_fetch_directory_with_include_shelves_populates_shelf_ids() -> None:
+    """With ``include_shelves=True`` the facade asks the shelf repo."""
+    class _StubShelfRepo(NoopShelfRepo):
+        def __init__(self, shelves_for: dict[str, list[str]]) -> None:
+            super().__init__()
+            self._shelves_for = shelves_for
+            self.calls: list[str] = []
+
+        async def get_shelves_of_book(self, book_id):
+            self.calls.append(book_id)
+            return list(self._shelves_for.get(book_id, []))
+
+    shelves_by_book = {
+        "book-1": ["shelf-A", "shelf-B"],
+        "book-2": ["shelf-C"],
+    }
+    shelf_repo = _StubShelfRepo(shelves_by_book)
+    facade, _dir_repo, _perm, _tags = _build_facade(shelf_repo=shelf_repo)
+
+    # Insert the directory.
+    created = await facade.create_directory(
+        DirectoryEntity(slug="x", display_name="X"),
+        _UserContext("alice"),
+    )
+    # Map the dir_repo's auto-id to "book-1" via the recording
+    # fake: simpler to just patch the shelf repo after the
+    # fact.  We mimic that by re-pointing the fake's dict.
+    shelves_by_book[str(created.id)] = shelves_by_book.pop("book-1")
+
+    result = await facade.fetch_directory(
+        created.id,
+        include={"include_shelves": True},
+    )
+    assert result is not None
+    assert result.shelf_ids == ["shelf-A", "shelf-B"]
+    assert shelf_repo.calls == [str(created.id)]
+
+
+async def test_fetch_directory_shelf_lookup_failure_yields_empty_list() -> None:
+    """When the shelf repo raises, the entity gets an empty shelf_ids list."""
+
+    class _RaisingShelfRepo(NoopShelfRepo):
+        async def get_shelves_of_book(self, book_id):
+            raise RuntimeError("kaboom")
+
+    shelf_repo = _RaisingShelfRepo()
+    facade, _dir_repo, _perm, _tags = _build_facade(shelf_repo=shelf_repo)
+
+    created = await facade.create_directory(
+        DirectoryEntity(slug="x", display_name="X"),
+        _UserContext("alice"),
+    )
+
+    result = await facade.fetch_directory(
+        created.id,
+        include={"include_shelves": True},
+    )
+    assert result is not None
+    assert result.shelf_ids == []
 
 
 # ---------------------------------------------------------------------------

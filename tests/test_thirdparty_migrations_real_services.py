@@ -50,6 +50,8 @@ from src.api.other.relationship import (
 from src.api.other.undefined import UNDEFINED
 from src.db.table import TableABC
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
+from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
 from src.services.attachment_facade import AttachmentFacadeImpl
 from src.services.directory import DirectoryServiceImpl
 from src.services.note import NoteServiceImpl
@@ -210,6 +212,8 @@ def _wire_real_services(
         directory_repo=directory_repo,
         tag_repo=_FakeTagRepo(),
         version_repo=_FakeVersionRepo(),
+        shelf_repo=NoopShelfRepo(),
+        rule_repo=InMemoryRuleRepo(),
     )
 
     # Bridge: the real ``NoteFacadeImpl.insert`` writes to the content

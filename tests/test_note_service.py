@@ -38,12 +38,15 @@ from src.api.other.relationship import (
     SubjectRef,
 )
 from src.api.other.undefined import UNDEFINED
+from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.services.note import NoteServiceImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
+from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
 from src.api.other.user_context import UserContextABC
 from src.api.services.jwt_provider import JwtProvider
 from tests._fixtures_pkg.fakes import (
@@ -139,6 +142,8 @@ def _make_service(
         directory_repo=fake_directory,
         tag_repo=fake_tags,
         version_repo=_FakeVersionRepo(),
+        shelf_repo=InMemoryShelfRepo(),
+        rule_repo=InMemoryRuleRepo(),
     )
     service = NoteServiceImpl(
         note_repo=facade,
@@ -276,6 +281,50 @@ async def test_get_note_skips_attachments_without_view_permission() -> None:
 async def test_insert_note_resolves_parent_directory_and_writes_owner_relation() -> None:
     """`insert_note` writes an owner relation and resolves a parent directory."""
     service, _db, _content, _dir, permission_repo, _jwt, _activity_logger = _make_service()
+    # Seed a default directory + default-fleeting rule so the
+    # note facade's _resolve_directory_ids finds a parent.
+    default_dir = DirectoryEntity(
+        id="dir-default", slug="fleeting_notes",
+    )
+    _dir.directories_by_id["dir-default"] = default_dir
+    _dir.user_to_directory_ids["user-1"] = ["dir-default"]
+    # Reach into the underlying facade to insert a rule + shelf
+    # admin relation; mirrors the production bootstrap.
+    facade = service._note_repo  # type: ignore[attr-defined]
+    from src.db.entities.rule import RuleEntity
+    await facade._rule_repo.create_rule(  # type: ignore[attr-defined]
+        RuleEntity(
+            id=UNDEFINED,
+            event_type="NoteCreated",
+            attached_entity_type="shelf",
+            attached_entity_id="shelf-1",
+            condition={"type": "always_true"},
+            action_type="add_to_directory",
+            action_context={"directory_id": "dir-default"},
+            enabled=True,
+            creator_id="user-1",
+        )
+    )
+    from src.api.other.relationship import (
+        ObjectRef,
+        ObjectTypeEnum,
+        Relationship,
+        ShelfRelationEnum,
+        SubjectRef,
+    )
+    await facade._permission_repo.insert([  # type: ignore[attr-defined]
+        Relationship(
+            resource=ObjectRef(
+                object_type=ObjectTypeEnum.SHELF,
+                object_id="shelf-1",
+            ),
+            relation=ShelfRelationEnum.ADMIN,
+            subject=SubjectRef(
+                object_type=ObjectTypeEnum.USER,
+                object_id="user-1",
+            ),
+        )
+    ])
 
     result = await service.insert_note(
         NoteEntity(
@@ -506,6 +555,42 @@ async def test_get_note_does_not_record_on_miss() -> None:
 async def test_insert_note_records_note_created() -> None:
     """`insert_note` records a `note_created` event after the repo insert."""
     service, _db, _content, _dir, _perm, _jwt, activity_logger = _make_service()
+    # Seed a default directory + rule (see the helper used by
+    # test_insert_note_resolves_parent_directory_and_writes_owner_relation).
+    default_dir = DirectoryEntity(
+        id="dir-default", slug="fleeting_notes",
+    )
+    _dir.directories_by_id["dir-default"] = default_dir
+    _dir.user_to_directory_ids["user-1"] = ["dir-default"]
+    facade = service._note_repo  # type: ignore[attr-defined]
+    from src.db.entities.rule import RuleEntity
+    await facade._rule_repo.create_rule(  # type: ignore[attr-defined]
+        RuleEntity(
+            id=UNDEFINED,
+            event_type="NoteCreated",
+            attached_entity_type="shelf",
+            attached_entity_id="shelf-1",
+            condition={"type": "always_true"},
+            action_type="add_to_directory",
+            action_context={"directory_id": "dir-default"},
+            enabled=True,
+            creator_id="user-1",
+        )
+    )
+    from src.api.other.relationship import (
+        ObjectRef as _OR,
+        ObjectTypeEnum as _OT,
+        Relationship as _R,
+        ShelfRelationEnum as _SRE,
+        SubjectRef as _SR,
+    )
+    await facade._permission_repo.insert([  # type: ignore[attr-defined]
+        _R(
+            resource=_OR(object_type=_OT.SHELF, object_id="shelf-1"),
+            relation=_SRE.ADMIN,
+            subject=_SR(object_type=_OT.USER, object_id="user-1"),
+        )
+    ])
 
     result = await service.insert_note(
         NoteEntity(

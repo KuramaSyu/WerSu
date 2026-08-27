@@ -43,6 +43,8 @@ from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
 from src.services.attachment_facade import AttachmentFacadeImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
+from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
 from src.services.directory import DirectoryServiceImpl
 from src.services.note import NoteServiceImpl
 from src.db.table import TableABC
@@ -169,6 +171,8 @@ def _wire_service(
         directory_repo=directory_repo,
         tag_repo=_FakeTagRepo(),
         version_repo=_FakeVersionRepo(),
+        shelf_repo=NoopShelfRepo(),
+        rule_repo=InMemoryRuleRepo(),
     )
 
     # Bridge the real facade's insert into the fake facade's store

@@ -14,6 +14,7 @@ from src.api.repos.directory_repo import (
     DirectoryHierarchyType,
     DirectoryParentType,
 )
+from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from tests._fixtures_pkg.fakes import (
@@ -187,6 +188,7 @@ async def test_resolve_files_of_directory_depth_and_cycle() -> None:
         permission_repo=permission_repo,
         tag_repo=_FakeTagRepo(),
         log=logging_provider,
+        shelf_repo=NoopShelfRepo(),
     )
 
     note_ids = await directory_repo.resolve_files_of_directory("root", ctx, max_depth=1)
