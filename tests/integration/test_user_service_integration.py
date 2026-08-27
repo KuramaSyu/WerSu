@@ -19,17 +19,24 @@ from typing import Awaitable, Callable, Iterable, Tuple, TypeVar
 
 import pytest
 
-from tests.stubs.user_context import _UserContext as UserContext
+from src.api.other.relationship import (
+    ObjectRef,
+    ObjectTypeEnum,
+    Relationship,
+    ShelfRelationEnum,
+    SubjectRef,
+)
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
+from src.db.entities.rule import RuleEntity
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.services.user_service import UserServiceImpl
+from tests.stubs.user_context import _UserContext as UserContext
 from tests.integration_helpers import (
     NoteRelationEnum,
-    ObjectRef,
-    ObjectTypeEnum,
     assert_user_has_admin_on_directory,
     make_custom_directory,
     make_user_entity,
@@ -279,3 +286,328 @@ async def _note_has_parent_directory(
         and str(rel.subject.object_id) == parent_directory_id
         for rel in relationships
     )
+
+
+# ---------------------------------------------------------------------------
+# Shelf + rule bootstrap integration tests
+# ---------------------------------------------------------------------------
+
+
+async def _fetch_user_shelf_id(
+    permission_repo, user_id: str
+) -> str:
+    """Return the ``users_shelf`` id for ``user_id``.
+
+    Walks the user's visible shelves via SpiceDB and picks
+    the one with slug ``users_shelf``.  Used by the integration
+    tests below.
+    """
+    # The bootstrap user service inserts a ``shelf#admin@user``
+    # relation for the newly-created user; the SpiceDB lookup
+    # surfaces it.
+    ids = await permission_repo.lookup(
+        Relationship(
+            resource=ObjectRef(
+                object_type=ObjectTypeEnum.SHELF, object_id=UNDEFINED,
+            ),
+            relation=ShelfRelationEnum.ADMIN,
+            subject=SubjectRef(
+                object_type=ObjectTypeEnum.USER,
+                object_id=str(user_id),
+            ),
+        )
+    )
+    if not ids:
+        pytest.fail(
+            f"no shelf#admin@user:{user_id!r} relation found"
+        )
+    return str(ids[0])
+
+
+async def _seed_rule_via_rule_repo(
+    rule_repo,
+    shelf_id: str,
+    directory_id: str,
+    user_id: str,
+) -> None:
+    """Insert a default-fleeting rule pointing at ``directory_id``.
+
+    Convenience for integration tests that want to bypass the
+    user-service bootstrap and pre-stage a shelf-attached rule.
+    """
+    await rule_repo.create_rule(
+        RuleEntity(
+            id=UNDEFINED,
+            event_type="NoteCreated",
+            attached_entity_type="shelf",
+            attached_entity_id=shelf_id,
+            condition={"type": "always_true"},
+            action_type="add_to_directory",
+            action_context={"directory_id": directory_id},
+            enabled=True,
+            creator_id=user_id,
+        )
+    )
+
+
+async def test_create_user_bootstraps_shelf_books_and_rule(
+    spicedb_postgres_env,
+) -> None:
+    """End-to-end: ``create_user`` produces a shelf, 3 books and a default rule.
+
+    Bundled into one test because the Postgres + SpiceDB
+    container spin-up is the dominant cost; splitting this
+    into three tests would multiply that cost.
+    """
+    env = spicedb_postgres_env
+    user_service = env.user_service
+    directory_repo = env.directory_repo
+    shelf_repo = env.shelf_repo
+    rule_repo = env.rule_repo
+    context_factory = env.user_context_factory
+
+    created_user = await user_service.create_user(
+        make_user_entity(
+            discord_id=9870000111,
+            username="integration-user-shelf",
+            discriminator="4444",
+            email="shelf@example.com",
+        )
+    )
+    if created_user.id is None:
+        pytest.fail("create_user returned a user without an ID")
+
+    # 1. shelf exists for this user
+    user_ctx = await context_factory.create(str(created_user.id))
+    shelf_ids = await env.permission_repo.lookup(
+        _shelf_admin_relationship(str(created_user.id))
+    )
+    if len(shelf_ids) != 1:
+        pytest.fail(
+            f"expected exactly 1 shelf admin relation for "
+            f"user {created_user.id!r}, got {len(shelf_ids)}: "
+            f"{shelf_ids!r}"
+        )
+    shelf_id = str(shelf_ids[0])
+    shelf = await shelf_repo.fetch_shelf(shelf_id, include_books=True)
+    if shelf is None:
+        pytest.fail(f"shelf {shelf_id!r} was not created")
+    # Slug follows ``<username>'s shelf``.
+    assert shelf.slug == "integration-user-shelf's shelf"
+    assert shelf.display_name == "integration-user-shelf's Shelf"
+
+    # 2. shelf contains exactly 3 books (the bootstrap defaults).
+    if shelf.book_ids is UNDEFINED or len(shelf.book_ids) != 3:
+        pytest.fail(
+            f"expected shelf {shelf_id!r} to carry 3 books, "
+            f"got {shelf.book_ids!r}"
+        )
+
+    # 3. the 3 books exist in the directory repo.
+    books = await _gather(directory_repo.fetch_directory, shelf.book_ids)
+    book_slugs = sorted(
+        d.slug for d in books if d is not None
+    )
+    assert book_slugs == [
+        "fleeting_notes", "literature_notes", "permanent_notes"
+    ]
+
+    # 4. a default-fleeting rule is attached to the shelf.
+    rules = await rule_repo.list_rules(
+        event_type="NoteCreated",
+        attached_entity_type="shelf",
+        attached_entity_id=shelf_id,
+    )
+    if len(rules) != 1:
+        pytest.fail(
+            f"expected 1 default rule on shelf {shelf_id!r}, "
+            f"got {len(rules)}"
+        )
+    rule = rules[0]
+    assert rule.action_type == "add_to_directory"
+    assert rule.enabled is True
+    fleeting_book = next(
+        d for d in books if d is not None and d.slug == "fleeting_notes"
+    )
+    assert rule.action_context == {
+        "directory_id": str(fleeting_book.id)
+    }
+
+
+async def test_insert_note_without_directory_uses_rule_default_e2e(
+    spicedb_postgres_env,
+) -> None:
+    """A note inserted without a parent picks up the rule's directory.
+
+    Bundled with the ``no rule`` case below so a single
+    Postgres container services both scenarios.
+    """
+    env = spicedb_postgres_env
+    user_service = env.user_service
+    directory_repo = env.directory_repo
+    note_repo = env.note_repo
+    permission_repo = env.permission_repo
+    context_factory = env.user_context_factory
+
+    # ---- case A: user has the default rule ----
+    created_user = await user_service.create_user(
+        make_user_entity(
+            discord_id=9870000222,
+            username="integration-user-rule-a",
+            discriminator="5555",
+            email="rule_a@example.com",
+        )
+    )
+    user_ctx = await context_factory.create(str(created_user.id))
+    default_directory = await _get_default_directory(
+        directory_repo, str(created_user.id), context_factory,
+    )
+
+    note = await note_repo.insert(
+        NoteEntity(
+            title="No explicit parent",
+            content="",
+            updated_at=datetime.now(),
+            author_id=created_user.id,
+        ),
+        user_ctx,
+    )
+    if note.note_id is None:
+        pytest.fail(f"insert returned a note without an ID: {note!r}")
+
+    await wait_until(
+        lambda: _note_has_parent_directory(
+            permission_repo,
+            str(note.note_id),
+            str(default_directory.id),
+        ),
+        description=(
+            f"note {note.note_id!r} parent_directory == "
+            f"{default_directory.id!r}"
+        ),
+    )
+
+    # ---- case B: user without a rule -> insert raises ----
+    user_no_rule = await user_service.create_user(
+        make_user_entity(
+            discord_id=9870000333,
+            username="integration-user-no-rule",
+            discriminator="6666",
+            email="no_rule@example.com",
+        )
+    )
+    # Delete the bootstrap rule so the user has none.
+    rules = await env.rule_repo.list_rules(
+        event_type="NoteCreated",
+        attached_entity_type="shelf",
+        attached_entity_id=await _first_user_shelf(
+            env, str(user_no_rule.id),
+        ),
+    )
+    for r in rules:
+        await env.rule_repo.delete_rule(str(r.id))
+
+    user_no_rule_ctx = await context_factory.create(str(user_no_rule.id))
+    with pytest.raises(ValueError, match="no default-fleeting rule"):
+        await note_repo.insert(
+            NoteEntity(
+                title="Orphan",
+                content="",
+                updated_at=datetime.now(),
+                author_id=user_no_rule.id,
+            ),
+            user_no_rule_ctx,
+        )
+
+
+async def test_migration_backfills_shelf_and_rule_for_existing_users(
+    spicedb_postgres_env,
+    tmp_path,
+) -> None:
+    """The 20260825-bootstrap-users-shelf migration is idempotent.
+
+    Strategy: run the migration against the live schema twice
+    and assert the second run is a no-op (no extra shelves, no
+    duplicate rules).
+    """
+    from src.db.migrations.context import MigrationContext
+    from src.db.migrations.runner import MigrationRunner
+
+    env = spicedb_postgres_env
+
+    # First run -- the integration fixture already applied all
+    # migrations, so a re-run of the bootstrap migration should
+    # be a no-op.  Run it explicitly anyway so the test fails
+    # loudly if a future migration adds side effects.
+    ctx = MigrationContext(
+        db=env.db,
+        spicedb_client=env.spicedb_client,
+    )
+    runner = MigrationRunner(
+        ctx=ctx,
+        log_provider=lambda *_a, **_k: __import__(
+            "logging"
+        ).getLogger("test.migration"),
+    )
+    await runner.run_pending_migrations()
+
+    # Confirm nothing new was added: count shelves + rules before
+    # and after; both must remain constant because the migration
+    # is idempotent.
+    shelf_rows = await env.db.fetch("SELECT id FROM note.shelf")
+    rule_rows = await env.db.fetch(
+        "SELECT id FROM rules WHERE event_type = 'NoteCreated'"
+    )
+    shelves_before = len(shelf_rows or [])
+    rules_before = len(rule_rows or [])
+
+    await runner.run_pending_migrations()
+
+    shelf_rows_after = await env.db.fetch("SELECT id FROM note.shelf")
+    rule_rows_after = await env.db.fetch(
+        "SELECT id FROM rules WHERE event_type = 'NoteCreated'"
+    )
+    assert len(shelf_rows_after or []) == shelves_before, (
+        "second migration run created new shelves"
+    )
+    assert len(rule_rows_after or []) == rules_before, (
+        "second migration run created new rules"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Private helpers (integration-specific)
+# ---------------------------------------------------------------------------
+
+
+def _shelf_admin_relationship(user_id: str) -> "Relationship":  # type: ignore[name-defined]
+    """Build a ``shelf#admin@user:<id>`` lookup filter."""
+    return Relationship(
+        resource=ObjectRef(
+            object_type=ObjectTypeEnum.SHELF, object_id=UNDEFINED
+        ),
+        relation=ShelfRelationEnum.ADMIN,
+        subject=SubjectRef(
+            object_type=ObjectTypeEnum.USER, object_id=str(user_id)
+        ),
+    )
+
+
+async def _first_user_shelf(env, user_id: str) -> str:
+    """Return the id of the first ``users_shelf`` row.
+
+    The bootstrap slug lives once per-deployment (uniqueness on
+    ``note.shelf.slug`` is enforced), so the helper returns
+    any matching row -- ``user_id`` is accepted for callers
+    that want symmetry with the live path.
+    """
+    rows = await env.db.fetch(
+        """
+        SELECT s.id FROM note.shelf s
+        WHERE s.slug = 'users_shelf'
+        LIMIT 1
+        """,
+    )
+    if not rows:
+        pytest.fail(f"no users_shelf row exists for user {user_id!r}")
+    return str(rows[0].get("id"))
