@@ -30,6 +30,8 @@ from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.db.repos.permissions.spicedb_role_repo import SpicedbRoleRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
+from src.db.repos.shelf.postgres import PostgresShelfRepo
+from src.db.repos.rule.postgres import PostgresRuleRepo
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user import RepoContextFactory
 from src.db.repos.user.user_action import UserActionPostgresRepo
@@ -88,6 +90,8 @@ class IntegrationEnv:
     sharing_service: SharingServiceImpl
     role_repo: SpicedbRoleRepo
     role_service: RoleServiceImpl
+    shelf_repo: "PostgresShelfRepo"
+    rule_repo: "PostgresRuleRepo"
 
 
 @pytest.fixture(scope="function")
@@ -169,11 +173,38 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             ),
             db=db,
         )
+        shelf_repo = PostgresShelfRepo(
+            shelf_table=Table(
+                db=db,
+                table_name="note.shelf",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            shelf_book_table=Table(
+                db=db,
+                table_name="note.shelf_book",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+        )
+        # ``rule_repo`` is built before ``note_repo`` because the
+        # note facade looks up default-fleeting rules when a
+        # caller inserts a note with no parent directory.
+        rule_repo = PostgresRuleRepo(
+            table=Table(
+                db=db,
+                table_name="rules",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            logging_provider=logging_provider,
+        )
         directory_facade = DirectoryFacadeImpl(
             directory_repo=postgres_directory_repo,
             permission_repo=permission_repo,
             tag_repo=tag_repo,
             log=logging_provider,
+            shelf_repo=shelf_repo,
         )
         version_repo = NoteVersionPostgresRepo(
             snapshot_table=Table(
@@ -207,6 +238,8 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             tag_repo=tag_repo,
             logging_provider=logging_provider,
             version_repo=version_repo,
+            shelf_repo=shelf_repo,
+            rule_repo=rule_repo,
         )
         user_repo = UserPostgresRepo(
             table=Table(
@@ -222,6 +255,9 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             user_repo=user_repo,
             directory_facade=directory_facade,
             context_factory=user_context_factory,
+            shelf_repo=shelf_repo,
+            rule_repo=rule_repo,
+            permission_repo=permission_repo,
         )
         permission_service = PermissionServiceImpl(
             permission_repo=permission_repo,
@@ -309,6 +345,8 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
                 sharing_service=sharing_service,
                 role_repo=role_repo,
                 role_service=role_service,
+                shelf_repo=shelf_repo,
+                rule_repo=rule_repo,
             )
         finally:
             await db.close()

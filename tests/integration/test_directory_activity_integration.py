@@ -19,6 +19,7 @@ from tests._fixtures_pkg.fakes import (
     _FakeDirectoryTable,
     _FakeTagRepo,
 )
+from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
 from src.api import ObjectRef, Relationship, SubjectRef
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
@@ -71,6 +72,7 @@ async def test_resolve_files_of_directory_spicedb(
         permission_repo=spicedb_permission_repo,
         tag_repo=_FakeTagRepo(),
         log=lambda *_a, **_k: logging.getLogger('test.directory_activity'),
+        shelf_repo=NoopShelfRepo(),
     )
 
     resolved = await directory_repo.resolve_files_of_directory(

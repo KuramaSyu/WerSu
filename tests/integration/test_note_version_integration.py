@@ -11,6 +11,8 @@ from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.db.repos.tag.postgres import PostgresTagRepo
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
+from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.table import Table
 from src.utils import logging_provider
@@ -74,23 +76,56 @@ async def test_note_versioning_records_snapshots_and_deltas(db, user_repo, test_
         db=db,
     )
 
+    directory_repo = _TestDirectoryRepo()
     note_repo = NoteFacadeImpl(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
         combined_repo=CombinedNotePostgresRepo(db=db),
         embedding_repo=_FakeEmbeddingRepo(),
         permission_repo=InMemoryPermissionRepo(),
-        directory_repo=_TestDirectoryRepo(),
+        directory_repo=directory_repo,
         tag_repo=tag_repo,
         logging_provider=logging_provider,
         version_repo=version_repo,
+        shelf_repo=NoopShelfRepo(),
+        rule_repo=InMemoryRuleRepo(),
     )
+
+    # Seed a default directory the user owns so the note facade's
+    # ``_resolve_directory_ids`` finds a parent.  The
+    # :class:`_TestDirectoryRepo` matches via
+    # ``user_to_directory_ids``; we register an explicit
+    # ``directory#admin@user`` relation so the lookup returns the
+    # id we put on the note.
+    from src.api.other.relationship import (
+        DirectoryRelationEnum,
+        ObjectRef,
+        ObjectTypeEnum,
+        Relationship,
+        SubjectRef,
+    )
+    default_dir_id = "dir-default"
+    directory_repo.user_to_directory_ids[str(user.id)] = [default_dir_id]
+    await note_repo._permission_repo.insert([
+        Relationship(
+            resource=ObjectRef(
+                object_type=ObjectTypeEnum.DIRECTORY,
+                object_id=default_dir_id,
+            ),
+            relation=DirectoryRelationEnum.ADMIN,
+            subject=SubjectRef(
+                object_type=ObjectTypeEnum.USER,
+                object_id=str(user.id),
+            ),
+        )
+    ])
 
     base_note = NoteEntity(
         title="v1",
         content="alpha",
         updated_at=datetime(2026, 5, 18, 11, 0, 0),
         author_id=user.id,
+        directory_ids=[default_dir_id],
     )
     created = await note_repo.insert(base_note, ctx)
 
