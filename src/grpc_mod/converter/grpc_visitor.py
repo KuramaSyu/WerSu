@@ -396,6 +396,14 @@ class ConvertToGrpcVisitor(EntityVisitor):
             kwargs["child_note_ids"] = [
                 str(v) for v in entity.child_note_ids if v
             ]
+        # Optional shelf list (book -> shelves direction).
+        # Emitted only when the entity was fetched with
+        # ``include_shelves=True``; otherwise the proto field
+        # stays at its empty default.
+        if entity.shelf_ids:
+            kwargs["shelf_ids"] = [
+                str(v) for v in entity.shelf_ids if v
+            ]
 
         return Directory(**kwargs)
 
