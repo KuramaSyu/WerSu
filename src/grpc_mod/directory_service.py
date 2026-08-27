@@ -68,6 +68,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 "include_parents": request.include_parents,
                 "include_child_dirs": request.include_child_dirs,
                 "include_child_notes": request.include_child_notes,
+                "include_shelves": request.include_shelves,
             }
             directory = await self._directory_service.get_directory(
                 request.id, user_ctx, include=include,
@@ -114,7 +115,8 @@ class GrpcDirectoryService(DirectoryServiceServicer):
             include: DirectoryIncludeOptions = {
                 "include_child_dirs": request.include_child_dirs,
                 "include_child_notes": request.include_child_notes,
-                "include_parents": request.include_parents
+                "include_parents": request.include_parents,
+                "include_shelves": request.include_shelves,
             }
             directories = await self._directory_service.get_directories(
                 user_ctx=user_ctx,
