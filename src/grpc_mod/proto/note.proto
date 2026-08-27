@@ -144,6 +144,11 @@ message Directory {
     repeated PermissionRelationship relationships = 7;
     repeated string child_dir_ids = 8;
     repeated string child_note_ids = 9;
+    // ids of every shelf this book (directory) sits on.
+    // Populated when the caller opts in via
+    // ``include_shelves`` on ``GetDirectoryRequest`` /
+    // ``GetDirectoriesRequest``; empty otherwise.
+    repeated string shelf_ids = 10;
 }
 
 message GetDirectoryRequest {
@@ -152,6 +157,7 @@ message GetDirectoryRequest {
     bool include_parents = 3;
     bool include_child_dirs = 4;
     bool include_child_notes = 5;
+    bool include_shelves = 6;
 }
 
 // list all directory contents of a given directory <parent_id>
@@ -164,6 +170,7 @@ message GetDirectoriesRequest {
     bool include_parents = 5;
     bool include_child_dirs = 6;
     bool include_child_notes = 7;
+    bool include_shelves = 8;
 }
 
 message CreateDirectoryRequest {

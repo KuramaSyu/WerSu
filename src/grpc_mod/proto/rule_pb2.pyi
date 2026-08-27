@@ -23,14 +23,11 @@ DESCRIPTOR: _descriptor.FileDescriptor
 
 @_typing.final
 class Rule(_message.Message):
-    """===== Rule entity ========================================================
-
-    A rule is a stored "if/then" wiring: when a domain event matching
-    ``event_type`` fires against the entity identified by
-    ``(attached_entity_type, attached_entity_id)`` (or, when those are
-    unset, against any entity), evaluate ``condition``; if it holds,
-    execute ``action`` of the variant named by ``action_type`` with the
-    parameters carried in ``action_context``.
+    """A rule is a stored if x then do y event. attached_entity describes
+    an entity, where this rule is attached to. e.g. if event type
+    is note_created and attached_entity is a directory, then the rule
+    will only fire if the note is created in that directory.
+    action type, describes the then action, e.g. add note to a directory etc
 
     The ``condition`` and ``action_context`` fields are carried as
     ``google.protobuf.Struct`` so the shape can evolve without breaking
@@ -62,12 +59,11 @@ class Rule(_message.Message):
     id: _builtins.str
     event_type: _builtins.str
     attached_entity_type: _builtins.str
-    """Optional scope anchor.  When both are unset the rule is
-    "global" -- it matches every event of its ``event_type``.
-    When set, the rule fires only for events whose primary
-    entity is this anchor (or, in the directory case, a
-    descendant of it).
-    "directory" | "note" | ""
+    """Required scope anchor.  The rule fires only for events
+    whose primary entity matches this anchor (or, in the
+    directory / shelf case, a descendant / contained book of
+    it).  Global rules are no longer supported.
+    "directory" | "note" | "shelf"
     """
     attached_entity_id: _builtins.str
     action_type: _builtins.str
@@ -114,10 +110,7 @@ Global___Rule: _TypeAlias = Rule  # noqa: Y015
 
 @_typing.final
 class RuleFilter(_message.Message):
-    """===== Filter =============================================================
-
-    Used by GetRules to scope the list.  All fields optional.
-    """
+    """Used by GetRules to scope the list.  All fields optional."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -128,7 +121,7 @@ class RuleFilter(_message.Message):
     CREATOR_ID_FIELD_NUMBER: _builtins.int
     event_type: _builtins.str
     attached_entity_type: _builtins.str
-    """"directory" | "note" | "" """
+    """"directory" | "note" | "shelf" """
     attached_entity_id: _builtins.str
     enabled_only: _builtins.bool
     creator_id: _builtins.str

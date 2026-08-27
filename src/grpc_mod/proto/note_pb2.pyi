@@ -538,6 +538,7 @@ class Directory(_message.Message):
     RELATIONSHIPS_FIELD_NUMBER: _builtins.int
     CHILD_DIR_IDS_FIELD_NUMBER: _builtins.int
     CHILD_NOTE_IDS_FIELD_NUMBER: _builtins.int
+    SHELF_IDS_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     slug: _builtins.str
     display_name: _builtins.str
@@ -551,6 +552,14 @@ class Directory(_message.Message):
     def child_dir_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     @_builtins.property
     def child_note_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def shelf_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
+        """ids of every shelf this book (directory) sits on.
+        Populated when the caller opts in via
+        ``include_shelves`` on ``GetDirectoryRequest`` /
+        ``GetDirectoriesRequest``; empty otherwise.
+        """
+
     def __init__(
         self,
         *,
@@ -563,10 +572,11 @@ class Directory(_message.Message):
         relationships: _abc.Iterable[Global___PermissionRelationship] | None = ...,
         child_dir_ids: _abc.Iterable[_builtins.str] | None = ...,
         child_note_ids: _abc.Iterable[_builtins.str] | None = ...,
+        shelf_ids: _abc.Iterable[_builtins.str] | None = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["child_dir_ids", b"child_dir_ids", "child_note_ids", b"child_note_ids", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "parent_dir_ids", b"parent_dir_ids", "relationships", b"relationships", "slug", b"slug"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["child_dir_ids", b"child_dir_ids", "child_note_ids", b"child_note_ids", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "parent_dir_ids", b"parent_dir_ids", "relationships", b"relationships", "shelf_ids", b"shelf_ids", "slug", b"slug"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -581,11 +591,13 @@ class GetDirectoryRequest(_message.Message):
     INCLUDE_PARENTS_FIELD_NUMBER: _builtins.int
     INCLUDE_CHILD_DIRS_FIELD_NUMBER: _builtins.int
     INCLUDE_CHILD_NOTES_FIELD_NUMBER: _builtins.int
+    INCLUDE_SHELVES_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     user_id: _builtins.str
     include_parents: _builtins.bool
     include_child_dirs: _builtins.bool
     include_child_notes: _builtins.bool
+    include_shelves: _builtins.bool
     def __init__(
         self,
         *,
@@ -594,10 +606,11 @@ class GetDirectoryRequest(_message.Message):
         include_parents: _builtins.bool = ...,
         include_child_dirs: _builtins.bool = ...,
         include_child_notes: _builtins.bool = ...,
+        include_shelves: _builtins.bool = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "include_child_dirs", b"include_child_dirs", "include_child_notes", b"include_child_notes", "include_parents", b"include_parents", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "include_child_dirs", b"include_child_dirs", "include_child_notes", b"include_child_notes", "include_parents", b"include_parents", "include_shelves", b"include_shelves", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -616,6 +629,7 @@ class GetDirectoriesRequest(_message.Message):
     INCLUDE_PARENTS_FIELD_NUMBER: _builtins.int
     INCLUDE_CHILD_DIRS_FIELD_NUMBER: _builtins.int
     INCLUDE_CHILD_NOTES_FIELD_NUMBER: _builtins.int
+    INCLUDE_SHELVES_FIELD_NUMBER: _builtins.int
     user_id: _builtins.str
     """the requesting user's id, used for permission checking"""
     parent_id: _builtins.str
@@ -624,6 +638,7 @@ class GetDirectoriesRequest(_message.Message):
     include_parents: _builtins.bool
     include_child_dirs: _builtins.bool
     include_child_notes: _builtins.bool
+    include_shelves: _builtins.bool
     def __init__(
         self,
         *,
@@ -634,10 +649,11 @@ class GetDirectoriesRequest(_message.Message):
         include_parents: _builtins.bool = ...,
         include_child_dirs: _builtins.bool = ...,
         include_child_notes: _builtins.bool = ...,
+        include_shelves: _builtins.bool = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "include_child_dirs", b"include_child_dirs", "include_child_notes", b"include_child_notes", "include_parents", b"include_parents", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_limit", b"_limit", "_offset", b"_offset", "_parent_id", b"_parent_id", "include_child_dirs", b"include_child_dirs", "include_child_notes", b"include_child_notes", "include_parents", b"include_parents", "include_shelves", b"include_shelves", "limit", b"limit", "offset", b"offset", "parent_id", b"parent_id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType__limit: _TypeAlias = _typing.Literal["limit"]  # noqa: Y015
     _WhichOneofArgType__limit: _TypeAlias = _typing.Literal["_limit", b"_limit"]  # noqa: Y015
