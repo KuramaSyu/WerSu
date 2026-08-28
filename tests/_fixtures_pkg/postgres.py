@@ -186,6 +186,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
                 id_fields=["id"],
                 logging_provider=logging_provider,
             ),
+            logging_provider=logging_provider,
         )
         # ``rule_repo`` is built before ``note_repo`` because the
         # note facade looks up default-fleeting rules when a

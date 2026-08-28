@@ -15,9 +15,11 @@ from src.db.repos.user.user import UserRepoABC
 from src.db.entities.user.user import UserEntity
 
 
-async def test_global_sharelink_allows_access(note_repo_facade, user_repo, test_user):
-    # create owner user
-    owner = await user_repo.insert(test_user)
+async def test_global_sharelink_allows_access(note_repo_facade, user_repo, user_service, test_user):
+    # create owner user -- ``user_service.create_user`` triggers the
+    # shelf + default-fleeting rule bootstrap so the note insert
+    # below can resolve a parent via the rule.
+    owner = await user_service.create_user(test_user)
 
     # insert a note as owner
     note_entity = NoteEntity(

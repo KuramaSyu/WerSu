@@ -131,6 +131,14 @@ async def db(dsn):
             note.content,
             note.version_snapshot,
             note.version_delta,
+            note.directory_note,
+            note.directory_subdirectory,
+            note.directory_tag,
+            note.note_tag,
+            note.tag,
+            note.shelf_book,
+            note.shelf,
+            rules,
             shared,
             user_action,
             activity
@@ -308,6 +316,7 @@ async def user_service(
             error_log=True,
             logging_provider=logging_provider,
         ),
+        logging_provider=logging_provider,
     )
     directory_facade = DirectoryFacadeImpl(
         directory_repo=directory_repo,

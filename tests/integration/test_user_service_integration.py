@@ -594,20 +594,17 @@ def _shelf_admin_relationship(user_id: str) -> "Relationship":  # type: ignore[n
 
 
 async def _first_user_shelf(env, user_id: str) -> str:
-    """Return the id of the first ``users_shelf`` row.
+    """Return the id of the user's bootstrap shelf.
 
-    The bootstrap slug lives once per-deployment (uniqueness on
-    ``note.shelf.slug`` is enforced), so the helper returns
-    any matching row -- ``user_id`` is accepted for callers
-    that want symmetry with the live path.
+    Resolves the shelf via SpiceDB ``shelf#admin@user:<id>``
+    so the test follows the production lookup semantics
+    rather than guessing a slug value -- legacy hardcoded
+    ``users_shelf`` slugs no longer match the per-user
+    ``<username>'s shelf`` convention.
     """
-    rows = await env.db.fetch(
-        """
-        SELECT s.id FROM note.shelf s
-        WHERE s.slug = 'users_shelf'
-        LIMIT 1
-        """,
+    shelf_ids = await env.permission_repo.lookup(
+        _shelf_admin_relationship(user_id)
     )
-    if not rows:
-        pytest.fail(f"no users_shelf row exists for user {user_id!r}")
-    return str(rows[0].get("id"))
+    if not shelf_ids:
+        pytest.fail(f"no shelf#admin@user:{user_id!r} relation found")
+    return str(shelf_ids[0])

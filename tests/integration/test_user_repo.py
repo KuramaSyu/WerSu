@@ -37,22 +37,28 @@ async def test_update_user(db: Database, user_repo: UserRepoABC, test_user: User
     assert ret_user_by_id == ret_user_update  # assert that update returns same as select
     assert ret_user_by_id.avatar == "http://somewere"
 
-async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_repo_facade: NoteFacadeABC, test_user: UserEntity):
+async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_repo_facade: NoteFacadeABC, user_service, test_user: UserEntity):
     """
     - Creates a user
     - Creates a note for that user
     - Deletes the user
     - Asserts that both user and note are deleted (cascade delete)
     """
-    test_user = await user_repo.insert(test_user)
+    # ``user_service.create_user`` is used instead of
+    # ``user_repo.insert`` so the user goes through the full
+    # bootstrap (default directories + shelf + rule).  Without
+    # this, the note facade's default-fleeting rule lookup has
+    # nothing to resolve and the note insert raises before the
+    # cascade path is exercised.
+    test_user = await user_service.create_user(test_user)
     assert isinstance(test_user.id, str)
     assert UUID(test_user.id).version == 7
     ctx = UserContext(user_id=test_user.id)
 
     test_note = NoteEntity(
-        title="Pauls secret note", 
-        content="This is a secret note.", 
-        updated_at=datetime.now(), 
+        title="Pauls secret note",
+        content="This is a secret note.",
+        updated_at=datetime.now(),
         author_id=test_user.id
     )
     note = await note_repo_facade.insert(test_note, ctx)

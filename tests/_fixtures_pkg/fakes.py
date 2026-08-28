@@ -62,6 +62,16 @@ class _FakeEmbeddingGenerator:
     def tensor_to_sequence(self, tensor: Any) -> List[float]:
         return [0.0]
 
+    def tensor_to_str_vec(self, tensor: Any) -> str:
+        """Mirror the real generator's API for the ``ContextNoteSearchStrategy``.
+
+        ``tensor_to_str_vec`` formats a tensor as a Postgres
+        ``[a,b,c]``-style vector literal -- only the context search
+        path uses it; the fakes return a matching string so the
+        strategy call site stays untouched.
+        """
+        return "[0.0]"
+
 
 class _FakeEmbeddingRepo(NoteEmbeddingRepo):
     """Stub embedding repo used by tests that don't need real ML embeddings."""
@@ -283,29 +293,6 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
         # those lists are populated.
         return existing
 
-    async def update_directory(self, entity: DirectoryEntity) -> Optional[DirectoryEntity]:
-        self.updated.append(entity)
-        existing = self.directories_by_id.get(str(entity.id))
-        if existing is None:
-            return None
-        updated = DirectoryEntity(
-            id=existing.id,
-            slug=existing.slug if is_undefined(entity.slug) else entity.slug,
-            display_name=existing.display_name if is_undefined(entity.display_name) else entity.display_name,
-            description=existing.description if is_undefined(entity.description) else entity.description,
-            image_url=existing.image_url if is_undefined(entity.image_url) else entity.image_url,
-            readme_note_id=existing.readme_note_id if is_undefined(entity.readme_note_id) else entity.readme_note_id,
-            parent_directory_ids=(
-                existing.parent_directory_ids
-                if is_undefined(entity.parent_directory_ids)
-                else entity.parent_directory_ids
-            ),
-            tag_ids=existing.tag_ids if is_undefined(entity.tag_ids) else entity.tag_ids,
-            relations=existing.relations,
-        )
-        self.directories_by_id[str(entity.id)] = updated
-        return updated
-
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
         # Start from the test-managed map (always wins).
         if user.user_id in self.user_to_directory_ids:
@@ -342,12 +329,139 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
     async def fetch_all_directories(self) -> List[DirectoryEntity]:
         return list(self.directories_by_id.values())
 
-    async def delete_directory(self, entity: DirectoryEntity) -> bool:
-        directory_id = str(entity.id)
+    async def fetch_directories_by_ids(self, ids: List[str]) -> List[DirectoryEntity]:
+        """Return directories in input order, skipping missing ids.
+
+        Satisfies :class:`DirectoryRepoABC.fetch_directories_by_ids`
+        so the fake can stand in for the production
+        :class:`DirectoryFacadeImpl` directory_repo parameter.
+        """
+        out: List[DirectoryEntity] = []
+        for did in ids:
+            existing = self.directories_by_id.get(str(did))
+            if existing is not None:
+                out.append(existing)
+        return out
+
+    async def insert_directory(
+        self,
+        *,
+        slug: str,
+        display_name: "Optional[str]" = None,
+        description: "Optional[str]" = None,
+        image_url: "Optional[str]" = None,
+        readme_note_id: "Optional[str]" = None,
+    ) -> DirectoryEntity:
+        """Insert a directory row and return the persisted entity.
+
+        Low-level counterpart of :meth:`create_directory` -- exposes
+        the :class:`DirectoryRepoABC` surface the production
+        :class:`DirectoryFacadeImpl` calls.  Permissions and
+        per-user admin relations are written by the facade on top
+        of this stub; here we only own the row state.
+        """
+        self._next_directory_id += 1
+        new_id = f"dir-{self._next_directory_id}"
+        created = DirectoryEntity(
+            id=new_id,
+            slug=slug,
+            display_name=display_name,
+            description=description,
+            image_url=image_url,
+            readme_note_id=readme_note_id,
+        )
+        self.directories_by_id[str(new_id)] = created
+        return created
+
+    async def delete_directory(self, entity_or_id) -> bool:  # type: ignore[override]
+        """Delete a directory, accepting either an entity or an id."""
+        directory_id = (
+            str(entity_or_id.id)
+            if hasattr(entity_or_id, "id")
+            else str(entity_or_id)
+        )
         self.deleted.append(directory_id)
         if directory_id in self.directories_by_id:
             del self.directories_by_id[directory_id]
         return True
+
+    async def update_directory(
+        self,
+        id_or_entity,  # type: ignore[no-untyped-def]
+        *,
+        slug="__UNSET__",
+        display_name="__UNSET__",
+        description="__UNSET__",
+        image_url="__UNSET__",
+        readme_note_id="__UNSET__",
+    ) -> Optional[DirectoryEntity]:
+        """Update a directory, accepting either the repo or facade form.
+
+        The :class:`DirectoryFacadeImpl` form passes ``id`` plus
+        per-field kwargs; the legacy / unit-test form passes a
+        :class:`DirectoryEntity`.  Both call sites land here; the
+        repo form is the canonical one.
+        """
+        is_entity_form = hasattr(id_or_entity, "slug")
+        if is_entity_form:
+            entity = id_or_entity
+            existing_id = str(entity.id)
+            existing = self.directories_by_id.get(existing_id)
+            if existing is None:
+                return None
+            updated = DirectoryEntity(
+                id=existing_id,
+                slug=entity.slug if not is_undefined(entity.slug) else existing.slug,
+                display_name=(
+                    entity.display_name
+                    if not is_undefined(entity.display_name)
+                    else existing.display_name
+                ),
+                description=(
+                    entity.description
+                    if not is_undefined(entity.description)
+                    else existing.description
+                ),
+                image_url=(
+                    entity.image_url
+                    if not is_undefined(entity.image_url)
+                    else existing.image_url
+                ),
+                readme_note_id=(
+                    entity.readme_note_id
+                    if not is_undefined(entity.readme_note_id)
+                    else existing.readme_note_id
+                ),
+            )
+            self.directories_by_id[existing_id] = updated
+            self.updated.append(updated)
+            return updated
+
+        existing_id = str(id_or_entity)
+        existing = self.directories_by_id.get(existing_id)
+        if existing is None:
+            return None
+        updated = DirectoryEntity(
+            id=existing_id,
+            slug=slug if slug != "__UNSET__" else existing.slug,
+            display_name=(
+                display_name if display_name != "__UNSET__" else existing.display_name
+            ),
+            description=(
+                description if description != "__UNSET__" else existing.description
+            ),
+            image_url=(
+                image_url if image_url != "__UNSET__" else existing.image_url
+            ),
+            readme_note_id=(
+                readme_note_id
+                if readme_note_id != "__UNSET__"
+                else existing.readme_note_id
+            ),
+        )
+        self.directories_by_id[existing_id] = updated
+        self.updated.append(updated)
+        return updated
 
     async def resolve_files_of_directory(
         self,
