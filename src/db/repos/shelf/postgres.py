@@ -28,7 +28,7 @@ from src.api.other.undefined import (
     unwrap_undefined_or,
 )
 from src.api.repos.shelf_repo import ShelfRepoABC
-from api import LoggingProvider
+from src.api import LoggingProvider
 from src.db.entities.shelf import ShelfEntity
 from src.db.table import TableABC
 
@@ -60,7 +60,7 @@ class PostgresShelfRepo(ShelfRepoABC):
     ) -> None:
         self._shelf_table = shelf_table
         self._shelf_book_table = shelf_book_table
-        self.log = logging_provider.get_logger(__name__)
+        self.log = logging_provider(__name__, self)
 
     @property
     def shelf_table(self) -> TableABC:
