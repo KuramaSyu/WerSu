@@ -60,6 +60,7 @@ class DirectoryRelationEnum(StrEnum):
 
     # relations
     PARENT = "parent"
+    OWNER = "owner"
     ADMIN = "admin"
     WRITER = "writer"
     READER = "reader"
