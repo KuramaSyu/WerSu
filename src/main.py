@@ -353,6 +353,10 @@ async def serve():
         third_party_table=auth_third_party_table,
         logging_provider=logging_provider,
     )
+    rule_repo = PostgresRuleRepo(
+        table=rules_table,
+        logging_provider=logging_provider,
+    )
 
     # Factory used by every gRPC service to create user instances
     user_context_factory = RepoContextFactory(user_repo=user_repo)
@@ -373,6 +377,7 @@ async def serve():
     shelf_repo = PostgresShelfRepo(
         shelf_table=shelf_table,
         shelf_book_table=shelf_book_table,
+        logging_provider=logging_provider,
     )
 
     directory_facade = DirectoryFacadeImpl(
@@ -445,10 +450,6 @@ async def serve():
     activity_repo = PostgresActivityRepo(
         table=activity_table,
         directory_repo=directory_facade,
-        logging_provider=logging_provider,
-    )
-    rule_repo = PostgresRuleRepo(
-        table=rules_table,
         logging_provider=logging_provider,
     )
 
