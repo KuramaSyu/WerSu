@@ -1,7 +1,10 @@
 """Postgres implementation of :class:`ShelfRepoABC`.
 
 Every SQL statement against ``note.shelf`` and ``note.shelf_book``
-lives here so the ABC consumers never see raw SQL.
+lives here so the ABC consumers never see raw SQL.  The repo is a
+pure storage adapter -- SpiceDB edges are layered on by
+:class:`~src.db.repos.shelf.spicedb_decorator.SpicedbShelfRepoDecorator`
+which wraps an instance of this class at the composition root.
 
 Tables touched:
 
@@ -27,6 +30,7 @@ from src.api.other.undefined import (
     is_undefined,
     unwrap_undefined_or,
 )
+from src.api.other.user_context import UserContextABC
 from src.api.repos.shelf_repo import ShelfRepoABC
 from src.api import LoggingProvider
 from src.db.entities.shelf import ShelfEntity
@@ -82,6 +86,7 @@ class PostgresShelfRepo(ShelfRepoABC):
         description: UndefinedNoneOr[str] = UNDEFINED,
         image_url: UndefinedNoneOr[str] = UNDEFINED,
         readme_note_id: UndefinedNoneOr[str] = UNDEFINED,
+        user_ctx: Optional[UserContextABC] = None,
     ) -> ShelfEntity:
         """Insert a shelf row and return the persisted entity.
 
@@ -89,6 +94,13 @@ class PostgresShelfRepo(ShelfRepoABC):
         occurs (e.g. two users with the same username), the
         insert retries with ``<slug>-2``, ``<slug>-3``, ... up
         to :data:`MAX_SLUG_RETRY` attempts before raising.
+
+        ``user_ctx`` is accepted for ABC compliance; this
+        storage adapter does not write SpiceDB edges -- the
+        :class:`~src.db.repos.shelf.spicedb_decorator.SpicedbShelfRepoDecorator`
+        handles auth.  When the decorator is in the call
+        chain, ``user_ctx`` is consumed there before this
+        method sees it.
         """
         import asyncpg  # local import keeps the module top-level clean
         candidate = slug
@@ -183,6 +195,7 @@ class PostgresShelfRepo(ShelfRepoABC):
         description: UndefinedNoneOr[str] = UNDEFINED,
         image_url: UndefinedNoneOr[str] = UNDEFINED,
         readme_note_id: UndefinedNoneOr[str] = UNDEFINED,
+        user_ctx: Optional[UserContextABC] = None,
     ) -> Optional[ShelfEntity]:
         """Partially update a shelf with UNDEFINED / None semantics."""
         if is_undefined(id):
@@ -212,8 +225,17 @@ class PostgresShelfRepo(ShelfRepoABC):
             return None
         return self._row_to_entity(record)
 
-    async def delete_shelf(self, id: str) -> bool:
-        """Delete the shelf row."""
+    async def delete_shelf(
+        self,
+        id: str,
+        *,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> bool:
+        """Delete the shelf row.
+
+        ``user_ctx`` is accepted for ABC compliance; this
+        storage adapter does not write SpiceDB edges.
+        """
         if is_undefined(id):
             raise ValueError("Shelf ID is required for deletion")
         records = await self._shelf_table.delete({"id": str(id)})
@@ -225,8 +247,16 @@ class PostgresShelfRepo(ShelfRepoABC):
         self,
         shelf_id: str,
         book_ids: List[str],
-    ) -> None:
-        """Set-match the full book set; cheap when nothing changes."""
+        *,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> List[str]:
+        """Set-match the full book set; cheap when nothing changes.
+
+        Returns the list of *newly added* book ids so callers
+        -- typically the
+        :class:`~src.db.repos.shelf.spicedb_decorator.SpicedbShelfRepoDecorator`
+        -- can scope auth grants to the diff.
+        """
         current = set(await self.get_books_of(str(shelf_id)))
         desired = {str(b) for b in book_ids if b}
 
@@ -234,11 +264,14 @@ class PostgresShelfRepo(ShelfRepoABC):
             await self._shelf_book_table.delete(
                 {"shelf_id": str(shelf_id), "book_id": old}
             )
+        newly_added: List[str] = []
         for new_book in desired.difference(current):
             await self._shelf_book_table.insert(
                 {"shelf_id": str(shelf_id), "book_id": new_book},
                 on_conflict="DO NOTHING",
             )
+            newly_added.append(new_book)
+        return newly_added
 
     async def get_books_of(self, shelf_id: str) -> List[str]:
         """Return sorted book ids sitting on ``shelf_id``."""
@@ -264,15 +297,35 @@ class PostgresShelfRepo(ShelfRepoABC):
             if _row_get(r, "shelf_id")
         )
 
-    async def add_book(self, shelf_id: str, book_id: str) -> None:
-        """Idempotently add ``book_id`` to ``shelf_id``."""
+    async def add_book(
+        self,
+        shelf_id: str,
+        book_id: str,
+        *,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> None:
+        """Idempotently add ``book_id`` to ``shelf_id``.
+
+        ``user_ctx`` is accepted for ABC compliance; this
+        storage adapter does not write SpiceDB edges.
+        """
         await self._shelf_book_table.insert(
             {"shelf_id": str(shelf_id), "book_id": str(book_id)},
             on_conflict="DO NOTHING",
         )
 
-    async def remove_book(self, shelf_id: str, book_id: str) -> None:
-        """Remove ``book_id`` from ``shelf_id`` (no-op if absent)."""
+    async def remove_book(
+        self,
+        shelf_id: str,
+        book_id: str,
+        *,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> None:
+        """Remove ``book_id`` from ``shelf_id`` (no-op if absent).
+
+        ``user_ctx`` is accepted for ABC compliance; this
+        storage adapter does not write SpiceDB edges.
+        """
         await self._shelf_book_table.delete(
             {"shelf_id": str(shelf_id), "book_id": str(book_id)}
         )
