@@ -7,7 +7,6 @@ from typing import Dict, List, Optional
 from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.api.other.undefined import UNDEFINED, unwrap_undefined
 from src.api.other.user_context import UserContextABC
-from src.api.repos.permission_repo import PermissionRepoABC
 from src.api.repos.rule_repo import RuleRepoABC
 from src.api.repos.shelf_repo import ShelfRepoABC
 from src.api.services.shelf_service import BootstrapResult
@@ -31,6 +30,14 @@ class ZettelkastenStrategy(ShelfBootstrapStrategy):
        default and non-default bindings are preserved.
     3. Rule: inserted only when no NoteCreated rule already exists for the
        shelf and a fleeting book is reachable.
+
+    SpiceDB ``shelf#owner`` / ``shelf#admin`` /
+    ``directory#owner`` / ``directory#admin`` edges are
+    granted automatically by the shelf repo's
+    :func:`~src.db.repos.shelf.postgres.writes_user_permissions`
+    decorator -- the strategy just forwards ``user_ctx`` to
+    every ``shelf_repo.insert_shelf`` / ``add_book`` /
+    ``set_books_of`` call it makes.
     """
 
     name: str = "zettelkasten"
@@ -41,12 +48,10 @@ class ZettelkastenStrategy(ShelfBootstrapStrategy):
         shelf_repo: ShelfRepoABC,
         rule_repo: RuleRepoABC,
         directory_facade: DirectoryFacadeABC,
-        permission_repo: PermissionRepoABC,
     ) -> None:
         self._shelf_repo = shelf_repo
         self._rule_repo = rule_repo
         self._directory_facade = directory_facade
-        self._permission_repo = permission_repo
 
     async def apply(
         self,
@@ -82,6 +87,11 @@ class ZettelkastenStrategy(ShelfBootstrapStrategy):
 
         # Pass 2: bind newly-created default books. add_book is
         # idempotent on note.shelf_book; pre-existing bindings stay.
+        # Forward ``user_ctx`` so the
+        # :func:`~src.db.repos.shelf.postgres.writes_user_permissions`
+        # decorator grants ``directory#owner`` / ``directory#admin``
+        # on the newly bound books for the caller -- matching
+        # what ``create_directory`` already does.
         for spec in self._directory_facade.DEFAULT_DIRECTORY_SPECS:
             if spec.name in existing_slugs_to_book_id:
                 continue
@@ -90,6 +100,7 @@ class ZettelkastenStrategy(ShelfBootstrapStrategy):
                     await self._shelf_repo.add_book(
                         shelf_id=shelf_id,
                         book_id=str(unwrap_undefined(book.id)),
+                        user_ctx=user_ctx,
                     )
                     break
 

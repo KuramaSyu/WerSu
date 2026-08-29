@@ -99,7 +99,6 @@ BootstrapDeps = tuple[
     ShelfRepoABC,
     RuleRepoABC,
     DirectoryFacadeABC,
-    PermissionRepoABC,
 ]
 
 
