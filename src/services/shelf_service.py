@@ -97,10 +97,14 @@ class ShelfServiceImpl(ShelfServiceABC):
         *,
         bootstrap: BootstrapStrategy = BootstrapStrategy.NONE,
     ) -> tuple[ShelfEntity, BootstrapResult]:
-        """Insert the shelf row, attach owner+admin relations, optionally run a strategy.
+        """Insert the shelf row + run an optional bootstrap strategy.
 
         Creation is unconditional (no permission chain); matches
-        the rule service's policy.
+        the rule service's policy.  The shelf repo's
+        :func:`~src.db.repos.shelf.postgres.writes_user_permissions`
+        decorator writes the ``shelf#owner`` / ``shelf#admin``
+        edges for ``actor`` on the freshly inserted row, so the
+        service no longer has to.
         """
         if not entity.slug:
             raise ValueError("shelf.slug is required for create_shelf")
@@ -111,13 +115,7 @@ class ShelfServiceImpl(ShelfServiceABC):
             description=entity.description,
             image_url=entity.image_url,
             readme_note_id=entity.readme_note_id,
-        )
-
-        await self._attach_owner_to_shelf(
-            shelf_id=str(persisted.id), user_id=str(actor.user_id),
-        )
-        await self._attach_admin_to_shelf(
-            shelf_id=str(persisted.id), user_id=str(actor.user_id),
+            user_ctx=actor,
         )
 
         if bootstrap == BootstrapStrategy.NONE:
@@ -128,7 +126,6 @@ class ShelfServiceImpl(ShelfServiceABC):
             shelf_repo=self._shelf_repo,
             rule_repo=self._rule_repo,
             directory_facade=self._directory_facade,
-            permission_repo=self._permission_repo,
         )
         bootstrap_result = await strategy.apply(
             shelf=persisted,
@@ -307,6 +304,7 @@ class ShelfServiceImpl(ShelfServiceABC):
         await self._enforce_write_permission(str(shelf_id), actor)
         await self._shelf_repo.set_books_of(
             str(shelf_id), [str(b) for b in book_ids if b],
+            user_ctx=actor,
         )
 
     async def attach_book(
@@ -321,7 +319,9 @@ class ShelfServiceImpl(ShelfServiceABC):
         if not book_id:
             raise ValueError("book_id is required for attach_book")
         await self._enforce_write_permission(str(shelf_id), actor)
-        await self._shelf_repo.add_book(str(shelf_id), str(book_id))
+        await self._shelf_repo.add_book(
+            str(shelf_id), str(book_id), user_ctx=actor,
+        )
 
     async def detach_book(
         self,
@@ -335,7 +335,9 @@ class ShelfServiceImpl(ShelfServiceABC):
         if not book_id:
             raise ValueError("book_id is required for detach_book")
         await self._enforce_write_permission(str(shelf_id), actor)
-        await self._shelf_repo.remove_book(str(shelf_id), str(book_id))
+        await self._shelf_repo.remove_book(
+            str(shelf_id), str(book_id), user_ctx=actor,
+        )
 
     async def get_books_of_shelf(
         self,
@@ -375,49 +377,6 @@ class ShelfServiceImpl(ShelfServiceABC):
         return visible
 
     # ---- internal helpers -----------------------------------------------
-
-    async def _attach_owner_to_shelf(
-        self,
-        *,
-        shelf_id: str,
-        user_id: str,
-    ) -> None:
-        """Insert shelf#owner@user:<id>. Called on every create_shelf."""
-        owner_rel = Relationship(
-            resource=ObjectRef(
-                object_type=ObjectTypeEnum.SHELF,
-                object_id=str(shelf_id),
-            ),
-            relation=ShelfRelationEnum.OWNER,
-            subject=SubjectRef(
-                object_type=ObjectTypeEnum.USER,
-                object_id=str(user_id),
-            ),
-        )
-        await self._permission_repo.insert([owner_rel])
-
-    async def _attach_admin_to_shelf(
-        self,
-        *,
-        shelf_id: str,
-        user_id: str,
-    ) -> None:
-        """Insert shelf#admin@user:<id>. Best-effort; failures are swallowed."""
-        try:
-            admin_rel = Relationship(
-                resource=ObjectRef(
-                    object_type=ObjectTypeEnum.SHELF,
-                    object_id=str(shelf_id),
-                ),
-                relation=ShelfRelationEnum.ADMIN,
-                subject=SubjectRef(
-                    object_type=ObjectTypeEnum.USER,
-                    object_id=str(user_id),
-                ),
-            )
-            await self._permission_repo.insert([admin_rel])
-        except Exception:  # noqa: BLE001 -- best-effort bootstrap
-            return
 
     async def _enforce_view_permission(
         self,
