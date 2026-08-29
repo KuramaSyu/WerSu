@@ -35,6 +35,7 @@ from src.api.services.shelf_service import (
 )
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.shelf import ShelfEntity
+from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
 from src.services.shelf_service import ShelfServiceImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
@@ -176,14 +177,28 @@ def _make_service(
     permission_repo: Optional[InMemoryPermissionRepo] = None,
     directory_facade: Optional[FakeDirectoryFacade] = None,
 ) -> ShelfServiceImpl:
-    """Build a :class:`ShelfServiceImpl` with in-memory defaults."""
+    """Build a :class:`ShelfServiceImpl` with in-memory defaults.
+
+    The ``shelf_repo`` argument is the *storage* adapter -- the
+    helper wraps it in :class:`SpicedbShelfRepoDecorator` so the
+    service's ``user_ctx`` keyword lands in the same place it
+    does in production.  Tests that need to inspect the
+    underlying storage should keep a reference to the unwrapped
+    repository and assert on it directly.
+    """
+    storage = shelf_repo if shelf_repo is not None else InMemoryShelfRepo()
+    perm = (
+        permission_repo
+        if permission_repo is not None
+        else InMemoryPermissionRepo()
+    )
+    decorated = SpicedbShelfRepoDecorator(
+        inner=storage,
+        permission_repo=perm,
+    )
     return ShelfServiceImpl(
-        shelf_repo=shelf_repo if shelf_repo is not None else InMemoryShelfRepo(),
-        permission_repo=(
-            permission_repo
-            if permission_repo is not None
-            else InMemoryPermissionRepo()
-        ),
+        shelf_repo=decorated,
+        permission_repo=perm,
         directory_facade=(
             directory_facade if directory_facade is not None else FakeDirectoryFacade()
         ),

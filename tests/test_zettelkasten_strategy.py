@@ -10,6 +10,7 @@ from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.rule import RuleEntity
 from src.db.entities.shelf import ShelfEntity
+from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
 from src.services.shelf_bootstrap import (
     ZettelkastenStrategy,
     build_strategy,
@@ -118,16 +119,25 @@ class FakeDirectoryFacade(DirectoryFacadeABC):
 
 
 def _make_strategy():
-    """Build a strategy with the in-memory test repos."""
-    shelf_repo = InMemoryShelfRepo()
+    """Build a strategy with the in-memory test repos.
+
+    The ``shelf_repo`` the strategy sees is the production
+    wiring -- the bare :class:`InMemoryShelfRepo` wrapped by
+    :class:`SpicedbShelfRepoDecorator` so the strategy's
+    ``user_ctx`` keyword lands somewhere real.
+    """
+    inner = InMemoryShelfRepo()
+    permission_repo = InMemoryPermissionRepo()
+    shelf_repo = SpicedbShelfRepoDecorator(
+        inner=inner,
+        permission_repo=permission_repo,
+    )
     rule_repo = InMemoryRuleRepo()
     directory_facade = FakeDirectoryFacade()
-    permission_repo = InMemoryPermissionRepo()
     strategy = ZettelkastenStrategy(
         shelf_repo=shelf_repo,
         rule_repo=rule_repo,
         directory_facade=directory_facade,
-        permission_repo=permission_repo,
     )
     return strategy, shelf_repo, rule_repo, directory_facade
 
@@ -379,7 +389,6 @@ async def test_build_strategy_returns_bound_zettelkasten() -> None:
         shelf_repo=InMemoryShelfRepo(),
         rule_repo=InMemoryRuleRepo(),
         directory_facade=FakeDirectoryFacade(),
-        permission_repo=InMemoryPermissionRepo(),
     )
     assert isinstance(strategy, ZettelkastenStrategy)
     assert strategy.name == "zettelkasten"
