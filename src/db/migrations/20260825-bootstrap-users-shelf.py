@@ -1,22 +1,32 @@
 """Backfill users_shelf for users that predate the shelf tables.
 
-Idempotent on every step: shelf row, shelf_book bindings, rule.
-Step 3 (rule insert) delegates to ensure_default_fleeting_rule
-so the probe is shared with the live zettelkasten bootstrap.
-Steps 1+2 stay migration-specific because the backfill
-semantics (bind every existing directory to every user shelf)
-differ from the strategy's "create three fresh books".
+Idempotent on every step.  This migration owns the only thing
+the live ``ZettelkastenStrategy`` does not: the ``note.shelf``
+row itself (the strategy's contract says "not insert the shelf
+itself -- the caller already did").
+
+The strategy owns everything else (default books,
+``shelf_book`` bindings, the default ``NoteCreated`` rule) and
+is invoked through the ``zettelkasten_strategy`` service the
+migration runner injects from the live composition root.  The
+shelf repo's ``writes_user_permissions`` decorator grants the
+``shelf#owner`` / ``shelf#admin`` edges when the strategy
+binds the user as the shelf owner, so this migration no longer
+needs to write any SpiceDB relations directly.
+
+This keeps the backfill in lockstep with
+``user_service.create_user`` instead of reimplementing shelf /
+book / rule creation in migration land.
 """
 
 from __future__ import annotations
 
 from typing import Optional
 
+from src.api.other.user_context import UserContextABC
+from src.db.entities.shelf import ShelfEntity
 from src.db.migrations.base import MigrationABC
 from src.db.migrations.context import MigrationContext
-from src.services.shelf_bootstrap.zettelkasten import (
-    ensure_default_fleeting_rule,
-)
 from src.services.user_service import (
     USERS_SHELF_DESCRIPTION,
     users_shelf_display_name_for,
@@ -37,143 +47,144 @@ class Migration(MigrationABC):
             for r in rows
             if r.get("user_id") is not None
         ]
-        await self._bootstrap_per_user_shelves(ctx, users)
-        await self._attach_default_fleeting_rules(ctx, users)
-
-    async def _bootstrap_per_user_shelves(
-        self,
-        ctx: MigrationContext,
-        users: list[tuple[str, object]],
-    ) -> None:
         for user_id, username in users:
-            shelf_slug = users_shelf_slug_for(username)
-            existing = await ctx.db.fetchrow(
-                "SELECT id FROM note.shelf WHERE slug = $1",
-                shelf_slug,
-            )
-            if existing and existing.get("id") is not None:
+            user_ctx = await self._build_user_ctx(ctx, user_id)
+            if user_ctx is None:
                 continue
-            await ctx.db.fetchrow(
-                """
-                INSERT INTO note.shelf (
-                    slug, display_name, description
-                ) VALUES ($1, $2, $3)
-                RETURNING id
-                """,
-                shelf_slug,
-                users_shelf_display_name_for(username),
-                USERS_SHELF_DESCRIPTION,
+            shelf_entity = await self._ensure_shelf_row(
+                ctx, username, user_ctx,
+            )
+            if shelf_entity is None:
+                continue
+            await self._run_zettelkasten_bootstrap(
+                ctx, shelf_entity, user_id, user_ctx,
             )
 
-        # Single-tenant: bind every directory to every user shelf.
-        # Multi-tenant backfill is out of scope here.
-        shelves = await ctx.db.fetch("SELECT id, slug FROM note.shelf")
-        dir_ids = await ctx.db.fetch("SELECT id FROM note.directory")
-        for shelf in shelves:
-            shelf_id = shelf.get("id")
-            if shelf_id is None:
-                continue
-            for d in dir_ids:
-                did = d.get("id")
-                if did is None:
-                    continue
-                await ctx.db.execute(
-                    """
-                    INSERT INTO note.shelf_book (shelf_id, book_id)
-                    VALUES ($1, $2)
-                    ON CONFLICT DO NOTHING
-                    """,
-                    str(shelf_id),
-                    str(did),
-                )
-
-    async def _attach_default_fleeting_rules(
+    async def _build_user_ctx(
         self,
         ctx: MigrationContext,
-        users: list[tuple[str, object]],
+        user_id: str,
+    ) -> Optional[UserContextABC]:
+        """Materialise a ``UserContextABC`` for ``user_id`` if the factory is wired."""
+        factory = ctx.services.user_context_factory
+        if factory is None:
+            return None
+        return await factory.create(str(user_id))
+
+    async def _ensure_shelf_row(
+        self,
+        ctx: MigrationContext,
+        username: object,
+        user_ctx: UserContextABC,
+    ) -> Optional[ShelfEntity]:
+        """Insert the user's ``note.shelf`` row on first run; reuse on re-runs.
+
+        On a fresh insert, delegates to the live
+        :meth:`ShelfRepoABC.insert_shelf` so the
+        :func:`~src.db.repos.shelf.postgres.writes_user_permissions`
+        decorator grants ``shelf#owner`` and ``shelf#admin``
+        for ``user_ctx`` in the same call.
+
+        Returns the shelf entity (id guaranteed set) so the
+        caller can hand it to the strategy.
+        """
+        shelf_repo = ctx.services.shelf_repo
+        if shelf_repo is None:
+            # Fixture-only / Postgres-only run: fall back to
+            # the raw SQL probe + insert.  No SpiceDB grants
+            # happen in this mode by design.
+            return await self._ensure_shelf_row_raw(ctx, username)
+
+        existing = await ctx.db.fetchrow(
+            "SELECT id FROM note.shelf WHERE slug = $1",
+            users_shelf_slug_for(username),
+        )
+        if existing and existing.get("id") is not None:
+            return ShelfEntity(
+                id=str(existing.get("id")),
+                slug=users_shelf_slug_for(username),
+            )
+
+        persisted = await shelf_repo.insert_shelf(
+            slug=users_shelf_slug_for(username),
+            display_name=users_shelf_display_name_for(username),
+            description=USERS_SHELF_DESCRIPTION,
+            user_ctx=user_ctx,
+        )
+        return persisted
+
+    async def _ensure_shelf_row_raw(
+        self,
+        ctx: MigrationContext,
+        username: object,
+    ) -> Optional[ShelfEntity]:
+        """Raw-SQL fallback when no shelf repo is registered.
+
+        Mirrors :meth:`_ensure_shelf_row` but skips the
+        SpiceDB grant -- the Postgres-only fixture runs that
+        hit this branch don't exercise the default-fleeting
+        code path.
+        """
+        shelf_slug = users_shelf_slug_for(username)
+        existing = await ctx.db.fetchrow(
+            "SELECT id, slug FROM note.shelf WHERE slug = $1",
+            shelf_slug,
+        )
+        if existing and existing.get("id") is not None:
+            return ShelfEntity(
+                id=str(existing.get("id")),
+                slug=shelf_slug,
+            )
+
+        inserted = await ctx.db.fetchrow(
+            """
+            INSERT INTO note.shelf (
+                slug, display_name, description
+            ) VALUES ($1, $2, $3)
+            RETURNING id
+            """,
+            shelf_slug,
+            users_shelf_display_name_for(username),
+            USERS_SHELF_DESCRIPTION,
+        )
+        if not inserted or inserted.get("id") is None:
+            return None
+        return ShelfEntity(
+            id=str(inserted.get("id")),
+            slug=shelf_slug,
+        )
+
+    async def _run_zettelkasten_bootstrap(
+        self,
+        ctx: MigrationContext,
+        shelf: ShelfEntity,
+        user_id: str,
+        user_ctx: UserContextABC,
     ) -> None:
-        rule_repo = ctx.get("rule_repo")
-        if rule_repo is None:
-            await self._attach_default_fleeting_rules_raw(ctx, users)
+        """Delegate default books / bindings / rule to ``ZettelkastenStrategy``.
+
+        The strategy calls ``shelf_repo.add_book(...)`` /
+        ``set_books_of(...)`` with the ``user_ctx`` we built in
+        :meth:`up`, which lets the
+        :func:`~src.db.repos.shelf.postgres.writes_user_permissions`
+        decorator grant ``directory#owner`` + ``directory#admin``
+        on the newly added books without this migration needing
+        to touch SpiceDB directly.
+
+        Skipped when the strategy is not registered -- that
+        happens on fixture-only / CLI runs that run migrations
+        without a full service bundle.  Those runs do not
+        exercise the default-fleeting code path, so the shelf
+        without books is harmless.
+        """
+        strategy = ctx.services.zettelkasten_strategy
+        if strategy is None:
             return
-
-        for user_id, username in users:
-            shelf_slug = users_shelf_slug_for(username)
-            shelf_row = await ctx.db.fetchrow(
-                "SELECT id FROM note.shelf WHERE slug = $1",
-                shelf_slug,
-            )
-            if not shelf_row or shelf_row.get("id") is None:
-                continue
-            shelf_id = str(shelf_row.get("id"))
-
-            fleeting = await ctx.db.fetchrow(
-                "SELECT id FROM note.directory "
-                "WHERE slug = 'fleeting_notes' LIMIT 1"
-            )
-            fleeting_id: Optional[str] = (
-                str(fleeting.get("id"))
-                if fleeting and fleeting.get("id") is not None
-                else None
-            )
-
-            await ensure_default_fleeting_rule(
-                rule_repo=rule_repo,
-                shelf_id=shelf_id,
-                owner_id=str(user_id),
-                fleeting_directory_id=fleeting_id,
-            )
-
-    async def _attach_default_fleeting_rules_raw(
-        self,
-        ctx: MigrationContext,
-        users: list[tuple[str, object]],
-    ) -> None:
-        # Raw-SQL fallback for fixtures/CLI runs without rule_repo.
-        # Mirrors ensure_default_fleeting_rule: probe first, insert only if missing.
-        for user_id, username in users:
-            shelf_slug = users_shelf_slug_for(username)
-            shelf_row = await ctx.db.fetchrow(
-                "SELECT id FROM note.shelf WHERE slug = $1",
-                shelf_slug,
-            )
-            if not shelf_row or shelf_row.get("id") is None:
-                continue
-            shelf_id = str(shelf_row.get("id"))
-            existing = await ctx.db.fetchrow(
-                """
-                SELECT id FROM rules
-                WHERE event_type = 'NoteCreated'
-                  AND attached_entity_type = 'shelf'
-                  AND attached_entity_id = $1
-                """,
-                shelf_id,
-            )
-            if existing and existing.get("id") is not None:
-                continue
-            fleeting = await ctx.db.fetchrow(
-                "SELECT id FROM note.directory "
-                "WHERE slug = 'fleeting_notes' LIMIT 1"
-            )
-            if not fleeting or fleeting.get("id") is None:
-                continue
-            await ctx.db.execute(
-                """
-                INSERT INTO rules (
-                    event_type, attached_entity_type, attached_entity_id,
-                    condition, action_type, action_context,
-                    enabled, creator_id
-                ) VALUES (
-                    'NoteCreated', 'shelf', $1,
-                    $2::jsonb, 'add_to_directory', $3::jsonb,
-                    TRUE, $4
-                )
-                """,
-                shelf_id,
-                '{"type": "always_true"}',
-                '{"directory_id": "' + str(fleeting.get("id")) + '"}',
-                str(user_id),
-            )
+        await strategy.apply(
+            shelf=shelf,
+            owner_id=str(user_id),
+            user_ctx=user_ctx,
+        )
 
 
 __all__ = ["Migration"]
