@@ -297,6 +297,7 @@ async def user_service(
     from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
     from src.db.repos.shelf.postgres import PostgresShelfRepo
     from src.db.repos.user import RepoContextFactory
+    from src.services.shelf_service import ShelfServiceImpl
     from src.services.user_service import UserServiceImpl
     permission_repo = note_repo_facade._permission_repo  # type: ignore[attr-defined]
     rule_repo = note_repo_facade._rule_repo  # type: ignore[attr-defined]
@@ -326,11 +327,16 @@ async def user_service(
         shelf_repo=shelf_repo,
     )
     context_factory = RepoContextFactory(user_repo=user_repo)
+    shelf_service = ShelfServiceImpl(
+        shelf_repo=shelf_repo,
+        permission_repo=permission_repo,
+        directory_facade=directory_facade,
+        rule_repo=rule_repo,
+        logging_provider=logging_provider,
+    )
     return UserServiceImpl(
         user_repo=user_repo,
         directory_facade=directory_facade,
         context_factory=context_factory,
-        shelf_repo=shelf_repo,
-        rule_repo=rule_repo,
-        permission_repo=permission_repo,
+        shelf_service=shelf_service,
     )
