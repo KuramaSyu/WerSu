@@ -1,0 +1,176 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+
+package proto;
+option go_package = "github.com/KuramaSyu/WerSu-Rest/src/proto;proto";
+
+// ===== Domain messages ====================================================
+
+// A shelf is a flat (non-hierarchical) grouping of books
+// (directories).  Mirrors the metadata columns of a
+// :class:`~src.db.entities.directory.directory.DirectoryEntity`
+// minus the parent / child lists -- shelves don't nest.
+//
+// ``book_ids`` is populated only when the caller opts in via
+// ``include_books=true`` on the read request; empty otherwise.
+message Shelf {
+    string id = 1;
+    string slug = 2;
+    string display_name = 3;
+    string description = 4;
+    string image_url = 5;
+    string readme_note_id = 6;
+    repeated string book_ids = 7;
+}
+
+// Bootstrap strategy the service should run immediately after
+// inserting the shelf row.  ``UNSPECIFIED`` / ``NONE`` both mean
+// "no strategy" -- the caller just gets the bare shelf.
+//
+// ``ZETTELKASTEN`` runs the same flow the user bootstrap
+// uses: create the three default books (fleeting / literature /
+// permanent) and bind them to the shelf, then insert the
+// ``NoteCreated -> add_to_directory(fleeting)`` rule attached to
+// the new shelf.  The strategy is idempotent: re-running it on a
+// shelf that already carries books is a no-op.
+enum BootstrapStrategy {
+    BOOTSTRAP_STRATEGY_UNSPECIFIED = 0;
+    BOOTSTRAP_STRATEGY_NONE = 1;
+    BOOTSTRAP_STRATEGY_ZETTELKASTEN = 2;
+}
+
+// What the strategy produced.  Echoed back on
+// :class:`CreateShelfResponse` so callers can confirm what was
+// created.  Empty when no strategy ran.
+message BootstrapResult {
+    repeated string created_directory_ids = 1;
+    string created_rule_id = 2;
+    string description = 3;
+}
+
+// Returned by ``DeleteShelf`` when ``dry=true``.  The fields
+// describe the would-be-cascade so the UI can show a
+// confirmation before issuing the real delete.  Empty when
+// ``dry=false`` and the delete succeeded.
+message DeleteShelfResponse {
+    bool dry = 1;
+    repeated string affected_book_ids = 2;
+    int32 binding_count = 3;
+}
+
+// ===== Requests ==========================================================
+
+message GetShelfRequest {
+    string user_id = 1;
+    string id = 2;
+    bool include_books = 3;
+}
+
+message GetShelvesRequest {
+    string user_id = 1;
+    repeated string ids = 2;
+    bool include_books = 3;
+}
+
+message ListShelvesRequest {
+    string user_id = 1;
+    optional int32 limit = 2;
+    optional int32 offset = 3;
+    bool include_books = 4;
+}
+
+message CreateShelfRequest {
+    string user_id = 1;
+    string slug = 2;
+    optional string display_name = 3;
+    optional string description = 4;
+    optional string image_url = 5;
+    optional string readme_note_id = 6;
+    BootstrapStrategy bootstrap_strategy = 7;
+}
+
+message UpdateShelfRequest {
+    string user_id = 1;
+    string id = 2;
+    optional string slug = 3;
+    optional string display_name = 4;
+    optional string description = 5;
+    optional string image_url = 6;
+    optional string readme_note_id = 7;
+}
+
+message DeleteShelfRequest {
+    string user_id = 1;
+    string id = 2;
+    bool dry = 3;
+}
+
+message SetBooksRequest {
+    string user_id = 1;
+    string shelf_id = 2;
+    repeated string book_ids = 3;
+}
+
+message AttachBookRequest {
+    string user_id = 1;
+    string shelf_id = 2;
+    string book_id = 3;
+}
+
+message DetachBookRequest {
+    string user_id = 1;
+    string shelf_id = 2;
+    string book_id = 3;
+}
+
+message GetBooksOfShelfRequest {
+    string user_id = 1;
+    string shelf_id = 2;
+}
+
+message GetShelvesOfBookRequest {
+    string user_id = 1;
+    string book_id = 2;
+}
+
+// ===== Responses =========================================================
+
+message ShelfResponse {
+    Shelf shelf = 1;
+}
+
+message ShelvesResponse {
+    repeated Shelf shelves = 1;
+}
+
+message CreateShelfResponse {
+    Shelf shelf = 1;
+    BootstrapResult bootstrap_result = 2;
+}
+
+message BooksResponse {
+    repeated string book_ids = 1;
+}
+
+message ShelfIdsResponse {
+    repeated string shelf_ids = 1;
+}
+
+// ===== Service ============================================================
+
+service ShelfService {
+    // CRUD
+    rpc GetShelf        (GetShelfRequest)         returns (ShelfResponse);
+    rpc GetShelves      (GetShelvesRequest)       returns (ShelvesResponse);
+    rpc ListShelves     (ListShelvesRequest)      returns (ShelvesResponse);
+    rpc CreateShelf     (CreateShelfRequest)      returns (CreateShelfResponse);
+    rpc UpdateShelf     (UpdateShelfRequest)      returns (ShelfResponse);
+    rpc DeleteShelf     (DeleteShelfRequest)      returns (DeleteShelfResponse);
+
+    // Book bindings
+    rpc SetBooks        (SetBooksRequest)         returns (google.protobuf.Empty);
+    rpc AttachBook      (AttachBookRequest)       returns (google.protobuf.Empty);
+    rpc DetachBook      (DetachBookRequest)       returns (google.protobuf.Empty);
+    rpc GetBooksOfShelf (GetBooksOfShelfRequest)  returns (BooksResponse);
+    rpc GetShelvesOfBook(GetShelvesOfBookRequest) returns (ShelfIdsResponse);
+}
