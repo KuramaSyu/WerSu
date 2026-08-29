@@ -111,6 +111,16 @@ from src.api.services.sharing import (
     SharingServiceABC,
 )
 from src.api.services.role import RoleServiceABC
+from src.api.services.shelf_service import (
+    BootstrapResult,
+    BootstrapStrategy,
+    DryDeleteResult,
+    ShelfPermissionError,
+    ShelfReadOptions,
+    ShelfServiceABC,
+    ShelfServiceError,
+    resolve_shelf_read_options,
+)
 from src.api.services.user_service import UserServiceABC
 from src.api.services.jwt_provider import (
     AttachmentTokenClaims,
@@ -190,6 +200,14 @@ __all__ = [
     "SharingRepoABC",
     "SharingServiceABC",
     "RoleServiceABC",
+    "ShelfPermissionError",
+    "ShelfReadOptions",
+    "ShelfServiceABC",
+    "ShelfServiceError",
+    "BootstrapResult",
+    "BootstrapStrategy",
+    "DryDeleteResult",
+    "resolve_shelf_read_options",
     "UserServiceABC",
     "AttachmentTokenClaims",
     "JwtError",

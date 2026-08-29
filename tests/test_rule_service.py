@@ -140,6 +140,11 @@ class FakeDirectoryFacade(DirectoryFacadeABC):
     ) -> None:
         raise NotImplementedError
 
+    async def fetch_directories_by_ids(
+        self, ids: List[str],
+    ) -> List[DirectoryEntity]:
+        return []
+
 
 def _note_rel(user_id: str, note_id: str, relation) -> Relationship:
     """Build a ``note#<relation>@user:<user_id>`` relationship."""

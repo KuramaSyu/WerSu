@@ -542,6 +542,9 @@ async def test_migration_backfills_shelf_and_rule_for_existing_users(
     ctx = MigrationContext(
         db=env.db,
         spicedb_client=env.spicedb_client,
+        services={
+            "rule_repo": env.rule_repo,
+        },
     )
     runner = MigrationRunner(
         ctx=ctx,

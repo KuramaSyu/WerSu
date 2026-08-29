@@ -27,6 +27,7 @@ from .background_process import (  # noqa: F401
     ManualClock,
 )
 from .directory_service import _StubDirectoryService  # noqa: F401
+from .shelf_service import _StubShelfService  # noqa: F401
 from .in_memory_permission_repo import InMemoryPermissionRepo  # noqa: F401
 from .logging import silent_logger  # noqa: F401
 from .permission_service import _FakePermissionService  # noqa: F401

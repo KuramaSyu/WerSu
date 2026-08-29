@@ -14,6 +14,7 @@ from src.api.repos.directory_repo import (
     DirectoryHierarchyType,
     DirectoryParentType,
 )
+from src.db.entities.directory.directory import DirectoryEntity
 from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
@@ -57,6 +58,11 @@ class _FakeDirectoryRepo(DirectoryFacadeABC):
         raise NotImplementedError()
 
     async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
+        return []
+
+    async def fetch_directories_by_ids(
+        self, ids: List[str],
+    ) -> List[DirectoryEntity]:
         return []
 
     async def delete_directory(self, entity) -> bool:  # type: ignore[override]

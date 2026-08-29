@@ -330,12 +330,7 @@ class _TestDirectoryRepo(DirectoryFacadeABC):
         return list(self.directories_by_id.values())
 
     async def fetch_directories_by_ids(self, ids: List[str]) -> List[DirectoryEntity]:
-        """Return directories in input order, skipping missing ids.
-
-        Satisfies :class:`DirectoryRepoABC.fetch_directories_by_ids`
-        so the fake can stand in for the production
-        :class:`DirectoryFacadeImpl` directory_repo parameter.
-        """
+        """Return directories in input order; missing ids are dropped."""
         out: List[DirectoryEntity] = []
         for did in ids:
             existing = self.directories_by_id.get(str(did))

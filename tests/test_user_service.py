@@ -18,6 +18,7 @@ from src.api.repos.directory_repo import (
 from src.api.other.relationship import ObjectRef, Relationship, SubjectRef
 from src.db.repos.note.permission import DirectoryRelationEnum, ObjectTypeEnum
 from src.db.repos.user.user import UserRepoABC
+from src.services.shelf_service import ShelfServiceImpl
 from src.services.user_service import UserServiceImpl
 
 
@@ -110,6 +111,19 @@ class _InMemoryDirectoryRepo(DirectoryFacadeABC):
 
     async def fetch_all_directories(self) -> List[DirectoryEntity]:
         return list(self.created)
+
+    async def fetch_directories_by_ids(
+        self, ids: List[str],
+    ) -> List[DirectoryEntity]:
+        # Mirror :meth:`fetch_directory`: linear scan over the
+        # in-memory ``created`` list.  Missing ids silently drop.
+        out: List[DirectoryEntity] = []
+        for did in ids:
+            for d in self.created:
+                if str(d.id) == str(did):
+                    out.append(d)
+                    break
+        return out
 
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         return False
@@ -218,23 +232,32 @@ def _make_service(
     rule_repo=None,
     permission_repo=None,
 ) -> UserServiceImpl:
-    """Build a :class:`UserServiceImpl` with sensible in-memory defaults.
+    """Build a UserServiceImpl with sensible in-memory defaults.
 
-    Tests that exercise the bootstrap path (shelf + books + rule)
-    can pass concrete fakes; tests that only care about directory
-    bootstrapping rely on the no-op fallbacks installed by
-    :class:`tests.stubs.in_memory_shelf_repo.InMemoryShelfRepo`
-    and :class:`tests.stubs.in_memory_rule_repo.InMemoryRuleRepo`.
+    Constructs a real ShelfServiceImpl from the in-memory fakes
+    so the user-service delegates shelf/rule work through the
+    shelf service (matching production wiring).
     """
     from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
     from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+    shelf_repo = shelf_repo if shelf_repo is not None else InMemoryShelfRepo()
+    rule_repo = rule_repo if rule_repo is not None else InMemoryRuleRepo()
+    permission_repo = (
+        permission_repo
+        if permission_repo is not None
+        else InMemoryPermissionRepo()
+    )
+    shelf_service = ShelfServiceImpl(
+        shelf_repo=shelf_repo,
+        permission_repo=permission_repo,
+        directory_facade=directory_repo,
+        rule_repo=rule_repo,
+    )
     return UserServiceImpl(
         user_repo=user_repo,
         directory_facade=directory_repo,
         context_factory=_InMemoryContextFactory(),
-        shelf_repo=shelf_repo if shelf_repo is not None else InMemoryShelfRepo(),
-        rule_repo=rule_repo if rule_repo is not None else InMemoryRuleRepo(),
-        permission_repo=permission_repo if permission_repo is not None else InMemoryPermissionRepo(),
+        shelf_service=shelf_service,
     )
 
 

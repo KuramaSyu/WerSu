@@ -94,6 +94,11 @@ class _StubDirectoryRepo(DirectoryFacadeABC):
     async def delete_directory(self, entity: DirectoryEntity) -> bool:
         raise NotImplementedError()
 
+    async def fetch_directories_by_ids(
+        self, ids: List[str],
+    ) -> List[DirectoryEntity]:
+        return []
+
     async def resolve_files_of_directory(
         self,
         directory_id: Optional[str],

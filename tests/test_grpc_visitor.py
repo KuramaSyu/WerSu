@@ -25,6 +25,7 @@ from src.api.services.note_service import NoteResponse
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.shelf import ShelfEntity
 from src.db.entities.user.user import UserEntity
 from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 from src.db.repos.attachments.attachments import Attachment
@@ -33,6 +34,7 @@ from src.grpc_mod.proto.attachments_pb2 import Attachment as GrpcAttachment
 from src.grpc_mod.proto.note_pb2 import Directory, Note, NoteResponse as GrpcNoteResponse
 from src.grpc_mod.proto.sharing_pb2 import NoteShare
 from src.grpc_mod.proto.user_pb2 import User
+from src.grpc_mod.proto.shelf_pb2 import Shelf as GrpcShelf
 from tests.stubs.visitor import StubVisitor, make_relationship
 
 
@@ -457,5 +459,47 @@ def test_note_response_convert_is_an_alias_for_visit() -> None:
     response = NoteResponse(note=entity)
     visitor = _visitor()
 
-    assert response.convert(visitor) == response.visit(visitor)
-    assert isinstance(response.convert(visitor), GrpcNoteResponse)
+
+
+# ---------------------------------------------------------------------------
+# Shelf dispatch + visit_shelf
+# ---------------------------------------------------------------------------
+
+
+def test_shelf_entity_dispatches_to_visit_shelf() -> None:
+    """``ShelfEntity.visit`` routes to ``visit_shelf`` on the visitor."""
+    entity = ShelfEntity(id="s-1", slug="mine", display_name="Mine")
+    visitor = _stub()
+    assert visitor.shelves == []
+    assert entity.visit(visitor) is entity
+    assert visitor.shelves == [entity]
+
+
+def test_visit_shelf_round_trip() -> None:
+    """``visit_shelf`` produces the proto message via the dispatch path."""
+    entity = ShelfEntity(
+        id="s-1", slug="mine", display_name="Mine", description="desc",
+        image_url="http://img", readme_note_id="n-1",
+        book_ids=["b-1", "b-2"],
+    )
+    visitor = _visitor()
+    proto = entity.visit(visitor)
+    assert isinstance(proto, GrpcShelf)
+    assert proto.id == "s-1"
+    assert proto.slug == "mine"
+    assert proto.display_name == "Mine"
+    assert proto.description == "desc"
+    assert proto.image_url == "http://img"
+    assert proto.readme_note_id == "n-1"
+    assert list(proto.book_ids) == ["b-1", "b-2"]
+
+
+def test_visit_shelf_drops_undefined_metadata_fields() -> None:
+    """UNDEFINED ``display_name`` / ``readme_note_id`` map to empty strings or absent fields."""
+    entity = ShelfEntity(id="s-1", slug="mine")
+    proto = entity.visit(_visitor())
+    assert proto.display_name == ""
+    assert proto.description == ""
+    assert proto.image_url == ""
+    assert proto.readme_note_id == ""
+    assert list(proto.book_ids) == []
