@@ -22,6 +22,9 @@ from typing import Any, Dict, List, Optional
 from warnings import deprecated
 
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
+from src.api.other.relationship import (
+    ShelfRelationEnum
+)
 from src.api.repos.combined_note_repo import CombinedNoteRepoABC
 from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api.repos.rule_repo import RuleRepoABC
@@ -160,7 +163,7 @@ class NoteFacadeImpl(NoteFacadeABC):
             for did in requested_ids:
                 if not did:
                     continue
-                if str(did) not in user_directory_ids:
+                if did not in user_directory_ids:
                     raise ValueError(
                         f"Provided directory_id '{did!r}' is not accessible "
                         f"for user {user.user_id!r}"
@@ -168,11 +171,7 @@ class NoteFacadeImpl(NoteFacadeABC):
             return [str(d) for d in requested_ids if d]
 
         # No parent requested -- fall back to the user's default
-        # rule.  The rule is looked up by walking every shelf the
-        # user owns; the bootstrap user service creates a single
-        # ``users_shelf``, so the loop is at most one iteration
-        # in production.  Tests that don't bootstrap a shelf
-        # simply have no rule and the call raises.
+        # rule. 
         rules = await self._fetch_default_fleeting_rules_for(user)
         if not rules:
             raise ValueError(
@@ -207,41 +206,18 @@ class NoteFacadeImpl(NoteFacadeABC):
         self,
         user: UserContextABC,
     ) -> List[Any]:
-        """Return the user's enabled ``NoteCreated`` rules attached to a shelf.
-
-        The walk is implemented in two parts because the note
-        facade does not own a "user -> shelf" relationship; it
-        asks the shelf repo for every shelf the user owns via
-        SpiceDB lookup.  Since the bootstrap user service always
-        creates exactly one shelf per user, this is one round-trip
-        in the common case.
-
-        Errors from the shelf repo / rule repo are swallowed and
-        treated as "no rule found" -- the caller will raise with
-        a helpful message rather than crashing on a transient
-        storage hiccup.
-        """
+        """Return the user's enabled ``NoteCreated`` rules attached to a shelf."""
         try:
-            # The user owns the shelf via SpiceDB admin/owner
-            # relations; we don't query SpiceDB directly here
-            # because the user service bootstraps a unique
-            # ``users_shelf`` per user.  Fetch every shelf
-            # whose ``owner`` / ``admin`` points at this user by
-            # relying on the shelf_repo's ``fetch_shelf`` and
-            # filtering by admin relations on the permission
-            # repo.  Simpler: ask the rule repo for *all* rules
-            # the user can manage (admin on the attached shelf)
-            # and filter in Python.  This is O(rules) but the
-            # rules table is small.
-            shelf_ids = await self._user_owned_shelf_ids(user)
+            shelf_ids = await self._shelfs_user_can_view(user)
             if not shelf_ids:
                 return []
+            
             rules: List[Any] = []
             for sid in shelf_ids:
                 shelf_rules = await self._rule_repo.list_rules(
                     event_type="NoteCreated",
                     attached_entity_type="shelf",
-                    attached_entity_id=str(sid),
+                    attached_entity_id=sid,
                     enabled_only=True,
                 )
                 rules.extend(shelf_rules)
@@ -253,36 +229,30 @@ class NoteFacadeImpl(NoteFacadeABC):
             )
             return []
 
-    async def _user_owned_shelf_ids(
+    async def _shelfs_user_can_view(
         self,
         user: UserContextABC,
     ) -> List[str]:
         """Return ids of every shelf the user has admin/owner on.
 
         Uses the permission repo's lookup semantics:
-        ``shelf#admin@user:<user_id>``.  An empty list is fine --
+        ``shelf#view@user:<user_id>``.  An empty list is fine --
         the caller treats it as "no default rule".
         """
         try:
-            from src.api.other.relationship import (
-                ObjectRef,
-                ObjectTypeEnum,
-                Relationship,
-                ShelfRelationEnum,
-            )
             shelf_ids = await self._permission_repo.lookup(
                 Relationship(
                     resource=ObjectRef(
                         object_type=ObjectTypeEnum.SHELF, object_id=UNDEFINED
                     ),
-                    relation=ShelfRelationEnum.ADMIN,
+                    relation=ShelfRelationEnum.VIEW,
                     subject=SubjectRef(
                         object_type=ObjectTypeEnum.USER,
                         object_id=str(user.user_id),
                     ),
                 )
             )
-            return [str(s) for s in shelf_ids]
+            return shelf_ids
         except Exception:  # noqa: BLE001 -- best-effort
             return []
 
@@ -350,7 +320,7 @@ class NoteFacadeImpl(NoteFacadeABC):
             )
             note.embeddings.append(embedding)
 
-        # resolve parent directories
+        # resolve parent directories (given or by rule)
         if note.directory_ids is UNDEFINED:
             resolved_dirs = await self._resolve_directory_ids(None, user)
         else:
