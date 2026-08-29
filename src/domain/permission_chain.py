@@ -438,6 +438,69 @@ class HasShelfEditPermissionsPerm(PermissionCheckChain):
         return f"user has no permission to edit permissions for shelf {self._shelf_id}"
 
 
+class HasShelfViewPerm(PermissionCheckChain):
+    """Permission check for viewing a shelf and its book bindings."""
+    OBJECT_TYPE: ObjectType = "shelf"
+    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.VIEW
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, shelf_id: str) -> None:
+        super().__init__()
+        self._shelf_id = shelf_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        return await self._get_permission_repo().has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._shelf_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no permission to view shelf {self._shelf_id}"
+
+
+class HasShelfWritePerm(PermissionCheckChain):
+    """Permission check for mutating a shelf's row or its book bindings."""
+    OBJECT_TYPE: ObjectType = "shelf"
+    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.WRITE
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, shelf_id: str) -> None:
+        super().__init__()
+        self._shelf_id = shelf_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        return await self._get_permission_repo().has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._shelf_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no permission to write to shelf {self._shelf_id}"
+
+
+class HasShelfDeletePerm(PermissionCheckChain):
+    """Permission check for deleting a shelf."""
+    OBJECT_TYPE: ObjectType = "shelf"
+    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.DELETE
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, shelf_id: str) -> None:
+        super().__init__()
+        self._shelf_id = shelf_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        return await self._get_permission_repo().has_permission(
+            user_ctx,
+            permission=self.RELATION_TYPE,
+            resource=ObjectRef(self.OBJECT_TYPE, self._shelf_id),
+        )
+
+    def _get_error_message(self) -> str:
+        return f"user has no permission to delete shelf {self._shelf_id}"
+
+
 class HasAnyDirectoryEditPermissionPerms(PermissionCheckChain):
     """Permission check: user has ``directory#edit_permissions`` on at least one directory.
 
