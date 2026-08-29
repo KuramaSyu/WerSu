@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
+from src.api.other.user_context import UserContextABC
 from src.db.entities.shelf import ShelfEntity
 
 
@@ -11,10 +12,10 @@ class ShelfRepoABC(ABC):
     """Storage contract for shelves.
 
     The :class:`ShelfRepoABC` is the cross-layer contract the
-    shelf service depends on; the concrete Postgres implementation
-    lives under :mod:`src.db.repos.shelf.postgres`.  The repo
-    deliberately does not consult SpiceDB; permission checks belong
-    upstream in the service / facade layer.
+    shelf service depends on.  Every write method accepts an
+    optional ``user_ctx`` so callers can declare the actor at
+    the call site; implementations route that identity to their
+    auth layer (SpiceDB edges in production, no-op in tests).
 
     Tables touched by the Postgres implementation:
 
@@ -23,6 +24,7 @@ class ShelfRepoABC(ABC):
 
     Implementations:
     * :class:`src.db.repos.shelf.postgres.PostgresShelfRepo`
+    * :class:`src.db.repos.shelf.spicedb_decorator.SpicedbShelfRepoDecorator`
     """
 
     # ---- shelf row CRUD -------------------------------------------------
@@ -36,6 +38,7 @@ class ShelfRepoABC(ABC):
         description: UndefinedNoneOr[str] = UNDEFINED,
         image_url: UndefinedNoneOr[str] = UNDEFINED,
         readme_note_id: UndefinedNoneOr[str] = UNDEFINED,
+        user_ctx: Optional[UserContextABC] = None,
     ) -> ShelfEntity:
         """Insert a new shelf row and return the persisted entity.
 
@@ -48,6 +51,12 @@ class ShelfRepoABC(ABC):
                 semantics as ``display_name``.
             image_url: optional image URL; same semantics.
             readme_note_id: optional README pointer; same semantics.
+            user_ctx: caller identity.  When supplied, the
+                implementation is expected to grant
+                ``shelf#owner`` + ``shelf#admin`` on the freshly
+                inserted shelf for this user.  ``None`` skips
+                the grant -- useful for fixtures that don't
+                exercise the auth layer.
 
         Returns:
             ShelfEntity: the inserted entity with its
@@ -113,6 +122,7 @@ class ShelfRepoABC(ABC):
         description: UndefinedNoneOr[str] = UNDEFINED,
         image_url: UndefinedNoneOr[str] = UNDEFINED,
         readme_note_id: UndefinedNoneOr[str] = UNDEFINED,
+        user_ctx: Optional[UserContextABC] = None,
     ) -> Optional[ShelfEntity]:
         """Partially update a shelf row.
 
@@ -126,6 +136,11 @@ class ShelfRepoABC(ABC):
             slug / display_name / description / image_url /
             readme_note_id: per-field updates using the
             UNDEFINED / None / value semantics above.
+            user_ctx: caller identity.  Accepted for symmetry
+                with :meth:`insert_shelf`; the current
+                implementation does not write any SpiceDB edges
+                on update (the service layer enforces write
+                permission upstream).
 
         Returns:
             Optional[ShelfEntity]: the updated entity without
@@ -139,11 +154,20 @@ class ShelfRepoABC(ABC):
         ...
 
     @abstractmethod
-    async def delete_shelf(self, id: str) -> bool:
+    async def delete_shelf(
+        self,
+        id: str,
+        *,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> bool:
         """Delete the shelf row (cascades ``note.shelf_book``).
 
         Args:
             id: shelf id to remove.
+            user_ctx: caller identity.  Accepted for symmetry
+                with :meth:`insert_shelf`; the current
+                implementation does not write any SpiceDB edges
+                on delete.
 
         Returns:
             bool: ``True`` when exactly one row was removed.
@@ -160,7 +184,9 @@ class ShelfRepoABC(ABC):
         self,
         shelf_id: str,
         book_ids: List[str],
-    ) -> None:
+        *,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> List[str]:
         """Replace the full book set of ``shelf_id`` with ``book_ids``.
 
         Args:
@@ -168,6 +194,20 @@ class ShelfRepoABC(ABC):
             book_ids: full list of book (directory) ids that
                 should sit on the shelf after this call; an
                 empty list removes every binding. Idempotent.
+            user_ctx: caller identity.  When supplied, the
+                implementation grants ``directory#owner`` +
+                ``directory#admin`` on each *newly added* book
+                for this user.  Edges on books that were
+                already on the shelf are left alone.
+
+        Returns:
+            List[str]: the book ids that were newly added by
+            this call (the diff between the previous binding
+            set and ``book_ids``).  Empty when the call was a
+            no-op.  Callers that only care about the
+            side-effect can ignore the return value; the
+            repo-decorator stack uses it to scope the auth
+            grant to the new books only.
 
         Note:
             The Postgres implementation uses a set-match approach:
@@ -208,10 +248,17 @@ class ShelfRepoABC(ABC):
         self,
         shelf_id: str,
         book_id: str,
+        *,
+        user_ctx: Optional[UserContextABC] = None,
     ) -> None:
         """Add ``book_id`` to ``shelf_id``.
 
         Idempotent: a no-op when the binding already exists.
+
+        When ``user_ctx`` is supplied the implementation grants
+        ``directory#owner`` + ``directory#admin`` on the bound
+        book for this user -- matching the policy used by
+        ``create_directory``.
         """
         ...
 
@@ -220,10 +267,17 @@ class ShelfRepoABC(ABC):
         self,
         shelf_id: str,
         book_id: str,
+        *,
+        user_ctx: Optional[UserContextABC] = None,
     ) -> None:
         """Remove ``book_id`` from ``shelf_id``.
 
-        A no-op when the binding does not exist.
+        A no-op when the binding does not exist.  ``user_ctx``
+        is accepted for symmetry with :meth:`add_book`; the
+        current implementation does not write any SpiceDB
+        edges on a remove (removing a binding must not revoke
+        the user's owner / admin edges on the underlying
+        book).
         """
         ...
 
