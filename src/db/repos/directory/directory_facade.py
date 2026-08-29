@@ -225,6 +225,22 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             raise ValueError("Directory ID is required for deletion")
         return await self._dir_repo.delete_directory(str(entity.id))
 
+    async def fetch_directories_by_ids(
+        self,
+        ids: List[str],
+    ) -> List[DirectoryEntity]:
+        """Delegate to the inner directory repo.
+
+        Lets callers holding the facade (bootstrap strategies,
+        migrations) probe multiple rows by id without reaching
+        around it.  Missing ids are silently dropped.
+        """
+        if not ids:
+            return []
+        return await self._dir_repo.fetch_directories_by_ids(
+            [str(i) for i in ids if i]
+        )
+
     # ---- DirectoryHelperMixin: hierarchy helpers ---------------------
 
     async def set_parents_of(

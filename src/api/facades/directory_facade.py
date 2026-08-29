@@ -194,5 +194,21 @@ class DirectoryFacadeABC(DirectoryHelperMixin):
         """
         ...
 
+    @abstractmethod
+    async def fetch_directories_by_ids(
+        self,
+        ids: List[str],
+    ) -> List[DirectoryEntity]:
+        """Fetch multiple directory rows in one query (no enrichment).
+
+        Args:
+            ids: directory ids to load.  Empty returns [].  Missing
+                ids are silently skipped.
+
+        Returns:
+            List[DirectoryEntity]: matching rows without hierarchy.
+        """
+        ...
+
 
 __all__ = ["DefaultDirectorySpec", "DirectoryFacadeABC"]
