@@ -1,26 +1,22 @@
-"""Backfill the per-user ``users_shelf`` for users created before shelves.
+"""Backfill users_shelf for users that predate the shelf tables.
 
-The :mod:`20260825-add-shelf` migration added the shelf tables but
-deliberately stopped short of backfilling existing users, so the new
-``NoteFacadeImpl._resolve_directory_ids`` (which looks up a
-default-fleeting rule per user) would raise for every existing note.
-
-This migration closes the gap:
-
-1. Creates a ``users_shelf`` row per user in ``note.shelf``.
-2. Binds every existing directory to that shelf.
-3. Inserts a default ``NoteCreated`` rule pointing at the user's
-   fleeting book (only when a fleeting book exists).
-
-Idempotent: re-runs find the existing shelf + rule and no-op.
+Idempotent on every step: shelf row, shelf_book bindings, rule.
+Step 3 (rule insert) delegates to ensure_default_fleeting_rule
+so the probe is shared with the live zettelkasten bootstrap.
+Steps 1+2 stay migration-specific because the backfill
+semantics (bind every existing directory to every user shelf)
+differ from the strategy's "create three fresh books".
 """
 
 from __future__ import annotations
 
-import json
+from typing import Optional
 
 from src.db.migrations.base import MigrationABC
 from src.db.migrations.context import MigrationContext
+from src.services.shelf_bootstrap.zettelkasten import (
+    ensure_default_fleeting_rule,
+)
 from src.services.user_service import (
     USERS_SHELF_DESCRIPTION,
     users_shelf_display_name_for,
@@ -29,11 +25,8 @@ from src.services.user_service import (
 
 
 class Migration(MigrationABC):
-    """Backfill users_shelf + shelf_book + default-fleeting rule."""
 
     async def up(self, ctx: MigrationContext) -> None:
-        """Run the backfill in one pass."""
-        # Discover users
         rows = await ctx.db.fetch(
             "SELECT u.id AS user_id, u.username FROM auth.user u ORDER BY u.id"
         )
@@ -52,17 +45,15 @@ class Migration(MigrationABC):
         ctx: MigrationContext,
         users: list[tuple[str, object]],
     ) -> None:
-        """Create one shelf per user, slug ``<username>'s shelf``."""
         for user_id, username in users:
             shelf_slug = users_shelf_slug_for(username)
-            # Skip when the shelf already exists for this slug.
             existing = await ctx.db.fetchrow(
                 "SELECT id FROM note.shelf WHERE slug = $1",
                 shelf_slug,
             )
             if existing and existing.get("id") is not None:
                 continue
-            shelf_row = await ctx.db.fetchrow(
+            await ctx.db.fetchrow(
                 """
                 INSERT INTO note.shelf (
                     slug, display_name, description
@@ -73,15 +64,15 @@ class Migration(MigrationABC):
                 users_shelf_display_name_for(username),
                 USERS_SHELF_DESCRIPTION,
             )
-            if not shelf_row:
+
+        # Single-tenant: bind every directory to every user shelf.
+        # Multi-tenant backfill is out of scope here.
+        shelves = await ctx.db.fetch("SELECT id, slug FROM note.shelf")
+        dir_ids = await ctx.db.fetch("SELECT id FROM note.directory")
+        for shelf in shelves:
+            shelf_id = shelf.get("id")
+            if shelf_id is None:
                 continue
-            shelf_id = str(shelf_row.get("id"))
-            # Bind every directory.  Per-user ownership is not
-            # recorded in Postgres (lives in SpiceDB), so for
-            # single-tenant deployments this binds the whole
-            # directory set; multi-tenant backfill is out of
-            # scope here.
-            dir_ids = await ctx.db.fetch("SELECT id FROM note.directory")
             for d in dir_ids:
                 did = d.get("id")
                 if did is None:
@@ -92,7 +83,7 @@ class Migration(MigrationABC):
                     VALUES ($1, $2)
                     ON CONFLICT DO NOTHING
                     """,
-                    shelf_id,
+                    str(shelf_id),
                     str(did),
                 )
 
@@ -101,11 +92,47 @@ class Migration(MigrationABC):
         ctx: MigrationContext,
         users: list[tuple[str, object]],
     ) -> None:
-        """Insert a default ``NoteCreated`` rule per user."""
+        rule_repo = ctx.get("rule_repo")
+        if rule_repo is None:
+            await self._attach_default_fleeting_rules_raw(ctx, users)
+            return
+
         for user_id, username in users:
             shelf_slug = users_shelf_slug_for(username)
-            # Look up the user's shelf, then check whether a
-            # rule already exists.  Both lookups are idempotent.
+            shelf_row = await ctx.db.fetchrow(
+                "SELECT id FROM note.shelf WHERE slug = $1",
+                shelf_slug,
+            )
+            if not shelf_row or shelf_row.get("id") is None:
+                continue
+            shelf_id = str(shelf_row.get("id"))
+
+            fleeting = await ctx.db.fetchrow(
+                "SELECT id FROM note.directory "
+                "WHERE slug = 'fleeting_notes' LIMIT 1"
+            )
+            fleeting_id: Optional[str] = (
+                str(fleeting.get("id"))
+                if fleeting and fleeting.get("id") is not None
+                else None
+            )
+
+            await ensure_default_fleeting_rule(
+                rule_repo=rule_repo,
+                shelf_id=shelf_id,
+                owner_id=str(user_id),
+                fleeting_directory_id=fleeting_id,
+            )
+
+    async def _attach_default_fleeting_rules_raw(
+        self,
+        ctx: MigrationContext,
+        users: list[tuple[str, object]],
+    ) -> None:
+        # Raw-SQL fallback for fixtures/CLI runs without rule_repo.
+        # Mirrors ensure_default_fleeting_rule: probe first, insert only if missing.
+        for user_id, username in users:
+            shelf_slug = users_shelf_slug_for(username)
             shelf_row = await ctx.db.fetchrow(
                 "SELECT id FROM note.shelf WHERE slug = $1",
                 shelf_slug,
@@ -124,10 +151,9 @@ class Migration(MigrationABC):
             )
             if existing and existing.get("id") is not None:
                 continue
-            # Pick the first fleeting_notes row.  Single-tenant
-            # deployments have exactly one such row.
             fleeting = await ctx.db.fetchrow(
-                "SELECT id FROM note.directory WHERE slug = 'fleeting_notes' LIMIT 1"
+                "SELECT id FROM note.directory "
+                "WHERE slug = 'fleeting_notes' LIMIT 1"
             )
             if not fleeting or fleeting.get("id") is None:
                 continue
@@ -144,9 +170,9 @@ class Migration(MigrationABC):
                 )
                 """,
                 shelf_id,
-                json.dumps({"type": "always_true"}),
-                json.dumps({"directory_id": str(fleeting.get("id"))}),
-                user_id,
+                '{"type": "always_true"}',
+                '{"directory_id": "' + str(fleeting.get("id")) + '"}',
+                str(user_id),
             )
 
 

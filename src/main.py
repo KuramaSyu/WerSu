@@ -48,6 +48,7 @@ from src.services.sharing import SharingServiceImpl
 from src.services.role_service import RoleServiceImpl
 from src.services.note import NoteServiceImpl
 from src.services.directory import DirectoryServiceImpl
+from src.api.services.shelf_service import ShelfServiceABC
 from src.services.thirdparty_migrations import (
     ThirdpartyMigrationsServiceABC,
 )
@@ -81,6 +82,7 @@ from src.grpc_mod.proto.note_pb2_grpc import (
 from src.grpc_mod.proto.thirdparty_migrations_pb2_grpc import (
     add_ThirdpartyMigrationsServiceServicer_to_server,  # type: ignore[attr-defined]
 )
+from src.grpc_mod.proto.shelf_pb2_grpc import add_ShelfServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.auth_pb2_grpc import add_AuthServiceServicer_to_server  # type: ignore[attr-defined]
 from src.db.repos.note.combined import CombinedNotePostgresRepo
@@ -91,12 +93,14 @@ from src.db.repos.tag.postgres import PostgresTagRepo
 from src.grpc_mod.attachment_service import GrpcAttachmentService
 from src.grpc_mod.directory_service import GrpcDirectoryService
 from src.grpc_mod.note_service import GrpcNoteService
+from src.grpc_mod.shelf_service import GrpcShelfService
 from src.grpc_mod.note_version_service import GrpcNoteVersionService
 from src.grpc_mod.permission_service import GrpcPermissionService
 from src.grpc_mod.rule_service import GrpcRuleService
 from src.grpc_mod.thirdparty_migrations_service import GrpcThirdpartyMigrationsService
 from src.grpc_mod.user_service import GrpcUserService
 from src.grpc_mod.auth_service import GrpcAuthService
+from src.services.shelf_service import ShelfServiceImpl
 from src.api.events.rule_dispatcher import RuleDispatcher
 from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.services.auth import PyJwtProvider
@@ -647,16 +651,30 @@ async def serve():
     add_RuleServiceServicer_to_server(grpc_rule_service, server)
 
     # setup gRPC user service
+    shelf_service: ShelfServiceABC = ShelfServiceImpl(
+        shelf_repo=shelf_repo,
+        permission_repo=permission_repo,
+        directory_facade=directory_facade,
+        rule_repo=rule_repo,
+        logging_provider=logging_provider,
+    )
     app_user_service = UserServiceImpl(
         user_repo=user_repo,
         directory_facade=directory_facade,
         context_factory=user_context_factory,
-        shelf_repo=shelf_repo,
-        rule_repo=rule_repo,
-        permission_repo=permission_repo,
+        shelf_service=shelf_service,
     )
     grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider, to_grpc=grpc_visitor)
     add_UserServiceServicer_to_server(grpc_user_service, server)
+
+    # gRPC shelf service shares the same ShelfServiceImpl as the user-bootstrap path.
+    grpc_shelf_service = GrpcShelfService(
+        shelf_service=shelf_service,
+        log=logging_provider,
+        to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
+    )
+    add_ShelfServiceServicer_to_server(grpc_shelf_service, server)
 
     # setup gRPC auth service (updateting credentials of any sort)
     app_user_auth_service = UserAuthServiceImpl(
