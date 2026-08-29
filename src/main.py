@@ -18,8 +18,10 @@ from src.api.other.undefined import UNDEFINED, UndefinedOr, UndefinedType
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
 from src.db.repos.shelf.postgres import PostgresShelfRepo
-from src.db.migrations.context import MigrationContext
+from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
+from src.db.migrations.context import MigrationContext, MigrationServices
 from src.db.migrations.runner import MigrationRunner
+from src.services.shelf_bootstrap import build_strategy
 from src.db.repos import SpicedbPermissionRepo
 from src.db.repos.permissions.spicedb_role_repo import SpicedbRoleRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
@@ -173,18 +175,6 @@ async def serve():
         target=grpc_spicedb_address,
         bearer_token=grpc_spicedb_credentials,
     )
-
-    # run migrations with dependency container
-    log.info("Running migrations...")
-    migration_runner = MigrationRunner(
-        ctx=MigrationContext(
-            db=db,
-            spicedb_client=spicedb_client,
-        ),
-        log_provider=logging_provider,
-    )
-    await migration_runner.run_pending_migrations()
-    log.info("Migrations completed")
 
     # setup db tables and their primary keys
     log.info("Setting up database tables...")
@@ -361,12 +351,6 @@ async def serve():
     # Factory used by every gRPC service to create user instances
     user_context_factory = RepoContextFactory(user_repo=user_repo)
 
-    permission_repo = SpicedbPermissionRepo(
-        client=spicedb_client,
-        consistent=True,
-        directory_subdirectory_table=directory_subdirectory_table,
-    )
-
     tag_repo: PostgresTagRepo = PostgresTagRepo(
         tag_table=tags_table,
         note_tag_table=note_tags_table,
@@ -374,10 +358,20 @@ async def serve():
         db=db,
     )
 
-    shelf_repo = PostgresShelfRepo(
-        shelf_table=shelf_table,
-        shelf_book_table=shelf_book_table,
-        logging_provider=logging_provider,
+    permission_repo = SpicedbPermissionRepo(
+        client=spicedb_client,
+        consistent=True,
+        directory_subdirectory_table=directory_subdirectory_table,
+    )
+
+    shelf_repo = SpicedbShelfRepoDecorator(
+        inner=PostgresShelfRepo(
+                shelf_table=shelf_table,
+                shelf_book_table=shelf_book_table,
+                logging_provider=logging_provider,
+            ),
+        permission_repo=permission_repo,
+        log_provider=logging_provider,
     )
 
     directory_facade = DirectoryFacadeImpl(
@@ -706,6 +700,33 @@ async def serve():
         context_factory=user_context_factory,
     )
     add_ActivityStatisticsServiceServicer_to_server(grpc_activity_statistics_service, server)
+
+    # construct runner which needs a lot of the just
+    # created services
+    log.info("Running migrations...")
+    zettelkasten_strategy = build_strategy(
+        "zettelkasten",
+        shelf_repo=shelf_repo,
+        rule_repo=rule_repo,
+        directory_facade=directory_facade,
+    )
+    migration_runner = MigrationRunner(
+        ctx=MigrationContext(
+            db=db,
+            spicedb_client=spicedb_client,
+            services=MigrationServices(
+                permission_repo=permission_repo,
+                rule_repo=rule_repo,
+                shelf_repo=shelf_repo,
+                directory_facade=directory_facade,
+                user_context_factory=user_context_factory,
+                zettelkasten_strategy=zettelkasten_strategy,
+            ),
+        ),
+        log_provider=logging_provider,
+    )
+    await migration_runner.run_pending_migrations()
+    log.info("Migrations completed")
 
     # configure server
     listen_addr = f"{grpc_host}:{grpc_port}"
