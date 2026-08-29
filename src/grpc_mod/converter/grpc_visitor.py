@@ -83,6 +83,7 @@ from src.grpc_mod.proto.role_pb2 import (
     UserRoleMembership as GrpcUserRoleMembership,
 )
 from src.grpc_mod.proto.user_pb2 import User
+from src.grpc_mod.proto.shelf_pb2 import Shelf as GrpcShelf
 from src.utils import asdict
 from src.utils.dict_helper import drop_except_keys, drop_undefined
 
@@ -409,19 +410,27 @@ class ConvertToGrpcVisitor(EntityVisitor):
 
     # ---- shelf ---------------------------------------------------------
 
-    def visit_shelf(self, entity):  # type: ignore[override]
-        """Convert a :class:`~src.db.entities.shelf.ShelfEntity` to a gRPC message.
+    def visit_shelf(self, entity) -> GrpcShelf:
+        """Convert a :class:`~src.db.entities.shelf.ShelfEntity` to a ``Shelf`` message.
 
-        NOTE: there is no ``Shelf`` proto yet -- the gRPC surface
-        for shelves is not in scope for this change.  Until that
-        proto lands, the entity visits but the visitor returns
-        ``None``; the entity itself is still discoverable through
-        :class:`StubVisitor` in tests, so the dispatch chain does
-        not break.  Once a ``Shelf`` proto is added this method
-        should mirror :meth:`visit_directory` and return the new
-        message.
+        Mirrors :meth:`visit_directory`: the metadata columns
+        become plain proto strings; ``book_ids`` is populated
+        only when the entity actually carried it (i.e. the
+        caller opted in via ``include_books=True`` on the
+        read path).
         """
-        return None
+        kwargs: dict[str, Any] = {
+            "id": "" if entity.id in (UNDEFINED, None) else str(entity.id),
+            "slug": str(entity.slug) if entity.slug else "",
+            "display_name": str(entity.display_name) if entity.display_name else "",
+            "description": str(entity.description) if entity.description else "",
+            "image_url": str(entity.image_url) if entity.image_url else "",
+        }
+        if not is_undefined(entity.readme_note_id) and entity.readme_note_id:
+            kwargs["readme_note_id"] = str(entity.readme_note_id)
+        if entity.book_ids:
+            kwargs["book_ids"] = [str(v) for v in entity.book_ids if v]
+        return GrpcShelf(**kwargs)
 
     # ---- user ----------------------------------------------------------
 
