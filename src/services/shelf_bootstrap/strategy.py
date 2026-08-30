@@ -51,7 +51,7 @@ class ShelfBootstrapStrategy(Protocol):
       :meth:`ShelfRepoABC.get_books_of` first.
     * **Not insert the shelf itself** -- the caller already did.
     * **Not insert permission relations** that the calling code
-      owns (the user bootstrap inserts ``shelf#admin``;
+      owns (admin is derived from owner in the schema;
       :class:`src.services.shelf_service.ShelfServiceImpl`
       inserts ``shelf#owner``).  Strategies own the *content*
       on the shelf, not its access control.

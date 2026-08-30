@@ -53,7 +53,7 @@ class ShelfRepoABC(ABC):
             readme_note_id: optional README pointer; same semantics.
             user_ctx: caller identity.  When supplied, the
                 implementation is expected to grant
-                ``shelf#owner`` + ``shelf#admin`` on the freshly
+                ``shelf#owner`` on the freshly
                 inserted shelf for this user.  ``None`` skips
                 the grant -- useful for fixtures that don't
                 exercise the auth layer.

@@ -1,3 +1,31 @@
+"""Derive ``shelf#admin`` from ``shelf#owner`` in the SpiceDB schema.
+
+This migration is the schema counterpart to
+:class:`src.db.repos.shelf.spicedb_decorator.SpicedbShelfRepoDecorator`
+granting only ``shelf#owner`` on ``insert_shelf``: with this
+schema change, an owner implicitly holds admin, so the
+decorator no longer needs to write a separate ``shelf#admin``
+edge.
+
+Existing ``shelf#admin`` rows remain valid (the new
+``admin: user | role#member | owner`` relation is a superset
+of the previous one), so no data migration is required.
+
+The full updated schema is embedded as a literal to match the
+pattern used by every other post-initial schema migration
+(e.g. ``20260825-add-shelf``).  Keep this in sync with
+``schema.zed``.
+"""
+
+from __future__ import annotations
+
+from authzed.api.v1 import WriteSchemaRequest
+
+from src.db.migrations.base import MigrationABC
+from src.db.migrations.context import MigrationContext
+
+
+SHELF_ADMIN_FROM_OWNER_SCHEMA_ZED = """\
 definition user {}
 
 definition role {
@@ -7,14 +35,6 @@ definition role {
     permission manage = administrator
 }
 
-/**
- * A shelf is a flat (non-hierarchical) grouping of books (directories).
- *
- * Rules can attach to a shelf; they fire for every event whose primary
- * entity is a book sitting on this shelf (or a note inside such a book,
- * for note events).  Shelves have the same role set as directories so
- * the existing permission helpers carry over.
- */
 definition shelf {
     relation owner: user | role#member
     relation admin: user | role#member | owner
@@ -50,10 +70,6 @@ definition note {
     relation reader: user | role#member
     relation parent_directory: directory
 
-    /**
-    * permission delete is granted to admins or parent
-    * directory users with delete permission
-    */
     permission delete = owner + admin + parent_directory->delete
     permission write = owner + writer + admin + parent_directory->write
     permission view = reader + write
@@ -65,11 +81,22 @@ definition attachment {
     relation parent_note: note
     relation parent_user: user
 
-    // each user who can view any note (of this attachment), can also view this attachment.
-    // there are no separate relations here, that a user can see some of the attachments of a note.
-    // parent_user grants the owner of an attachment full CRUD on it, even when it has no
-    // parent note (orphaned attachments).
     permission delete = parent_note->delete + parent_user
     permission write = parent_note->write + parent_user
     permission view = parent_note->view + parent_user
 }
+"""
+
+
+class Migration(MigrationABC):
+    """Write the updated shelf schema so admin derives from owner."""
+
+    async def up(self, ctx: MigrationContext) -> None:
+        if ctx.spicedb_client is None:
+            raise ValueError(
+                "MigrationContext.spicedb_client is required for "
+                "SpiceDB schema migration"
+            )
+        await ctx.spicedb_client.WriteSchema(
+            WriteSchemaRequest(schema=SHELF_ADMIN_FROM_OWNER_SCHEMA_ZED)
+        )

@@ -224,16 +224,13 @@ async def test_create_shelf_inserts_owner_relation_and_returns_entity() -> None:
     assert unwrap_undefined(persisted.id) == unwrap_undefined(persisted.id)
     assert persisted.slug == "my shelf"
     assert bootstrap_result == BootstrapResult()
-    # shelf#owner and shelf#admin are both inserted, both target the caller.
-    relations = sorted(
-        permission_repo._store,  # noqa: SLF001
-        key=lambda r: str(r.relation),
-    )
-    assert len(relations) == 2
-    for rel in relations:
-        assert rel.resource.object_type == ObjectTypeEnum.SHELF
-        assert rel.subject.object_id == "u-1"
-    assert [str(r.relation) for r in relations] == ["admin", "owner"]
+    # shelf#owner is inserted; admin is derived from owner in the schema.
+    relations = list(permission_repo._store)  # noqa: SLF001
+    assert len(relations) == 1
+    rel = relations[0]
+    assert rel.resource.object_type == ObjectTypeEnum.SHELF
+    assert rel.subject.object_id == "u-1"
+    assert str(rel.relation) == "owner"
 
 
 async def test_create_shelf_without_slug_raises() -> None:

@@ -9,10 +9,9 @@ The strategy owns everything else (default books,
 ``shelf_book`` bindings, the default ``NoteCreated`` rule) and
 is invoked through the ``zettelkasten_strategy`` service the
 migration runner injects from the live composition root.  The
-shelf repo's ``writes_user_permissions`` decorator grants the
-``shelf#owner`` / ``shelf#admin`` edges when the strategy
-binds the user as the shelf owner, so this migration no longer
-needs to write any SpiceDB relations directly.
+shelf repo's SpiceDB decorator grants ``shelf#owner`` (admin
+is derived from owner in the schema), so this migration does
+not touch SpiceDB directly.
 
 This keeps the backfill in lockstep with
 ``user_service.create_user`` instead of reimplementing shelf /
@@ -82,7 +81,7 @@ class Migration(MigrationABC):
         On a fresh insert, delegates to the live
         :meth:`ShelfRepoABC.insert_shelf` so the
         :func:`~src.db.repos.shelf.postgres.writes_user_permissions`
-        decorator grants ``shelf#owner`` and ``shelf#admin``
+        decorator grants ``shelf#owner`` (admin is derived)
         for ``user_ctx`` in the same call.
 
         Returns the shelf entity (id guaranteed set) so the

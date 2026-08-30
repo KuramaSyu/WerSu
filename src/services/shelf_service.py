@@ -102,7 +102,7 @@ class ShelfServiceImpl(ShelfServiceABC):
         Creation is unconditional (no permission chain); matches
         the rule service's policy.  The shelf repo's
         :func:`~src.db.repos.shelf.postgres.writes_user_permissions`
-        decorator writes the ``shelf#owner`` / ``shelf#admin``
+        decorator writes the ``shelf#owner``
         edges for ``actor`` on the freshly inserted row, so the
         service no longer has to.
         """

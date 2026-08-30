@@ -31,7 +31,7 @@ class ZettelkastenStrategy(ShelfBootstrapStrategy):
     3. Rule: inserted only when no NoteCreated rule already exists for the
        shelf and a fleeting book is reachable.
 
-    SpiceDB ``shelf#owner`` / ``shelf#admin`` /
+    SpiceDB ``shelf#owner`` /
     ``directory#owner`` / ``directory#admin`` edges are
     granted automatically by the shelf repo's
     :func:`~src.db.repos.shelf.postgres.writes_user_permissions`
