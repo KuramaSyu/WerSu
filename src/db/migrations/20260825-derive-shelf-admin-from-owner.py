@@ -1,15 +1,19 @@
-"""Derive ``shelf#admin`` from ``shelf#owner`` in the SpiceDB schema.
+"""Add a ``shelf#has_admin`` synthetic permission that composes admin + owner.
 
-This migration is the schema counterpart to
+The original version of this migration tried to express
+"owner implies admin" with ``relation admin: user | role#member | owner``
+so the
 :class:`src.db.repos.shelf.spicedb_decorator.SpicedbShelfRepoDecorator`
-granting only ``shelf#owner`` on ``insert_shelf``: with this
-schema change, an owner implicitly holds admin, so the
-decorator no longer needs to write a separate ``shelf#admin``
-edge.
-
-Existing ``shelf#admin`` rows remain valid (the new
-``admin: user | role#member | owner`` relation is a superset
-of the previous one), so no data migration is required.
+could grant only ``shelf#owner`` on ``insert_shelf``.  SpiceDB
+does not expand same-definition references on the right-hand
+side of a relation-type union, so that schema was accepted but
+``shelf#view`` lookups never returned the owner.  The fix is
+to keep ``admin`` and ``owner`` separate and introduce a
+``has_admin = admin + owner`` synthetic permission; call sites
+that need "admin or owner" semantics compose it instead of
+duplicating the union.  ``delete``, ``write``, and
+``edit_permissions`` are likewise extended with ``owner`` so
+the bootstrap-strategy owner checks keep working.
 
 The full updated schema is embedded as a literal to match the
 pattern used by every other post-initial schema migration
@@ -25,7 +29,7 @@ from src.db.migrations.base import MigrationABC
 from src.db.migrations.context import MigrationContext
 
 
-SHELF_ADMIN_FROM_OWNER_SCHEMA_ZED = """\
+SHELF_HAS_ADMIN_SCHEMA_ZED = """\
 definition user {}
 
 definition role {
@@ -37,14 +41,19 @@ definition role {
 
 definition shelf {
     relation owner: user | role#member
-    relation admin: user | role#member | owner
+    relation admin: user | role#member
     relation writer: user | role#member
     relation reader: user | role#member
 
-    permission delete = admin
-    permission write = writer + admin
+    // Synthetic permission: callers that need "admin or owner"
+    // semantics compose ``has_admin`` instead of duplicating
+    // ``admin + owner`` everywhere.
+    permission has_admin = admin + owner
+
+    permission delete = has_admin
+    permission write = writer + has_admin
     permission view = reader + write
-    permission edit_permissions = admin + owner
+    permission edit_permissions = has_admin
 }
 
 definition directory {
@@ -89,7 +98,7 @@ definition attachment {
 
 
 class Migration(MigrationABC):
-    """Write the updated shelf schema so admin derives from owner."""
+    """Write the updated shelf schema with the ``has_admin`` synthetic permission."""
 
     async def up(self, ctx: MigrationContext) -> None:
         if ctx.spicedb_client is None:
@@ -98,5 +107,5 @@ class Migration(MigrationABC):
                 "SpiceDB schema migration"
             )
         await ctx.spicedb_client.WriteSchema(
-            WriteSchemaRequest(schema=SHELF_ADMIN_FROM_OWNER_SCHEMA_ZED)
+            WriteSchemaRequest(schema=SHELF_HAS_ADMIN_SCHEMA_ZED)
         )

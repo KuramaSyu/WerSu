@@ -302,15 +302,16 @@ async def _fetch_user_shelf_id(
     the one with slug ``users_shelf``.  Used by the integration
     tests below.
     """
-    # The bootstrap user service inserts a ``shelf#admin@user``
+    # The bootstrap user service inserts a ``shelf#owner@user``
     # relation for the newly-created user; the SpiceDB lookup
-    # surfaces it.
+    # surfaces it.  Owner implies admin via the
+    # ``permission has_admin = admin + owner`` synthetic.
     ids = await permission_repo.lookup(
         Relationship(
             resource=ObjectRef(
                 object_type=ObjectTypeEnum.SHELF, object_id=UNDEFINED,
             ),
-            relation=ShelfRelationEnum.ADMIN,
+            relation=ShelfRelationEnum.OWNER,
             subject=SubjectRef(
                 object_type=ObjectTypeEnum.USER,
                 object_id=str(user_id),
@@ -319,7 +320,7 @@ async def _fetch_user_shelf_id(
     )
     if not ids:
         pytest.fail(
-            f"no shelf#admin@user:{user_id!r} relation found"
+            f"no shelf#owner@user:{user_id!r} relation found"
         )
     return str(ids[0])
 
@@ -380,11 +381,11 @@ async def test_create_user_bootstraps_shelf_books_and_rule(
     # 1. shelf exists for this user
     user_ctx = await context_factory.create(str(created_user.id))
     shelf_ids = await env.permission_repo.lookup(
-        _shelf_admin_relationship(str(created_user.id))
+        _shelf_owner_relationship(str(created_user.id))
     )
     if len(shelf_ids) != 1:
         pytest.fail(
-            f"expected exactly 1 shelf admin relation for "
+            f"expected exactly 1 shelf owner relation for "
             f"user {created_user.id!r}, got {len(shelf_ids)}: "
             f"{shelf_ids!r}"
         )
@@ -583,13 +584,19 @@ async def test_migration_backfills_shelf_and_rule_for_existing_users(
 # ---------------------------------------------------------------------------
 
 
-def _shelf_admin_relationship(user_id: str) -> "Relationship":  # type: ignore[name-defined]
-    """Build a ``shelf#admin@user:<id>`` lookup filter."""
+def _shelf_owner_relationship(user_id: str) -> "Relationship":  # type: ignore[name-defined]
+    """Build a ``shelf#owner@user:<id>`` lookup filter.
+
+    The bootstrap user service grants ``shelf#owner`` (not
+    ``shelf#admin``) on ``insert_shelf``; ``admin`` is a
+    separate relation.  Use ``owner`` to locate the user's
+    shelf via SpiceDB.
+    """
     return Relationship(
         resource=ObjectRef(
             object_type=ObjectTypeEnum.SHELF, object_id=UNDEFINED
         ),
-        relation=ShelfRelationEnum.ADMIN,
+        relation=ShelfRelationEnum.OWNER,
         subject=SubjectRef(
             object_type=ObjectTypeEnum.USER, object_id=str(user_id)
         ),
@@ -599,15 +606,15 @@ def _shelf_admin_relationship(user_id: str) -> "Relationship":  # type: ignore[n
 async def _first_user_shelf(env, user_id: str) -> str:
     """Return the id of the user's bootstrap shelf.
 
-    Resolves the shelf via SpiceDB ``shelf#admin@user:<id>``
+    Resolves the shelf via SpiceDB ``shelf#owner@user:<id>``
     so the test follows the production lookup semantics
     rather than guessing a slug value -- legacy hardcoded
     ``users_shelf`` slugs no longer match the per-user
     ``<username>'s shelf`` convention.
     """
     shelf_ids = await env.permission_repo.lookup(
-        _shelf_admin_relationship(user_id)
+        _shelf_owner_relationship(user_id)
     )
     if not shelf_ids:
-        pytest.fail(f"no shelf#admin@user:{user_id!r} relation found")
+        pytest.fail(f"no shelf#owner@user:{user_id!r} relation found")
     return str(shelf_ids[0])

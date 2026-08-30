@@ -76,6 +76,14 @@ class InMemoryPermissionRepo(PermissionRepoABC):
 
     async def delete(self, relationship: Relationship) -> Relationship:
         def matches(stored: Relationship) -> bool:
+            # ``UNDEFINED`` on any pattern slot acts as a wildcard,
+            # mirroring :meth:`src.db.repos.permissions.spicedb_repo.SpicedbPermissionRepo.delete`
+            # where ``object_type`` / ``relation`` / ``subject.object_type``
+            # are all optional on the filter.  Without the wildcard
+            # check below, ``SubjectRef(UNDEFINED, UNDEFINED)`` (used by
+            # shelf cleanup to drop *every* subject) would never match
+            # a stored ``user:<id>`` subject because their
+            # ``object_type`` strings differ.
             obj_match = (
                 stored.resource.object_type == relationship.resource.object_type
                 and (
@@ -88,10 +96,13 @@ class InMemoryPermissionRepo(PermissionRepoABC):
                 or stored.relation == relationship.relation
             )
             subj_match = (
-                stored.subject.object_type == relationship.subject.object_type
-                and (
-                    relationship.subject.object_id is UNDEFINED
-                    or stored.subject.object_id == relationship.subject.object_id
+                relationship.subject.object_type is UNDEFINED
+                or (
+                    stored.subject.object_type == relationship.subject.object_type
+                    and (
+                        relationship.subject.object_id is UNDEFINED
+                        or stored.subject.object_id == relationship.subject.object_id
+                    )
                 )
             )
             return obj_match and rel_match and subj_match

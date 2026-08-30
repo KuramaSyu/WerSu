@@ -17,14 +17,20 @@ definition role {
  */
 definition shelf {
     relation owner: user | role#member
-    relation admin: user | role#member | owner
+    relation admin: user | role#member
     relation writer: user | role#member
     relation reader: user | role#member
 
-    permission delete = admin
-    permission write = writer + admin
+    // Synthetic permission: callers that need "admin or owner"
+    // semantics (e.g. the bootstrap-strategy owner check,
+    // ``edit_permissions``) compose ``has_admin`` instead of
+    // duplicating ``admin + owner`` everywhere.
+    permission has_admin = admin + owner
+
+    permission delete = has_admin
+    permission write = writer + has_admin
     permission view = reader + write
-    permission edit_permissions = admin + owner
+    permission edit_permissions = has_admin
 }
 
 definition directory {

@@ -31,6 +31,7 @@ from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.db.repos.permissions.spicedb_role_repo import SpicedbRoleRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.db.repos.shelf.postgres import PostgresShelfRepo
+from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
 from src.db.repos.rule.postgres import PostgresRuleRepo
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user import RepoContextFactory
@@ -174,20 +175,25 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             ),
             db=db,
         )
-        shelf_repo = PostgresShelfRepo(
-            shelf_table=Table(
-                db=db,
-                table_name="note.shelf",
-                id_fields=["id"],
+        # spicedb decorator for permission management
+        shelf_repo = SpicedbShelfRepoDecorator(
+            inner=PostgresShelfRepo(
+                shelf_table=Table(
+                    db=db,
+                    table_name="note.shelf",
+                    id_fields=["id"],
+                    logging_provider=logging_provider,
+                ),
+                shelf_book_table=Table(
+                    db=db,
+                    table_name="note.shelf_book",
+                    id_fields=["id"],
+                    logging_provider=logging_provider,
+                ),
                 logging_provider=logging_provider,
             ),
-            shelf_book_table=Table(
-                db=db,
-                table_name="note.shelf_book",
-                id_fields=["id"],
-                logging_provider=logging_provider,
-            ),
-            logging_provider=logging_provider,
+            permission_repo=permission_repo,
+            log_provider=logging_provider,
         )
         # ``rule_repo`` is built before ``note_repo`` because the
         # note facade looks up default-fleeting rules when a

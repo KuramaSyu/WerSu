@@ -211,7 +211,7 @@ class NoteFacadeImpl(NoteFacadeABC):
             shelf_ids = await self._shelfs_user_can_view(user)
             if not shelf_ids:
                 return []
-            
+
             rules: List[Any] = []
             for sid in shelf_ids:
                 shelf_rules = await self._rule_repo.list_rules(
