@@ -127,9 +127,14 @@ from src.api.services.jwt_provider import (
     JwtError,
     JwtProvider,
 )
+from src.api.errors import (
+    DatabaseError
+)
 
 
 __all__ = [
+    # errors
+    "DatabaseError",
     # relationship vocabulary (must come first; see top-of-file note)
     "AttachmentRelationEnum",
     "DirectoryRelationEnum",

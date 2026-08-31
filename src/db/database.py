@@ -3,10 +3,14 @@ import functools
 from typing import Awaitable, Callable, Coroutine, Dict, Optional, List, Any
 import asyncpg
 from asyncpg import Pool, Connection, Record
+import socket
+import traceback
+
 
 from src.api.other.types import LoggingProvider
 from src.api.other.undefined import UNDEFINED
 from src.utils.singleton import SingletonMeta
+from src.api.errors import DatabaseError
 
 
 def strip_args(*args: Any) -> List[Any]:
@@ -135,14 +139,18 @@ class Database(DatabaseABC):
         self._init_file_path = init_file
     
     async def init_db(self):
-        self._pool = await asyncpg.create_pool(dsn=self._dsn)
-        self._log.info("Database connected")
+        try:
+            self._pool = await asyncpg.create_pool(dsn=self._dsn)
+            self._log.info("connected")
+        except socket.gaierror as e:
+            self._log.critical(f"Database connection failed: {e}", exc_info=True)
+            raise DatabaseError(f"Database connection failed: {e}") from None
         
         content = ""
         with open(self._init_file_path) as f:
             content = f.read()
         await self._pool.execute(content)
-        self._log.info("Database initialized with init.sql")
+        self._log.info("initialized with init.sql")
 
     async def close(self):
         if self._pool:
