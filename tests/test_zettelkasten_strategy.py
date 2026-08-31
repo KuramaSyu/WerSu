@@ -145,7 +145,7 @@ def _make_strategy():
 async def _make_shelf(shelf_repo: InMemoryShelfRepo) -> ShelfEntity:
     """Insert a real shelf row; the strategy needs a real id to probe."""
     return await shelf_repo.insert_shelf(
-        slug="my shelf", display_name="My Shelf",
+        slug="my shelf", display_name="My Shelf", user_ctx=_UserCtx("user-1"),
     )
 
 
@@ -308,7 +308,7 @@ async def test_apply_inserts_rule_when_only_non_default_books_bound() -> None:
 
 async def test_ensure_rule_helper_returns_existing_rule_id() -> None:
     _, shelf_repo, rule_repo, _ = _make_strategy()
-    await shelf_repo.insert_shelf(slug="s")
+    await shelf_repo.insert_shelf(slug="s", user_ctx=_UserCtx("user-1"))
 
     await rule_repo.create_rule(
         RuleEntity(

@@ -94,10 +94,17 @@ async def test_insert_shelf_grants_owner_on_the_new_shelf() -> None:
     assert all(str(r.resource.object_id) == str(unwrap_undefined(persisted.id)) for r in edges)
 
 
-async def test_insert_shelf_without_user_ctx_writes_no_edges() -> None:
-    decorator, _, perm = _make_decorated()
-    await decorator.insert_shelf(slug="my shelf")
+async def test_insert_shelf_without_user_ctx_raises_and_writes_no_edges() -> None:
+    """Without ``user_ctx`` the decorator refuses to mint a shelf, because
+    the missing caller makes ``shelf#owner`` impossible to grant and would
+    leave the SpiceDB graph inconsistent.  Nothing is written to either
+    the storage or the permission repo.
+    """
+    decorator, storage, perm = _make_decorated()
+    with pytest.raises(ValueError, match="requires user_ctx"):
+        await decorator.insert_shelf(slug="my shelf")
     assert perm._store == []  # noqa: SLF001
+    assert storage._shelves == {}  # noqa: SLF001
 
 
 async def test_insert_shelf_without_permission_repo_is_a_type_error() -> None:
