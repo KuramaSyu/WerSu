@@ -11,28 +11,11 @@ boundary it cares about.
 """
 
 from __future__ import annotations
-
-from typing import List, Optional
-
-import pytest
-
 from src.api.facades.directory_facade import DirectoryFacadeABC
-from src.api.other.relationship import (
-    ObjectRef,
-    ObjectTypeEnum,
-    Relationship,
-    ShelfRelationEnum,
-    SubjectRef,
-)
+from src.api.other.relationship import ObjectRef, ObjectTypeEnum, Relationship, ShelfRelationEnum, SubjectRef
 from src.api.other.undefined import UNDEFINED, unwrap_undefined
 from src.api.other.user_context import UserContextABC
-from src.api.services.shelf_service import (
-    BootstrapResult,
-    BootstrapStrategy,
-    DryDeleteResult,
-    ShelfPermissionError,
-    ShelfReadOptions,
-)
+from src.api.services.shelf_service import BootstrapResult, BootstrapStrategy, DryDeleteResult, ShelfPermissionError, ShelfReadOptions, resolve_shelf_read_options
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.shelf import ShelfEntity
 from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
@@ -40,6 +23,8 @@ from src.services.shelf_service import ShelfServiceImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
 from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
+from typing import List, Optional
+import pytest
 
 
 # ---- fakes ----------------------------------------------------------------
@@ -602,7 +587,6 @@ async def test_resolve_shelf_read_options_defaults_include_books_to_false() -> N
     -- callers must use :func:`resolve_shelf_read_options` to
     guarantee a complete options dict.
     """
-    from src.api.services.shelf_service import resolve_shelf_read_options
     assert resolve_shelf_read_options(None) == {"include_books": False}
     assert resolve_shelf_read_options(
         ShelfReadOptions(),

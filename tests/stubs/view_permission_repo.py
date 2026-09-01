@@ -12,12 +12,10 @@ the wrong shape for the statistics-service permission check.
 """
 
 from __future__ import annotations
-
-from typing import List, Optional
-
-from src.api.repos.permission_repo import PermissionRepoABC
 from src.api.other.relationship import ObjectRef, Relationship
 from src.api.other.user_context import UserContextABC
+from src.api.repos.permission_repo import PermissionRepoABC, ResolvedChildren
+from typing import List, Optional
 
 
 class _FakeViewPermissionRepo(PermissionRepoABC):
@@ -84,7 +82,6 @@ class _FakeViewPermissionRepo(PermissionRepoABC):
         max_depth: int = 10,
         exclusive: bool = True,
     ) -> "ResolvedChildren":
-        from src.api.repos.permission_repo import ResolvedChildren
 
         # The view-only stub knows no relations.  Tests that need
         # tree resolution use :class:`InMemoryPermissionRepo`

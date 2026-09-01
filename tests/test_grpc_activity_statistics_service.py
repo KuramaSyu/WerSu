@@ -8,28 +8,14 @@ payload emitted.
 """
 
 from __future__ import annotations
-
-import datetime as _dt
-from typing import List
-from unittest.mock import AsyncMock, MagicMock
-
-import grpc
-import pytest
-
 from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.grpc_mod.activity_statistics_service import GrpcActivityStatisticsService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
-from src.grpc_mod.proto.activity_pb2 import (
-    ACCESSED_AS_SYSTEM,
-    ACCESSED_AS_USER,
-    Activity,
-    ActivityFilter,
-    GetActivityHistoryRequest,
-    GetMostUsedActivityRequest,
-    MOST_USED_ALGORITHM_COUNT,
-    MOST_USED_ALGORITHM_LOG_COUNT,
-)
+from src.grpc_mod.proto.activity_pb2 import ACCESSED_AS_SYSTEM, ACCESSED_AS_USER, Activity, ActivityFilter, GetActivityHistoryRequest, GetMostUsedActivityRequest, MOST_USED_ALGORITHM_COUNT, MOST_USED_ALGORITHM_LOG_COUNT
 from tests.stubs.user_context import _UserContext
+from typing import List
+from unittest.mock import AsyncMock, MagicMock
+import datetime as _dt, grpc, json, pytest
 
 
 # --------------------------------------------------------------------------
@@ -358,7 +344,6 @@ class TestVisitorConversion:
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
     ) -> None:
-        import json
         stats_service.get_history.return_value = [
             _entity(metadata={"from": "v1", "to": "v2"}),
         ]
@@ -384,7 +369,6 @@ class TestVisitorConversion:
         ``note_stripped_content``) are still present in the merged
         payload.
         """
-        import json
         row = _entity(
             metadata={"from": "v1", "to": "v2", "permission": "read"},
         )
@@ -417,7 +401,6 @@ class TestVisitorConversion:
         filter had no note_id pin), the visitor leaves the metadata
         untouched.
         """
-        import json
         row = _entity(metadata={"note_title": "Original"})
         # neither enrichment field set -> nothing stamped
         stats_service.get_history.return_value = [row]

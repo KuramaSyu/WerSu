@@ -1,23 +1,21 @@
 from dataclasses import replace
 from datetime import datetime
-from typing import List
-
-import pytest
-
-from tests.stubs.user_context import _UserContext as UserContext
+from src.api.other.relationship import DirectoryRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note_facade import NoteFacadeImpl
+from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.tag.postgres import PostgresTagRepo
+from src.db.table import Table
+from src.utils import logging_provider
+from tests.fixtures import _FakeEmbeddingRepo, _TestDirectoryRepo, db, dsn, test_user, user_repo
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
 from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
-from src.db.repos.note.versioning import NoteVersionPostgresRepo
-from src.db.table import Table
-from src.utils import logging_provider
-
-from tests.fixtures import db, dsn, test_user, user_repo, _FakeEmbeddingRepo, _TestDirectoryRepo
+from tests.stubs.user_context import _UserContext as UserContext
+from typing import List
+import pytest
 
 pytestmark = pytest.mark.integration
 
@@ -97,13 +95,6 @@ async def test_note_versioning_records_snapshots_and_deltas(db, user_repo, test_
     # ``user_to_directory_ids``; we register an explicit
     # ``directory#admin@user`` relation so the lookup returns the
     # id we put on the note.
-    from src.api.other.relationship import (
-        DirectoryRelationEnum,
-        ObjectRef,
-        ObjectTypeEnum,
-        Relationship,
-        SubjectRef,
-    )
     default_dir_id = "dir-default"
     directory_repo.user_to_directory_ids[str(user.id)] = [default_dir_id]
     await note_repo._permission_repo.insert([

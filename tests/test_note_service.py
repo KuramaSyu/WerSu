@@ -19,52 +19,32 @@ catching regressions in the orchestration logic.
 """
 
 from __future__ import annotations
-
 from dataclasses import replace
 from datetime import datetime
-from typing import List, Optional
-
-import pytest
-
-from tests.stubs.user_context import _UserContext as UserContext
-from src.api.services.note_service import NoteResponse
-from src.api.repos.permission_repo import PermissionRepoABC
-from src.api.other.relationship import (
-    DirectoryRelationEnum,
-    NoteRelationEnum,
-    ObjectRef,
-    ObjectTypeEnum,
-    Relationship,
-    SubjectRef,
-)
+from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.facades.note_facade import NoteFacadeABC, SearchType
+from src.api.other.relationship import DirectoryRelationEnum, NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, ShelfRelationEnum, SubjectRef, ObjectRef as _OR, ObjectTypeEnum as _OT, Relationship as _R, SubjectRef as _SR, ShelfRelationEnum as _SRE
 from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import UserContextABC
+from src.api.repos.permission_repo import PermissionRepoABC
+from src.api.services.jwt_provider import JwtProvider
+from src.api.services.note_service import NoteResponse
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
-from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.db.entities.rule import RuleEntity
 from src.db.repos.note.note_facade import NoteFacadeImpl
-from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.services.note import NoteServiceImpl
+from tests._fixtures_pkg.fakes import _FakeCombinedNoteRepo, _FakeDatabase, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeTagRepo, _FakeVersionRepo, _TestDirectoryRepo
+from tests.stubs.activity_logger_service import _FakeActivityLoggerService
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
 from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
-from src.api.other.user_context import UserContextABC
-from src.api.services.jwt_provider import JwtProvider
-from tests._fixtures_pkg.fakes import (
-    _FakeCombinedNoteRepo,
-    _FakeDatabase,
-    _FakeEmbeddingRepo,
-    _FakeJwtProvider,
-    _FakeNoteContentRepo,
-    _FakeTagRepo,
-    _FakeVersionRepo,
-    _TestDirectoryRepo,
-)
-from tests.stubs.activity_logger_service import _FakeActivityLoggerService
-from tests.stubs.user_context import _UserContext as _UserCtx
+from tests.stubs.user_context import _UserContext as UserContext, _UserContext as _UserCtx
+from typing import List, Optional
+import logging, pytest
 
 
 def _log_provider(*_args, **_kwargs):
-    import logging
     return logging.getLogger("test.note_service")
 
 
@@ -292,7 +272,6 @@ async def test_insert_note_resolves_parent_directory_and_writes_owner_relation()
     # Reach into the underlying facade to insert a rule + shelf
     # admin relation; mirrors the production bootstrap.
     facade = service._note_repo  # type: ignore[attr-defined]
-    from src.db.entities.rule import RuleEntity
     await facade._rule_repo.create_rule(  # type: ignore[attr-defined]
         RuleEntity(
             id=UNDEFINED,
@@ -305,13 +284,6 @@ async def test_insert_note_resolves_parent_directory_and_writes_owner_relation()
             enabled=True,
             creator_id="user-1",
         )
-    )
-    from src.api.other.relationship import (
-        ObjectRef,
-        ObjectTypeEnum,
-        Relationship,
-        ShelfRelationEnum,
-        SubjectRef,
     )
     await facade._permission_repo.insert([  # type: ignore[attr-defined]
         Relationship(
@@ -598,7 +570,6 @@ async def test_insert_note_records_note_created() -> None:
     _dir.directories_by_id["dir-default"] = default_dir
     _dir.user_to_directory_ids["user-1"] = ["dir-default"]
     facade = service._note_repo  # type: ignore[attr-defined]
-    from src.db.entities.rule import RuleEntity
     await facade._rule_repo.create_rule(  # type: ignore[attr-defined]
         RuleEntity(
             id=UNDEFINED,
@@ -611,13 +582,6 @@ async def test_insert_note_records_note_created() -> None:
             enabled=True,
             creator_id="user-1",
         )
-    )
-    from src.api.other.relationship import (
-        ObjectRef as _OR,
-        ObjectTypeEnum as _OT,
-        Relationship as _R,
-        ShelfRelationEnum as _SRE,
-        SubjectRef as _SR,
     )
     await facade._permission_repo.insert([  # type: ignore[attr-defined]
         _R(

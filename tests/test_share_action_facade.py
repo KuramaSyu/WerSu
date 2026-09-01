@@ -21,23 +21,19 @@ Pinned regressions (one per behaviour):
 """
 
 from __future__ import annotations
-
 from datetime import datetime, timedelta
-from typing import Optional
-
-import pytest
-
-from tests.stubs.user_context import _UserContext as UserContext
 from src.api.other.undefined import UNDEFINED
-from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_action import FilterUserAction, UserActionEntity
 from src.facades.share_action_facade import ShareActionFacade
 from tests.stubs.logging import silent_logger
 from tests.stubs.sharing_repo import _FakeSharingRepo
 from tests.stubs.user_action_repo import _FakeUserActionRepo
-from tests.stubs.user_context import _UserContext
+from tests.stubs.user_context import _UserContext as UserContext, _UserContext
 from tests.stubs.user_repo import _FakeUserRepo
+from typing import Optional
+import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -388,5 +384,4 @@ async def test_read_methods_delegate_to_wrapped_sharing_repo() -> None:
 
 
 def _filter_by_note(note_id: str):
-    from src.db.entities.note.sharing import FilterShareNote
     return FilterShareNote(note_id=note_id)

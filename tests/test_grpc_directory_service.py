@@ -25,6 +25,7 @@ import grpc
 from grpc.aio import ServicerContext
 
 from tests.stubs import _StubDirectoryService, _UserContextFactory, silent_logger
+from src.api.other.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.grpc_mod.proto.note_pb2 import (
@@ -34,6 +35,7 @@ from src.grpc_mod.proto.note_pb2 import (
     GetDirectoriesRequest,
     GetDirectoryRequest,
     GetNotesOfDirectoryRequest,
+    IdsOrUndefined,
 )
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.service import GrpcDirectoryService
@@ -268,7 +270,7 @@ async def test_patch_directory_passes_entity_to_service() -> None:
             user_id="user-1",
             name="new-name",
             description="new-description",
-            parent_ids=["new-parent"],
+            parent_ids=IdsOrUndefined(ids=["new-parent"]),
         ),
         cast(ServicerContext, context),
     )
@@ -281,6 +283,70 @@ async def test_patch_directory_passes_entity_to_service() -> None:
     assert list(impl.last_patch_entity.parent_directory_ids) == ["new-parent"]
     assert result.id == "dir-1"
     assert result.slug == "new-name"
+
+
+async def test_patch_directory_shelf_ids_change_forwards_to_service() -> None:
+    """`shelf_ids_change` flows verbatim into `patch_directory`."""
+    impl = _StubDirectoryService()
+    impl.patch_result = DirectoryEntity(id="dir-1", slug="d", relations=[])
+    service = _service(impl)
+    context = _FakeContext()
+
+    await service.PatchDirectory(
+        AlterDirectoryRequest(
+            id="dir-1",
+            user_id="user-1",
+            shelf_ids=IdsOrUndefined(ids=["shelf-a", "shelf-b"]),
+        ),
+        cast(ServicerContext, context),
+    )
+
+    assert context.code is None
+    assert impl.last_patch_entity is not None
+    assert list(impl.last_patch_entity.shelf_ids) == ["shelf-a", "shelf-b"]
+    # unset oneofs stay UNDEFINED
+    assert impl.last_patch_entity.parent_directory_ids is UNDEFINED
+
+
+async def test_patch_directory_omitted_oneofs_leave_fields_undefined() -> None:
+    """Without any oneof arms, the corresponding entity fields stay UNDEFINED."""
+    impl = _StubDirectoryService()
+    impl.patch_result = DirectoryEntity(id="dir-1", slug="d", relations=[])
+    service = _service(impl)
+    context = _FakeContext()
+
+    await service.PatchDirectory(
+        AlterDirectoryRequest(id="dir-1", user_id="user-1"),
+        cast(ServicerContext, context),
+    )
+
+    assert context.code is None
+    assert impl.last_patch_entity is not None
+    assert impl.last_patch_entity.parent_directory_ids is UNDEFINED
+    assert impl.last_patch_entity.shelf_ids is UNDEFINED
+    assert impl.last_patch_entity.slug is UNDEFINED
+
+
+async def test_patch_directory_empty_ids_replaces_with_empty_list() -> None:
+    """Explicit empty ids list stays [] (not collapsed to UNDEFINED)."""
+    impl = _StubDirectoryService()
+    impl.patch_result = DirectoryEntity(id="dir-1", slug="d", relations=[])
+    service = _service(impl)
+    context = _FakeContext()
+
+    await service.PatchDirectory(
+        AlterDirectoryRequest(
+            id="dir-1",
+            user_id="user-1",
+            parent_ids=IdsOrUndefined(ids=[]),
+        ),
+        cast(ServicerContext, context),
+    )
+
+    assert context.code is None
+    assert impl.last_patch_entity is not None
+    assert list(impl.last_patch_entity.parent_directory_ids) == []
+    assert impl.last_patch_entity.parent_directory_ids is not UNDEFINED
 
 
 async def test_create_directory_requires_name() -> None:

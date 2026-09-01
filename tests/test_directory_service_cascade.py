@@ -18,54 +18,27 @@ SpiceDB.  Pins:
 """
 
 from __future__ import annotations
-
-import logging
-from typing import List, Optional, Tuple
-
-import pytest
-
-from src.api.repos.permission_repo import (
-    DirectoryChild,
-    PermissionRepoABC,
-)
-from src.api.other.relationship import (
-    AttachmentRelationEnum,
-    DirectoryRelationEnum,
-    NoteRelationEnum,
-    ObjectRef,
-    ObjectTypeEnum,
-    Relationship,
-    SubjectRef,
-)
+from src.api.other.relationship import AttachmentRelationEnum, DirectoryRelationEnum, NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.api.other.undefined import UNDEFINED
+from src.api.repos.permission_repo import DirectoryChild, PermissionRepoABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
+from src.db.repos.note.note_facade import NoteFacadeImpl
+from src.db.table import TableABC
 from src.services.attachment_facade import AttachmentFacadeImpl
+from src.services.directory import DirectoryServiceImpl
+from src.services.note import NoteServiceImpl
+from tests._fixtures_pkg.fakes import _FakeCombinedNoteRepo, _FakeDatabase, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeNoteRepoFacade, _FakeTagRepo, _FakeVersionRepo, _TestDirectoryRepo
+from tests.stubs.activity_logger_service import _FakeActivityLoggerService
+from tests.stubs.attachments import InMemoryAttachmentMetadataRepo, InMemoryAttachmentRepo
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
 from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
-from src.services.directory import DirectoryServiceImpl
-from src.services.note import NoteServiceImpl
-from src.db.table import TableABC
-from tests._fixtures_pkg.fakes import (
-    _FakeCombinedNoteRepo,
-    _FakeDatabase,
-    _FakeEmbeddingRepo,
-    _FakeJwtProvider,
-    _FakeNoteContentRepo,
-    _FakeNoteRepoFacade,
-    _FakeTagRepo,
-    _FakeVersionRepo,
-    _TestDirectoryRepo,
-)
-from tests.stubs.activity_logger_service import _FakeActivityLoggerService
-from tests.stubs.attachments import (
-    InMemoryAttachmentMetadataRepo,
-    InMemoryAttachmentRepo,
-)
 from tests.stubs.logging import silent_logger
 from tests.stubs.user_context import _UserContext as _UserCtx
+from typing import List, Optional, Tuple
+import logging, pytest
 
 
 class _FakeLinkTable(TableABC):
@@ -157,7 +130,6 @@ def _wire_service(
     jwt_provider = _FakeJwtProvider()
     activity_logger = _FakeActivityLoggerService()
 
-    from src.db.repos.note.note_facade import NoteFacadeImpl
 
     real_facade = NoteFacadeImpl(
         db=fake_db,

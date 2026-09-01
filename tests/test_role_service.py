@@ -9,30 +9,17 @@ and holds role metadata in-process.
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
-
-import pytest
-
-from src.api import (
-    ObjectRef,
-    ObjectTypeEnum,
-    PermissionRepoABC,
-    Relationship,
-    RoleRelationEnum,
-    SubjectRef,
-)
+from datetime import datetime
+from src.api import ObjectRef, ObjectTypeEnum, PermissionRepoABC, Relationship, RoleRelationEnum, SubjectRef
 from src.api.other.undefined import UNDEFINED, UndefinedOr, is_undefined
 from src.api.other.user_context import UserContextABC
-from src.db.entities.user.role import (
-    RoleEntity,
-    RoleFilter,
-    UserRoleMembershipEntity,
-)
+from src.db.entities.user.role import RoleEntity, RoleFilter, UserRoleMembershipEntity
 from src.services.role_service import RoleServiceImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.user_context import _UserContext
+from typing import Dict, List, Optional
+import pytest, uuid
 
 
 # ---------------------------------------------------------------------------
@@ -52,8 +39,6 @@ class _FakeRoleRepo:
     remove_calls: List[tuple[str, str]] = field(default_factory=list)
 
     async def create_role(self, role: RoleEntity, ctx: UserContextABC) -> RoleEntity:
-        from datetime import datetime
-        import uuid
 
         if is_undefined(role.name):
             raise ValueError("role.name is required")

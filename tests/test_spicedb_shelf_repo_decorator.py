@@ -12,24 +12,15 @@ Contract:
 """
 
 from __future__ import annotations
-
-from typing import Optional
-
-import pytest
-
+from src.api.other.relationship import DirectoryRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, ShelfRelationEnum, SubjectRef
 from src.api.other.undefined import UNDEFINED, unwrap_undefined
 from src.api.other.user_context import UserContextABC
-from src.api.other.relationship import (
-    DirectoryRelationEnum,
-    ObjectRef,
-    ObjectTypeEnum,
-    Relationship,
-    ShelfRelationEnum,
-    SubjectRef,
-)
+from src.db.entities.shelf import ShelfEntity
 from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
+from typing import Optional
+import pytest
 
 
 # ---- helpers --------------------------------------------------------------
@@ -204,7 +195,6 @@ async def test_delete_shelf_revokes_every_shelf_edge() -> None:
     """
     decorator, storage, perm = _make_decorated()
     # Inject a shelf row directly so the id is predictable.
-    from src.db.entities.shelf import ShelfEntity  # noqa: WPS433
     storage._shelves["shelf-1"] = ShelfEntity(  # noqa: SLF001
         id="shelf-1",
         slug="s1",

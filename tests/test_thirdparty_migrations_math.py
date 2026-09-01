@@ -24,29 +24,22 @@ Faktorisierungsmethoden page from the BA Studium book:
 """
 
 from __future__ import annotations
-
-import io
-import json
-import zipfile
-
-import pytest
-
+from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import UserContextABC
 from src.api.services.directory_service import DirectoryServiceABC
 from src.api.services.note_service import NoteServiceABC
-from src.api.other.user_context import UserContextABC
+from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
 from src.services.attachment_facade import AttachmentFacadeABC
 from src.services.thirdparty_migrations.bookstack import BookstackBookImport
-from src.services.thirdparty_migrations.bookstack_html_converter import (
-    BookstackHtmlConverter,
-    ConvertOptions,
-)
+from src.services.thirdparty_migrations.bookstack_html_converter import BookstackHtmlConverter, ConvertOptions
 from src.services.thirdparty_migrations.bookstack_models import BookstackPage
 from tests._fixtures_pkg.bookstack_emergency_backup import EMERGENCY_BACKUP_BOOK_PAYLOAD
 from tests.stubs.directory_service import _StubDirectoryService
 from tests.stubs.logging import silent_logger
 from tests.stubs.user_context import _UserContext
+import io, json, pytest, zipfile
 
 
 def _builder(key: str) -> str:
@@ -255,8 +248,6 @@ def _build_importer(
     async def patched(entity, user_ctx):
         ds.next_directory_id += 1
         new_id = f"dir-{ds.next_directory_id}"
-        from src.db.entities.directory.directory import DirectoryEntity
-        from src.api.other.undefined import UNDEFINED
         created = DirectoryEntity(
             id=new_id,
             slug=entity.slug,
@@ -355,9 +346,6 @@ def test_default_pipeline_still_emits_emergency_backup_correctly() -> None:
     renders cleanly through the default pipeline -- sanity
     check that the math regex changes did not break
     non-math pages."""
-    from tests._fixtures_pkg.bookstack_emergency_backup import (
-        EMERGENCY_BACKUP_BOOK_PAYLOAD,
-    )
     html = EMERGENCY_BACKUP_BOOK_PAYLOAD["book"]["chapters"][0]["pages"][0]["html"]
     # ``convert_details`` defaults to True, so the default
     # converter preserves the ``<details>`` wrappers.

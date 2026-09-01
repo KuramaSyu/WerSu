@@ -15,34 +15,21 @@ run configured in ``pytest.ini``.
 """
 
 from datetime import datetime
-from typing import Awaitable, Callable, Iterable, Tuple, TypeVar
-
-import pytest
-
-from src.api.other.relationship import (
-    ObjectRef,
-    ObjectTypeEnum,
-    Relationship,
-    ShelfRelationEnum,
-    SubjectRef,
-)
+from src.api.other.relationship import ObjectRef, ObjectTypeEnum, Relationship, ShelfRelationEnum, SubjectRef
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.rule import RuleEntity
+from src.db.migrations.context import MigrationContext
+from src.db.migrations.runner import MigrationRunner
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.services.user_service import UserServiceImpl
+from tests.integration_helpers import NoteRelationEnum, assert_user_has_admin_on_directory, make_custom_directory, make_user_entity, spicedb_postgres_env, wait_until
 from tests.stubs.user_context import _UserContext as UserContext
-from tests.integration_helpers import (
-    NoteRelationEnum,
-    assert_user_has_admin_on_directory,
-    make_custom_directory,
-    make_user_entity,
-    spicedb_postgres_env,
-    wait_until,
-)
+from typing import Awaitable, Callable, Iterable, Tuple, TypeVar
+import asyncio, pytest
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
@@ -250,7 +237,6 @@ async def _gather(
     coro_factory: Callable[[str], Awaitable[_T]], ids: Iterable[str]
 ) -> list[_T]:
     """Await a coroutine for each id in parallel."""
-    import asyncio
     return await asyncio.gather(*(coro_factory(i) for i in ids))
 
 
@@ -531,8 +517,6 @@ async def test_migration_backfills_shelf_and_rule_for_existing_users(
     and assert the second run is a no-op (no extra shelves, no
     duplicate rules).
     """
-    from src.db.migrations.context import MigrationContext
-    from src.db.migrations.runner import MigrationRunner
 
     env = spicedb_postgres_env
 

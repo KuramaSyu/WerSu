@@ -21,19 +21,10 @@ Wire shape asserted:
 """
 
 from __future__ import annotations
-
-import io
-import json
-import logging
-import zipfile
-from typing import Dict, List, Optional, Tuple
-
-import pytest
-
-from src.api.services.directory_service import DirectoryServiceABC
-from src.api.services.note_service import NoteServiceABC
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import UserContextABC
+from src.api.services.directory_service import DirectoryServiceABC
+from src.api.services.note_service import NoteServiceABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
@@ -44,6 +35,8 @@ from src.services.thirdparty_migrations.bookstack_reader import BookstackZipErro
 from tests.stubs.directory_service import _StubDirectoryService
 from tests.stubs.logging import silent_logger
 from tests.stubs.user_context import _UserContext
+from typing import Dict, List, Optional, Tuple
+import io, json, logging, pytest, zipfile
 
 
 # -------------------------------------------------------------------------
@@ -417,8 +410,6 @@ async def test_non_image_attachment_inline_ref_becomes_link() -> None:
     )
     # Add the XML file to the zip; the default zip helper only
     # ships the cover + a couple of PNGs.
-    import io
-    import zipfile
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
@@ -462,8 +453,6 @@ async def test_pdf_attachment_inline_ref_stays_inline_image() -> None:
             }
         ]
     )
-    import io
-    import zipfile
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:

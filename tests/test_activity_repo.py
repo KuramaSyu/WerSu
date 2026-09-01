@@ -19,26 +19,18 @@ TEXT columns; the per-row target-shape validation lives in the repo
 """
 
 from __future__ import annotations
-
-from datetime import datetime, timezone
-from typing import AsyncGenerator, List, Tuple
-
-import uuid
-
-import pytest
-
+from dataclasses import replace as _replace
+from datetime import datetime, timedelta, timezone
 from src.api.repos.activity_repo import ActivityFilterBuilder
-from src.db.entities.activity import (
-    ActivityEntity,
-    ActivityKind,
-    ActivityScore,
-)
+from src.db.entities.activity import ActivityEntity, ActivityKind, ActivityScore
 from src.db.repos.activity.postgres import PostgresActivityRepo
 from src.db.sql_builders import SqlBuilderFactory
 from src.db.sqlite_database import SqliteDatabase
 from src.db.table import Table
 from src.utils.logging import logging_provider
 from tests._fixtures_pkg.fakes import _TestDirectoryRepo
+from typing import AsyncGenerator, List, Tuple
+import asyncio, json, pytest, uuid
 
 
 # Fixtures
@@ -121,7 +113,6 @@ async def _insert(
     unavailable in tests.  ``metadata`` is serialised to JSON because
     the test schema stores metadata as ``TEXT``.
     """
-    import json
 
     payload = metadata if metadata is not None else {}
     entity = ActivityEntity(
@@ -563,8 +554,6 @@ class TestEditAndRemove:
         self, repo: PostgresActivityRepo,
     ) -> None:
         """``edit_activity`` replaces the persisted columns."""
-        import json
-        from dataclasses import replace as _replace
         entity = await _insert(
             repo,
             action="note_viewed",
@@ -618,10 +607,8 @@ async def sqlite_db_backdate(repo: PostgresActivityRepo, note_id: str, *, days: 
     ``executescript`` and drops bound params.
     """
     db = repo._table.db  # type: ignore[attr-defined]
-    from datetime import timedelta
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     cutoff_iso = cutoff.strftime("%Y-%m-%d %H:%M:%S")
-    import asyncio
     await asyncio.to_thread(
         db.connection.execute,
         "UPDATE activity SET at = ? WHERE note_id = ?",

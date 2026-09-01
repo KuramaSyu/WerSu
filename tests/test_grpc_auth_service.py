@@ -22,15 +22,10 @@ Wire shape asserted:
 """
 
 from __future__ import annotations
-
-import logging
 from dataclasses import replace
-from typing import Any, Dict, List, Optional, cast
-
-import grpc
+from datetime import datetime
 from google.protobuf.empty_pb2 import Empty
 from grpc.aio import ServicerContext
-
 from src.api.other.undefined import UNDEFINED
 from src.api.repos.user_auth_repo import UserAuthRepoABC
 from src.api.services.user_service import UserFilter
@@ -40,14 +35,11 @@ from src.db.entities.user.third_party import ThirdPartyEntity, ThirdPartyFilter
 from src.db.entities.user.user_auth import UserAuthEntity
 from src.grpc_mod.auth_service import GrpcAuthService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
-from src.grpc_mod.proto.auth_pb2 import (
-    CreateUserAuthRequest,
-    GetUserAuthRequest,
-    RegisterPasskeyRequest,
-    RegisterPasskeyResponse,
-    UpdateUserAuthRequest,
-)
+from src.grpc_mod.proto.auth_pb2 import CreateUserAuthRequest, GetUserAuthRequest, RegisterPasskeyRequest, RegisterPasskeyResponse, UpdateUserAuthRequest
 from src.services.user_auth_service import UserAuthServiceImpl
+from typing import Any, Dict, List, Optional, cast
+from urllib.parse import urlparse
+import grpc, logging
 
 
 # ---------------------------------------------------------------------
@@ -203,7 +195,6 @@ class RecordingUserAuthRepo(UserAuthRepoABC):
     async def revoke_passkey(self, passkey_id: str) -> PasskeyEntity:
         self._record("revoke_passkey", passkey_id)
         pk = self._passkeys[passkey_id]
-        from datetime import datetime
         revoked = replace(pk, revoked_at=datetime.now())
         self._passkeys[passkey_id] = revoked
         return revoked
@@ -391,7 +382,6 @@ async def test_get_user_auth_avatar_url_is_discord_cdn_url() -> None:
     qualified URL so the frontend can drop it into ``<img src>``
     without extra work.
     """
-    from urllib.parse import urlparse
 
     service, repo = _make_service()
     await repo.insert(

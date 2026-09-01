@@ -16,44 +16,35 @@ keeps the lightweight fixtures the rest of the test suite shares:
   :mod:`tests.fixtures.fakes`).
 """
 
-from typing import Iterator
-
-import pytest
-from testcontainers.postgres import PostgresContainer
-
 from src.ai.embedding_generator import EmbeddingGenerator, Models
+from src.api.facades.note_facade import NoteFacadeABC
+from src.api.repos.tag_repo import TagRepoABC
 from src.db.entities.user.user import UserEntity
 from src.db.migrations.context import MigrationContext
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos import Database, UserPostgresRepo
+from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.note.combined import CombinedNotePostgresRepo
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.embedding import NoteEmbeddingPostgresRepo
 from src.db.repos.note.note_facade import NoteFacadeImpl
-from src.api.facades.note_facade import NoteFacadeABC
-from src.api.repos.tag_repo import TagRepoABC
+from src.db.repos.note.versioning import NoteVersionPostgresRepo
+from src.db.repos.shelf.postgres import PostgresShelfRepo
+from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
 from src.db.repos.tag.postgres import PostgresTagRepo
+from src.db.repos.user import RepoContextFactory
+from src.db.repos.user.user import UserRepoABC
+from src.db.table import Table
+from src.services.shelf_service import ShelfServiceImpl
+from src.services.user_service import UserServiceImpl
+from src.utils import logging_provider
+from testcontainers.postgres import PostgresContainer
+from tests._fixtures_pkg.fakes import _FakeDatabase, _FakeEmbeddingGenerator, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeNoteRepoFacade, _FakeVersionRepo, _TestDirectoryRepo, _TestSpiceDbClient
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
 from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
-from src.db.repos.note.versioning import NoteVersionPostgresRepo
-from src.db.repos.user.user import UserRepoABC
-from src.db.table import Table
-from src.utils import logging_provider
-
-# Re-export the in-memory fakes so existing imports
-# (``from tests.fixtures import _FakeEmbeddingRepo``) keep working.
-from tests._fixtures_pkg.fakes import (  # noqa: F401
-    _FakeEmbeddingGenerator,
-    _FakeEmbeddingRepo,
-    _FakeNoteContentRepo,
-    _FakeNoteRepoFacade,
-    _FakeJwtProvider,
-    _FakeVersionRepo,
-    _FakeDatabase,
-    _TestDirectoryRepo,
-    _TestSpiceDbClient,
-)
+from typing import Iterator
+import pytest
 
 
 def create_postgres_dsn(postgres_container: PostgresContainer) -> str:
@@ -294,12 +285,6 @@ async def user_service(
     the user repo + facade rule repo + facade permission repo
     individually.
     """
-    from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
-    from src.db.repos.shelf.postgres import PostgresShelfRepo
-    from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
-    from src.db.repos.user import RepoContextFactory
-    from src.services.shelf_service import ShelfServiceImpl
-    from src.services.user_service import UserServiceImpl
     permission_repo = note_repo_facade._permission_repo  # type: ignore[attr-defined]
     rule_repo = note_repo_facade._rule_repo  # type: ignore[attr-defined]
     directory_repo._permission_repo = permission_repo

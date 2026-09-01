@@ -7,25 +7,20 @@ exercise every branch the service offers without spinning up SpiceDB.
 """
 
 from __future__ import annotations
-
-from typing import AsyncGenerator, List, Optional
-
-import pytest
-
 from src.api.other.undefined import UNDEFINED
-
+from src.db.entities.activity import ActivityEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.activity.postgres import PostgresActivityRepo
 from src.db.sql_builders import SqlBuilderFactory
 from src.db.sqlite_database import SqliteDatabase
 from src.db.table import Table
-from src.services.activity_statistics_service import (
-    ActivityStatisticsServiceImpl,
-)
+from src.services.activity_statistics_service import ActivityStatisticsServiceImpl
 from src.utils.logging import logging_provider
 from tests._fixtures_pkg.fakes import _FakeNoteContentRepo, _TestDirectoryRepo
 from tests.stubs.user_context import _UserContext as _FakeUserContext
 from tests.stubs.view_permission_repo import _FakeViewPermissionRepo as _FakePermissionRepo
+from typing import AsyncGenerator, List, Optional
+import math, pytest, uuid
 
 
 # SQLite + repo fixture (lifted from test_activity_repo)
@@ -144,9 +139,6 @@ async def _insert(
     directory_id: Optional[str] = None,
     actor_id: str = "alice",
 ) -> None:
-    from src.api.other.undefined import UNDEFINED
-    from src.db.entities.activity import ActivityEntity
-    import uuid
     await repo.add_activity(
         ActivityEntity(
             id=str(uuid.uuid4()),
@@ -406,7 +398,6 @@ class TestGetMostUsed:
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
-        import math
         perms = _FakePermissionRepo(viewable_note_ids=["n-1", "n-2"])
         svc = ActivityStatisticsServiceImpl(
             activity_repo=activity_repo,

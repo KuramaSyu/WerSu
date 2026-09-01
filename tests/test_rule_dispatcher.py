@@ -13,20 +13,14 @@ The tests cover:
 """
 
 from __future__ import annotations
-
-import pytest
-
-from src.api.events.event_context import NoopEventContext
-from src.api.events.events import (
-    DirectoryCreated,
-    NoteCreated,
-    NoteUpdated,
-)
+from src.api.events.event_context import EventContext, NoopEventContext
+from src.api.events.events import DirectoryCreated, NoteCreated, NoteUpdated
 from src.api.events.rule_dispatcher import RuleDispatcher
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.rule import RuleEntity
 from src.services.event_bus import InMemoryEventBus
 from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
+import pytest
 
 
 # ---- fakes for the directory / tag repos ---------------------------------
@@ -195,7 +189,6 @@ async def test_note_content_contains_only_fires_on_match():
 
     directory_repo = FakeDirectoryRepo()
     tag_repo = FakeTagRepo()
-    from src.api.events.event_context import EventContext
     class _Ctx(EventContext):
         async def note_content(self, note_id): return (await note_repo.select_by_id(note_id)).content
         async def note_title(self, note_id): return (await note_repo.select_by_id(note_id)).title

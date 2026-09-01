@@ -19,33 +19,20 @@ call signature and the repo contract surfaces as a
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, Tuple
-
-from src.api.other.relationship import (
-    DirectoryRelationEnum,
-    NoteRelationEnum,
-    ObjectRef,
-    ObjectTypeEnum,
-    Relationship,
-    SubjectRef,
-)
+from src.api.other.relationship import DirectoryRelationEnum, NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
-from src.api.repos.directory_repo import (
-    DirectoryChildType,
-    DirectoryHierarchyType,
-    DirectoryParentType,
-    DirectoryRepoABC,
-)
-from src.api.repos.tag_repo import TagRepoABC
+from src.api.repos.directory_repo import DirectoryChildType, DirectoryHierarchyType, DirectoryParentType, DirectoryRepoABC
 from src.api.repos.shelf_repo import ShelfRepoABC
-from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
+from src.api.repos.tag_repo import TagRepoABC
 from src.api.services.directory_service import DirectoryIncludeOptions
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
 from tests.stubs.user_context import _UserContext
+from typing import Any, Dict, List, Optional, Set, Tuple
+import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -754,7 +741,6 @@ async def test_update_directory_requires_id() -> None:
     """Validation: no id, no writes."""
     facade, dir_repo, perm_repo, _tags = _build_facade()
 
-    import pytest
 
     with pytest.raises(ValueError):
         await facade.update_directory(DirectoryEntity(slug="x"))
@@ -948,7 +934,6 @@ async def test_delete_directory_requires_id() -> None:
     """Validation: no id, no writes."""
     facade, dir_repo, perm_repo, _tags = _build_facade()
 
-    import pytest
 
     with pytest.raises(ValueError):
         await facade.delete_directory(DirectoryEntity(slug="x"))

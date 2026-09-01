@@ -14,13 +14,8 @@ service layer.
 """
 
 from __future__ import annotations
-
 from datetime import datetime
-from typing import Optional
-
-import pytest
-
-from tests.stubs.user_context import _UserContext as UserContext
+from src.api import NoteRelationEnum, ObjectRef, SubjectRef
 from src.api.other.relationship import NoteRelationEnum, ObjectRef, Relationship, SubjectRef
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
@@ -33,8 +28,10 @@ from tests.stubs.logging import silent_logger
 from tests.stubs.permission_service import _FakePermissionService
 from tests.stubs.sharing_repo import _FakeSharingRepo
 from tests.stubs.user_action_repo import _FakeUserActionRepo
-from tests.stubs.user_context import _UserContext
+from tests.stubs.user_context import _UserContext as UserContext, _UserContext
 from tests.stubs.user_repo import _FakeUserRepo
+from typing import Optional
+import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +48,6 @@ async def _perms_with_edit(
     in-memory impl's implication map expands ``admin`` to
     ``{admin, delete, write, view, edit_permissions}``.
     """
-    from src.api import NoteRelationEnum, ObjectRef, SubjectRef
     repo = InMemoryPermissionRepo()
     await repo.insert([
         Relationship(

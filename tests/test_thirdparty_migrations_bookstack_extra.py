@@ -16,16 +16,10 @@
 """
 
 from __future__ import annotations
-
-import logging
-from typing import List, Optional, Tuple
-
-import pytest
-
-from src.api.services.directory_service import DirectoryServiceABC
-from src.api.services.note_service import NoteServiceABC
 from src.api.other.relationship import DirectoryRelationEnum
 from src.api.other.user_context import UserContextABC
+from src.api.services.directory_service import DirectoryServiceABC
+from src.api.services.note_service import NoteServiceABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
@@ -34,6 +28,8 @@ from src.services.thirdparty_migrations.bookstack import BookstackBookImport
 from tests.stubs.directory_service import _StubDirectoryService
 from tests.stubs.logging import silent_logger
 from tests.stubs.user_context import _UserContext
+from typing import List, Optional, Tuple
+import io, json, logging, pytest, zipfile
 
 
 class _StubNoteService(NoteServiceABC):
@@ -155,9 +151,6 @@ def _book_payload() -> dict:
 
 
 def _build_zip(payload: dict) -> bytes:
-    import io
-    import json
-    import zipfile
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:

@@ -15,19 +15,12 @@ Covers the contract the rest of the rules subsystem depends on:
 """
 
 from __future__ import annotations
-
-import pytest
-
 from src.api.events.event_bus import EventBus
-from src.api.events.events import (
-    DirectoryCreated,
-    DirectoryUpdated,
-    Event,
-    NoteCreated,
-    NoteUpdated,
-)
+from src.api.events.events import DirectoryCreated, DirectoryUpdated, Event, NoteCreated, NoteUpdated
 from src.api.events.listener import Listener, extract_event_type
 from src.services.event_bus import InMemoryEventBus, NoopEventBus
+from typing import Generic, TypeVar
+import asyncio, pytest, time
 
 
 # ---- Listener contract ----------------------------------------------------
@@ -62,7 +55,6 @@ def test_extract_event_type_raises_on_unresolved_typevar_subclass():
         class Concrete(Base[NoteCreated]): ...   # resolves
         class Bare(Base): ...                    # does NOT resolve
     """
-    from typing import Generic, TypeVar  # noqa: WPS433 -- local import
 
     E = TypeVar("E", bound=Event)
 
@@ -193,7 +185,6 @@ async def test_in_memory_bus_dispatches_concurrently():
     implementation the total time would be 2x the sleep, with the
     concurrent implementation it should be ~1x.
     """
-    import asyncio
 
     started: list[float] = []
     finished: list[float] = []
@@ -210,7 +201,6 @@ async def test_in_memory_bus_dispatches_concurrently():
     await bus.subscribe(a)
     await bus.subscribe(b)
 
-    import time
     t0 = time.monotonic()
     await bus.notify(NoteCreated(note_id="1", actor_id="u"))
     elapsed = time.monotonic() - t0

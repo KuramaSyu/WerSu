@@ -12,37 +12,27 @@ in the CRUD path.
 """
 
 from __future__ import annotations
-
 from dataclasses import replace
 from datetime import datetime
-from typing import Optional
-from uuid import UUID
-
-import pytest
-
+from enum import Enum
+from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.facades.note_facade import SearchType
+from src.api.other.relationship import ObjectRef, ObjectTypeEnum, Relationship, ShelfRelationEnum, SubjectRef
 from src.api.other.types import Pagination
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.rule import RuleEntity
-from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.db.repos.note import note_facade as note_module
-from src.db.repos.note.note_facade import NoteFacadeImpl
-from src.api.facades.note_facade import SearchType
-from tests._fixtures_pkg.fakes import (
-    _FakeCombinedNoteRepo,
-    _FakeDatabase,
-    _FakeEmbeddingRepo,
-    _FakeJwtProvider,
-    _FakeNoteContentRepo,
-    _FakeTagRepo,
-    _FakeVersionRepo,
-    _TestDirectoryRepo,
-)
+from src.db.repos.note.note_facade import DateNoteSearchStrategy, NoteFacadeImpl
+from tests._fixtures_pkg.fakes import _FakeCombinedNoteRepo, _FakeDatabase, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeTagRepo, _FakeVersionRepo, _TestDirectoryRepo
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
 from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
 from tests.stubs.user_context import _UserContext as UserContext
+from typing import Optional
+from uuid import UUID
+import logging, pytest
 
 
 def _make_facade(
@@ -83,7 +73,6 @@ def _make_facade(
 
 
 def _log_provider(*_args, **_kwargs):
-    import logging
     return logging.getLogger("test.note_facade")
 
 
@@ -256,7 +245,6 @@ async def test_search_notes_dispatches_known_strategy() -> None:
     SQL-driven search behaviour is covered by the integration tests
     in ``test_notes_repo.py``.
     """
-    from src.db.repos.note.note_facade import DateNoteSearchStrategy
 
     class _RecordingStrategy:
         def __init__(self, **kwargs) -> None:
@@ -283,7 +271,6 @@ async def test_search_notes_dispatches_known_strategy() -> None:
 
 async def test_search_notes_raises_for_unknown_search_type() -> None:
     """`search_notes` raises `ValueError` for an unrecognised `SearchType`."""
-    from enum import Enum
 
     class _Bad(Enum):
         NOPE = 99
@@ -341,13 +328,6 @@ async def _seed_default_fleeting_rule_for(
         )
     )
     # Make the user admin on the shelf so the lookup returns it.
-    from src.api.other.relationship import (
-        ObjectRef,
-        ObjectTypeEnum,
-        Relationship,
-        ShelfRelationEnum,
-        SubjectRef,
-    )
     await permission_repo.insert([
         Relationship(
             resource=ObjectRef(

@@ -1,25 +1,20 @@
 from dataclasses import replace
-from typing import Dict, List, Optional, Tuple
-
-from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
-from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.user_context import _UserContext as UserContext
+from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.other.relationship import ObjectRef, Relationship, SubjectRef
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import ContextFactory, UserContextABC
+from src.api.repos.directory_repo import DirectoryChildType, DirectoryHierarchyType, DirectoryParentType
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
-from src.api.facades.directory_facade import DirectoryFacadeABC
-from src.api.repos.directory_repo import (
-    DirectoryChildType,
-    DirectoryHierarchyType,
-    DirectoryParentType,
-)
-from src.api.other.relationship import ObjectRef, Relationship, SubjectRef
 from src.db.repos.note.permission import DirectoryRelationEnum, ObjectTypeEnum
 from src.db.repos.user.user import UserRepoABC
 from src.services.shelf_service import ShelfServiceImpl
 from src.services.user_service import UserServiceImpl
+from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
+from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
+from tests.stubs.user_context import _UserContext as UserContext
+from typing import Dict, List, Optional, Tuple
 
 
 class _InMemoryUserRepo(UserRepoABC):
@@ -238,8 +233,6 @@ def _make_service(
     so the user-service delegates shelf/rule work through the
     shelf service (matching production wiring).
     """
-    from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
-    from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
     shelf_repo = shelf_repo if shelf_repo is not None else InMemoryShelfRepo()
     rule_repo = rule_repo if rule_repo is not None else InMemoryRuleRepo()
     permission_repo = (

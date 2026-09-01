@@ -28,8 +28,9 @@ import grpc
 from grpc.aio import ServicerContext
 
 from tests.stubs.user_context import _UserContextFactory
-from src.api.services.note_service import NoteIncludeOptions, NoteResponse, NoteServiceABC
+from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import UserContextABC
+from src.api.services.note_service import NoteIncludeOptions, NoteResponse, NoteServiceABC
 from src.db.entities.note.metadata import NoteEntity
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.proto.note_pb2 import (
@@ -37,6 +38,7 @@ from src.grpc_mod.proto.note_pb2 import (
     GetNoteRequest,
     IdsOrUndefined,
     NoteResponse as GrpcNoteResponse,
+    PostNoteRequest,
 )
 from src.grpc_mod.service import GrpcNoteService
 
@@ -245,16 +247,8 @@ def _make_capturing_service() -> tuple[GrpcNoteService, _CapturingNoteService]:
     return service, note_service
 
 
-from src.api.other.undefined import UNDEFINED  # noqa: E402
-
-
-from src.grpc_mod.proto.note_pb2 import PostNoteRequest  # noqa: E402
-
-
 async def test_post_note_with_directory_ids_forwards_them_and_skips_shelf() -> None:
     """directory_ids takes priority: shelf_id is ignored when set."""
-    from src.api.other.undefined import UNDEFINED
-
     service, stub = _make_capturing_service()
     context = _FakeContext()
 
@@ -279,8 +273,6 @@ async def test_post_note_with_directory_ids_forwards_them_and_skips_shelf() -> N
 
 async def test_post_note_with_shelf_id_only_passes_shelf_to_facade() -> None:
     """Only shelf_id: directory_ids stays UNDEFINED, shelf_ids = [shelf_id]."""
-    from src.api.other.undefined import UNDEFINED
-
     service, stub = _make_capturing_service()
     context = _FakeContext()
 
@@ -384,8 +376,6 @@ def _make_update_service() -> tuple[GrpcNoteService, _UpdateNoteStub]:
 
 async def test_patch_note_directory_ids_change_forwards_to_service() -> None:
     """A set `directory_ids_change` flows verbatim into `update_note`."""
-    from src.api.other.undefined import UNDEFINED
-
     service, stub = _make_update_service()
     context = _FakeContext()
 
@@ -405,8 +395,6 @@ async def test_patch_note_directory_ids_change_forwards_to_service() -> None:
 
 async def test_patch_note_tag_ids_change_forwards_to_service() -> None:
     """A set `tag_ids_change` flows verbatim into `update_note`."""
-    from src.api.other.undefined import UNDEFINED
-
     service, stub = _make_update_service()
     context = _FakeContext()
 
@@ -425,8 +413,6 @@ async def test_patch_note_tag_ids_change_forwards_to_service() -> None:
 
 async def test_patch_note_empty_ids_change_replaces_with_empty_list() -> None:
     """An explicit empty list replaces the field with [] (not UNDEFINED)."""
-    from src.api.other.undefined import UNDEFINED
-
     service, stub = _make_update_service()
     context = _FakeContext()
 
@@ -445,8 +431,6 @@ async def test_patch_note_empty_ids_change_replaces_with_empty_list() -> None:
 
 async def test_patch_note_omitted_ids_change_leaves_field_undefined() -> None:
     """Without the oneof arm, the entity field stays UNDEFINED."""
-    from src.api.other.undefined import UNDEFINED
-
     service, stub = _make_update_service()
     context = _FakeContext()
 
@@ -461,8 +445,6 @@ async def test_patch_note_omitted_ids_change_leaves_field_undefined() -> None:
 
 async def test_patch_note_optional_title_forwards_to_service() -> None:
     """A set `title` flows into `update_note`; unset stays UNDEFINED."""
-    from src.api.other.undefined import UNDEFINED
-
     service, stub = _make_update_service()
     context = _FakeContext()
 
@@ -481,8 +463,6 @@ async def test_patch_note_optional_title_forwards_to_service() -> None:
 
 async def test_patch_note_optional_content_forwards_to_service() -> None:
     """A set `content` flows into `update_note`; unset stays UNDEFINED."""
-    from src.api.other.undefined import UNDEFINED
-
     service, stub = _make_update_service()
     context = _FakeContext()
 
