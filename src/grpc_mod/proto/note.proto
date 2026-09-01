@@ -76,10 +76,15 @@ message Note {
     repeated PermissionRelationship permissions = 7;
     repeated string directory_ids = 8;
     repeated string tag_ids = 9;
-    
+
     // used for permission checking
-    string user_id = 10; 
+    string user_id = 10;
     repeated string attachment_ids = 11;
+
+    // ids of every shelf this note sits on (transitively via its
+    // parent directory).  Populated only when the caller opts in
+    // via the read paths; empty otherwise.
+    repeated string shelf_ids = 12;
 }
 
 message NoteResponse {
@@ -92,7 +97,12 @@ message NoteEmbedding {
     repeated float embedding = 2;
 }
 
-// Request to add a note
+// Request to add a note.  At least one of ``directory_ids`` or
+// ``shelf_id`` must be supplied.  When ``directory_ids`` is
+// non-empty it is preferred: the first id becomes the note's
+// primary directory (and shelves are inherited from there).  When
+// only ``shelf_id`` is given the note facade resolves a default
+// directory from the user's rules attached to that shelf.
 message PostNoteRequest {
     string title = 1;
     optional string content = 2;
@@ -100,6 +110,17 @@ message PostNoteRequest {
 
     // the id of the user making the request - used for permission checking
     string user_id = 4;
+
+    // shelf the new note should land on.  Used only when
+    // ``directory_ids`` is empty: the note facade resolves a
+    // default directory from rules attached to this shelf.
+    string shelf_id = 5;
+
+    // Explicit parent directories for the new note.  Preferred
+    // over ``shelf_id`` when non-empty -- the first id becomes
+    // the note's primary directory, and inherited shelves come
+    // from there.  Empty == fall back to ``shelf_id``.
+    repeated string directory_ids = 6;
 }
 
 // Request to delete a note
