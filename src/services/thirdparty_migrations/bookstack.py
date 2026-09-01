@@ -20,7 +20,6 @@ partial result.
 
 from __future__ import annotations
 
-import mimetypes
 from typing import Callable, Dict, List
 
 from src.api import DirectoryServiceABC, LoggingProvider, NoteServiceABC, UserContextABC
@@ -28,6 +27,7 @@ from src.api.other.undefined import UNDEFINED, unwrap_undefined
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
+from src.utils import guess_content_type
 from src.services.attachment_facade import AttachmentFacadeABC
 from src.services.thirdparty_migrations import (
     ImportedChapter,
@@ -260,7 +260,7 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
                     key=UNDEFINED,
                     filename=filename,
                     filepath=f'/{book.name}/{filename}',
-                    content_type=_guess_content_type(filename),
+                    content_type=guess_content_type(filename),
                     size=len(data),
                     content=data,
                 )
@@ -433,9 +433,3 @@ class BookstackBookImport(ThirdpartyMigrationsServiceABC):
 
 
 __all__ = ["BookstackBookImport"]
-
-
-def _guess_content_type(filename: str) -> str:
-    """Best-effort content type lookup that falls back to octet-stream."""
-    guessed, _ = mimetypes.guess_type(filename)
-    return guessed or "application/octet-stream"

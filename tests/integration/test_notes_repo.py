@@ -12,7 +12,8 @@ from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.directory.directory import DirectoryEntity
 from src.api.other.relationship import DirectoryRelationEnum, NoteRelationEnum, ObjectTypeEnum
-from src.db.repos.note.content import NoteContentPostgresRepo, NoteContentRepo
+from src.api.repos.note_content_repo import NoteContentRepo
+from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api.repos.tag_repo import TagRepoABC

@@ -4,7 +4,7 @@ The dispatcher and rule listeners receive an
 :class:`~src.api.events.event_context.EventContext` alongside
 each event.  This module is the production implementation: it
 fetches note content / title via
-:class:`~src.db.repos.note.content.NoteContentRepo` and walks
+:class:`~src.api.repos.note_content_repo.NoteContentRepo` and walks
 the directory tree via the directory facade's
 :meth:`~src.api.repos.directory_repo.DirectoryHelperMixin.get_parents_of`
 helper.  Shelf lookups go through the
@@ -32,7 +32,7 @@ from typing import List, Optional
 from src.api.events.event_context import EventContext
 from src.api.repos.directory_repo import DirectoryHelperMixin
 from src.api.repos.shelf_repo import ShelfRepoABC
-from src.db.repos.note.content import NoteContentRepo
+from src.api.repos.note_content_repo import NoteContentRepo
 
 
 class InMemoryEventContext(EventContext):

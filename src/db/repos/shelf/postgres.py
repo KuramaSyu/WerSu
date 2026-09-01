@@ -21,13 +21,12 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Set
 
-import asyncpg  # type: ignore[import]
-
 from src.api.other.undefined import (
     UNDEFINED,
     UndefinedNoneOr,
     UndefinedOr,
     is_undefined,
+    resolve_undefined_none,
     unwrap_undefined_or,
 )
 from src.api.other.user_context import UserContextABC
@@ -35,6 +34,7 @@ from src.api.repos.shelf_repo import ShelfRepoABC
 from src.api import LoggingProvider
 from src.db.entities.shelf import ShelfEntity
 from src.db.table import TableABC
+from src.utils import row_get
 
 
 class PostgresShelfRepo(ShelfRepoABC):
@@ -109,10 +109,10 @@ class PostgresShelfRepo(ShelfRepoABC):
                 rows = await self._shelf_table.insert(
                     {
                         "slug": candidate,
-                        "display_name": self._resolve_undefined_none(display_name),
-                        "description": self._resolve_undefined_none(description),
-                        "image_url": self._resolve_undefined_none(image_url),
-                        "readme_note_id": self._resolve_undefined_none(readme_note_id),
+                        "display_name": resolve_undefined_none(display_name),
+                        "description": resolve_undefined_none(description),
+                        "image_url": resolve_undefined_none(image_url),
+                        "readme_note_id": resolve_undefined_none(readme_note_id),
                     },
                     returning=self._SHELF_COLUMNS,
                 )
@@ -280,9 +280,9 @@ class PostgresShelfRepo(ShelfRepoABC):
             select="book_id",
         )
         return sorted(
-            str(_row_get(r, "book_id"))
+            str(row_get(r, "book_id"))
             for r in records or []
-            if _row_get(r, "book_id")
+            if row_get(r, "book_id")
         )
 
     async def get_shelves_of_book(self, book_id: str) -> List[str]:
@@ -292,9 +292,9 @@ class PostgresShelfRepo(ShelfRepoABC):
             select="shelf_id",
         )
         return sorted(
-            str(_row_get(r, "shelf_id"))
+            str(row_get(r, "shelf_id"))
             for r in records or []
-            if _row_get(r, "shelf_id")
+            if row_get(r, "shelf_id")
         )
 
     async def add_book(
@@ -333,59 +333,41 @@ class PostgresShelfRepo(ShelfRepoABC):
     # ---- helpers -------------------------------------------------------
 
     @staticmethod
-    def _resolve_undefined_none(value: UndefinedNoneOr[str]) -> Optional[str]:
-        """Map a nullable ``UndefinedNoneOr`` into a SQL-friendly value."""
-        if is_undefined(value):
-            return None
-        if value is None:
-            return None
-        return str(value)
-
-    @staticmethod
     def _row_to_entity(row: object) -> ShelfEntity:
         """Map one ``note.shelf`` record to a :class:`ShelfEntity`."""
         return ShelfEntity(
             id=(
-                str(_row_get(row, "id"))
-                if _row_get(row, "id") is not None
+                str(row_get(row, "id"))
+                if row_get(row, "id") is not None
                 else UNDEFINED
             ),
             slug=(
-                str(_row_get(row, "slug"))
-                if _row_get(row, "slug") is not None
+                str(row_get(row, "slug"))
+                if row_get(row, "slug") is not None
                 else None
             ),
             display_name=(
-                str(_row_get(row, "display_name"))
-                if _row_get(row, "display_name") is not None
+                str(row_get(row, "display_name"))
+                if row_get(row, "display_name") is not None
                 else None
             ),
             description=(
-                str(_row_get(row, "description"))
-                if _row_get(row, "description") is not None
+                str(row_get(row, "description"))
+                if row_get(row, "description") is not None
                 else None
             ),
             image_url=(
-                str(_row_get(row, "image_url"))
-                if _row_get(row, "image_url") is not None
+                str(row_get(row, "image_url"))
+                if row_get(row, "image_url") is not None
                 else None
             ),
             readme_note_id=(
-                str(_row_get(row, "readme_note_id"))
-                if _row_get(row, "readme_note_id") is not None
+                str(row_get(row, "readme_note_id"))
+                if row_get(row, "readme_note_id") is not None
                 else None
             ),
             book_ids=UNDEFINED,
         )
-
-
-def _row_get(row: object, key: str) -> object:
-    """Read ``key`` from an asyncpg Record or a plain dict."""
-    if isinstance(row, asyncpg.Record):
-        return row.get(key)  # type: ignore[dict-item]
-    if isinstance(row, dict):
-        return row.get(key)
-    raise TypeError(f"Unsupported row type: {type(row)}")
 
 
 __all__ = ["PostgresShelfRepo"]

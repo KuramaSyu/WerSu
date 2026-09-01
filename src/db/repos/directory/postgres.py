@@ -30,8 +30,6 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-import asyncpg  # type: ignore[import]
-
 from src.api.services.directory_service import DirectoryIncludeOptions
 from src.api.repos.directory_repo import DirectoryRepoABC
 from src.api.other.undefined import (
@@ -39,6 +37,7 @@ from src.api.other.undefined import (
     UndefinedNoneOr,
     UndefinedOr,
     is_undefined,
+    resolve_undefined_none,
     unwrap_undefined_or,
 )
 from src.api.repos.directory_repo import (
@@ -48,6 +47,7 @@ from src.api.repos.directory_repo import (
 )
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.table import TableABC
+from src.utils import row_get
 
 
 class PostgresDirectoryRepo(DirectoryRepoABC):
@@ -107,10 +107,10 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         rows = await self._directory_table.insert(
             {
                 "slug": slug,
-                "display_name": self._resolve_undefined_none(display_name),
-                "description": self._resolve_undefined_none(description),
-                "image_url": self._resolve_undefined_none(image_url),
-                "readme_note_id": self._resolve_undefined_none(readme_note_id),
+                "display_name": resolve_undefined_none(display_name),
+                "description": resolve_undefined_none(description),
+                "image_url": resolve_undefined_none(image_url),
+                "readme_note_id": resolve_undefined_none(readme_note_id),
             },
             returning=self._DIRECTORY_COLUMNS,
         )
@@ -554,9 +554,9 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
                 select="directory_id",
             )
             return sorted(
-                str(self._row_get(r, "directory_id"))
+                str(row_get(r, "directory_id"))
                 for r in records or []
-                if self._row_get(r, "directory_id")
+                if row_get(r, "directory_id")
             )
         if child_type == "note":
             records = await self._directory_note_table.select(
@@ -564,9 +564,9 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
                 select="directory_id",
             )
             return sorted(
-                str(self._row_get(r, "directory_id"))
+                str(row_get(r, "directory_id"))
                 for r in records or []
-                if self._row_get(r, "directory_id")
+                if row_get(r, "directory_id")
             )
         raise ValueError(f"invalid child_type: {child_type!r}")
 
@@ -614,9 +614,9 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
                     str(parent_id),
                 )
                 book_ids = sorted(
-                    str(self._row_get(r, "book_id"))
+                    str(row_get(r, "book_id"))
                     for r in records or []
-                    if self._row_get(r, "book_id")
+                    if row_get(r, "book_id")
                 )
                 if child_type == "directory":
                     return book_ids
@@ -647,18 +647,18 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
                     select="note_id",
                 )
                 note_ids.update(
-                    str(self._row_get(r, "note_id"))
+                    str(row_get(r, "note_id"))
                     for r in records or []
-                    if self._row_get(r, "note_id")
+                    if row_get(r, "note_id")
                 )
             records = await self._subdirectory_table.select(
                 where={"directory_id": current_id},
                 select="child_directory_id",
             )
             child_directory_ids = [
-                str(self._row_get(r, "child_directory_id"))
+                str(row_get(r, "child_directory_id"))
                 for r in records or []
-                if self._row_get(r, "child_directory_id")
+                if row_get(r, "child_directory_id")
             ]
             if child_type in ("directory", "both"):
                 directory_ids.update(child_directory_ids)
@@ -828,35 +828,6 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
     # --- helpers -------------------------------------------------------
 
     @staticmethod
-    def _resolve_undefined_none(value: UndefinedNoneOr[str]) -> Optional[str]:
-        """Map a nullable ``UndefinedNoneOr`` into a SQL-friendly value.
-
-        * ``UNDEFINED`` -> SQL ``NULL`` (no value supplied).
-        * ``None``       -> SQL ``NULL`` (explicitly cleared).
-        * concrete str  -> ``str``.
-        """
-        if is_undefined(value):
-            return None
-        if value is None:
-            return None
-        return str(value)
-
-    @staticmethod
-    def _row_get(row: object, key: str) -> object:
-        """Read ``key`` from an :class:`asyncpg.Record` or a plain ``dict``.
-
-        The :class:`Table` machinery may surface either depending
-        on the dialect / table wrapper, so the helper covers both
-        uniformly without leaking the driver-specific type into
-        the rest of the stack.
-        """
-        if isinstance(row, asyncpg.Record):
-            return row.get(key)  # type: ignore[dict-item]
-        if isinstance(row, dict):
-            return row.get(key)
-        raise TypeError(f"Unsupported row type: {type(row)}")
-
-    @staticmethod
     def _row_to_entity(row: object) -> DirectoryEntity:
         """Map one ``note.directory`` record to a :class:`DirectoryEntity`.
 
@@ -866,11 +837,7 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         type.
         """
         def _get(key: str) -> object:
-            if isinstance(row, asyncpg.Record):
-                return row.get(key)  # type: ignore[dict-item]
-            if isinstance(row, dict):
-                return row.get(key)
-            raise TypeError(f"Unsupported row type: {type(row)}")
+            return row_get(row, key)
 
         return DirectoryEntity(
             id=str(_get("id")) if _get("id") is not None else UNDEFINED,

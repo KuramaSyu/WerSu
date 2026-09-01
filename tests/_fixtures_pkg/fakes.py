@@ -40,7 +40,7 @@ from src.api.other.relationship import (
     Relationship,
     SubjectRef,
 )
-from src.db.repos.note.content import NoteContentRepo
+from src.api.repos.note_content_repo import NoteContentRepo
 from src.db.table import TableABC
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.api.facades.note_facade import NoteFacadeABC, SearchType

@@ -1,9 +1,11 @@
-from abc import ABC, abstractmethod
-from dataclasses import replace
+"""Postgres implementation of :class:`~src.api.repos.note_content_repo.NoteContentRepo`."""
+
+from __future__ import annotations
+
 from typing import List, Optional
 
 from asyncpg import Record
-from src.api.other.undefined import UNDEFINED
+from src.api.repos.note_content_repo import NoteContentRepo
 from src.db.entities import NoteEntity
 from src.db.table import TableABC
 
@@ -11,130 +13,9 @@ from src.utils import asdict
 from src.utils.dict_helper import drop_undefined
 
 
-class NoteContentRepo(ABC):
-
-    @abstractmethod
-    async def insert(
-        self,
-        metadata: NoteEntity,
-    ) -> NoteEntity:
-        """inserts metadata
-        
-        Args:
-        -----
-        metadata: `NoteEntity`
-            the metadata of a note
-
-        Returns:
-        --------
-        `NoteEntity`:
-            the updated entity (updated ID)
-        """
-        ...
-
-    @abstractmethod
-    async def update(
-        self,
-        set: NoteEntity,
-        where: NoteEntity,
-    ) -> NoteEntity:
-        """updates metadata
-        
-        Args:
-        -----
-        set: `NoteEntity`
-            the fields to update
-        where: `NoteEntity`
-            the conditions to match
-
-        Returns:
-        --------
-        `NoteEntity`:
-            the updated entity
-        """
-        ...
-
-    @abstractmethod
-    async def delete(
-        self,
-        metadata: NoteEntity,
-    ) -> Optional[List[NoteEntity]]:
-        """delete metadata
-        
-        Args:
-        -----
-        metadata: `NoteEntity`
-            the metadata of a note
-
-        Returns:
-        --------
-        `NoteEntity`:
-            the deleted entity
-        """
-        ...
-
-    @abstractmethod
-    async def select(
-        self,
-        metadata: NoteEntity,
-    ) -> List[NoteEntity]:
-        """select metadata
-        
-        Args:
-        -----
-        metadata: `NoteEntity`
-            the metadata of a note to search for
-
-        Returns:
-        --------
-        `List[NoteEntity]`:
-            the matching entities
-        """
-        ...
-
-    @abstractmethod
-    async def select_by_id(
-        self,
-        note_id: str,
-    ) -> NoteEntity:
-        """select metadata by ID
-
-        Args:
-        -----
-        note_id: `str`
-            the ID of the note
-
-        Returns:
-        --------
-        `NoteEntity`:
-            the matching entity
-        """
-        ...
-
-    @abstractmethod
-    async def select_by_ids(
-        self,
-        note_ids: List[str],
-    ) -> List[NoteEntity]:
-        """Bulk variant of :meth:`select_by_id`.
-
-        Args:
-            note_ids: ids to resolve.  Order is preserved in the
-                returned list.  Empty input is a programming error.
-
-        Raises:
-            ValueError: when `note_ids` is empty or any id is missing.
-
-        Returns:
-            List[NoteEntity]: matching notes in `note_ids` order.
-            `embeddings` and `permissions` are never populated here -
-            callers enrich from the permission repo.
-        """
-        ...
-
-
 class NoteContentPostgresRepo(NoteContentRepo):
-    """Provides an implementation using Postgres as the backend database"""
+    """Provides an implementation using Postgres as the backend database."""
+
     def __init__(self, table: TableABC):
         self._table = table
 

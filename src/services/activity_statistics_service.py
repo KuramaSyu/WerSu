@@ -27,7 +27,7 @@ from src.api.other.types import LoggingProvider
 from src.api.other.undefined import UNDEFINED, is_undefined, unwrap_undefined_or
 from src.api.other.user_context import UserContextABC
 from src.db.entities.activity import ActivityEntity, ActivityFilterBuilder, ActivityScore
-from src.db.repos.note.content import NoteContentRepo
+from src.api.repos.note_content_repo import NoteContentRepo
 from src.utils import logging_provider as default_logging_provider
 
 

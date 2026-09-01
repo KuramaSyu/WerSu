@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 
-from typing import TYPE_CHECKING, Any, Dict, List, Protocol, Sequence
+from typing import TYPE_CHECKING, Any, Dict, List, Protocol
 
 from asyncpg import Record
 from src.api.other.undefined import UNDEFINED
 from src.db.entities import NoteEmbeddingEntity
 from src.db.table import TableABC
 
-from src.utils import asdict
+from src.utils import asdict, str_vec_to_list, tensor_to_str_vec
 
 
 if TYPE_CHECKING:
@@ -21,16 +21,6 @@ else:
         def generate(self, text: str) -> Any:
             ...
 
-
-def _tensor_to_str_vec(tensor: Any) -> str:
-    return f"[{','.join(str(x) for x in tensor.tolist())}]"
-
-
-def _str_vec_to_list(vec_str: str) -> Sequence[float]:
-    vec_str = vec_str.strip().lstrip("[").rstrip("]")
-    if not vec_str:
-        return []
-    return [float(x) for x in vec_str.split(",")]
 
 class NoteEmbeddingRepo(ABC):
 
@@ -160,7 +150,7 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
         # generate embedding
         embedding_content = f"{title}\n{content}"
         embedding = self._embedding_generator.generate(embedding_content)
-        embedding_str = _tensor_to_str_vec(embedding)
+        embedding_str = tensor_to_str_vec(embedding)
 
         # insert embedding
         record = await self._table.insert({
@@ -176,7 +166,7 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
         embedding = NoteEmbeddingEntity(
             note_id=record[0]["note_id"],
             model=self._embedding_generator.model_name,
-            embedding=_str_vec_to_list(record[0]["embedding"]),
+            embedding=str_vec_to_list(record[0]["embedding"]),
         )
         return embedding
 

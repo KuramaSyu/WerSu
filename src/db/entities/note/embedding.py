@@ -1,14 +1,8 @@
 from dataclasses import dataclass
-from typing import List, Sequence
+from typing import List
 
 from src.api.other.undefined import *
-
-
-def _str_vec_to_list(vec_str: str) -> List[float]:
-    vec_str = vec_str.strip().lstrip("[").rstrip("]")
-    if not vec_str:
-        return []
-    return [float(x) for x in vec_str.split(",")]
+from src.utils import str_vec_to_list
 
 
 @dataclass
@@ -22,7 +16,7 @@ class NoteEmbeddingEntity:
     def __post_init__(self):
         if isinstance(self.embedding, str):
             # embeddings are strings in DB, hence a conversion here
-            self.embedding = _str_vec_to_list(self.embedding)
+            self.embedding = str_vec_to_list(self.embedding)
 
 
 

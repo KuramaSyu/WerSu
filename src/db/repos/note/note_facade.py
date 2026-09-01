@@ -3,7 +3,7 @@
 Public methods follow the
 :class:`~src.api.note_facade.NoteRepoFacadeABC` contract.  Every
 SQL statement lives in the repos the facade delegates to
-(:class:`~src.db.repos.note.content.NoteContentRepo`,
+(:class:`~src.api.repos.note_content_repo.NoteContentRepo`,
 :class:`~src.db.repos.note.combined.CombinedNotePostgresRepo`,
 :class:`src.db.repos.tag.postgres.PostgresTagRepo`, the embedding
 / version repos).  The facade itself does **not** issue SQL --
@@ -17,6 +17,7 @@ time and otherwise ignores it.
 
 from __future__ import annotations
 
+from dataclasses import fields, replace
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -37,7 +38,7 @@ from src.api.other.user_context import UserContextABC
 from src.db import Database
 from src.db.entities import NoteEntity
 from src.db.repos.directory.directory_facade import DirectoryFacadeABC
-from src.db.repos.note.content import NoteContentRepo
+from src.api.repos.note_content_repo import NoteContentRepo
 from src.db.repos.note.embedding import NoteEmbeddingRepo
 from src.db.repos.note.search_strategy import (
     ContextNoteSearchStrategy,
@@ -361,7 +362,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         current = await self._content_repo.select_by_id(str(note.note_id))
 
         updated = await self._content_repo.update(
-            set=_strip_non_content_fields(note),
+            set=_keep_only_content(note),
             where=NoteEntity(note_id=note.note_id),
         )
 
@@ -599,17 +600,28 @@ class NoteFacadeImpl(NoteFacadeABC):
         raise ValueError(f"Unknown SearchType: {search_type}")
 
 
-def _strip_non_content_fields(note: NoteEntity) -> NoteEntity:
-    """Return a copy of ``note`` with relation fields cleared."""
-    return NoteEntity(  # noqa: E999
-        note_id=UNDEFINED,
-        title=note.title,
-        content=note.content,
-        updated_at=note.updated_at,
-        author_id=note.author_id,
-        embeddings=UNDEFINED,
-        permissions=UNDEFINED,
-        directory_ids=UNDEFINED,
-        tag_ids=UNDEFINED,
-        attachment_ids=UNDEFINED,
-    )
+#: Attributes backed by columns on the ``note`` SQL table.
+#: Everything else (relation fields, embeddings, permissions) lives in a
+#: side table or is computed at read time, so it must be cleared before
+#: passing the entity to ``update``.
+_CONTENT_FIELDS: frozenset[str] = frozenset({
+    "note_id",
+    "title",
+    "content",
+    "updated_at",
+    "author_id",
+})
+
+
+def _keep_only_content(note: NoteEntity) -> NoteEntity:
+    """Return ``note`` with every non-content field cleared.
+
+    Walks :data:`dataclasses.fields` so any new field added to
+    :class:`NoteEntity` is dropped automatically.
+    """
+    cleared = {
+        name: UNDEFINED
+        for name in (f.name for f in fields(NoteEntity))
+        if name not in _CONTENT_FIELDS
+    }
+    return replace(note, **cleared)
