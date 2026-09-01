@@ -190,9 +190,13 @@ message CreateDirectoryRequest {
     optional string description = 3;
     optional string image_url = 4;
 
-    // can contain directories and shelves
+    // contains directory parents
     repeated string parent_ids = 5;
-    
+
+    // contains shelf parents. we separate it,
+    // to prevent extra db calls, just to tell them apart
+    repeated string shelf_ids = 7;
+
     // the user_id of the user making the request, used for permission checking
     // its also the author of the directory
     string user_id = 6;

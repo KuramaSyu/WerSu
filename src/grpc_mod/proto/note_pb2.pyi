@@ -699,6 +699,7 @@ class CreateDirectoryRequest(_message.Message):
     DESCRIPTION_FIELD_NUMBER: _builtins.int
     IMAGE_URL_FIELD_NUMBER: _builtins.int
     PARENT_IDS_FIELD_NUMBER: _builtins.int
+    SHELF_IDS_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
     name: _builtins.str
     display_name: _builtins.str
@@ -709,7 +710,15 @@ class CreateDirectoryRequest(_message.Message):
     its also the author of the directory
     """
     @_builtins.property
-    def parent_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    def parent_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
+        """contains directory parents"""
+
+    @_builtins.property
+    def shelf_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
+        """contains shelf parents. we separate it,
+        to prevent extra db calls, just to tell them apart
+        """
+
     def __init__(
         self,
         *,
@@ -718,11 +727,12 @@ class CreateDirectoryRequest(_message.Message):
         description: _builtins.str | None = ...,
         image_url: _builtins.str | None = ...,
         parent_ids: _abc.Iterable[_builtins.str] | None = ...,
+        shelf_ids: _abc.Iterable[_builtins.str] | None = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "description", b"description", "display_name", b"display_name", "image_url", b"image_url"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_ids", b"parent_ids", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_ids", b"parent_ids", "shelf_ids", b"shelf_ids", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType__description: _TypeAlias = _typing.Literal["description"]  # noqa: Y015
     _WhichOneofArgType__description: _TypeAlias = _typing.Literal["_description", b"_description"]  # noqa: Y015
