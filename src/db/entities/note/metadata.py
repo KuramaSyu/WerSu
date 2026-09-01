@@ -30,6 +30,9 @@ class NoteEntity(AcceptsVisitor):
     tag_ids: UndefinedOr[List[str]] = UNDEFINED
     attachment_ids: UndefinedOr[List[str]] = UNDEFINED
 
+    # at least 1 id when set.
+    shelf_ids: UndefinedOr[List[str]] = UNDEFINED
+
     # for internal usage only
     embeddings: UndefinedOr[List[NoteEmbeddingEntity]] = UNDEFINED
 

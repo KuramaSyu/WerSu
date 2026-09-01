@@ -63,6 +63,7 @@ class DirectoryEntity(AcceptsVisitor):
     child_directory_ids: UndefinedOr[List[str]] = UNDEFINED
     child_note_ids: UndefinedOr[List[str]] = UNDEFINED
     tag_ids: UndefinedOr[List[str]] = UNDEFINED
+    # Book <-> shelf is n:m; this list is the canonical mapping.
     shelf_ids: UndefinedOr[List[str]] = UNDEFINED
     # deprecated -- dont use this anymore. Only for internal usage
     relations: UndefinedOr[List[Relationship]] = UNDEFINED
