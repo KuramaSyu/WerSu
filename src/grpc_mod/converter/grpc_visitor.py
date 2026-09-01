@@ -234,6 +234,10 @@ class ConvertToGrpcVisitor(EntityVisitor):
             basic_args["attachment_ids"] = [
                 str(v) for v in entity.attachment_ids if v
             ]
+        if entity.shelf_ids:
+            basic_args["shelf_ids"] = [
+                str(v) for v in entity.shelf_ids if v
+            ]
 
         return Note(
             **basic_args,
@@ -272,6 +276,10 @@ class ConvertToGrpcVisitor(EntityVisitor):
         if entity.tag_ids:
             basic_args["tag_ids"] = [
                 str(v) for v in entity.tag_ids if v
+            ]
+        if entity.shelf_ids:
+            basic_args["shelf_ids"] = [
+                str(v) for v in entity.shelf_ids if v
             ]
         return MinimalNote(**basic_args)
 
