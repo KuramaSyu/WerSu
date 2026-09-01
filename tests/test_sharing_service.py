@@ -20,7 +20,7 @@ from src.api.other.relationship import NoteRelationEnum, ObjectRef, Relationship
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.user_action import UserActionEntity
-from src.facades.share_action_facade import ShareActionFacade
+from src.db.repos.sharing.share_action_facade import ShareActionFacade
 from src.services.sharing import SharingServiceImpl
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo

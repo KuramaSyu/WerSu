@@ -42,7 +42,7 @@ from src.services.activity_logger_service import ActivityLoggerServiceImpl
 from src.services.permissions import PermissionServiceImpl
 from src.services.role_service import RoleServiceImpl
 from src.services.sharing import SharingServiceImpl
-from src.facades.share_action_facade import ShareActionFacade
+from src.db.repos.sharing.share_action_facade import ShareActionFacade
 from src.services.shelf_service import ShelfServiceImpl
 from src.services.user_service import UserServiceImpl
 from src.utils import logging_provider

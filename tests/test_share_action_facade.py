@@ -26,7 +26,7 @@ from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_action import FilterUserAction, UserActionEntity
-from src.facades.share_action_facade import ShareActionFacade
+from src.db.repos.sharing.share_action_facade import ShareActionFacade
 from tests.stubs.logging import silent_logger
 from tests.stubs.sharing_repo import _FakeSharingRepo
 from tests.stubs.user_action_repo import _FakeUserActionRepo

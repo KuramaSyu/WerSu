@@ -41,7 +41,7 @@ from src.services.attachment_facade import AttachmentFacadeImpl
 from src.services.directory import DirectoryServiceImpl
 from src.services.note import NoteServiceImpl
 from src.services.thirdparty_migrations.bookstack import BookstackBookImport
-from src.services.thirdparty_migrations.bookstack_html_converter import BookstackHtmlConverter
+from src.services.thirdparty_migrations.html_converter import BookstackHtmlConverter
 from src.services.thirdparty_migrations.bookstack_reader import BookstackBookReader
 from tests._fixtures_pkg.fakes import _FakeCombinedNoteRepo, _FakeDatabase, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeNoteRepoFacade, _FakeTagRepo, _FakeVersionRepo, _TestDirectoryRepo
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService

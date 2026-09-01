@@ -38,7 +38,7 @@ from src.grpc_mod.proto.note_pb2 import (
     IdsOrUndefined,
 )
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
-from src.grpc_mod.service import GrpcDirectoryService
+from src.grpc_mod.directory_service import GrpcDirectoryService
 
 
 def _to_grpc() -> ConvertToGrpcVisitor:

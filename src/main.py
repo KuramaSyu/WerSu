@@ -55,7 +55,7 @@ from src.services.thirdparty_migrations import (
     ThirdpartyMigrationsServiceABC,
 )
 from src.services.thirdparty_migrations.bookstack import BookstackBookImport
-from src.facades.share_action_facade import ShareActionFacade
+from src.db.repos.sharing.share_action_facade import ShareActionFacade
 from src.utils import logging_provider
 from src.db import Database, NoteEmbeddingPostgresRepo, NoteVersionPostgresRepo
 from src.db.repos.attachments.attachments import (

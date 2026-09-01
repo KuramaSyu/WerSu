@@ -1,8 +1,8 @@
-"""Unit tests for :class:`src.services.thirdparty_migrations.bookstack_html_converter.BookstackHtmlConverter`."""
+"""Unit tests for :class:`src.services.thirdparty_migrations.html_converter.BookstackHtmlConverter`."""
 
 from __future__ import annotations
 
-from src.services.thirdparty_migrations.bookstack_html_converter import (
+from src.services.thirdparty_migrations.html_converter import (
     BookstackHtmlConverter,
 )
 from src.services.thirdparty_migrations.bookstack_models import BookstackPage

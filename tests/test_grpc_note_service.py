@@ -40,7 +40,7 @@ from src.grpc_mod.proto.note_pb2 import (
     NoteResponse as GrpcNoteResponse,
     PostNoteRequest,
 )
-from src.grpc_mod.service import GrpcNoteService
+from src.grpc_mod.note_service import GrpcNoteService
 
 
 class _FakeContext:

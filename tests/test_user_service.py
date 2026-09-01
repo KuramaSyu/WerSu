@@ -6,7 +6,7 @@ from src.api.other.user_context import ContextFactory, UserContextABC
 from src.api.repos.directory_repo import DirectoryChildType, DirectoryHierarchyType, DirectoryParentType
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import UserEntity
-from src.db.repos.note.permission import DirectoryRelationEnum, ObjectTypeEnum
+from src.api.other.relationship import DirectoryRelationEnum, ObjectTypeEnum
 from src.db.repos.user.user import UserRepoABC
 from src.services.shelf_service import ShelfServiceImpl
 from src.services.user_service import UserServiceImpl

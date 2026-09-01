@@ -35,7 +35,7 @@ from src.services.thirdparty_migrations import (
     ThirdpartyMigrationsServiceABC,
 )
 from src.utils.attachment_url import build_attachment_link_url, build_attachment_url
-from src.services.thirdparty_migrations.bookstack_html_converter import (
+from src.services.thirdparty_migrations.html_converter import (
     BookstackHtmlConverter,
     ConvertOptions,
 )

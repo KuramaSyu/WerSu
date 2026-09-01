@@ -17,7 +17,7 @@ from src.grpc_mod.proto.note_pb2 import (
     RestoreNoteVersionRequest,
 )
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
-from src.grpc_mod.service import GrpcNoteVersionService
+from src.grpc_mod.note_version_service import GrpcNoteVersionService
 from src.services.directory_activity_service import DirectoryActivityServiceABC
 
 

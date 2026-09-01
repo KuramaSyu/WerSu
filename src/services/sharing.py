@@ -19,7 +19,7 @@ from src.db.repos.user import RepoUserContext
 from src.db.repos.user.user import UserRepoABC
 from src.domain.permission_chain import HasNoteEditPermissionsPerm
 from src.services.permissions import PermissionServiceABC
-from src.facades.share_action_facade import ShareActionFacade
+from src.db.repos.sharing.share_action_facade import ShareActionFacade
 
 
 class SharingServiceImpl(SharingServiceABC):

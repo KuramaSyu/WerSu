@@ -33,7 +33,7 @@ from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
 from src.services.attachment_facade import AttachmentFacadeABC
 from src.services.thirdparty_migrations.bookstack import BookstackBookImport
-from src.services.thirdparty_migrations.bookstack_html_converter import BookstackHtmlConverter, ConvertOptions
+from src.services.thirdparty_migrations.html_converter import BookstackHtmlConverter, ConvertOptions
 from src.services.thirdparty_migrations.bookstack_models import BookstackPage
 from tests._fixtures_pkg.bookstack_emergency_backup import EMERGENCY_BACKUP_BOOK_PAYLOAD
 from tests.stubs.directory_service import _StubDirectoryService
