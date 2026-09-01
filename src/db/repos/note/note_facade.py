@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 from warnings import deprecated
 
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
+from src.api.errors import NoteApiError
 from src.api.other.relationship import (
     ShelfRelationEnum
 )
@@ -30,6 +31,7 @@ from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api.repos.rule_repo import RuleRepoABC
 from src.api.repos.tag_repo import TagRepoABC
 from src.api.repos.shelf_repo import ShelfRepoABC
+from src.api.search_filter import NoteSearchFilter
 from src.api.services.note_service import NoteIncludeOptions, resolve_include_options
 from src.api.other.relationship import AttachmentRelationEnum
 from src.api.other.types import LoggingProvider, Pagination
@@ -85,10 +87,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         self._directory_facade = directory_repo
         self._tag_repo = tag_repo
         self._version_repo = version_repo
-        # Used by :meth:`_resolve_directory_ids` to look up the
-        # user's "default directory" rule instead of guessing by
-        # slug.  ``shelf_repo`` powers the user -> shelf
-        # lookup so we know which shelf to query rules against.
+        # Powers the default-fleeting rule lookup in _resolve_directory_ids.
         self._shelf_repo = shelf_repo
         self._rule_repo = rule_repo
         self.log = logging_provider(__name__, self)
@@ -136,6 +135,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         self,
         requested_ids: Optional[List[str]],
         user: UserContextABC,
+        shelf_id: Optional[str] = None,
     ) -> List[str]:
         """Get the directory ids for a freshly-inserted note.
 
@@ -170,20 +170,21 @@ class NoteFacadeImpl(NoteFacadeABC):
                     )
             return [str(d) for d in requested_ids if d]
 
-        # No parent requested -- fall back to the user's default
-        # rule. 
-        rules = await self._fetch_default_fleeting_rules_for(user)
+        rules = await self._fetch_default_fleeting_rules_for(user, shelf_id)
         if not rules:
+            where = (
+                f"attached to shelf {shelf_id!r}"
+                if shelf_id
+                else "for this user"
+            )
             raise ValueError(
                 f"No directory_ids supplied for note insert and "
-                f"user {user.user_id!r} has no default-fleeting rule; "
-                f"create a NoteCreated rule attached to the user's "
-                f"shelf with an 'add_to_directory' action or pass "
-                f"directory_ids explicitly."
+                f"user {user.user_id!r} has no default-fleeting rule "
+                f"{where}; create a NoteCreated rule with an "
+                f"'add_to_directory' action or pass directory_ids "
+                f"explicitly."
             )
-        # Use the first matching rule; the user service only
-        # creates one but the schema doesn't enforce uniqueness
-        # on (attached_entity_id, event_type, enabled).
+        # Schema doesn't enforce uniqueness on (attached_entity_id, event_type, enabled).
         rule = rules[0]
         action_context = rule.action_context or {}
         directory_id = action_context.get("directory_id")
@@ -205,13 +206,24 @@ class NoteFacadeImpl(NoteFacadeABC):
     async def _fetch_default_fleeting_rules_for(
         self,
         user: UserContextABC,
+        shelf_id: Optional[str] = None,
     ) -> List[Any]:
-        """Return the user's enabled ``NoteCreated`` rules attached to a shelf."""
+        """Return enabled NoteCreated rules attached to a shelf (or every shelf)."""
         try:
+            if shelf_id:
+                # -> shelf id given: fetch rule directly
+                return await self._rule_repo.list_rules(
+                    event_type="NoteCreated",
+                    attached_entity_type="shelf",
+                    attached_entity_id=shelf_id,
+                    enabled_only=True,
+                )
+
             shelf_ids = await self._shelfs_user_can_view(user)
             if not shelf_ids:
                 return []
-
+            
+            # iteralte all shelves the user can view
             rules: List[Any] = []
             for sid in shelf_ids:
                 shelf_rules = await self._rule_repo.list_rules(
@@ -221,6 +233,7 @@ class NoteFacadeImpl(NoteFacadeABC):
                     enabled_only=True,
                 )
                 rules.extend(shelf_rules)
+            # collection of all rules from all shelves
             return rules
         except Exception as exc:  # noqa: BLE001 -- best-effort
             self.log.warning(
@@ -261,46 +274,30 @@ class NoteFacadeImpl(NoteFacadeABC):
         note: NoteEntity,
         note_id: str,
     ) -> NoteEntity:
-        """Refresh `note.directory_ids` / `tag_ids` after a write path.
-
-        Used by the write paths (`insert` / `update` /
-        `search_notes`) to mirror the freshly-written
-        parent-directory + tag bindings back onto the in-memory
-        entity before it's returned to the caller.  The read
-        paths (`select_by_id` / `select_by_ids`) skip this
-        helper entirely -- the combined repo's
-        `NoteFetchStrategyABC` SQL already returns
-        `directory_ids` / `tag_ids` / `attachment_ids`
-        alongside the note row.
+        """Refresh directory_ids / tag_ids / shelf_ids from the repos.
 
         Args:
             note: entity to enrich; mutated in place.
             note_id: id used for the directory / tag lookups.
 
         Returns:
-            NoteEntity: updated version (same object)
+            NoteEntity: updated version (same object).
         """
         note.directory_ids = await self._directory_facade.get_parents_of(
             "note", note_id, "directory",
         )
         note.tag_ids = await self._tag_repo.list_tags_of("note", note_id)
+
+        # TODO: actually resolve the wohle hierarchy to get the shelves.
+        # for now, we dont fetch any sehlves
+        shelf_ids: set[str] = set()
+        note.sehlf_ids = list(shelf_ids)
         return note
 
     # ---- insert / update ---------------------------------------------
 
     async def insert(self, note: NoteEntity, user: UserContextABC):
-        """Insert a note, its embedding, parent-directory bindings and tags.
-
-        Args:
-            note: payload carrying the scalar fields plus the
-                optional `directory_ids` and `tag_ids`.
-            user: caller identity; becomes the owner relation and
-                scopes the parent-directory lookup.
-
-        Returns:
-            NoteEntity: the persisted note with id and permissions
-            populated.
-        """
+        """Insert a note; raises NoteApiError when neither directory_ids nor shelf_ids is set."""
         # insert main content
         inserted = await self._content_repo.insert(note)
         note_id = inserted.note_id
@@ -320,16 +317,30 @@ class NoteFacadeImpl(NoteFacadeABC):
             )
             note.embeddings.append(embedding)
 
-        # resolve parent directories (given or by rule)
-        if note.directory_ids is UNDEFINED:
-            resolved_dirs = await self._resolve_directory_ids(None, user)
-        else:
+        # use given dirs or resolve default-fleeting rule from shelf
+        has_explicit_dirs = (
+            note.directory_ids is not UNDEFINED
+            and bool(note.directory_ids)
+        )
+        shelf_anchor = _first_id(note.shelf_ids)
+        if not has_explicit_dirs and not shelf_anchor:
+            raise NoteApiError(
+                "note insert requires either directory_ids or a shelf_id "
+                "to scope the default-fleeting rule"
+            )
+
+        if has_explicit_dirs:
             resolved_dirs = await self._resolve_directory_ids(
                 list(unwrap_undefined_or(note.directory_ids, [])), user,  # type: ignore
             )
-            # if the given dirs reoslved nothing, then get default dirs
             if not resolved_dirs:
-                resolved_dirs = await self._resolve_directory_ids(None, user)
+                resolved_dirs = await self._resolve_directory_ids(
+                    None, user, shelf_id=shelf_anchor,
+                )
+        else:
+            resolved_dirs = await self._resolve_directory_ids(
+                None, user, shelf_id=shelf_anchor,
+            )
 
         # assign the resolved directory ids. reset note.directory_ids and
         # repopulate it to ensure consistency if one call would fail.
@@ -340,6 +351,8 @@ class NoteFacadeImpl(NoteFacadeABC):
             )
             note.directory_ids.append(directory_id)
 
+        # If the caller gave us a shelf but no explicit directory_ids,
+        # the directory resolved by a default-fleeting rule
 
         # insert tags
         if note.tag_ids is not UNDEFINED:
@@ -421,6 +434,9 @@ class NoteFacadeImpl(NoteFacadeABC):
                 directory_ids,
             )
 
+        # we dont update shelfs. shelfs are only used
+        # for default-fleeting rule resolution
+
         # `permissions` deprecated; the returned `updated` therefore comes back with the
         # dataclass default `UNDEFINED`
         if updated.permissions is UNDEFINED:
@@ -477,6 +493,8 @@ class NoteFacadeImpl(NoteFacadeABC):
         see the same shape the write paths produced -- the
         combined repo's side-table JOINs are honoured when they
         carry data, but this facade remains the source of truth.
+        ``shelf_ids`` is refreshed from the shelf repo via the
+        note's parent directories.
         """
         include_opts = resolve_include_options(include)
         note = await self._combined_repo.select_by_id(
@@ -513,30 +531,11 @@ class NoteFacadeImpl(NoteFacadeABC):
         query: str,
         ctx: UserContextABC,
         pagination: Pagination,
+        *,
+        filter_: Optional[NoteSearchFilter] = None,
     ) -> List[NoteEntity]:
-        """Run a search strategy and tidy up the returned entities.
-
-        Strategies own their own SQL (they predate the facade's
-        SQL-free contract and live in their own module).  The
-        facade passes its `db` handle through to the strategy
-        only -- nothing else in the facade requires it.
-
-        Method body orchestration:
-
-        1. Picks the right strategy for `search_type`.
-        2. Normalises `UNDEFINED` list fields to ``[]`` so the
-           gRPC layer doesn't have to.
-        3. Augments `note.permissions` with the user's
-           ``parent_directory`` SpiceDB relations so the search
-           result row mirrors the per-id view.
-
-        Args:
-            search_type: which strategy to run.
-            query: search text; interpretation depends on
-                `search_type`.
-            ctx: caller identity used to scope the result set.
-            pagination: offset / limit window for the search.
-        """
+        """Run a strategy (date bounds in SQL, include/exclude in Python)."""
+        filter_obj = filter_ or NoteSearchFilter.empty()
         common_init_parameters: Dict[str, Any] = {
             "db": self._db,
             "query": query,
@@ -544,18 +543,79 @@ class NoteFacadeImpl(NoteFacadeABC):
             "offset": pagination.offset,
             "user_context": ctx,
             "note_permissions": self._permission_repo,
+            "filter_": filter_obj,
         }
         strategy = self._strategy_for(search_type, common_init_parameters)
 
         note_entities = await strategy.search()
+        if not filter_obj.is_empty():
+            note_entities = await self._apply_search_filter(
+                note_entities, filter_obj,
+            )
         for note in note_entities:
             if note.permissions is UNDEFINED:
                 note.permissions = []
-            # replacement: read directory_ids and tag_ids back from their
-            # dedicated repos so the search result rows mirror the per-id
-            # view of parent-directory and tag bindings.
             await self._populate_relation_fields(note, str(note.note_id))
         return note_entities
+
+    async def _apply_search_filter(
+        self,
+        notes: List[NoteEntity],
+        filter_: NoteSearchFilter,
+    ) -> List[NoteEntity]:
+        """Apply include/exclude halves in Python (date bounds handled by strategy)."""
+        if not notes:
+            return notes
+
+        include_dirs = set(filter_.include_directory_ids)
+        exclude_dirs = set(filter_.exclude_directory_ids)
+        include_shelves = set(filter_.include_shelf_ids)
+        exclude_shelves = set(filter_.exclude_shelf_ids)
+        include_tags = set(filter_.include_tag_ids)
+        exclude_tags = set(filter_.exclude_tag_ids)
+
+        shelf_to_books: Dict[str, set[str]] = {}
+        if include_shelves or exclude_shelves:
+            for sid in (include_shelves | exclude_shelves):
+                shelf_to_books[sid] = set(
+                    await self._shelf_repo.get_books_of(sid)
+                )
+
+        kept: List[NoteEntity] = []
+        for note in notes:
+            note_id = str(note.note_id) if note.note_id else ""
+            if not note_id:
+                continue
+
+            await self._populate_relation_fields(note, note_id)
+
+            dir_ids = set(note.directory_ids or [])
+            tag_ids = set(note.tag_ids or [])
+
+            if include_dirs and not (dir_ids & include_dirs):
+                continue
+            if exclude_dirs and (dir_ids & exclude_dirs):
+                continue
+
+            if include_tags and not (tag_ids & include_tags):
+                continue
+            if exclude_tags and (tag_ids & exclude_tags):
+                continue
+
+            if include_shelves or exclude_shelves:
+                # The note sits on a shelf when any parent dir is in
+                # that shelf's book set.
+                note_on_shelves: set[str] = set()
+                for sid, books in shelf_to_books.items():
+                    if dir_ids & books:
+                        note_on_shelves.add(sid)
+                if include_shelves and not (note_on_shelves & include_shelves):
+                    continue
+                if exclude_shelves and (note_on_shelves & exclude_shelves):
+                    continue
+
+            kept.append(note)
+        return kept
 
     def _strategy_for(
         self,
@@ -583,16 +643,20 @@ class NoteFacadeImpl(NoteFacadeABC):
 
 
 
-def _strip_non_content_fields(note: NoteEntity) -> NoteEntity:
-    """Return a copy of ``note`` with relation fields cleared.
+def _first_id(value: Any) -> Optional[str]:
+    """Return the first non-empty id from ``value`` (if any)."""
+    if value is UNDEFINED or value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        for v in value:
+            if v:
+                return str(v)
+    return None
 
-    The ``content_repo.update`` method writes only the columns on
-    the ``note.content`` row -- the relation / list fields
-    (``embeddings``, ``permissions``, ``directory_ids``,
-    ``tag_ids``, ``attachment_ids``) must not bleed into the SET
-    clause.
-    """
-    return NoteEntity(
+
+def _strip_non_content_fields(note: NoteEntity) -> NoteEntity:
+    """Return a copy of ``note`` with relation fields cleared."""
+    return NoteEntity(  # noqa: E999
         note_id=UNDEFINED,
         title=note.title,
         content=note.content,
