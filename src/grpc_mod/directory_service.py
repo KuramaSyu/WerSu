@@ -157,6 +157,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
 
             user_ctx = await self._context.create(request.user_id)
             parent_ids = list(request.parent_ids)
+            shelf_ids = request.shelf_ids or UNDEFINED
             directory = await self._directory_service.create_directory(
                 DirectoryEntity(
                     id=UNDEFINED,
@@ -165,6 +166,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                     description=request.description if request.HasField("description") else UNDEFINED,
                     image_url=request.image_url if request.HasField("image_url") else UNDEFINED,
                     parent_directory_ids=parent_ids if parent_ids else UNDEFINED,
+                    shelf_ids=shelf_ids,
                     relations=[],
                 ),
                 user_ctx,
@@ -195,6 +197,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
 
             user_ctx = await self._context.create(request.user_id)
             parent_ids_provided = len(request.parent_ids) > 0
+            shelf_ids = request.shelf_ids if request.HasField("shelf_ids") else UNDEFINED
             updated = await self._directory_service.patch_directory(
                 DirectoryEntity(
                     id=request.id,
@@ -207,6 +210,7 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                         if parent_ids_provided
                         else UNDEFINED
                     ),
+                    shelf_ids=shelf_ids,
                     tag_ids=UNDEFINED,
                     relations=UNDEFINED,
                 ),
