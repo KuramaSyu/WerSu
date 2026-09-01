@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, List, Optional
 
 from src.api.other.types import Pagination
 from src.api.other.user_context import UserContextABC
+from src.api.search_filter import NoteSearchFilter
 from src.api.services.note_service import NoteIncludeOptions
 
 if TYPE_CHECKING:
@@ -187,6 +188,8 @@ class NoteFacadeABC(ABC):
         query: str,
         ctx: UserContextABC,
         pagination: Pagination,
+        *,
+        filter_: Optional[NoteSearchFilter] = None,
     ) -> List["NoteEntity"]:
         """Run the configured search strategy.
 
