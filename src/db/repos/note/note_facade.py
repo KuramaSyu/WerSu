@@ -22,7 +22,6 @@ from typing import Any, Dict, List, Optional
 from warnings import deprecated
 
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
-from src.api.errors import NoteApiError
 from src.api.other.relationship import (
     ShelfRelationEnum
 )
@@ -297,7 +296,13 @@ class NoteFacadeImpl(NoteFacadeABC):
     # ---- insert / update ---------------------------------------------
 
     async def insert(self, note: NoteEntity, user: UserContextABC):
-        """Insert a note; raises NoteApiError when neither directory_ids nor shelf_ids is set."""
+        """Insert a note; resolves directory ids from explicit dirs, a shelf anchor, or the user's default-fleeting rule.
+
+        Falls back to the user's default-fleeting rule when no
+        explicit ``directory_ids`` are given.  Raises
+        ``ValueError`` if neither an explicit list nor a
+        default-fleeting rule is available.
+        """
         # insert main content
         inserted = await self._content_repo.insert(note)
         note_id = inserted.note_id
@@ -317,26 +322,18 @@ class NoteFacadeImpl(NoteFacadeABC):
             )
             note.embeddings.append(embedding)
 
-        # use given dirs or resolve default-fleeting rule from shelf
-        has_explicit_dirs = (
-            note.directory_ids is not UNDEFINED
-            and bool(note.directory_ids)
-        )
-        shelf_anchor = _first_id(note.shelf_ids)
-        if not has_explicit_dirs and not shelf_anchor:
-            raise NoteApiError(
-                "note insert requires either directory_ids or a shelf_id "
-                "to scope the default-fleeting rule"
-            )
+        # Resolve directory ids: explicit list wins; otherwise
+        # fall back to the default-fleeting rule scoped to the
+        # given shelf anchor, or any shelf the user can view.
+        explicit_dirs: List[str] = []
+        if note.directory_ids is not UNDEFINED and note.directory_ids:
+            explicit_dirs = [str(d) for d in note.directory_ids if d]
 
-        if has_explicit_dirs:
+        shelf_anchor = _first_id(note.shelf_ids)
+        if explicit_dirs:
             resolved_dirs = await self._resolve_directory_ids(
-                list(unwrap_undefined_or(note.directory_ids, [])), user,  # type: ignore
+                explicit_dirs, user, shelf_id=shelf_anchor,
             )
-            if not resolved_dirs:
-                resolved_dirs = await self._resolve_directory_ids(
-                    None, user, shelf_id=shelf_anchor,
-                )
         else:
             resolved_dirs = await self._resolve_directory_ids(
                 None, user, shelf_id=shelf_anchor,
