@@ -1,0 +1,2 @@
+class SearchFilterError(ValueError):
+    pass
