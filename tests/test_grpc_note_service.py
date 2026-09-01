@@ -32,7 +32,12 @@ from src.api.services.note_service import NoteIncludeOptions, NoteResponse, Note
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
-from src.grpc_mod.proto.note_pb2 import GetNoteRequest, NoteResponse as GrpcNoteResponse
+from src.grpc_mod.proto.note_pb2 import (
+    AlterNoteRequest,
+    GetNoteRequest,
+    IdsOrUndefined,
+    NoteResponse as GrpcNoteResponse,
+)
 from src.grpc_mod.service import GrpcNoteService
 
 
@@ -329,3 +334,180 @@ async def test_post_note_with_blank_strings_is_treated_as_unset() -> None:
 
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
     assert stub.last_note is None
+
+
+# ---------------------------------------------------------------------------
+# PatchNote: oneof/optional fields flow through to the service layer.
+# ---------------------------------------------------------------------------
+
+
+class _UpdateNoteStub(NoteServiceABC):
+    """`NoteServiceABC` stub that records the entity handed to `update_note`."""
+
+    def __init__(self) -> None:
+        self.last_note = None
+        self.last_user_ctx = None
+
+    async def update_note(self, note, user_ctx):
+        self.last_note = note
+        self.last_user_ctx = user_ctx
+        return note
+
+    async def insert_note(self, note, user_ctx):  # pragma: no cover
+        raise NotImplementedError
+
+    async def delete_note(self, note_id, user_ctx):  # pragma: no cover
+        raise NotImplementedError
+
+    async def get_note(self, note_id, user_ctx, *, include=None):  # pragma: no cover
+        raise NotImplementedError
+
+    async def search_notes(  # pragma: no cover
+        self, search_type, query, user_ctx, limit, offset,
+    ):
+        raise NotImplementedError
+
+    async def get_notes(self, note_ids, user_ctx, options=None):  # pragma: no cover
+        raise NotImplementedError
+
+
+def _make_update_service() -> tuple[GrpcNoteService, _UpdateNoteStub]:
+    stub = _UpdateNoteStub()
+    service = GrpcNoteService(
+        note_service=stub,
+        log=_log_provider,
+        to_grpc=_to_grpc(),
+        context_factory=_UserContextFactory(),
+    )
+    return service, stub
+
+
+async def test_patch_note_directory_ids_change_forwards_to_service() -> None:
+    """A set `directory_ids_change` flows verbatim into `update_note`."""
+    from src.api.other.undefined import UNDEFINED
+
+    service, stub = _make_update_service()
+    context = _FakeContext()
+
+    request = AlterNoteRequest(
+        id="note-1",
+        author_id="user-1",
+        directory_ids=IdsOrUndefined(ids=["dir-a", "dir-b"]),
+    )
+    proto = await service.PatchNote(request, cast(ServicerContext, context))
+
+    assert context.code is None
+    assert stub.last_note is not None
+    assert list(stub.last_note.directory_ids) == ["dir-a", "dir-b"]
+    # the other ids-shaped field stays UNDEFINED because not set
+    assert stub.last_note.tag_ids is UNDEFINED
+
+
+async def test_patch_note_tag_ids_change_forwards_to_service() -> None:
+    """A set `tag_ids_change` flows verbatim into `update_note`."""
+    from src.api.other.undefined import UNDEFINED
+
+    service, stub = _make_update_service()
+    context = _FakeContext()
+
+    request = AlterNoteRequest(
+        id="note-1",
+        author_id="user-1",
+        tag_ids=IdsOrUndefined(ids=["tag-a", "tag-b"]),
+    )
+    await service.PatchNote(request, cast(ServicerContext, context))
+
+    assert context.code is None
+    assert stub.last_note is not None
+    assert list(stub.last_note.tag_ids) == ["tag-a", "tag-b"]
+    assert stub.last_note.directory_ids is UNDEFINED
+
+
+async def test_patch_note_empty_ids_change_replaces_with_empty_list() -> None:
+    """An explicit empty list replaces the field with [] (not UNDEFINED)."""
+    from src.api.other.undefined import UNDEFINED
+
+    service, stub = _make_update_service()
+    context = _FakeContext()
+
+    request = AlterNoteRequest(
+        id="note-1",
+        author_id="user-1",
+        directory_ids=IdsOrUndefined(ids=[]),
+    )
+    await service.PatchNote(request, cast(ServicerContext, context))
+
+    assert context.code is None
+    assert stub.last_note is not None
+    assert list(stub.last_note.directory_ids) == []
+    assert stub.last_note.directory_ids is not UNDEFINED
+
+
+async def test_patch_note_omitted_ids_change_leaves_field_undefined() -> None:
+    """Without the oneof arm, the entity field stays UNDEFINED."""
+    from src.api.other.undefined import UNDEFINED
+
+    service, stub = _make_update_service()
+    context = _FakeContext()
+
+    request = AlterNoteRequest(id="note-1", author_id="user-1")
+    await service.PatchNote(request, cast(ServicerContext, context))
+
+    assert context.code is None
+    assert stub.last_note is not None
+    assert stub.last_note.directory_ids is UNDEFINED
+    assert stub.last_note.tag_ids is UNDEFINED
+
+
+async def test_patch_note_optional_title_forwards_to_service() -> None:
+    """A set `title` flows into `update_note`; unset stays UNDEFINED."""
+    from src.api.other.undefined import UNDEFINED
+
+    service, stub = _make_update_service()
+    context = _FakeContext()
+
+    request = AlterNoteRequest(
+        id="note-1",
+        author_id="user-1",
+        title="new title",
+    )
+    await service.PatchNote(request, cast(ServicerContext, context))
+
+    assert context.code is None
+    assert stub.last_note is not None
+    assert stub.last_note.title == "new title"
+    assert stub.last_note.content is UNDEFINED
+
+
+async def test_patch_note_optional_content_forwards_to_service() -> None:
+    """A set `content` flows into `update_note`; unset stays UNDEFINED."""
+    from src.api.other.undefined import UNDEFINED
+
+    service, stub = _make_update_service()
+    context = _FakeContext()
+
+    request = AlterNoteRequest(
+        id="note-1",
+        author_id="user-1",
+        content="new body",
+    )
+    await service.PatchNote(request, cast(ServicerContext, context))
+
+    assert context.code is None
+    assert stub.last_note is not None
+    assert stub.last_note.content == "new body"
+    assert stub.last_note.title is UNDEFINED
+
+
+async def test_patch_note_missing_author_id_returns_invalid_argument() -> None:
+    """`author_id` is required; absent -> INVALID_ARGUMENT, no update."""
+    service, stub = _make_update_service()
+    context = _FakeContext()
+
+    request = AlterNoteRequest(id="note-1", user_id="user-1")
+    proto = await service.PatchNote(request, cast(ServicerContext, context))
+
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert "author_id is required" in (context.details or "")
+    assert stub.last_note is None
+    assert proto.id == ""
