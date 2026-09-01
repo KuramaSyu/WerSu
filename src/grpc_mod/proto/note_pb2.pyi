@@ -763,6 +763,7 @@ class AlterDirectoryRequest(_message.Message):
     DESCRIPTION_FIELD_NUMBER: _builtins.int
     IMAGE_URL_FIELD_NUMBER: _builtins.int
     PARENT_IDS_FIELD_NUMBER: _builtins.int
+    SHELF_IDS_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     name: _builtins.str
@@ -771,7 +772,9 @@ class AlterDirectoryRequest(_message.Message):
     image_url: _builtins.str
     user_id: _builtins.str
     @_builtins.property
-    def parent_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    def parent_ids(self) -> Global___IdsOrUndefined: ...
+    @_builtins.property
+    def shelf_ids(self) -> Global___IdsOrUndefined: ...
     def __init__(
         self,
         *,
@@ -780,12 +783,13 @@ class AlterDirectoryRequest(_message.Message):
         display_name: _builtins.str | None = ...,
         description: _builtins.str | None = ...,
         image_url: _builtins.str | None = ...,
-        parent_ids: _abc.Iterable[_builtins.str] | None = ...,
+        parent_ids: Global___IdsOrUndefined | None = ...,
+        shelf_ids: Global___IdsOrUndefined | None = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "description", b"description", "display_name", b"display_name", "image_url", b"image_url", "name", b"name", "parent_ids", b"parent_ids", "parent_ids_change", b"parent_ids_change", "shelf_ids", b"shelf_ids", "shelf_ids_change", b"shelf_ids_change"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_ids", b"parent_ids", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_description", b"_description", "_display_name", b"_display_name", "_image_url", b"_image_url", "_name", b"_name", "description", b"description", "display_name", b"display_name", "id", b"id", "image_url", b"image_url", "name", b"name", "parent_ids", b"parent_ids", "parent_ids_change", b"parent_ids_change", "shelf_ids", b"shelf_ids", "shelf_ids_change", b"shelf_ids_change", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType__description: _TypeAlias = _typing.Literal["description"]  # noqa: Y015
     _WhichOneofArgType__description: _TypeAlias = _typing.Literal["_description", b"_description"]  # noqa: Y015
@@ -795,6 +799,10 @@ class AlterDirectoryRequest(_message.Message):
     _WhichOneofArgType__image_url: _TypeAlias = _typing.Literal["_image_url", b"_image_url"]  # noqa: Y015
     _WhichOneofReturnType__name: _TypeAlias = _typing.Literal["name"]  # noqa: Y015
     _WhichOneofArgType__name: _TypeAlias = _typing.Literal["_name", b"_name"]  # noqa: Y015
+    _WhichOneofReturnType_parent_ids_change: _TypeAlias = _typing.Literal["parent_ids"]  # noqa: Y015
+    _WhichOneofArgType_parent_ids_change: _TypeAlias = _typing.Literal["parent_ids_change", b"parent_ids_change"]  # noqa: Y015
+    _WhichOneofReturnType_shelf_ids_change: _TypeAlias = _typing.Literal["shelf_ids"]  # noqa: Y015
+    _WhichOneofArgType_shelf_ids_change: _TypeAlias = _typing.Literal["shelf_ids_change", b"shelf_ids_change"]  # noqa: Y015
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__description) -> _WhichOneofReturnType__description | None: ...
     @_typing.overload
@@ -803,6 +811,10 @@ class AlterDirectoryRequest(_message.Message):
     def WhichOneof(self, oneof_group: _WhichOneofArgType__image_url) -> _WhichOneofReturnType__image_url | None: ...
     @_typing.overload
     def WhichOneof(self, oneof_group: _WhichOneofArgType__name) -> _WhichOneofReturnType__name | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_parent_ids_change) -> _WhichOneofReturnType_parent_ids_change | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_shelf_ids_change) -> _WhichOneofReturnType_shelf_ids_change | None: ...
 
 Global___AlterDirectoryRequest: _TypeAlias = AlterDirectoryRequest  # noqa: Y015
 

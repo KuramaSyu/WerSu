@@ -4,11 +4,13 @@ import "google/protobuf/timestamp.proto";
 package proto;
 option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
 
+
 // Request for getting a note by id
 message GetNoteRequest {
     string id = 1;
     string user_id = 2;
 }
+
 
 message GetSearchNotesRequest {
     enum SearchType {
@@ -211,7 +213,19 @@ message AlterDirectoryRequest {
     optional string display_name = 3;
     optional string description = 4;
     optional string image_url = 5;
-    repeated string parent_ids = 6;
+
+    // oneof is used, to set an array to null
+
+    // directory parents
+    oneof parent_ids_change {
+        IdsOrUndefined parent_ids = 6;
+    }
+
+    // shelf parents
+    oneof shelf_ids_change {
+        IdsOrUndefined shelf_ids = 8;
+    }
+
     string user_id = 7;
 }
 
