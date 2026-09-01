@@ -43,7 +43,7 @@ from src.api.other.undefined import UNDEFINED, unwrap_undefined
 from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.domain.permission_chain import HasDirectoryViewPerm, PermissionCheckChain, PermissionCheckChainStart
-from src.utils import convert_entity_for_db
+from src.utils import convert_entity_for_db, non_empty
 
 
 class DirectoryFacadeImpl(DirectoryFacadeABC):
@@ -86,6 +86,12 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         parent_ids = entity.parent_directory_ids
         if parent_ids:
             await self._replace_parents(dir_id, list(parent_ids))
+        elif entity.shelf_ids:
+            # No directory parent -> bind to every supplied shelf.
+            for sid in non_empty(entity.shelf_ids):
+                await self._shelf_repo.add_book(
+                    sid, dir_id, user_ctx=user_ctx,
+                )
 
         # add note#admin@user relation for consistency and permission checks
         admin_relation = await self._create_user_admin_relation(dir_id, user_ctx)
@@ -188,6 +194,27 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             await self._replace_parents(
                 str(entity.id), list(entity.parent_directory_ids)
             )
+
+        # Shelf binding: replace the entire shelf set when the entity
+        # carries shelf_ids; otherwise leave the binding alone.
+        if entity.shelf_ids:
+            current = await self.fetch_directory(entity.id)
+            current_shelves: Set[str] = set()
+            if current and current.shelf_ids:
+                current_shelves = set(current.shelf_ids)
+   
+            new_shelf_ids = set(entity.shelf_ids or [])
+
+            # delete old shelf bindings
+            for sid in current_shelves - new_shelf_ids:
+                await self._shelf_repo.remove_book(
+                    sid, str(entity.id), user_ctx=None,
+                )
+            # add new bindings
+            for sid in new_shelf_ids - current_shelves:
+                await self._shelf_repo.add_book(
+                    sid, str(entity.id), user_ctx=None,
+                )
 
         if entity.tag_ids:
             await self._tag_repo.replace_tags_of(
