@@ -530,6 +530,7 @@ async def serve():
         jwt_provider=jwt_provider,
         directory_repo=directory_facade,
         activity_logger=activity_logger_service,
+        rule_repo=rule_repo,
         logging_provider=logging_provider,
     )
 
