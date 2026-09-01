@@ -86,7 +86,6 @@ from src.api.services.directory_service import (
 )
 from src.api.services.note_service import (
     GetNotesOptions,
-    GetNotesOptionsBuilder,
     NoteIncludeOptions,
     NoteResponse,
     NoteServiceABC,
@@ -187,7 +186,6 @@ __all__ = [
     "DirectoryIncludeOptions",
     "resolve_directory_include_options",
     "GetNotesOptions",
-    "GetNotesOptionsBuilder",
     "NoteIncludeOptions",
     "NoteResponse",
     "NoteServiceABC",

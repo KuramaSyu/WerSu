@@ -19,7 +19,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from warnings import deprecated
 
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
 from src.api.other.relationship import (
@@ -32,7 +31,6 @@ from src.api.repos.tag_repo import TagRepoABC
 from src.api.repos.shelf_repo import ShelfRepoABC
 from src.api.search_filter import NoteSearchFilter
 from src.api.services.note_service import NoteIncludeOptions, resolve_include_options
-from src.api.other.relationship import AttachmentRelationEnum
 from src.api.other.types import LoggingProvider, Pagination
 from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.other.user_context import UserContextABC
@@ -92,43 +90,6 @@ class NoteFacadeImpl(NoteFacadeABC):
         self.log = logging_provider(__name__, self)
 
     # ---- private helpers ---------------------------------------------
-
-    @deprecated("dont populate note.permissions anymore")
-    async def _fetch_note_permissions(
-        self,
-        note_id: str,
-    ) -> List[Relationship]:
-        """Fetch every direct relationship stored for a note.
-
-        Combines the regular note relations with the reverse
-        ``attachment#parent_note@note`` lookups.
-
-        Args:
-            note_id: id of the note whose direct relations to
-                fetch.
-
-        Returns:
-            List[Relationship]: the merged, sorted relation list
-                the caller can attach to ``note.permissions``.
-        """
-        relations = await self._permission_repo.list_relationships(
-            resource=ObjectRef(ObjectTypeEnum.NOTE, note_id),
-        )
-        attachment_relations = await self._permission_repo.lookup_relationships(
-            Relationship(
-                resource=ObjectRef(ObjectTypeEnum.ATTACHMENT, UNDEFINED),
-                relation=AttachmentRelationEnum.PARENT_NOTE,
-                subject=SubjectRef(ObjectTypeEnum.NOTE, note_id),
-            )
-        )
-        return sorted(
-            relations + attachment_relations,
-            key=lambda rel: (
-                str(rel.relation),
-                str(rel.subject.object_type),
-                "" if rel.subject.object_id is UNDEFINED else str(rel.subject.object_id),
-            ),
-        )
 
     async def _resolve_directory_ids(
         self,
@@ -329,7 +290,8 @@ class NoteFacadeImpl(NoteFacadeABC):
         if note.directory_ids is not UNDEFINED and note.directory_ids:
             explicit_dirs = [str(d) for d in note.directory_ids if d]
 
-        shelf_anchor = _first_id(note.shelf_ids)
+        shelf_ids = note.shelf_ids if note.shelf_ids is not UNDEFINED else None
+        shelf_anchor = str(next((v for v in (shelf_ids or []) if v), ""))
         if explicit_dirs:
             resolved_dirs = await self._resolve_directory_ids(
                 explicit_dirs, user, shelf_id=shelf_anchor,
@@ -366,10 +328,8 @@ class NoteFacadeImpl(NoteFacadeABC):
         )
         await self._permission_repo.insert([owner_relation])
 
-        # deprecated: dont populate note.permissions
-        # note.permissions = await self._fetch_note_permissions(note_id=note_id)
-        # replacement: read directory_ids and tag_ids back from their
-        # dedicated repos so the returned entity matches the persisted state.
+        # Read directory_ids and tag_ids back from their dedicated repos
+        # so the returned entity matches the persisted state.
         note = await self._populate_relation_fields(note, note_id)
         # match the `update` path: a fresh insert carries no
         # caller-supplied permissions, so the returned entity
@@ -637,18 +597,6 @@ class NoteFacadeImpl(NoteFacadeABC):
                 generator=self._embedding_repo.embedding_generator,
             )
         raise ValueError(f"Unknown SearchType: {search_type}")
-
-
-
-def _first_id(value: Any) -> Optional[str]:
-    """Return the first non-empty id from ``value`` (if any)."""
-    if value is UNDEFINED or value is None:
-        return None
-    if isinstance(value, (list, tuple)):
-        for v in value:
-            if v:
-                return str(v)
-    return None
 
 
 def _strip_non_content_fields(note: NoteEntity) -> NoteEntity:

@@ -179,128 +179,60 @@ async def serve():
     # setup db tables and their primary keys
     log.info("Setting up database tables...")
     common_table_kwargs: Dict[str, Any] = {"db": db, "logging_provider": logging_provider}
-    content_table = Table(
-        **common_table_kwargs, 
-        table_name="note.content", 
-        id_fields=["id"]
+    _TABLES = (
+        ("note.content", ["id"]),
+        ("note.embedding", ["note_id", "model"]),
+        ("note.version_snapshot", ["snapshot_id"]),
+        ("note.version_delta", ["delta_id"]),
+        ("note.attachment", ["key"]),
+        ("note.attachment_note_link", ["note_id", "attachment_key"]),
+        ("note.attachment_user_link", ["user_id", "attachment_key"]),
+        ("shared", ["id"]),
+        ("roles", ["id"]),
+        ("user_action", ["id"]),
+        ("auth.user", ["id"]),
+        ("auth.password", ["user_id"]),
+        ("auth.passkey", ["id"]),
+        ("auth.third_party", ["id"]),
+        ("activity", ["id"]),
+        ("rules", ["id"]),
+        ("note.directory", ["id"]),
+        ("note.directory_subdirectory", ["id"]),
+        ("note.directory_note", ["id"]),
+        ("note.shelf", ["id"]),
+        ("note.shelf_book", ["id"]),
+        ("note.tag", ["id"]),
+        ("note.directory_tag", ["directory_id", "tag_id"]),
+        ("note.note_tag", ["note_id", "tag_id"]),
     )
-    embedding_table = Table(
-        **common_table_kwargs,
-        table_name="note.embedding",
-        id_fields=["note_id", "model"]
-    )
-    version_snapshot_table = Table(
-        **common_table_kwargs,
-        table_name="note.version_snapshot",
-        id_fields=["snapshot_id"],
-    )
-    version_delta_table = Table(
-        **common_table_kwargs,
-        table_name="note.version_delta",
-        id_fields=["delta_id"],
-    )
-    attachments_table = Table(
-        **common_table_kwargs,
-        table_name="note.attachment",
-        id_fields=["key"],
-    )
-    attachments_note_link_table = Table(
-        **common_table_kwargs,
-        table_name="note.attachment_note_link",
-        id_fields=["note_id", "attachment_key"],
-    )
-    attachments_user_link_table = Table(
-        **common_table_kwargs,
-        table_name="note.attachment_user_link",
-        id_fields=["user_id", "attachment_key"],
-    )
-
-    shared_table = Table(
-        **common_table_kwargs,
-        table_name="shared",
-        id_fields=["id"],
-    )
-    roles_table = Table(
-        **common_table_kwargs,
-        table_name="roles",
-        id_fields=["id"],
-    )
-    user_action_table = Table(
-        **common_table_kwargs,
-        table_name="user_action",
-        id_fields=["id"],
-    )
-
-    auth_user_table = Table(
-        **common_table_kwargs,
-        table_name="auth.user",
-        id_fields=["id"],
-    )
-    auth_password_table = Table(
-        **common_table_kwargs,
-        table_name="auth.password",
-        id_fields=["user_id"],
-    )
-    auth_passkey_table = Table(
-        **common_table_kwargs,
-        table_name="auth.passkey",
-        id_fields=["id"],
-    )
-    auth_third_party_table = Table(
-        **common_table_kwargs,
-        table_name="auth.third_party",
-        id_fields=["id"],
-    )
-    activity_table = Table(
-        **common_table_kwargs,
-        table_name="activity",
-        id_fields=["id"],
-    )
-    rules_table = Table(
-        **common_table_kwargs,
-        table_name="rules",
-        id_fields=["id"],
-    )
-    directory_table = Table(
-        **common_table_kwargs,
-        table_name="note.directory",
-        id_fields=["id"],
-    )
-    directory_subdirectory_table = Table(
-        **common_table_kwargs,
-        table_name="note.directory_subdirectory",
-        id_fields=["id"],
-    )
-    directory_note_table = Table(
-        **common_table_kwargs,
-        table_name="note.directory_note",
-        id_fields=["id"],
-    )
-    shelf_table = Table(
-        **common_table_kwargs,
-        table_name="note.shelf",
-        id_fields=["id"],
-    )
-    shelf_book_table = Table(
-        **common_table_kwargs,
-        table_name="note.shelf_book",
-        id_fields=["id"],
-    )
-    tags_table = Table(
-        **common_table_kwargs,
-        table_name="note.tag",
-        id_fields=["id"],
-    )
-    directory_tags_table = Table(
-        **common_table_kwargs,
-        table_name="note.directory_tag",
-        id_fields=["directory_id", "tag_id"],
-    )
-    note_tags_table = Table(
-        **common_table_kwargs,
-        table_name="note.note_tag",
-        id_fields=["note_id", "tag_id"],
-    )
+    tables = {
+        name: Table(**common_table_kwargs, table_name=name, id_fields=ids)
+        for name, ids in _TABLES
+    }
+    content_table = tables["note.content"]
+    embedding_table = tables["note.embedding"]
+    version_snapshot_table = tables["note.version_snapshot"]
+    version_delta_table = tables["note.version_delta"]
+    attachments_table = tables["note.attachment"]
+    attachments_note_link_table = tables["note.attachment_note_link"]
+    attachments_user_link_table = tables["note.attachment_user_link"]
+    shared_table = tables["shared"]
+    roles_table = tables["roles"]
+    user_action_table = tables["user_action"]
+    auth_user_table = tables["auth.user"]
+    auth_password_table = tables["auth.password"]
+    auth_passkey_table = tables["auth.passkey"]
+    auth_third_party_table = tables["auth.third_party"]
+    activity_table = tables["activity"]
+    rules_table = tables["rules"]
+    directory_table = tables["note.directory"]
+    directory_subdirectory_table = tables["note.directory_subdirectory"]
+    directory_note_table = tables["note.directory_note"]
+    shelf_table = tables["note.shelf"]
+    shelf_book_table = tables["note.shelf_book"]
+    tags_table = tables["note.tag"]
+    directory_tags_table = tables["note.directory_tag"]
+    note_tags_table = tables["note.note_tag"]
 
     # setup S3 connection
     s3_client: Any = boto3.client(  # type: ignore[reportUnknownMemberType]

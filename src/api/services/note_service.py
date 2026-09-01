@@ -99,8 +99,7 @@ def resolve_include_options(
 
 
 def resolve_options(options: Optional[GetNotesOptions]) -> GetNotesOptions:
-    """Resolve `options` (or `None`) into a full options dict.
-    """
+    """Resolve `options` (or `None`) into a full options dict."""
     if not options:
         options = GetNotesOptions()
     include_content = options.get("include_content", True)
@@ -109,51 +108,6 @@ def resolve_options(options: Optional[GetNotesOptions]) -> GetNotesOptions:
         include_content=bool(include_content),
         strip_content_at=int(strip_content_at),
     )
-
-
-class GetNotesOptionsBuilder:
-    """Fluent builder for :class:`GetNotesOptions`.
-
-    Used wherever a dict literal would be opaque or when callers want
-    to spread the options across multiple steps before resolving them.
-
-    Example:
-        options = (
-            GetNotesOptionsBuilder()
-            .include_content(False)
-            .strip_content_at(120)
-            .build()
-        )
-    """
-
-    def __init__(self) -> None:
-        self._include_content: bool = True
-        self._strip_content_at: int = _DEFAULT_STRIP_CONTENT_AT
-
-    def include_content(self, value: bool) -> "GetNotesOptionsBuilder":
-        """Set `include_content` on the built options."""
-        self._include_content = value
-        return self
-
-    def strip_content_at(self, value: int) -> "GetNotesOptionsBuilder":
-        """Set `strip_content_at` on the built options.
-
-        Args:
-            value: max number of characters to keep from each note's
-                `content`.  Values `<= 0` are treated as "do not
-                truncate", which is only useful in combination with
-                :meth:`include_content` `False` overrides downstream.
-        """
-        self._strip_content_at = value
-        self._include_content = True  # implicit override
-        return self
-
-    def build(self) -> GetNotesOptions:
-        """Return a fresh :class:`GetNotesOptions` snapshot."""
-        return GetNotesOptions(
-            include_content=self._include_content,
-            strip_content_at=self._strip_content_at,
-        )
 
 
 @dataclass
@@ -347,9 +301,8 @@ class NoteServiceABC(ABC):
 
 __all__ = [
     "GetNotesOptions",
-    "GetNotesOptionsBuilder",
     "NoteIncludeOptions",
     "NoteResponse",
     "NoteServiceABC",
     "resolve_include_options",
-]  
+] 

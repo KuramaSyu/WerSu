@@ -41,7 +41,6 @@ from src.api.other.types import LoggingProvider, Pagination
 from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
-from src.db.entities.rule import RuleEntity
 from src.db.repos.directory.directory_facade import DirectoryFacadeABC
 from src.domain.permission_chain import  HasNoteDeletePerm, HasNoteViewPerm, HasNoteWritePerm
 from src.utils.extract_attachments import extract_attachment_ids
@@ -111,13 +110,10 @@ class NoteServiceImpl(NoteServiceABC):
         note: NoteEntity,
         user_ctx: UserContextABC,
     ) -> NoteEntity:
-        # Resolve the parent directory ids at the service layer so
-        # validation errors surface here, not deep in the DB facade.
-        # Either ``directory_ids`` or ``shelf_ids`` must be supplied;
-        # when only ``shelf_ids`` is set we look up an enabled
-        # ``NoteCreated`` rule attached to the shelf and use its
-        # ``add_to_directory`` action's directory as the parent.
-        note.directory_ids = await self._resolve_directory_ids(note, user_ctx)
+        # Validate at the service boundary so errors surface here,
+        # not deep in the facade.  NoteFacadeImpl.insert re-runs the
+        # same resolution once we let it through.
+        await self._validate_insert_parent(note, user_ctx)
 
         if not note.updated_at:
             note.updated_at = self._now()
@@ -129,6 +125,52 @@ class NoteServiceImpl(NoteServiceABC):
         )
 
         return inserted
+
+    async def _validate_insert_parent(
+        self,
+        note: NoteEntity,
+        user_ctx: UserContextABC,
+    ) -> None:
+        """Raise ValueError when no usable parent directory can be resolved."""
+        directory_ids = note.directory_ids
+        has_dirs = directory_ids is not UNDEFINED and bool(directory_ids)
+        shelf_ids = note.shelf_ids
+        has_shelf = shelf_ids is not UNDEFINED and bool(shelf_ids)
+
+        if has_dirs:
+            user_directory_ids = await self._directory_repo.list_user_directory_ids(
+                user_ctx,
+            )
+            for did in directory_ids or []:
+                if not did:
+                    continue
+                if str(did) not in user_directory_ids:
+                    raise ValueError(
+                        f"Provided directory_id '{did!r}' is not accessible "
+                        f"for user {user_ctx.user_id!r}"
+                    )
+            return
+
+        if not has_shelf:
+            raise ValueError(
+                "note insert requires either directory_ids or a shelf_id "
+                f"to scope the default-fleeting rule (user {user_ctx.user_id!r})"
+            )
+
+        shelf_id = str(next(v for v in (shelf_ids or []) if v))
+        rules = await self._rule_repo.list_rules(
+            event_type="NoteCreated",
+            attached_entity_type="shelf",
+            attached_entity_id=shelf_id,
+            enabled_only=True,
+        )
+        if not any(r.action_type == "add_to_directory" for r in rules):
+            raise ValueError(
+                f"shelf_id {shelf_id!r} has no enabled NoteCreated rule "
+                f"with an 'add_to_directory' action for user "
+                f"{user_ctx.user_id!r}; create the rule or pass "
+                f"directory_ids explicitly"
+            )
 
     async def update_note(
         self,
@@ -272,92 +314,14 @@ class NoteServiceImpl(NoteServiceABC):
             ),
         )
 
-    async def _resolve_directory_ids(
-        self,
-        note: NoteEntity,
-        user_ctx: UserContextABC,
-    ) -> List[str]:
-        """Resolve the parent directory ids for a freshly-inserted note.
-
-        Either ``note.directory_ids`` (explicit, validated against the
-        user's visible directories) or ``note.shelf_ids`` (look up an
-        enabled ``NoteCreated`` rule attached to the shelf and use its
-        ``add_to_directory`` action's directory) must be supplied. When
-        only ``shelf_ids`` is given and no matching rule exists we
-        raise ``ValueError`` so the caller can surface a clear error.
-        """
-        requested = _defined_ids(note.directory_ids)
-        shelf_id = _first_id(note.shelf_ids)
-
-        if requested:
-            # validate the supplied directory ids against the
-            # user's view access set; an id the caller cannot see
-            # is a programming / UX bug, not a silent fallback.
-            user_directory_ids = await self._directory_repo.list_user_directory_ids(
-                user_ctx,
-            )
-            for did in requested:
-                if did not in user_directory_ids:
-                    raise ValueError(
-                        f"Provided directory_id '{did!r}' is not accessible "
-                        f"for user {user_ctx.user_id!r}"
-                    )
-            return requested
-
-        if not shelf_id:
-            raise ValueError(
-                "note insert requires either directory_ids or a shelf_id "
-                f"to scope the default-fleeting rule (user {user_ctx.user_id!r})"
-            )
-
-        rule = await self._find_default_fleeting_rule(shelf_id)
-        if rule is None:
-            raise ValueError(
-                f"shelf_id {shelf_id!r} has no enabled NoteCreated rule "
-                f"with an 'add_to_directory' action for user "
-                f"{user_ctx.user_id!r}; create the rule or pass "
-                f"directory_ids explicitly"
-            )
-
-        directory_id = (rule.action_context or {}).get("directory_id")
-        if not isinstance(directory_id, str) or not directory_id:
-            raise ValueError(
-                f"default-fleeting rule {rule.id!r} has no "
-                f"'directory_id' in its action_context"
-            )
-        return [directory_id]
-
-    async def _find_default_fleeting_rule(
-        self,
-        shelf_id: str,
-    ) -> Optional[RuleEntity]:
-        """Return the enabled NoteCreated rule attached to ``shelf_id``.
-
-        When multiple rules match (no uniqueness constraint on the
-        ``(attached_entity_id, event_type, enabled)`` triple), the
-        first one wins.  Returns ``None`` when no rule matches.
-        """
-        rules = await self._rule_repo.list_rules(
-            event_type="NoteCreated",
-            attached_entity_type="shelf",
-            attached_entity_id=shelf_id,
-            enabled_only=True,
-        )
-        for rule in rules:
-            if rule.action_type == "add_to_directory":
-                return rule
-        return None
-    
     async def _populate_directory_ids(
         self,
         notes: List[NoteEntity],
     ) -> None:
-        """Populate ``directory_ids`` for every note from the directory repo.
+        """Populate directory_ids for every note from the directory repo.
 
         Asks the directory repo for the parents of every note in
-        one batch call and assigns the result to
-        ``note.directory_ids``. Notes with no parents end up with
-        an empty list.
+        one batch call and assigns the result to note.directory_ids.
         """
         if not notes:
             return
@@ -389,29 +353,6 @@ class NoteServiceImpl(NoteServiceABC):
                 attachment_id=attachment_id,
             )
         return tokens
-
-
-# ---- module-level helpers -------------------------------------------------
-
-
-def _defined_ids(value: object) -> List[str]:
-    """Return the list of non-empty ids from ``value`` (or [])."""
-    if value is UNDEFINED or value is None:
-        return []
-    if isinstance(value, (list, tuple)):
-        return [str(v) for v in value if v]
-    return []
-
-
-def _first_id(value: object) -> Optional[str]:
-    """Return the first non-empty id from ``value`` (if any)."""
-    if value is UNDEFINED or value is None:
-        return None
-    if isinstance(value, (list, tuple)):
-        for v in value:
-            if v:
-                return str(v)
-    return None
 
 
 __all__ = ["NoteServiceImpl"]
