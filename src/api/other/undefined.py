@@ -33,6 +33,7 @@ __all__: typing.Sequence[str] = (
     "any_undefined",
     "count_undefined",
     "is_undefined",
+    "resolve_undefined_none",
     "unwrap_undefined",
 )
 
@@ -170,3 +171,17 @@ def unwrap_undefined_or(item: UndefinedNoneOr[T_co], default: T_default = None) 
     if item is UNDEFINED:
         return default
     return item  # type: ignore[return-value]
+
+
+def resolve_undefined_none(value: UndefinedNoneOr[str]) -> typing.Optional[str]:
+    """Map a nullable ``UndefinedNoneOr[str]`` into a SQL-friendly ``Optional[str]``.
+
+    * ``UNDEFINED`` -> ``None`` (no value supplied).
+    * ``None``      -> ``None`` (explicitly cleared).
+    * concrete str -> ``str(value)``.
+    """
+    if is_undefined(value):
+        return None
+    if value is None:
+        return None
+    return str(value)
