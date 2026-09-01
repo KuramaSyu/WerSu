@@ -34,6 +34,7 @@ from src.grpc_mod.proto.note_pb2 import (
     NotesReply,
 )
 from src.grpc_mod.proto.note_pb2_grpc import DirectoryServiceServicer
+from src.utils.grpc_type_helper import grpc_unwrap_oneof, grpc_unwrap_optional
 
 
 class GrpcDirectoryService(DirectoryServiceServicer):
@@ -196,21 +197,19 @@ class GrpcDirectoryService(DirectoryServiceServicer):
                 return Directory()
 
             user_ctx = await self._context.create(request.user_id)
-            parent_ids_provided = len(request.parent_ids) > 0
-            shelf_ids = request.shelf_ids if request.HasField("shelf_ids") else UNDEFINED
             updated = await self._directory_service.patch_directory(
                 DirectoryEntity(
                     id=request.id,
-                    slug=request.name if request.HasField("name") else UNDEFINED,
-                    display_name=request.display_name if request.HasField("display_name") else UNDEFINED,
-                    description=request.description if request.HasField("description") else UNDEFINED,
-                    image_url=request.image_url if request.HasField("image_url") else UNDEFINED,
-                    parent_directory_ids=(
-                        list(request.parent_ids)
-                        if parent_ids_provided
-                        else UNDEFINED
+                    slug=grpc_unwrap_optional(request, "name"),
+                    display_name=grpc_unwrap_optional(request, "display_name"),
+                    description=grpc_unwrap_optional(request, "description"),
+                    image_url=grpc_unwrap_optional(request, "image_url"),
+                    parent_directory_ids=grpc_unwrap_oneof(
+                        request, "parent_ids_change"
                     ),
-                    shelf_ids=shelf_ids,
+                    shelf_ids=grpc_unwrap_oneof(
+                        request, "shelf_ids_change"
+                    ),
                     tag_ids=UNDEFINED,
                     relations=UNDEFINED,
                 ),
