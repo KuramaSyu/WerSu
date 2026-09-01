@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import List, Self
+from typing import List, Optional, Self
 
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import UserContextABC
+from src.api.search_filter import NoteSearchFilter
 from src.ai.embedding_generator import  EmbeddingGeneratorABC, Models
 from src.db.database import  DatabaseABC
 from src.db.entities import NoteEntity
@@ -21,6 +22,7 @@ class NoteSearchStrategy(ABC):
         db: DatabaseABC,
         user_context: UserContextABC,
         note_permissions: PermissionRepoABC,
+        filter_: Optional[NoteSearchFilter] = None,
     ) -> None:
         self.db = db
         self.query = query
@@ -28,6 +30,7 @@ class NoteSearchStrategy(ABC):
         self.offset = offset
         self.user_context = user_context
         self.note_permissions = note_permissions
+        self.filter = filter_ or NoteSearchFilter.empty()
 
 
     def set_query(self, query: str) -> Self:
@@ -100,11 +103,21 @@ class NoteSearchStrategy(ABC):
         """
         ...
 
+    def _date_filter_sql(self) -> str:
+        """Return AND-snippet for the date bounds on updated_at; empty if unset."""
+        parts = []
+        if self.filter.date_from is not None:
+            parts.append(f"AND updated_at >= '{self.filter.date_from.isoformat()}'")
+        if self.filter.date_until is not None:
+            parts.append(f"AND updated_at <= '{self.filter.date_until.isoformat()}'")
+        return " ".join(parts)
+
 
 class DateNoteSearchStrategy(NoteSearchStrategy):
     """Return notes sorted by date (most recent first)."""
 
     async def search(self) -> list["NoteEntity"]:
+        date_filter = self._date_filter_sql()
         query = f"""
         SELECT id, title, author_id, content, updated_at
         FROM note.content
@@ -113,6 +126,7 @@ class DateNoteSearchStrategy(NoteSearchStrategy):
                 SELECT 1 FROM note.directory d
                 WHERE d.readme_note_id = note.content.id
             )
+            {date_filter}
         ORDER BY updated_at DESC
         LIMIT {self.limit}
         OFFSET {self.offset};
@@ -131,6 +145,7 @@ class WebNoteSearchStrategy(NoteSearchStrategy):
 
     async def search(self) -> list["NoteEntity"]:
         note_ids = await self._get_user_note_ids()
+        date_filter = self._date_filter_sql()
         query = f"""
         SELECT id, title, author_id, content, updated_at,
             ts_rank(
@@ -145,6 +160,7 @@ class WebNoteSearchStrategy(NoteSearchStrategy):
                 SELECT 1 FROM note.directory d
                 WHERE d.readme_note_id = note.content.id
             )
+            {date_filter}
         ORDER BY fts_rank DESC
         LIMIT {self.limit}
         OFFSET {self.offset};
@@ -165,6 +181,7 @@ class SimilaritySearchStrategy(NoteSearchStrategy):
 
     async def search(self) -> list["NoteEntity"]:
         note_ids = await self._get_user_note_ids()
+        date_filter = self._date_filter_sql()
         query = f"""
         SELECT id, title, author_id, content, updated_at
         FROM note.content
@@ -173,6 +190,7 @@ class SimilaritySearchStrategy(NoteSearchStrategy):
                 SELECT 1 FROM note.directory d
                 WHERE d.readme_note_id = note.content.id
             )
+            {date_filter}
         ORDER BY GREATEST(
             similarity(title, $1),
             similarity(content, $1)
@@ -189,6 +207,7 @@ class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
 
     async def search(self) -> list["NoteEntity"]:
         note_ids = await self._get_user_note_ids()
+        date_filter = self._date_filter_sql()
         query = f"""
         SELECT id, title, author_id, content, updated_at
         FROM note.content
@@ -197,6 +216,7 @@ class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
                 SELECT 1 FROM note.directory d
                 WHERE d.readme_note_id = note.content.id
             )
+            {date_filter}
         ORDER BY similarity(title || ' ' || content, $1) DESC
         LIMIT {self.limit}
         OFFSET {self.offset};
@@ -218,13 +238,15 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         user_context: UserContextABC,
         generator: EmbeddingGeneratorABC,
         note_permissions: PermissionRepoABC,
+        filter_: Optional[NoteSearchFilter] = None,
     ) -> None:
-        super().__init__(query, limit, offset, db, user_context, note_permissions)
+        super().__init__(query, limit, offset, db, user_context, note_permissions, filter_=filter_)
         self.generator = generator
 
     async def search(self) -> list["NoteEntity"]:
         model = Models.MINI_LM_L6_V2
         note_ids = await self._get_user_note_ids()
+        date_filter = self._date_filter_sql()
         query = f"""
         SELECT id, title, author_id, content, updated_at, (embedding <=> $1::vector) AS similarity
         FROM note.embedding
@@ -236,6 +258,7 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
                 SELECT 1 FROM note.directory d
                 WHERE d.readme_note_id = note.content.id
             )
+            {date_filter}
         ORDER BY similarity ASC
         LIMIT {self.limit}
         OFFSET {self.offset}
@@ -243,7 +266,7 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         query_embedding = self.generator.generate(self.query)
         query_embedding_str = self.generator.tensor_to_str_vec(query_embedding)
         records = await self.db.fetch(
-            query, query_embedding_str, 
+            query, query_embedding_str,
             model.value, note_ids,
         )
 
