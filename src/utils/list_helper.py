@@ -1,4 +1,4 @@
-from typing import Any, Sequence, Generic, TypeVar, List
+from typing import Any, Sequence, Generic, TypeVar, List, overload
 
 T = TypeVar("T")
 
