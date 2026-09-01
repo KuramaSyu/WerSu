@@ -34,11 +34,14 @@ from src.api.services.note_service import GetNotesOptions, resolve_options
 from src.api.services.jwt_provider import JwtProvider
 from src.api.services.activity_logger_service import EventMetadataVisitor
 from src.api.facades.note_facade import NoteFacadeABC, SearchType
+from src.api.repos.rule_repo import RuleRepoABC
+from src.api.search_filter import NoteSearchFilter
 from src.api.other.relationship import AttachmentRelationEnum
 from src.api.other.types import LoggingProvider, Pagination
 from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.metadata import NoteEntity
+from src.db.entities.rule import RuleEntity
 from src.db.repos.directory.directory_facade import DirectoryFacadeABC
 from src.domain.permission_chain import  HasNoteDeletePerm, HasNoteViewPerm, HasNoteWritePerm
 from src.utils.extract_attachments import extract_attachment_ids
@@ -58,6 +61,7 @@ class NoteServiceImpl(NoteServiceABC):
         jwt_provider: JwtProvider,
         directory_repo: DirectoryFacadeABC,
         activity_logger: ActivityLoggerServiceABC,
+        rule_repo: RuleRepoABC,
         logging_provider: LoggingProvider,
         now: Callable[[], datetime.datetime] = datetime.datetime.now,
     ) -> None:
@@ -66,6 +70,7 @@ class NoteServiceImpl(NoteServiceABC):
         self._jwt_provider = jwt_provider
         self._directory_repo = directory_repo
         self._activity_logger = activity_logger
+        self._rule_repo = rule_repo
         self._log = logging_provider(__name__, self)
         self._now = now
         self._to_metadata = EventMetadataVisitor()
@@ -106,10 +111,14 @@ class NoteServiceImpl(NoteServiceABC):
         note: NoteEntity,
         user_ctx: UserContextABC,
     ) -> NoteEntity:
-        # The repo resolves the default parent directory when
-        # `note.directory_ids` is UNDEFINED or empty, so we don't need
-        # to fork the resolution here -- just stamp `updated_at` and
-        # hand the entity to the facade.
+        # Resolve the parent directory ids at the service layer so
+        # validation errors surface here, not deep in the DB facade.
+        # Either ``directory_ids`` or ``shelf_ids`` must be supplied;
+        # when only ``shelf_ids`` is set we look up an enabled
+        # ``NoteCreated`` rule attached to the shelf and use its
+        # ``add_to_directory`` action's directory as the parent.
+        note.directory_ids = await self._resolve_directory_ids(note, user_ctx)
+
         if not note.updated_at:
             note.updated_at = self._now()
 
@@ -119,23 +128,6 @@ class NoteServiceImpl(NoteServiceABC):
             metadata=inserted.convert(self._to_metadata),
         )
 
-        # a local copy for later usage; this already got inserted in the note repo
-        # parent_dir_relation = Relationship(
-        #     resource=ObjectRef(ObjectTypeEnum.NOTE, inserted.note_id),
-        #     relation=NoteRelationEnum.PARENT_DIRECTORY,
-        #     subject=SubjectRef(ObjectTypeEnum.DIRECTORY, parent_directory_id),
-        # )
-
-        # check directories again -- is this really necessary?
-        # inserted.permissions = await self._fetch_note_permissions(str(inserted.note_id))
-        # has_parent_dir = any(
-        #     str(rel.relation) == str(NoteRelationEnum.PARENT_DIRECTORY)
-        #     and str(rel.subject.object_type) == str(ObjectTypeEnum.DIRECTORY)
-        #     and str(rel.subject.object_id) == str(parent_directory_id)
-        #     for rel in inserted.permissions
-        # )
-        # if not has_parent_dir:
-        #   inserted.permissions.append(parent_dir_relation)
         return inserted
 
     async def update_note(
@@ -179,12 +171,19 @@ class NoteServiceImpl(NoteServiceABC):
         user_ctx: UserContextABC,
         limit: int,
         offset: int,
+        *,
+        filter_: Optional[NoteSearchFilter] = None,
     ) -> List[NoteEntity]:
+        from src.api.search_filter import validate_search_filter
+
+        if filter_ is not None:
+            validate_search_filter(filter_)
         notes = await self._note_repo.search_notes(
             SearchType[search_type],
             query,
             ctx=user_ctx,
             pagination=Pagination(limit=limit, offset=offset),
+            filter_=filter_,
         )
         await self._populate_directory_ids(notes)
         return notes
@@ -273,38 +272,81 @@ class NoteServiceImpl(NoteServiceABC):
             ),
         )
 
-    async def _resolve_parent_directory_ids(
+    async def _resolve_directory_ids(
         self,
         note: NoteEntity,
         user_ctx: UserContextABC,
     ) -> List[str]:
         """Resolve the parent directory ids for a freshly-inserted note.
 
-        Empty / UNDEFINED `note.directory_ids` falls back to the
-        user's default zettelkasten directory via the same lookup
-        the facade performs, so the rule lives in only one place.
+        Either ``note.directory_ids`` (explicit, validated against the
+        user's visible directories) or ``note.shelf_ids`` (look up an
+        enabled ``NoteCreated`` rule attached to the shelf and use its
+        ``add_to_directory`` action's directory) must be supplied. When
+        only ``shelf_ids`` is given and no matching rule exists we
+        raise ``ValueError`` so the caller can surface a clear error.
         """
-        existing_dirs = note.directory_ids
+        requested = _defined_ids(note.directory_ids)
+        shelf_id = _first_id(note.shelf_ids)
 
-        # already exist -> return early
-        if existing_dirs:
-            return existing_dirs
-    
-        # get user dirs, search for fleeting directory and return it.
-        user_directory_ids = await self._directory_repo.list_user_directory_ids(user_ctx)
-        default_name = self._directory_repo.get_default_directory_specs()[0].name
-        self._log.info(
-            f"Resolving default directory {default_name!r} for user {user_ctx.user_id!r} "
-            f"by traversing {len(user_directory_ids)} directories"
+        if requested:
+            # validate the supplied directory ids against the
+            # user's view access set; an id the caller cannot see
+            # is a programming / UX bug, not a silent fallback.
+            user_directory_ids = await self._directory_repo.list_user_directory_ids(
+                user_ctx,
+            )
+            for did in requested:
+                if did not in user_directory_ids:
+                    raise ValueError(
+                        f"Provided directory_id '{did!r}' is not accessible "
+                        f"for user {user_ctx.user_id!r}"
+                    )
+            return requested
+
+        if not shelf_id:
+            raise ValueError(
+                "note insert requires either directory_ids or a shelf_id "
+                f"to scope the default-fleeting rule (user {user_ctx.user_id!r})"
+            )
+
+        rule = await self._find_default_fleeting_rule(shelf_id)
+        if rule is None:
+            raise ValueError(
+                f"shelf_id {shelf_id!r} has no enabled NoteCreated rule "
+                f"with an 'add_to_directory' action for user "
+                f"{user_ctx.user_id!r}; create the rule or pass "
+                f"directory_ids explicitly"
+            )
+
+        directory_id = (rule.action_context or {}).get("directory_id")
+        if not isinstance(directory_id, str) or not directory_id:
+            raise ValueError(
+                f"default-fleeting rule {rule.id!r} has no "
+                f"'directory_id' in its action_context"
+            )
+        return [directory_id]
+
+    async def _find_default_fleeting_rule(
+        self,
+        shelf_id: str,
+    ) -> Optional[RuleEntity]:
+        """Return the enabled NoteCreated rule attached to ``shelf_id``.
+
+        When multiple rules match (no uniqueness constraint on the
+        ``(attached_entity_id, event_type, enabled)`` triple), the
+        first one wins.  Returns ``None`` when no rule matches.
+        """
+        rules = await self._rule_repo.list_rules(
+            event_type="NoteCreated",
+            attached_entity_type="shelf",
+            attached_entity_id=shelf_id,
+            enabled_only=True,
         )
-        for d_id in user_directory_ids:
-            d = await self._directory_repo.fetch_directory(d_id)
-            self._log.info(f"Checking directory {d_id!r} -> {d!r}")
-            if d and d.slug == default_name:
-                return [str(unwrap_undefined(d.id))]
-        raise ValueError(
-            f"Could not resolve default directory {default_name!r} for user {user_ctx.user_id!r}"
-        )
+        for rule in rules:
+            if rule.action_type == "add_to_directory":
+                return rule
+        return None
     
     async def _populate_directory_ids(
         self,
@@ -347,6 +389,29 @@ class NoteServiceImpl(NoteServiceABC):
                 attachment_id=attachment_id,
             )
         return tokens
+
+
+# ---- module-level helpers -------------------------------------------------
+
+
+def _defined_ids(value: object) -> List[str]:
+    """Return the list of non-empty ids from ``value`` (or [])."""
+    if value is UNDEFINED or value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(v) for v in value if v]
+    return []
+
+
+def _first_id(value: object) -> Optional[str]:
+    """Return the first non-empty id from ``value`` (if any)."""
+    if value is UNDEFINED or value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        for v in value:
+            if v:
+                return str(v)
+    return None
 
 
 __all__ = ["NoteServiceImpl"]
