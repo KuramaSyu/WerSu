@@ -151,6 +151,7 @@ def _make_service(
         jwt_provider=fake_jwt,
         directory_repo=fake_directory,
         activity_logger=fake_activity_logger,
+        rule_repo=facade._rule_repo,  # type: ignore[attr-defined]
         logging_provider=_log_provider,
     )
     return service, fake_db, fake_content, fake_directory, fake_permission, fake_jwt, fake_activity_logger
@@ -332,6 +333,7 @@ async def test_insert_note_resolves_parent_directory_and_writes_owner_relation()
             content="body",
             updated_at=datetime(2026, 7, 3, 12, 0, 0),
             author_id="user-1",
+            shelf_ids=["shelf-1"],
         ),
         _human_ctx("user-1"),
     )
@@ -364,6 +366,39 @@ async def test_insert_note_rejects_inaccessible_parent_dir() -> None:
                 updated_at=datetime(2026, 7, 3, 12, 0, 0),
                 author_id="user-1",
                 directory_ids=["not-my-directory"],
+            ),
+            _human_ctx("user-1"),
+        )
+
+
+async def test_insert_note_raises_when_neither_directory_nor_shelf_given() -> None:
+    """`insert_note` raises when neither directory_ids nor shelf_ids is supplied."""
+    service, _db, _content, _dir, _perm, _jwt, _activity_logger = _make_service()
+
+    with pytest.raises(ValueError, match="directory_ids or a shelf_id"):
+        await service.insert_note(
+            NoteEntity(
+                title="Orphan",
+                content="body",
+                updated_at=datetime(2026, 7, 3, 12, 0, 0),
+                author_id="user-1",
+            ),
+            _human_ctx("user-1"),
+        )
+
+
+async def test_insert_note_raises_when_shelf_id_has_no_rule() -> None:
+    """`insert_note` raises when shelf_id is supplied but no rule matches."""
+    service, _db, _content, _dir, _perm, _jwt, _activity_logger = _make_service()
+    # no default-fleeting rule seeded -> shelf_id has no fallback
+    with pytest.raises(ValueError, match="no enabled NoteCreated rule"):
+        await service.insert_note(
+            NoteEntity(
+                title="No rule",
+                content="body",
+                updated_at=datetime(2026, 7, 3, 12, 0, 0),
+                author_id="user-1",
+                shelf_ids=["shelf-without-rule"],
             ),
             _human_ctx("user-1"),
         )
@@ -598,6 +633,7 @@ async def test_insert_note_records_note_created() -> None:
             content="body",
             updated_at=datetime(2026, 7, 3, 12, 0, 0),
             author_id="user-1",
+            shelf_ids=["shelf-1"],
         ),
         _human_ctx("user-1"),
     )
