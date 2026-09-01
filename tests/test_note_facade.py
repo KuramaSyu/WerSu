@@ -120,6 +120,7 @@ async def test_insert_without_content_skips_embedding() -> None:
         content="",
         updated_at=datetime(2026, 7, 3, 12, 0, 0),
         author_id="user-1",
+        shelf_ids=["shelf-1"],
     )
     result = await facade.insert(note, UserContext("user-1"))
 
@@ -148,6 +149,7 @@ async def test_insert_records_initial_snapshot_when_version_repo_present() -> No
         content="Snap content",
         updated_at=datetime(2026, 7, 3, 12, 0, 0),
         author_id="user-1",
+        shelf_ids=["shelf-1"],
     )
     await facade.insert(note, UserContext("user-1"))
 
@@ -384,6 +386,7 @@ async def test_insert_note_without_directory_uses_rule_default() -> None:
         content="body",
         updated_at=datetime(2026, 7, 3, 12, 0, 0),
         author_id="user-1",
+        shelf_ids=["shelf-1"],
     )
     result = await facade.insert(note, UserContext("user-1"))
 
@@ -392,7 +395,7 @@ async def test_insert_note_without_directory_uses_rule_default() -> None:
 
 
 async def test_insert_note_without_directory_raises_when_no_rule() -> None:
-    """No parent + no rule -> ``ValueError``."""
+    """Shelf id with no matching rule -> ``ValueError``."""
     facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade()
     fake_db.fetchrow_responses.append({"id": "note-no-rule"})
 
@@ -401,6 +404,7 @@ async def test_insert_note_without_directory_raises_when_no_rule() -> None:
         content="body",
         updated_at=datetime(2026, 7, 3, 12, 0, 0),
         author_id="user-1",
+        shelf_ids=["shelf-1"],
     )
     with pytest.raises(ValueError, match="no default-fleeting rule"):
         await facade.insert(note, UserContext("user-1"))

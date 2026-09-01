@@ -188,3 +188,144 @@ async def test_get_note_forwards_temporary_user_jwt_map_to_proto() -> None:
         "att-a": "jwt:user-1:att-a",
         "att-b": "jwt:user-1:att-b",
     }
+
+
+# ---------------------------------------------------------------------------
+# PostNote: directory_ids is preferred over shelf_id; one of both is required.
+# ---------------------------------------------------------------------------
+
+
+class _CapturingNoteService(NoteServiceABC):
+    """Records the entity handed to `insert_note` and echoes a fake id."""
+
+    def __init__(self) -> None:
+        self.last_note = None
+        self.last_user_ctx = None
+
+    async def insert_note(self, note, user_ctx):
+        self.last_note = note
+        self.last_user_ctx = user_ctx
+        # the repo would normally assign an id; fake one so the
+        # grpc visitor can serialize the response without raising.
+        if note.note_id is None or note.note_id is UNDEFINED:
+            note.note_id = "note-fake-id"
+        return note
+
+    async def update_note(self, note, user_ctx):  # pragma: no cover
+        raise NotImplementedError
+
+    async def delete_note(self, note_id, user_ctx):  # pragma: no cover
+        raise NotImplementedError
+
+    async def get_note(self, note_id, user_ctx, *, include=None):  # pragma: no cover
+        raise NotImplementedError
+
+    async def search_notes(  # pragma: no cover
+        self, search_type, query, user_ctx, limit, offset,
+    ):
+        raise NotImplementedError
+
+    async def get_notes(self, note_ids, user_ctx, options=None):  # pragma: no cover
+        raise NotImplementedError
+
+
+def _make_capturing_service() -> tuple[GrpcNoteService, _CapturingNoteService]:
+    note_service = _CapturingNoteService()
+    service = GrpcNoteService(
+        note_service=note_service,
+        log=_log_provider,
+        to_grpc=_to_grpc(),
+        context_factory=_UserContextFactory(),
+    )
+    return service, note_service
+
+
+from src.api.other.undefined import UNDEFINED  # noqa: E402
+
+
+from src.grpc_mod.proto.note_pb2 import PostNoteRequest  # noqa: E402
+
+
+async def test_post_note_with_directory_ids_forwards_them_and_skips_shelf() -> None:
+    """directory_ids takes priority: shelf_id is ignored when set."""
+    from src.api.other.undefined import UNDEFINED
+
+    service, stub = _make_capturing_service()
+    context = _FakeContext()
+
+    request = PostNoteRequest(
+        title="hello",
+        content="world",
+        author_id="user-1",
+        user_id="user-1",
+        shelf_id="shelf-should-be-ignored",
+        directory_ids=["dir-a", "dir-b"],
+    )
+    proto = await service.PostNote(request, cast(ServicerContext, context))
+
+    assert context.code is None
+    assert proto.id == "" or proto.title == "hello"  # proto echo via visitor
+    assert stub.last_note is not None
+    # directory_ids flowed through verbatim
+    assert list(stub.last_note.directory_ids) == ["dir-a", "dir-b"]
+    # shelf_ids left UNDEFINED so the facade does not consult a shelf
+    assert stub.last_note.shelf_ids is UNDEFINED
+
+
+async def test_post_note_with_shelf_id_only_passes_shelf_to_facade() -> None:
+    """Only shelf_id: directory_ids stays UNDEFINED, shelf_ids = [shelf_id]."""
+    from src.api.other.undefined import UNDEFINED
+
+    service, stub = _make_capturing_service()
+    context = _FakeContext()
+
+    request = PostNoteRequest(
+        title="hello",
+        content=None,
+        author_id="user-1",
+        user_id="user-1",
+        shelf_id="shelf-only",
+    )
+    await service.PostNote(request, cast(ServicerContext, context))
+
+    assert context.code is None
+    assert stub.last_note is not None
+    assert stub.last_note.directory_ids is UNDEFINED
+    assert list(stub.last_note.shelf_ids) == ["shelf-only"]
+
+
+async def test_post_note_without_directory_or_shelf_returns_invalid_argument() -> None:
+    """Both empty -> INVALID_ARGUMENT, no entity forwarded."""
+    service, stub = _make_capturing_service()
+    context = _FakeContext()
+
+    request = PostNoteRequest(
+        title="hello",
+        content=None,
+        author_id="user-1",
+        user_id="user-1",
+    )
+    proto = await service.PostNote(request, cast(ServicerContext, context))
+
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert "directory_ids or shelf_id" in (context.details or "")
+    assert stub.last_note is None
+    assert proto.id == ""
+
+
+async def test_post_note_with_blank_strings_is_treated_as_unset() -> None:
+    """Blank shelf_id + empty directory_ids -> INVALID_ARGUMENT."""
+    service, stub = _make_capturing_service()
+    context = _FakeContext()
+
+    request = PostNoteRequest(
+        title="hello",
+        content=None,
+        author_id="user-1",
+        user_id="user-1",
+        shelf_id="   ",
+    )
+    await service.PostNote(request, cast(ServicerContext, context))
+
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert stub.last_note is None

@@ -247,6 +247,7 @@ def _wire_real_services(
         jwt_provider=jwt_provider,
         directory_repo=directory_repo,
         activity_logger=activity_logger,
+        rule_repo=facade._rule_repo,  # type: ignore[attr-defined]
         logging_provider=silent_logger,
     )
     attachment_facade = AttachmentFacadeImpl(
