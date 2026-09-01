@@ -29,9 +29,9 @@ class Rule(_message.Message):
     will only fire if the note is created in that directory.
     action type, describes the then action, e.g. add note to a directory etc
 
-    The ``condition`` and ``action_context`` fields are carried as
-    ``google.protobuf.Struct`` so the shape can evolve without breaking
-    the gRPC contract.  Valid ``condition.type`` values:
+    Both `condition` and `action_context` fields are structs,
+    so the shape can evolve without breaking
+    the gRPC contract.  Valid `condition.type` values:
 
       - "always_true"
       - "note_content_contains"   (with ``substring``)

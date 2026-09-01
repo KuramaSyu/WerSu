@@ -81,9 +81,7 @@ message Note {
     string user_id = 10;
     repeated string attachment_ids = 11;
 
-    // ids of every shelf this note sits on (transitively via its
-    // parent directory).  Populated only when the caller opts in
-    // via the read paths; empty otherwise.
+    // sehlves where this note is in. currently maybe empty
     repeated string shelf_ids = 12;
 }
 
@@ -97,12 +95,7 @@ message NoteEmbedding {
     repeated float embedding = 2;
 }
 
-// Request to add a note.  At least one of ``directory_ids`` or
-// ``shelf_id`` must be supplied.  When ``directory_ids`` is
-// non-empty it is preferred: the first id becomes the note's
-// primary directory (and shelves are inherited from there).  When
-// only ``shelf_id`` is given the note facade resolves a default
-// directory from the user's rules attached to that shelf.
+// Request to add a note. Either shelf_id or directory_ids must be provided. 
 message PostNoteRequest {
     string title = 1;
     optional string content = 2;
@@ -111,15 +104,12 @@ message PostNoteRequest {
     // the id of the user making the request - used for permission checking
     string user_id = 4;
 
-    // shelf the new note should land on.  Used only when
-    // ``directory_ids`` is empty: the note facade resolves a
-    // default directory from rules attached to this shelf.
+    // shelf used to resolve rules, so that the correct 
+    // directory is autoselected
     string shelf_id = 5;
 
-    // Explicit parent directories for the new note.  Preferred
-    // over ``shelf_id`` when non-empty -- the first id becomes
-    // the note's primary directory, and inherited shelves come
-    // from there.  Empty == fall back to ``shelf_id``.
+    // Explicit parent directories instead of relying on rules
+    // over shelf_id
     repeated string directory_ids = 6;
 }
 
@@ -199,10 +189,14 @@ message CreateDirectoryRequest {
     optional string display_name = 2;
     optional string description = 3;
     optional string image_url = 4;
+
+    // can contain directories and shelves
     repeated string parent_ids = 5;
+    
     // the user_id of the user making the request, used for permission checking
     // its also the author of the directory
     string user_id = 6;
+
 }
 
 // any ommited fields will be left unchanged 
