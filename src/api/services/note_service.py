@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, TypedDict
 
 from src.api.other.user_context import UserContextABC
 from src.api.other.visitor import AcceptsVisitor, EntityVisitor
+from src.api.search_filter import NoteSearchFilter
 
 if TYPE_CHECKING:
     from src.db.entities.note.metadata import NoteEntity
@@ -283,6 +284,8 @@ class NoteServiceABC(ABC):
         user_ctx: UserContextABC,
         limit: int,
         offset: int,
+        *,
+        filter_: Optional[NoteSearchFilter] = None,
     ) -> List[NoteEntity]:
         """Run the embedding / fuzzy / date search pipeline.
 
