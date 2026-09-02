@@ -7,10 +7,8 @@ package proto;
 option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
 
 
-// String value wrapper for fields where the API needs to distinguish:
-// - field omitted: leave unchanged / do not filter
-// - null_value=true: explicitly set or search for NULL
-// - value set: use the provided string
+// String wrapper: field omitted = leave unchanged, null_value = explicit NULL,
+// value = use the provided string.
 message NullableString {
     oneof kind {
         string value = 1;
@@ -18,10 +16,8 @@ message NullableString {
     }
 }
 
-// Timestamp value wrapper for fields where the API needs to distinguish:
-// - field omitted: leave unchanged / do not filter
-// - null_value=true: explicitly set or search for NULL
-// - value set: use the provided timestamp
+// Timestamp wrapper: field omitted = leave unchanged, null_value = explicit NULL,
+// value = use the provided timestamp.
 message NullableTimestamp {
     oneof kind {
         google.protobuf.Timestamp value = 1;
@@ -30,7 +26,7 @@ message NullableTimestamp {
 }
 
 
-// the permission a share can have
+// Permission level of a share.
 enum SharePermission {
     SHARE_PERMISSION_UNSPECIFIED = 0;
     SHARE_PERMISSION_READ = 1;
@@ -50,12 +46,9 @@ message NoteShare {
     string access_as = 9;
 }
 
-// Filter for searching shares.
-//
-// Date values are evaluated inclusively:
-// - online_since.value finds shares with online_since >= value
-// - online_until.value finds shares with online_until <= value
-// - null_value=true searches for rows where the date column is NULL
+// Filter for shares. Dates are inclusive:
+// online_since.value matches online_since >= value, online_until.value matches
+// online_until <= value, null_value matches rows where the column is NULL.
 message ShareFilter {
     optional string note_id = 1;
     optional string created_by = 2;
@@ -73,7 +66,7 @@ message CreateShareRequest {
     SharePermission permission = 6;
 }
 
-// Access a share by its ID. This ID is part of the share URL /public/n/<share_id>
+// Access a share by its ID (the share_id segment of /public/n/<share_id>).
 message AccessShareRequest {
     string share_id = 1;
 }
@@ -83,12 +76,12 @@ message AccessShareResponse {
     NoteShare share = 1;
 }
 
-// request with share id to get the temporary user id that can be used to access the share. 
+// Look up the temporary user id used to access a share.
 message GetShareUserRequest {
     string share_id = 1;
 }
 
-// Response for a get share user request, containing the temporary user id 
+// Response carrying the temporary user id for a share.
 message GetShareUserResponse {
     string access_as = 1;
     NullableTimestamp online_until = 2;

@@ -5,7 +5,7 @@ package proto;
 option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
 
 
-// Request for getting a note by id
+// Fetch a note by id.
 message GetNoteRequest {
     string id = 1;
     string user_id = 2;
@@ -42,7 +42,7 @@ message NotesReply {
     repeated MinimalTag tags = 3;
 }
 
-// Response: represents a minimal Note for search results
+// Minimal note returned by search results.
 message MinimalNote {
     string id = 1; // Note ID (UUIDv7 string)
     string title = 2;
@@ -66,7 +66,7 @@ message MinimalTag {
     string display_name = 3;
 }
 
-// Response: represents a Note
+// Full Note entity.
 message Note {
     reserved 6;
     string id = 1;
@@ -83,7 +83,7 @@ message Note {
     string user_id = 10;
     repeated string attachment_ids = 11;
 
-    // sehlves where this note is in. currently maybe empty
+    // shelves this note is on; may be empty
     repeated string shelf_ids = 12;
 }
 
@@ -97,7 +97,7 @@ message NoteEmbedding {
     repeated float embedding = 2;
 }
 
-// Request to add a note. Either shelf_id or directory_ids must be provided. 
+// Create a note. Either shelf_id or directory_ids must be provided. 
 message PostNoteRequest {
     string title = 1;
     optional string content = 2;
@@ -106,8 +106,7 @@ message PostNoteRequest {
     // the id of the user making the request - used for permission checking
     string user_id = 4;
 
-    // shelf used to resolve rules, so that the correct 
-    // directory is autoselected
+    // shelf used to resolve rules so the correct directory is autoselected
     string shelf_id = 5;
 
     // Explicit parent directories instead of relying on rules
@@ -123,7 +122,7 @@ message DeleteNoteRequest {
     string user_id = 2;
 }
 
-// Request to alter a note. Any omitted fields will be left unchanged, and any repeated fields will be replaced with the new values.
+// Alter a note. Omitted fields are left unchanged; repeated fields are replaced.
 message AlterNoteRequest {
     string id = 1;
     optional string title = 2;
@@ -141,8 +140,7 @@ message AlterNoteRequest {
     string user_id = 7;
 }
 
-// repeated fields dont have a HasField. So we wrap them into a
-// `oneof` to distinguish "not set" from "explicitly cleared".
+// Wraps a repeated field in a oneof so we can tell "not set" apart from "explicitly cleared".
 message IdsOrUndefined {
     repeated string ids = 1;
 }
@@ -157,10 +155,8 @@ message Directory {
     repeated PermissionRelationship relationships = 7;
     repeated string child_dir_ids = 8;
     repeated string child_note_ids = 9;
-    // ids of every shelf this book (directory) sits on.
-    // Populated when the caller opts in via
-    // ``include_shelves`` on ``GetDirectoryRequest`` /
-    // ``GetDirectoriesRequest``; empty otherwise.
+    // ids of every shelf this book sits on. Populated when the caller opts in
+    // via include_shelves on GetDirectoryRequest / GetDirectoriesRequest; empty otherwise.
     repeated string shelf_ids = 10;
 }
 
@@ -173,7 +169,7 @@ message GetDirectoryRequest {
     bool include_shelves = 6;
 }
 
-// list all directory contents of a given directory <parent_id>
+// List directory contents under a given parent_id.
 message GetDirectoriesRequest {
     // the requesting user's id, used for permission checking
     string user_id = 1;
@@ -195,18 +191,15 @@ message CreateDirectoryRequest {
     // contains directory parents
     repeated string parent_ids = 5;
 
-    // contains shelf parents. we separate it,
-    // to prevent extra db calls, just to tell them apart
+    // shelf parents; kept separate from directory parents to skip a db roundtrip
     repeated string shelf_ids = 7;
 
-    // the user_id of the user making the request, used for permission checking
-    // its also the author of the directory
+    // used for permission checking; also the author of the directory
     string user_id = 6;
 
 }
 
-// any ommited fields will be left unchanged 
-// and any repeated fields will be replaced with the new values. 
+// Alter a directory. Omitted fields are left unchanged; repeated fields are replaced.
 message AlterDirectoryRequest {
     string id = 1;
     optional string name = 2;
@@ -299,7 +292,7 @@ message PermissionsResponse {
     repeated PermissionRelationship relationships = 3;
 }
 
-// Versioning requests and responses
+// Versioning messages.
 message NoteVersionSummary {
     string version_id = 1;
     string note_id = 2;
@@ -348,9 +341,7 @@ message RestoreNoteVersionRequest {
 
 // Note Service
 service NoteService {
-    // GetNote returns a Note from DB. If the user is a public/temp user,
-    // then an additional id_token_map will be returned, containing a
-    // JWT for each attachment in the file. 
+    // For public/temp users, id_token_map carries a JWT per attachment.
     rpc GetNote(GetNoteRequest) returns (NoteResponse);
     rpc PostNote(PostNoteRequest) returns (Note);
     rpc PatchNote(AlterNoteRequest) returns (Note);

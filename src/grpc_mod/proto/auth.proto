@@ -6,21 +6,17 @@ import "google/protobuf/timestamp.proto";
 package proto;
 option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
 
-// Auth proto.
+// Auth service.
 //
 // Layering:
-// - The browser does not talk to gRPC. REST (`WerSu-Rest`) is the
-//   HTTP edge and runs the WebAuthn ceremony (challenge generation,
-//   attestation/assertion verification) using `go-webauthn`. It also
-//   handles password hashing, rate limiting, JWT issuance, and email
-//   delivery.
-// - gRPC is the source of truth for users and credentials. REST
-//   calls into this service to look up credentials, persist public
-//   keys, and bump counters. REST does not write to the auth tables
-//   directly.
-// - There is no session table on the backend. Every request that
-//   reaches gRPC is trusted because the REST middleware has already
-//   verified a JWT or session.
+// - The browser talks to REST (WerSu-Rest), not gRPC. REST is the HTTP edge
+//   and runs the WebAuthn ceremony (challenge, attestation, assertion) with
+//   go-webauthn. It also handles password hashing, rate limiting, JWT issuance,
+//   and email delivery.
+// - gRPC is the source of truth for users and credentials. REST calls into this
+//   service to look up credentials, persist public keys, and bump counters.
+// - There is no session table. Every gRPC request is trusted because the REST
+//   middleware has already verified a JWT or session.
 
 enum CredentialKind {
     CREDENTIAL_KIND_UNSPECIFIED = 0;
@@ -30,25 +26,22 @@ enum CredentialKind {
     CREDENTIAL_KIND_GOOGLE = 4;
 }
 
-// A user as exposed to the auth layer.
+// User as exposed to the auth layer.
 message UserAuth {
     string id = 1;
     string email = 2;
-    // Username is optional; empty string means the user has not set one.
+    // Username is optional; empty string means unset.
     string username = 3;
     // Zero timestamp means the email has not been verified yet.
     google.protobuf.Timestamp email_verified_at = 4;
     bool is_active = 5;
     google.protobuf.Timestamp created_at = 6;
-    // Absolute URL to the user's avatar. Empty string means none
-    // is configured. The REST controller maps this to JSON null
-    // on the frontend.
+    // Absolute avatar URL. Empty string means none; REST maps empty to JSON null.
     string avatar_url = 7;
 }
 
-// A stored credential. Exactly one of the `payload` oneof fields is
-// populated, enforced by the service layer. The `kind` enum tells
-// REST which one to read.
+// Stored credential. Exactly one payload oneof field is populated
+// (enforced by the service layer); kind tells REST which one to read.
 message Credential {
     string id = 1;
     string user_id = 2;
@@ -60,23 +53,21 @@ message Credential {
         // kind = DISCORD
         string discord_id = 6;
 
-        // kind = PASSWORD -- argon2id encoded string
+        // kind = PASSWORD; argon2id encoded string
         string password_hash = 7;
 
-        // kind = PASSKEY -- points at the row in `passkeys` table
+        // kind = PASSKEY; points at the row in passkeys table
         string passkey_id = 8;
 
-        // kind = GOOGLE -- Google's stable user id from the `sub` claim
+        // kind = GOOGLE; Google's stable user id from the sub claim
         string google_id = 9;
     }
 }
 
-// A stored WebAuthn passkey (public-key credential).
-//
-// The private key never leaves the user's device. The `public_key`
-// field holds the COSE-encoded public key produced by the
-// authenticator at registration time. `sign_count` is updated on
-// every successful login and must strictly increase; a non-monotonic
+// Stored WebAuthn passkey (public-key credential).
+// The private key never leaves the user's device. public_key holds the
+// COSE-encoded public key produced at registration. sign_count is bumped
+// on every successful login and must strictly increase; a non-monotonic
 // counter suggests an authenticator clone.
 message Passkey {
     string id = 1;
@@ -95,10 +86,9 @@ message Passkey {
     google.protobuf.Timestamp revoked_at = 14;
 }
 
-// Lookup a user by id/email/discord id
+// Lookup a user by id/email/discord id.
 // Often used by frontend: useUser() hook resolves to this.
-// REST takes user id from session, and checks against this endpoint
-// if information is correct.
+// REST takes user id from session and checks against this endpoint.
 message GetUserAuthRequest {
     oneof identifier {
         string user_id = 1;
@@ -111,15 +101,14 @@ message GetUserAuthResponse {
     UserAuth user = 1;
 }
 
-// Create a user (email + password signup). Returns
-// ALREADY_EXISTS if a user with the email already exists.
+// Create a user (email + password signup).
+// Returns ALREADY_EXISTS if a user with the email already exists.
 message CreateUserAuthRequest {
     string email = 1;
     string username = 2;
     string password_hash = 3;
-    // Optional. Absolute URL to the user's avatar (resolved by the
-    // REST controller via Discord/Google/Gravatar fallbacks). Empty
-    // string means none. The frontend maps empty to JSON null.
+    // Optional. Absolute avatar URL resolved by REST via Discord/Google/Gravatar.
+    // Empty string means none; frontend maps empty to JSON null.
     string avatar_url = 4;
 }
 
@@ -127,14 +116,13 @@ message CreateUserAuthResponse {
     UserAuth user = 1;
 }
 
-// Update mutable fields on an existing user. Each field is a
-// tri-state: omitted (leave unchanged), `_set` populated (write the
-// value), or `_clear` populated (set the column to NULL). Used for
-// username/email changes and `email_verified_at`.
+// Update mutable fields on a user. Each field is tri-state:
+// omitted (leave unchanged), _set (write value), or _clear (set column NULL).
+// Used for username/email changes and email_verified_at.
 message UpdateUserAuthRequest {
     string user_id = 1;
 
-    // the actor on which we will check permissions
+    // actor used for permission checks
     string requester_id = 2;
 
     oneof username_change {
@@ -178,9 +166,9 @@ message FindCredentialByProviderResponse {
     UserAuth user = 2;
 }
 
-// Look up a passkey by its WebAuthn credential id. REST calls
-// this with the `id` from `navigator.credentials.get()` so it
-// can do the signature verification with the right public key.
+// Look up a passkey by its WebAuthn credential id. REST calls this with
+// the id from navigator.credentials.get() so it can verify the signature
+// with the right public key.
 message FindPasskeyRequest {
     bytes credential_id = 1;
 }
@@ -189,8 +177,7 @@ message FindPasskeyResponse {
     Passkey passkey = 1;
 }
 
-// List a user's passkeys for the settings page (with a friendly
-// label, last-used date, and a way to revoke each).
+// List a user's passkeys for the settings page (friendly label, last-used date, revoke).
 message ListPasskeysRequest {
     string user_id = 1;
     bool include_revoked = 2;
@@ -200,10 +187,9 @@ message ListPasskeysResponse {
     repeated Passkey passkeys = 1;
 }
 
-// Bump the sign counter after a successful assertion. REST
-// verifies the signature first, then calls this. The service
-// returns FAILED_PRECONDITION if the new counter is not strictly
-// greater than the stored one (cloned authenticator).
+// Bump the sign counter after a successful assertion. REST verifies the
+// signature first, then calls this. Returns FAILED_PRECONDITION if the new
+// counter is not strictly greater than the stored one (cloned authenticator).
 message UpdatePasskeyCounterRequest {
     string passkey_id = 1;
     uint64 new_sign_count = 2;
@@ -214,14 +200,13 @@ message UpdatePasskeyCounterResponse {
 }
 
 // Store a new passkey after REST has verified the attestation.
-// `credential_id` is the raw bytes from the authenticator.
-// `public_key` is the COSE-encoded public key extracted from the
-// attestation authData. The service layer is responsible for
-// storing both in their native byte form -- they are not reshaped.
+// credential_id is the raw bytes from the authenticator; public_key is the
+// COSE-encoded public key extracted from the attestation authData.
+// The service stores both in their native byte form; they are not reshaped.
 message RegisterPasskeyRequest {
     string user_id = 1;
 
-    // actor on which we will check permissions
+    // actor used for permission checks
     string requester_id = 2;
     bytes credential_id = 3;
     bytes public_key = 4;
@@ -244,14 +229,12 @@ message RevokePasskeyRequest {
 }
 
 
-// Account Linking: Attach a new credential to an existing user (Passkey
-// Discord OAuth, Google OAuth, or password)
-//
-// `kind` selects which payload field is populated. Exactly one of
-// `discord_id`, `password_hash`, `passkey_id`, or `google_id` must
-// be set. Returns ALREADY_EXISTS if the user already has a
-// credential of that kind (with the exception of passkey, which
-// can have many).
+// Account Linking: attach a new credential to an existing user
+// (Passkey, Discord OAuth, Google OAuth, or password).
+// kind selects which payload field is populated; exactly one of
+// discord_id, password_hash, passkey_id, or google_id must be set.
+// Returns ALREADY_EXISTS if the user already has a credential of that kind
+// (passkey is the exception and can have many).
 message LinkCredentialRequest {
     string user_id = 1;
     string requester_id = 2;
@@ -269,7 +252,7 @@ message LinkCredentialResponse {
     Credential credential = 1;
 }
 
-// Unlink a credential. Removing the last credential should raise
+// Unlink a credential. Removing the last credential should raise.
 message UnlinkCredentialRequest {
     string credential_id = 1;
     string user_id = 2;
@@ -278,7 +261,7 @@ message UnlinkCredentialRequest {
     string requester_id = 3;
 }
 
-// Summary of every credential linked to a user (Google, Discord, Passkey, Password)
+// Every credential linked to a user (Google, Discord, Passkey, Password).
 message ListLinkedCredentialsRequest {
     string user_id = 1;
 }

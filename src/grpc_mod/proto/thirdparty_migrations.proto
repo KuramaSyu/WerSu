@@ -3,11 +3,9 @@ syntax = "proto3";
 package proto;
 option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
 
-// One chunk of a streamed BookStack book zip. The first chunk in the
-// stream carries `user_id`; subsequent chunks may leave it empty.
-//
-// `content` holds raw bytes of the zip (or a slice of them when the
-// client chooses to chunk the upload).
+// One chunk of a streamed BookStack book zip.
+// First chunk carries user_id; later chunks may leave it empty.
+// content holds raw bytes of the zip (or a slice when the client chunks the upload).
 message BookstackBookImportChunk {
     string user_id = 1;
     bytes content = 2;
@@ -28,11 +26,9 @@ message BookstackBookImportResponse {
     int32 attachments_uploaded = 4;
 }
 
-// Service that imports content from third-party documentation tools
+// Imports content from third-party documentation tools
 // into the project's directory / note / attachment model.
-//
-// Only the BookStack book import is implemented today; further RPCs
-// will be added here for other sources (Notion, Confluence, ...).
+// Only BookStack is implemented today; Notion, Confluence, ... will follow.
 service ThirdpartyMigrationsService {
     rpc BookstackBookImport(stream BookstackBookImportChunk)
         returns (BookstackBookImportResponse);

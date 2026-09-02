@@ -49,7 +49,7 @@ message UpdateAttachmentMetadataRequest {
     string sha256 = 4;
     string size = 5;
     
-    // the requesting user - used for authorization
+    // used for authorization
     string user_id = 6;
 }
 
@@ -78,9 +78,9 @@ service AttachmentService {
     rpc GetAttachmentMetadata(GetAttachmentMetadataRequest) returns (AttachmentMetadata);
     rpc DeleteAttachment(DeleteAttachmentRequest) returns (DeleteAttachmentResponse);
 
-    // enforces that key (filepath) is given and updates all other provided fields for that key
+    // requires key; updates other provided fields for that key
     rpc UpdateAttachmentMetadata(UpdateAttachmentMetadataRequest) returns (AttachmentMetadata);
-    // either works -> no return or fails completely with an error, so no need for a response message
+    // either succeeds fully or fails with an error; no response body needed
     rpc PostAttachmentLink(PostAttachmentLinkRequest) returns (google.protobuf.Empty);
     rpc DeleteAttachmentLink(DeleteAttachmentLinkRequest) returns (google.protobuf.Empty);
 }
