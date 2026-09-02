@@ -9,8 +9,8 @@ result enrichment).
 
 It is the only layer in the codebase that holds a
 :class:`src.api.permission_repo.PermissionRepoABC`.  The gRPC adapter
-(:class:`src.grpc_mod.service.GrpcNoteService`) calls into it; nothing
-else reaches the permission repo.
+(:class:`src.grpc_mod.note_service.GrpcNoteService`) calls into it;
+nothing else reaches the permission repo.
 """
 
 from __future__ import annotations

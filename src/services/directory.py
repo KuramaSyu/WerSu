@@ -6,8 +6,8 @@ and orchestrates every directory-related concern (permission checks,
 README bookkeeping, pagination, default-directory resolution).
 
 It sits above the directories / notes repos but below the gRPC adapter,
-so that :class:`~src.grpc_mod.service.GrpcDirectoryService` (and any
-future caller) can stay free of permission/repo plumbing.
+so that :class:`~src.grpc_mod.directory_service.GrpcDirectoryService`
+(and any future caller) can stay free of permission/repo plumbing.
 """
 
 from __future__ import annotations

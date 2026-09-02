@@ -1,4 +1,4 @@
-"""Unit tests for :class:`src.grpc_mod.service.GrpcDirectoryService`.
+"""Unit tests for :class:`src.grpc_mod.directory_service.GrpcDirectoryService`.
 
 These tests pin the gRPC adapter's behaviour on top of the shared
 :class:`~tests.stubs.directory_service._StubDirectoryService` so they

@@ -1,4 +1,4 @@
-"""Fast unit tests for :class:`src.grpc_mod.service.GrpcNoteService`.
+"""Fast unit tests for :class:`src.grpc_mod.note_service.GrpcNoteService`.
 
 `GetNote` is the only RPC whose wire shape changed in the visitor
 refactor: it now returns the proto :class:`NoteResponse` (which wraps
