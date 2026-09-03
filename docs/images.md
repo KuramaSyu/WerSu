@@ -11,52 +11,81 @@ The following diagram shows how image upload is handled
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant Frontend
     participant REST Proxy
     participant WerSu gRPC
     participant SpiceDB
     participant Postgres
-    participant Openinary
+    participant imgproxy
+    participant S3
 
-    Frontend->>REST Proxy: (1) Upload image
-    REST Proxy->>Openinary: (2) Proxy the upload image request
-    Openinary->>REST Proxy: (3) Return image URL
+    alt Upload image (no authentication)
+    Frontend->>REST Proxy: Upload image<br/>POST /api/attachments/images
+    REST Proxy->>S3: (2) Proxy the upload image request
+    S3->>REST Proxy: (3) Return image Key / URL
+    REST Proxy->>WerSu gRPC: Send image with S3 Key
+    WerSu gRPC->>Postgres: Store image metadata + Key in database
+    Postgres-->>WerSu gRPC:
+    WerSu gRPC->>REST Proxy: Return image Key (now stored in the backend)
     activate REST Proxy
-    Note left of REST Proxy: (3.1) Change internal<br>openinary URL<br>to WerSu URL  
+    Note right of REST Proxy: internal S3 URL to public URL
     deactivate REST Proxy
-    REST Proxy->>Frontend: (4) Return image URL
-    Frontend->>REST Proxy: (5) Update/Create note (with image URL)
-    REST Proxy->>WerSu gRPC: (6) Proxy the update/create note request
-    WerSu gRPC->>Postgres: (7) Update/Create note in database
-    Postgres->>WerSu gRPC: (8) Return note ID
-    activate WerSu gRPC
-    Note right of WerSu gRPC: (9) Parse image/attachment<br>URLs from note content
-    deactivate WerSu gRPC
-    WerSu gRPC->>SpiceDB: (10) Update permissions for note using the ID
-    WerSu gRPC->>SpiceDB: (11) Add that image is child of the note
-    WerSu gRPC->>REST Proxy: (12) Return success response with note ID
-    REST Proxy->>Frontend: (13) Return success response with note ID
+    REST Proxy-->>Frontend: Return image URL
+    end
 
+    alt Link image to note (authenticated)
+    Frontend->>REST Proxy: Link image to note over<br/>POST /api/attachments/attachment-links
+    activate REST Proxy
+    Note right of REST Proxy: Authenticate user via Cookie or JWT
+    deactivate REST Proxy
+    REST Proxy->>WerSu gRPC: Proxy request to backend
+    WerSu gRPC->>SpiceDB: Check if user is authorized to write the note<br/>where the attachment should be linked to<br/>note#write@user
+    SpiceDB-->>WerSu gRPC:
+    WerSu gRPC->>SpiceDB: Create relation from note to attachment<br/>(and transitive relation to user)
+    SpiceDB-->>WerSu gRPC:
+    WerSu gRPC-->>REST Proxy:
+    REST Proxy-->>Frontend:
+    end
+
+    alt retrieve image (authenticated)
+    Frontend-->>REST Proxy: GET /api/attachments/
+    activate Frontend
+    Note right of Frontend: When opening a note, we request all attachments and images with GET /api/attachments/. The Key is passed via body
+    deactivate Frontend
+    activate REST Proxy
+    Note right of REST Proxy: Authenticate user via Cookie or JWT
+    deactivate REST Proxy
+    REST Proxy->>SpiceDB: Check if user is authorized to access the attachment
+    SpiceDB-->>REST Proxy:
+    REST Proxy->>imgproxy: Fetch image with given dimensions
+    imgproxy-->>S3: Fetch image bytes
+    S3-->>imgproxy: Return image bytes
+    imgproxy->>REST Proxy: Return transformed image bytes
+    REST Proxy-->>Frontend: Return transformed image bytes
+    end
 ```
-1. The user uploads an image. This image is sent to the REST Endpoint which acts mostly as proxy
-2. The REST Proxy will proxy the upload to Openinary, an image store
-3. Openinary returns the URL where to access the image from
-    - 3.1 The Restproxy will change the interal Openinary URL like https://localhost/123 to https://wersu.inu-the-bot.com/attachment?type=image&id=123 which will be accessable from the frontend
-4. Return this updated URL
-5. Now the Frontend inserts the image into the note using it's ID, so that note content looks like this:
-    ```
-    ...
-    ![first image](https://wersu.inu-the-bot.com/attachment?type=image&id=123)
-    ...
-    ```
-    Now this content is sent to the REST Proxy
-6. The REST Proxy proxies this POST-Request to WerSu gRPC
-7. WerSu gRPC will create or update the note in the Postgres Database
-8. Postgres will return the ID of the note (lets take 42 as example)
-9. WerSu gRPC parses image URLs out of the content
-10. WerSu gRPC will create following relations and send them to SpiceDB:
-    - `note:42#admin@user:alice` alice is admin of note 123
-    - `directory:docs#parent@note:42` note 42 belongs to the docs directory
-11. WerSu gRPC will create the `note:42#parent@attachment:123` relation, which means that attachment 123 belongs to note 42
-12. WerSu gRPC now returns the note ID to the REST Proxy
-13. The REST Proxy proxies the response back to the frontend
+1. User uploads an image via frontend
+2. REST Proxy puts the image via S3
+3. S3 returns the image key
+4. REST Proxy sends the image key to WerSu gRPC (the actual backend)
+5. WerSu gRPC stores the image metadata and key in Postgres
+6. Postgres returns
+7. WerSu gRPC returns the image (S3) key to REST Proxy
+8. The REST Proxy transforms the internal S3 URL to a public URL which contains the actual S3 key and returns it to the frontend
+9. After the frontend receives the image URL and hence the attachment key, it can link it to the actual note. Hence it calls `POST /api/attachments/attachment-links` with the note ID and attachment key
+10. The REST Proxy authenticates the user either with Cookie or JWT and forwards the request to WerSu gRPC
+11. WerSu gRPC checks with SpiceDB if the user is authorized to write the note via `note#write@user` (write is the permission, which is required to link an attachment to a note)
+12. SpiceDB returns the result to WerSu gRPC
+13. WerSu gRPC creates a relation from the note to the attachment (e.g. `attachment#parent@note`). This way, a request if a user can access an attachment is checked transitively by checking if the user has access (view) to the note. There are no direct permissions for attachments.
+14. SpiceDB returns the result to WerSu gRPC
+15. WerSu gRPC returns the result to REST Proxy
+16. REST Proxy returns the result to the frontend
+17. When the user opens a note, then the frontend makes a request to `GET /api/attachments/` or `GET /api/attachments/images[image-params]` to fetch all attachments and images for the note. The attachment key is passed via body, since it contains slashes which results in broken URLs if we passed it via query params. 
+18. The REST Proxy authenticates the user either with Cookie or JWT and checks with SpiceDB if the user is authorized to access the attachment via `note#view@user`. 
+19. SpiceDB returns the result to REST Proxy
+20. The REST Proxy fetches the image from imgproxy with the given dimensions (for example w=100&h=100&fit=crop)
+21. imgproxy fetches the image bytes from S3
+22. S3 returns the image bytes to imgproxy
+23. imgproxy returns the transformed image bytes to REST Proxy
+24. REST Proxy returns the transformed image bytes to the frontend
