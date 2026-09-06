@@ -23,24 +23,16 @@ DESCRIPTOR: _descriptor.FileDescriptor
 
 @_typing.final
 class Rule(_message.Message):
-    """A rule is a stored if x then do y event. attached_entity describes
-    an entity, where this rule is attached to. e.g. if event type
-    is note_created and attached_entity is a directory, then the rule
-    will only fire if the note is created in that directory.
-    action type, describes the then action, e.g. add note to a directory etc
+    """Stored "if x then do y" event. attached_entity is the scope anchor
+    (e.g. a directory); the rule fires only when the event's primary entity
+    matches it (or a descendant in the directory/shelf case). Global rules
+    are no longer supported.
 
-    Both `condition` and `action_context` fields are structs,
-    so the shape can evolve without breaking
-    the gRPC contract.  Valid `condition.type` values:
-
-      - "always_true"
-      - "note_content_contains"   (with ``substring``)
-      - "note_title_contains"     (with ``substring``)
-
-    Valid ``action_type`` values:
-
-      - "add_to_directory"        (with ``directory_id``)
-      - "add_tag"                 (with ``tag_id``)
+    condition and action_context are Structs so the shape can evolve without
+    breaking the gRPC contract.
+    Valid condition.type values: "always_true", "note_content_contains" (with substring),
+    "note_title_contains" (with substring).
+    Valid action_type values: "add_to_directory" (with directory_id), "add_tag" (with tag_id).
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -59,25 +51,20 @@ class Rule(_message.Message):
     id: _builtins.str
     event_type: _builtins.str
     attached_entity_type: _builtins.str
-    """Required scope anchor.  The rule fires only for events
-    whose primary entity matches this anchor (or, in the
-    directory / shelf case, a descendant / contained book of
-    it).  Global rules are no longer supported.
+    """Required scope anchor: rule fires only for events whose primary entity
+    matches this (or, for directory/shelf, a descendant of it).
     "directory" | "note" | "shelf"
     """
     attached_entity_id: _builtins.str
     action_type: _builtins.str
-    """Action split into a discriminator + parameters so the
-    discriminator is indexable and round-trips cleanly.
+    """Action discriminator + parameters; discriminator is indexable.
     "add_to_directory" | "add_tag" | ...
     """
     enabled: _builtins.bool
     creator_id: _builtins.str
     @_builtins.property
     def condition(self) -> _struct_pb2.Struct:
-        """Condition dataclass, serialised as a Struct:
-          { "type": "note_content_contains", "substring": "linux" }
-        """
+        """Condition Struct, e.g. {"type": "note_content_contains", "substring": "linux"}."""
 
     @_builtins.property
     def action_context(self) -> _struct_pb2.Struct: ...
@@ -110,7 +97,7 @@ Global___Rule: _TypeAlias = Rule  # noqa: Y015
 
 @_typing.final
 class RuleFilter(_message.Message):
-    """Used by GetRules to scope the list.  All fields optional."""
+    """Scopes the GetRules list. All fields optional."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -412,9 +399,7 @@ class DeleteRuleResponse(_message.Message):
     EMPTY_FIELD_NUMBER: _builtins.int
     @_builtins.property
     def empty(self) -> _empty_pb2.Empty:
-        """Empty for now; kept so the response shape can grow
-        without breaking clients.
-        """
+        """Empty for now; kept so the response shape can grow without breaking clients."""
 
     def __init__(
         self,

@@ -19,10 +19,8 @@ DESCRIPTOR: _descriptor.FileDescriptor
 
 @_typing.final
 class Role(_message.Message):
-    """A role that bundles a set of users for permission grants.
-
-    Metadata (name, description) lives in Postgres.  Membership edges
-    (`user#member_of@role`) live in SpiceDB.
+    """Bundles users for permission grants. Metadata lives in Postgres;
+    membership edges (user#member_of@role) live in SpiceDB.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -54,7 +52,7 @@ Global___Role: _TypeAlias = Role  # noqa: Y015
 
 @_typing.final
 class UserRoleMembership(_message.Message):
-    """A single `user#member_of@role` edge."""
+    """A single user#member_of@role edge."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -82,12 +80,9 @@ Global___UserRoleMembership: _TypeAlias = UserRoleMembership  # noqa: Y015
 
 @_typing.final
 class RoleFilter(_message.Message):
-    """Filter for searching roles.
-
-    `member_id` matches roles whose SpiceDB `user#member_of@role`
-    relation includes the given user id.  `name` matches by exact
-    role name.  Both fields are optional; unset means "don't filter
-    on that field".
+    """Filter for roles. member_id matches roles whose SpiceDB
+    user#member_of@role relation includes the user; name matches by exact role name.
+    Both fields optional; unset means "don't filter on that field".
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -119,8 +114,8 @@ Global___RoleFilter: _TypeAlias = RoleFilter  # noqa: Y015
 
 @_typing.final
 class CreateRoleRequest(_message.Message):
-    """Create a new role.  The actor's user_id is used for permission
-    checks (currently: must hold `manage` on the bootstrap role).
+    """Create a role. Actor's user_id is used for permission checks
+    (currently: must hold manage on the bootstrap role).
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -148,9 +143,8 @@ Global___CreateRoleRequest: _TypeAlias = CreateRoleRequest  # noqa: Y015
 
 @_typing.final
 class UpdateRoleRequest(_message.Message):
-    """Update a role's metadata (name and/or description).  Membership
-    is managed through `AddUserToRole` / `RemoveUserFromRole`.  The
-    actor's user_id is used for permission checks.
+    """Update a role's metadata (name/description). Membership is managed
+    through AddUserToRole / RemoveUserFromRole. Actor's user_id is used for permission checks.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -183,10 +177,9 @@ Global___UpdateRoleRequest: _TypeAlias = UpdateRoleRequest  # noqa: Y015
 
 @_typing.final
 class DeleteRoleRequest(_message.Message):
-    """Delete a role.  Membership edges become dangling references in
-    SpiceDB (they silently evaluate to nothing); cleanup of those is
-    the caller's responsibility.  The actor's user_id is used for
-    permission checks.
+    """Delete a role. Membership edges become dangling references in SpiceDB
+    (silently evaluate to nothing); cleanup is the caller's responsibility.
+    Actor's user_id is used for permission checks.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -256,9 +249,7 @@ Global___GetRolesRequest: _TypeAlias = GetRolesRequest  # noqa: Y015
 
 @_typing.final
 class AddUserToRoleRequest(_message.Message):
-    """Add a user to a role's membership.  Gated by `manage` permission
-    on the role.
-    """
+    """Add a user to a role's membership. Gated by manage permission on the role."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -285,9 +276,7 @@ Global___AddUserToRoleRequest: _TypeAlias = AddUserToRoleRequest  # noqa: Y015
 
 @_typing.final
 class RemoveUserFromRoleRequest(_message.Message):
-    """Remove a user from a role's membership.  Gated by `manage`
-    permission on the role.
-    """
+    """Remove a user from a role's membership. Gated by manage permission on the role."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
