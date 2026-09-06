@@ -30,16 +30,11 @@ class _BootstrapStrategyEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Boo
     BOOTSTRAP_STRATEGY_ZETTELKASTEN: _BootstrapStrategy.ValueType  # 2
 
 class BootstrapStrategy(_BootstrapStrategy, metaclass=_BootstrapStrategyEnumTypeWrapper):
-    """Bootstrap strategy the service should run immediately after
-    inserting the shelf row.  ``UNSPECIFIED`` / ``NONE`` both mean
-    "no strategy" -- the caller just gets the bare shelf.
-
-    ``ZETTELKASTEN`` runs the same flow the user bootstrap
-    uses: create the three default books (fleeting / literature /
-    permanent) and bind them to the shelf, then insert the
-    ``NoteCreated -> add_to_directory(fleeting)`` rule attached to
-    the new shelf.  The strategy is idempotent: re-running it on a
-    shelf that already carries books is a no-op.
+    """Strategy the service runs right after inserting the shelf row.
+    UNSPECIFIED / NONE both mean "no strategy" - caller gets the bare shelf.
+    ZETTELKASTEN runs the user bootstrap flow: create the three default books
+    (fleeting / literature / permanent), bind them to the shelf, and insert the
+    NoteCreated -> add_to_directory(fleeting) rule. Idempotent: re-running is a no-op.
     """
 
 BOOTSTRAP_STRATEGY_UNSPECIFIED: BootstrapStrategy.ValueType  # 0
@@ -51,13 +46,9 @@ Global___BootstrapStrategy: _TypeAlias = BootstrapStrategy  # noqa: Y015
 class Shelf(_message.Message):
     """===== Domain messages ====================================================
 
-    A shelf is a flat (non-hierarchical) grouping of books
-    (directories).  Mirrors the metadata columns of a
-    :class:`~src.db.entities.directory.directory.DirectoryEntity`
-    minus the parent / child lists -- shelves don't nest.
-
-    ``book_ids`` is populated only when the caller opts in via
-    ``include_books=true`` on the read request; empty otherwise.
+    A shelf is a flat (non-hierarchical) grouping of books (directories).
+    Mirrors DirectoryEntity metadata minus parent / child lists; shelves do not nest.
+    book_ids is populated only when the caller opts in via include_books=true; empty otherwise.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -98,9 +89,8 @@ Global___Shelf: _TypeAlias = Shelf  # noqa: Y015
 
 @_typing.final
 class BootstrapResult(_message.Message):
-    """What the strategy produced.  Echoed back on
-    :class:`CreateShelfResponse` so callers can confirm what was
-    created.  Empty when no strategy ran.
+    """What the strategy produced. Echoed back on CreateShelfResponse so
+    callers can confirm what was created. Empty when no strategy ran.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -129,10 +119,9 @@ Global___BootstrapResult: _TypeAlias = BootstrapResult  # noqa: Y015
 
 @_typing.final
 class DeleteShelfResponse(_message.Message):
-    """Returned by ``DeleteShelf`` when ``dry=true``.  The fields
-    describe the would-be-cascade so the UI can show a
-    confirmation before issuing the real delete.  Empty when
-    ``dry=false`` and the delete succeeded.
+    """Returned by DeleteShelf when dry=true. Fields describe the would-be-cascade
+    so the UI can show a confirmation before issuing the real delete.
+    Empty when dry=false and the delete succeeded.
     """
 
     DESCRIPTOR: _descriptor.Descriptor

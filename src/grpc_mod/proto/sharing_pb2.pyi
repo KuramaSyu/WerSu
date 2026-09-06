@@ -31,7 +31,7 @@ class _SharePermissionEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Share
     SHARE_PERMISSION_WRITE: _SharePermission.ValueType  # 2
 
 class SharePermission(_SharePermission, metaclass=_SharePermissionEnumTypeWrapper):
-    """the permission a share can have"""
+    """Permission level of a share."""
 
 SHARE_PERMISSION_UNSPECIFIED: SharePermission.ValueType  # 0
 SHARE_PERMISSION_READ: SharePermission.ValueType  # 1
@@ -40,10 +40,8 @@ Global___SharePermission: _TypeAlias = SharePermission  # noqa: Y015
 
 @_typing.final
 class NullableString(_message.Message):
-    """String value wrapper for fields where the API needs to distinguish:
-    - field omitted: leave unchanged / do not filter
-    - null_value=true: explicitly set or search for NULL
-    - value set: use the provided string
+    """String wrapper: field omitted = leave unchanged, null_value = explicit NULL,
+    value = use the provided string.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -70,10 +68,8 @@ Global___NullableString: _TypeAlias = NullableString  # noqa: Y015
 
 @_typing.final
 class NullableTimestamp(_message.Message):
-    """Timestamp value wrapper for fields where the API needs to distinguish:
-    - field omitted: leave unchanged / do not filter
-    - null_value=true: explicitly set or search for NULL
-    - value set: use the provided timestamp
+    """Timestamp wrapper: field omitted = leave unchanged, null_value = explicit NULL,
+    value = use the provided timestamp.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -150,12 +146,9 @@ Global___NoteShare: _TypeAlias = NoteShare  # noqa: Y015
 
 @_typing.final
 class ShareFilter(_message.Message):
-    """Filter for searching shares.
-
-    Date values are evaluated inclusively:
-    - online_since.value finds shares with online_since >= value
-    - online_until.value finds shares with online_until <= value
-    - null_value=true searches for rows where the date column is NULL
+    """Filter for shares. Dates are inclusive:
+    online_since.value matches online_since >= value, online_until.value matches
+    online_until <= value, null_value matches rows where the column is NULL.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -234,7 +227,7 @@ Global___CreateShareRequest: _TypeAlias = CreateShareRequest  # noqa: Y015
 
 @_typing.final
 class AccessShareRequest(_message.Message):
-    """Access a share by its ID. This ID is part of the share URL /public/n/<share_id>"""
+    """Access a share by its ID (the share_id segment of /public/n/<share_id>)."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -277,7 +270,7 @@ Global___AccessShareResponse: _TypeAlias = AccessShareResponse  # noqa: Y015
 
 @_typing.final
 class GetShareUserRequest(_message.Message):
-    """request with share id to get the temporary user id that can be used to access the share."""
+    """Look up the temporary user id used to access a share."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -298,7 +291,7 @@ Global___GetShareUserRequest: _TypeAlias = GetShareUserRequest  # noqa: Y015
 
 @_typing.final
 class GetShareUserResponse(_message.Message):
-    """Response for a get share user request, containing the temporary user id"""
+    """Response carrying the temporary user id for a share."""
 
     DESCRIPTOR: _descriptor.Descriptor
 

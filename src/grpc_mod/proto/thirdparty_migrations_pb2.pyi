@@ -20,11 +20,9 @@ DESCRIPTOR: _descriptor.FileDescriptor
 
 @_typing.final
 class BookstackBookImportChunk(_message.Message):
-    """One chunk of a streamed BookStack book zip. The first chunk in the
-    stream carries `user_id`; subsequent chunks may leave it empty.
-
-    `content` holds raw bytes of the zip (or a slice of them when the
-    client chooses to chunk the upload).
+    """One chunk of a streamed BookStack book zip.
+    First chunk carries user_id; later chunks may leave it empty.
+    content holds raw bytes of the zip (or a slice when the client chunks the upload).
     """
 
     DESCRIPTOR: _descriptor.Descriptor
