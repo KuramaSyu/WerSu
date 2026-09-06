@@ -26,11 +26,9 @@ if _version_not_supported:
 
 
 class ThirdpartyMigrationsServiceStub:
-    """Service that imports content from third-party documentation tools
+    """Imports content from third-party documentation tools
     into the project's directory / note / attachment model.
-
-    Only the BookStack book import is implemented today; further RPCs
-    will be added here for other sources (Notion, Confluence, ...).
+    Only BookStack is implemented today; Notion, Confluence, ... will follow.
     """
 
     def __init__(self, channel):
@@ -47,11 +45,9 @@ class ThirdpartyMigrationsServiceStub:
 
 
 class ThirdpartyMigrationsServiceServicer:
-    """Service that imports content from third-party documentation tools
+    """Imports content from third-party documentation tools
     into the project's directory / note / attachment model.
-
-    Only the BookStack book import is implemented today; further RPCs
-    will be added here for other sources (Notion, Confluence, ...).
+    Only BookStack is implemented today; Notion, Confluence, ... will follow.
     """
 
     def BookstackBookImport(self, request_iterator, context):
@@ -77,11 +73,9 @@ def add_ThirdpartyMigrationsServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class ThirdpartyMigrationsService:
-    """Service that imports content from third-party documentation tools
+    """Imports content from third-party documentation tools
     into the project's directory / note / attachment model.
-
-    Only the BookStack book import is implemented today; further RPCs
-    will be added here for other sources (Notion, Confluence, ...).
+    Only BookStack is implemented today; Notion, Confluence, ... will follow.
     """
 
     @staticmethod
