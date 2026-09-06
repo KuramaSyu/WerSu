@@ -1,18 +1,3 @@
-"""Concrete :class:`~src.api.note_service.NoteServiceABC` implementation.
-
-This service composes :class:`src.api.note_facade.NoteRepoFacadeABC`
-(via its :class:`~src.db.repos.note.note.NoteFacadeImpl` implementation)
-with the permission and directory repos and orchestrates every
-permission-related concern (parent-directory resolution, owner /
-parent-dir relation insert, post-fetch permission enrichment, search
-result enrichment).
-
-It is the only layer in the codebase that holds a
-:class:`src.api.permission_repo.PermissionRepoABC`.  The gRPC adapter
-(:class:`src.grpc_mod.note_service.GrpcNoteService`) calls into it;
-nothing else reaches the permission repo.
-"""
-
 from __future__ import annotations
 
 import datetime
