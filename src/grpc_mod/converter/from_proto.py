@@ -12,10 +12,11 @@ import datetime as _dt
 from typing import Any, Literal
 
 from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr, unwrap_undefined
+from src.api.search_filter import NoteSearchFilter, validate_search_filter
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.role import RoleEntity, RoleFilter
 from src.db.repos.note.note_facade import SearchType
-from src.grpc_mod.proto.note_pb2 import GetSearchNotesRequest
+from src.grpc_mod.proto.note_pb2 import GetSearchNotesRequest, NoteSearchFilter as GrpcNoteSearchFilter
 from src.grpc_mod.proto.role_pb2 import (
     CreateRoleRequest,
     Role,
@@ -155,6 +156,40 @@ def to_search_type(
     ):
         return SearchType.CONTEXT
     raise ValueError(f"Unknown SearchType value: {proto_value}")
+
+
+def to_search_filter_entity(
+    grpc_filter: GrpcNoteSearchFilter,
+) -> NoteSearchFilter:
+    """Convert a proto ``NoteSearchFilter`` into the domain filter and validate it.
+
+    Raises:
+        SearchFilterError: if the same dimension has both include and exclude ids,
+            or if ``date_from`` is later than ``date_until``.
+    """
+    date_from = (
+        grpc_filter.date_from.ToDatetime()
+        if grpc_filter.HasField("date_from")
+        else None
+    )
+    date_until = (
+        grpc_filter.date_until.ToDatetime()
+        if grpc_filter.HasField("date_until")
+        else None
+    )
+
+    out = NoteSearchFilter(
+        include_directory_ids=list(grpc_filter.include_directory_ids),
+        exclude_directory_ids=list(grpc_filter.exclude_directory_ids),
+        date_from=date_from,
+        date_until=date_until,
+        include_shelf_ids=list(grpc_filter.include_shelf_ids),
+        exclude_shelf_ids=list(grpc_filter.exclude_shelf_ids),
+        include_tag_ids=list(grpc_filter.include_tag_ids),
+        exclude_tag_ids=list(grpc_filter.exclude_tag_ids),
+    )
+    validate_search_filter(out)
+    return out
 
 
 # --- roles ---------------------------------------------------------

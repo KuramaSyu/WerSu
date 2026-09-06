@@ -20,10 +20,9 @@ from grpc.aio import ServicerContext
 from src.api import LoggingProvider, NoteServiceABC
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import ContextFactory, UserContextABC
-from src.api.search_filter import NoteSearchFilter, validate_search_filter
 from src.db.entities import NoteEntity
 from src.grpc_mod._log_decorator import log_service_call
-from src.grpc_mod.converter.from_proto import to_search_type
+from src.grpc_mod.converter.from_proto import to_search_filter_entity, to_search_type
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.proto.note_pb2 import (
     AlterNoteRequest,
@@ -215,7 +214,7 @@ class GrpcNoteService(NoteServiceServicer):
     ):
         try:
             user_ctx = await self._context.create(request.user_id)
-            filter_ = _search_filter_from_proto(request)
+            filter_ = to_search_filter_entity(request.filter)
             notes = await self._note_service.search_notes(
                 to_search_type(request.search_type).name,
                 request.query,
@@ -236,34 +235,3 @@ class GrpcNoteService(NoteServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while searching notes")
             return NotesReply()
-
-
-def _search_filter_from_proto(
-    request: GetSearchNotesRequest,
-) -> NoteSearchFilter:
-    """Translate the proto search filter; raises on inconsistent filter_."""
-    filter_proto = request.filter
-
-    date_from = (
-        filter_proto.date_from.ToDatetime()
-        if filter_proto.HasField("date_from")
-        else None
-    )
-    date_until = (
-        filter_proto.date_until.ToDatetime()
-        if filter_proto.HasField("date_until")
-        else None
-    )
-
-    out = NoteSearchFilter(
-        include_directory_ids=list(filter_proto.include_directory_ids),
-        exclude_directory_ids=list(filter_proto.exclude_directory_ids),
-        date_from=date_from,
-        date_until=date_until,
-        include_shelf_ids=list(filter_proto.include_shelf_ids),
-        exclude_shelf_ids=list(filter_proto.exclude_shelf_ids),
-        include_tag_ids=list(filter_proto.include_tag_ids),
-        exclude_tag_ids=list(filter_proto.exclude_tag_ids),
-    )
-    validate_search_filter(out)
-    return out
