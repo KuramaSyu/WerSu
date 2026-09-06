@@ -34,21 +34,17 @@ class _CredentialKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Creden
     CREDENTIAL_KIND_GOOGLE: _CredentialKind.ValueType  # 4
 
 class CredentialKind(_CredentialKind, metaclass=_CredentialKindEnumTypeWrapper):
-    """Auth proto.
+    """Auth service.
 
     Layering:
-    - The browser does not talk to gRPC. REST (`WerSu-Rest`) is the
-      HTTP edge and runs the WebAuthn ceremony (challenge generation,
-      attestation/assertion verification) using `go-webauthn`. It also
-      handles password hashing, rate limiting, JWT issuance, and email
-      delivery.
-    - gRPC is the source of truth for users and credentials. REST
-      calls into this service to look up credentials, persist public
-      keys, and bump counters. REST does not write to the auth tables
-      directly.
-    - There is no session table on the backend. Every request that
-      reaches gRPC is trusted because the REST middleware has already
-      verified a JWT or session.
+    - The browser talks to REST (WerSu-Rest), not gRPC. REST is the HTTP edge
+      and runs the WebAuthn ceremony (challenge, attestation, assertion) with
+      go-webauthn. It also handles password hashing, rate limiting, JWT issuance,
+      and email delivery.
+    - gRPC is the source of truth for users and credentials. REST calls into this
+      service to look up credentials, persist public keys, and bump counters.
+    - There is no session table. Every gRPC request is trusted because the REST
+      middleware has already verified a JWT or session.
     """
 
 CREDENTIAL_KIND_UNSPECIFIED: CredentialKind.ValueType  # 0
@@ -60,7 +56,7 @@ Global___CredentialKind: _TypeAlias = CredentialKind  # noqa: Y015
 
 @_typing.final
 class UserAuth(_message.Message):
-    """A user as exposed to the auth layer."""
+    """User as exposed to the auth layer."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -74,13 +70,10 @@ class UserAuth(_message.Message):
     id: _builtins.str
     email: _builtins.str
     username: _builtins.str
-    """Username is optional; empty string means the user has not set one."""
+    """Username is optional; empty string means unset."""
     is_active: _builtins.bool
     avatar_url: _builtins.str
-    """Absolute URL to the user's avatar. Empty string means none
-    is configured. The REST controller maps this to JSON null
-    on the frontend.
-    """
+    """Absolute avatar URL. Empty string means none; REST maps empty to JSON null."""
     @_builtins.property
     def email_verified_at(self) -> _timestamp_pb2.Timestamp:
         """Zero timestamp means the email has not been verified yet."""
@@ -108,9 +101,8 @@ Global___UserAuth: _TypeAlias = UserAuth  # noqa: Y015
 
 @_typing.final
 class Credential(_message.Message):
-    """A stored credential. Exactly one of the `payload` oneof fields is
-    populated, enforced by the service layer. The `kind` enum tells
-    REST which one to read.
+    """Stored credential. Exactly one payload oneof field is populated
+    (enforced by the service layer); kind tells REST which one to read.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -130,11 +122,11 @@ class Credential(_message.Message):
     discord_id: _builtins.str
     """kind = DISCORD"""
     password_hash: _builtins.str
-    """kind = PASSWORD -- argon2id encoded string"""
+    """kind = PASSWORD; argon2id encoded string"""
     passkey_id: _builtins.str
-    """kind = PASSKEY -- points at the row in `passkeys` table"""
+    """kind = PASSKEY; points at the row in passkeys table"""
     google_id: _builtins.str
-    """kind = GOOGLE -- Google's stable user id from the `sub` claim"""
+    """kind = GOOGLE; Google's stable user id from the sub claim"""
     @_builtins.property
     def created_at(self) -> _timestamp_pb2.Timestamp: ...
     @_builtins.property
@@ -164,12 +156,10 @@ Global___Credential: _TypeAlias = Credential  # noqa: Y015
 
 @_typing.final
 class Passkey(_message.Message):
-    """A stored WebAuthn passkey (public-key credential).
-
-    The private key never leaves the user's device. The `public_key`
-    field holds the COSE-encoded public key produced by the
-    authenticator at registration time. `sign_count` is updated on
-    every successful login and must strictly increase; a non-monotonic
+    """Stored WebAuthn passkey (public-key credential).
+    The private key never leaves the user's device. public_key holds the
+    COSE-encoded public key produced at registration. sign_count is bumped
+    on every successful login and must strictly increase; a non-monotonic
     counter suggests an authenticator clone.
     """
 
@@ -235,10 +225,9 @@ Global___Passkey: _TypeAlias = Passkey  # noqa: Y015
 
 @_typing.final
 class GetUserAuthRequest(_message.Message):
-    """Lookup a user by id/email/discord id
+    """Lookup a user by id/email/discord id.
     Often used by frontend: useUser() hook resolves to this.
-    REST takes user id from session, and checks against this endpoint
-    if information is correct.
+    REST takes user id from session and checks against this endpoint.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -288,8 +277,8 @@ Global___GetUserAuthResponse: _TypeAlias = GetUserAuthResponse  # noqa: Y015
 
 @_typing.final
 class CreateUserAuthRequest(_message.Message):
-    """Create a user (email + password signup). Returns
-    ALREADY_EXISTS if a user with the email already exists.
+    """Create a user (email + password signup).
+    Returns ALREADY_EXISTS if a user with the email already exists.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -302,9 +291,8 @@ class CreateUserAuthRequest(_message.Message):
     username: _builtins.str
     password_hash: _builtins.str
     avatar_url: _builtins.str
-    """Optional. Absolute URL to the user's avatar (resolved by the
-    REST controller via Discord/Google/Gravatar fallbacks). Empty
-    string means none. The frontend maps empty to JSON null.
+    """Optional. Absolute avatar URL resolved by REST via Discord/Google/Gravatar.
+    Empty string means none; frontend maps empty to JSON null.
     """
     def __init__(
         self,
@@ -344,10 +332,9 @@ Global___CreateUserAuthResponse: _TypeAlias = CreateUserAuthResponse  # noqa: Y0
 
 @_typing.final
 class UpdateUserAuthRequest(_message.Message):
-    """Update mutable fields on an existing user. Each field is a
-    tri-state: omitted (leave unchanged), `_set` populated (write the
-    value), or `_clear` populated (set the column to NULL). Used for
-    username/email changes and `email_verified_at`.
+    """Update mutable fields on a user. Each field is tri-state:
+    omitted (leave unchanged), _set (write value), or _clear (set column NULL).
+    Used for username/email changes and email_verified_at.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -364,7 +351,7 @@ class UpdateUserAuthRequest(_message.Message):
     AVATAR_URL_CLEAR_FIELD_NUMBER: _builtins.int
     user_id: _builtins.str
     requester_id: _builtins.str
-    """the actor on which we will check permissions"""
+    """actor used for permission checks"""
     username_set: _builtins.str
     email_set: _builtins.str
     avatar_url_set: _builtins.str
@@ -493,9 +480,9 @@ Global___FindCredentialByProviderResponse: _TypeAlias = FindCredentialByProvider
 
 @_typing.final
 class FindPasskeyRequest(_message.Message):
-    """Look up a passkey by its WebAuthn credential id. REST calls
-    this with the `id` from `navigator.credentials.get()` so it
-    can do the signature verification with the right public key.
+    """Look up a passkey by its WebAuthn credential id. REST calls this with
+    the id from navigator.credentials.get() so it can verify the signature
+    with the right public key.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -537,9 +524,7 @@ Global___FindPasskeyResponse: _TypeAlias = FindPasskeyResponse  # noqa: Y015
 
 @_typing.final
 class ListPasskeysRequest(_message.Message):
-    """List a user's passkeys for the settings page (with a friendly
-    label, last-used date, and a way to revoke each).
-    """
+    """List a user's passkeys for the settings page (friendly label, last-used date, revoke)."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -583,10 +568,9 @@ Global___ListPasskeysResponse: _TypeAlias = ListPasskeysResponse  # noqa: Y015
 
 @_typing.final
 class UpdatePasskeyCounterRequest(_message.Message):
-    """Bump the sign counter after a successful assertion. REST
-    verifies the signature first, then calls this. The service
-    returns FAILED_PRECONDITION if the new counter is not strictly
-    greater than the stored one (cloned authenticator).
+    """Bump the sign counter after a successful assertion. REST verifies the
+    signature first, then calls this. Returns FAILED_PRECONDITION if the new
+    counter is not strictly greater than the stored one (cloned authenticator).
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -632,10 +616,9 @@ Global___UpdatePasskeyCounterResponse: _TypeAlias = UpdatePasskeyCounterResponse
 @_typing.final
 class RegisterPasskeyRequest(_message.Message):
     """Store a new passkey after REST has verified the attestation.
-    `credential_id` is the raw bytes from the authenticator.
-    `public_key` is the COSE-encoded public key extracted from the
-    attestation authData. The service layer is responsible for
-    storing both in their native byte form -- they are not reshaped.
+    credential_id is the raw bytes from the authenticator; public_key is the
+    COSE-encoded public key extracted from the attestation authData.
+    The service stores both in their native byte form; they are not reshaped.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -652,7 +635,7 @@ class RegisterPasskeyRequest(_message.Message):
     FRIENDLY_NAME_FIELD_NUMBER: _builtins.int
     user_id: _builtins.str
     requester_id: _builtins.str
-    """actor on which we will check permissions"""
+    """actor used for permission checks"""
     credential_id: _builtins.bytes
     public_key: _builtins.bytes
     aaguid: _builtins.bytes
@@ -731,14 +714,12 @@ Global___RevokePasskeyRequest: _TypeAlias = RevokePasskeyRequest  # noqa: Y015
 
 @_typing.final
 class LinkCredentialRequest(_message.Message):
-    """Account Linking: Attach a new credential to an existing user (Passkey
-    Discord OAuth, Google OAuth, or password)
-
-    `kind` selects which payload field is populated. Exactly one of
-    `discord_id`, `password_hash`, `passkey_id`, or `google_id` must
-    be set. Returns ALREADY_EXISTS if the user already has a
-    credential of that kind (with the exception of passkey, which
-    can have many).
+    """Account Linking: attach a new credential to an existing user
+    (Passkey, Discord OAuth, Google OAuth, or password).
+    kind selects which payload field is populated; exactly one of
+    discord_id, password_hash, passkey_id, or google_id must be set.
+    Returns ALREADY_EXISTS if the user already has a credential of that kind
+    (passkey is the exception and can have many).
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -800,7 +781,7 @@ Global___LinkCredentialResponse: _TypeAlias = LinkCredentialResponse  # noqa: Y0
 
 @_typing.final
 class UnlinkCredentialRequest(_message.Message):
-    """Unlink a credential. Removing the last credential should raise"""
+    """Unlink a credential. Removing the last credential should raise."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -828,7 +809,7 @@ Global___UnlinkCredentialRequest: _TypeAlias = UnlinkCredentialRequest  # noqa: 
 
 @_typing.final
 class ListLinkedCredentialsRequest(_message.Message):
-    """Summary of every credential linked to a user (Google, Discord, Passkey, Password)"""
+    """Every credential linked to a user (Google, Discord, Passkey, Password)."""
 
     DESCRIPTOR: _descriptor.Descriptor
 

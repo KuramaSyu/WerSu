@@ -100,14 +100,14 @@ class AttachmentServiceServicer:
         raise NotImplementedError('Method not implemented!')
 
     def UpdateAttachmentMetadata(self, request, context):
-        """enforces that key (filepath) is given and updates all other provided fields for that key
+        """requires key; updates other provided fields for that key
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def PostAttachmentLink(self, request, context):
-        """either works -> no return or fails completely with an error, so no need for a response message
+        """either succeeds fully or fails with an error; no response body needed
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')

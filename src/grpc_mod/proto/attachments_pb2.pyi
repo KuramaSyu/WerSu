@@ -179,7 +179,7 @@ class UpdateAttachmentMetadataRequest(_message.Message):
     sha256: _builtins.str
     size: _builtins.str
     user_id: _builtins.str
-    """the requesting user - used for authorization"""
+    """used for authorization"""
     def __init__(
         self,
         *,
