@@ -45,7 +45,7 @@ Global___PermissionObjectType: _TypeAlias = PermissionObjectType  # noqa: Y015
 
 @_typing.final
 class GetNoteRequest(_message.Message):
-    """Request for getting a note by id"""
+    """Fetch a note by id."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -105,6 +105,7 @@ class GetSearchNotesRequest(_message.Message):
     LIMIT_FIELD_NUMBER: _builtins.int
     OFFSET_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
+    FILTER_FIELD_NUMBER: _builtins.int
     search_type: Global___GetSearchNotesRequest.SearchType.ValueType
     """Search parameters"""
     query: _builtins.str
@@ -113,6 +114,10 @@ class GetSearchNotesRequest(_message.Message):
     offset: _builtins.int
     user_id: _builtins.str
     """authentication"""
+    @_builtins.property
+    def filter(self) -> Global___NoteSearchFilter:
+        """Optional structured filter applied on top of the search strategy."""
+
     def __init__(
         self,
         *,
@@ -121,14 +126,72 @@ class GetSearchNotesRequest(_message.Message):
         limit: _builtins.int = ...,
         offset: _builtins.int = ...,
         user_id: _builtins.str = ...,
+        filter: Global___NoteSearchFilter | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["filter", b"filter"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["limit", b"limit", "offset", b"offset", "query", b"query", "search_type", b"search_type", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["filter", b"filter", "limit", b"limit", "offset", b"offset", "query", b"query", "search_type", b"search_type", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___GetSearchNotesRequest: _TypeAlias = GetSearchNotesRequest  # noqa: Y015
+
+@_typing.final
+class NoteSearchFilter(_message.Message):
+    """Optional filters narrowing a search result set. Include/exclude are XOR - one of both"""
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    INCLUDE_DIRECTORY_IDS_FIELD_NUMBER: _builtins.int
+    EXCLUDE_DIRECTORY_IDS_FIELD_NUMBER: _builtins.int
+    DATE_FROM_FIELD_NUMBER: _builtins.int
+    DATE_UNTIL_FIELD_NUMBER: _builtins.int
+    INCLUDE_SHELF_IDS_FIELD_NUMBER: _builtins.int
+    EXCLUDE_SHELF_IDS_FIELD_NUMBER: _builtins.int
+    INCLUDE_TAG_IDS_FIELD_NUMBER: _builtins.int
+    EXCLUDE_TAG_IDS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def include_directory_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def exclude_directory_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def date_from(self) -> _timestamp_pb2.Timestamp: ...
+    @_builtins.property
+    def date_until(self) -> _timestamp_pb2.Timestamp: ...
+    @_builtins.property
+    def include_shelf_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def exclude_shelf_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def include_tag_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    @_builtins.property
+    def exclude_tag_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    def __init__(
+        self,
+        *,
+        include_directory_ids: _abc.Iterable[_builtins.str] | None = ...,
+        exclude_directory_ids: _abc.Iterable[_builtins.str] | None = ...,
+        date_from: _timestamp_pb2.Timestamp | None = ...,
+        date_until: _timestamp_pb2.Timestamp | None = ...,
+        include_shelf_ids: _abc.Iterable[_builtins.str] | None = ...,
+        exclude_shelf_ids: _abc.Iterable[_builtins.str] | None = ...,
+        include_tag_ids: _abc.Iterable[_builtins.str] | None = ...,
+        exclude_tag_ids: _abc.Iterable[_builtins.str] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_date_from", b"_date_from", "_date_until", b"_date_until", "date_from", b"date_from", "date_until", b"date_until"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_date_from", b"_date_from", "_date_until", b"_date_until", "date_from", b"date_from", "date_until", b"date_until", "exclude_directory_ids", b"exclude_directory_ids", "exclude_shelf_ids", b"exclude_shelf_ids", "exclude_tag_ids", b"exclude_tag_ids", "include_directory_ids", b"include_directory_ids", "include_shelf_ids", b"include_shelf_ids", "include_tag_ids", b"include_tag_ids"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__date_from: _TypeAlias = _typing.Literal["date_from"]  # noqa: Y015
+    _WhichOneofArgType__date_from: _TypeAlias = _typing.Literal["_date_from", b"_date_from"]  # noqa: Y015
+    _WhichOneofReturnType__date_until: _TypeAlias = _typing.Literal["date_until"]  # noqa: Y015
+    _WhichOneofArgType__date_until: _TypeAlias = _typing.Literal["_date_until", b"_date_until"]  # noqa: Y015
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__date_from) -> _WhichOneofReturnType__date_from | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__date_until) -> _WhichOneofReturnType__date_until | None: ...
+
+Global___NoteSearchFilter: _TypeAlias = NoteSearchFilter  # noqa: Y015
 
 @_typing.final
 class NotesReply(_message.Message):
@@ -164,7 +227,7 @@ Global___NotesReply: _TypeAlias = NotesReply  # noqa: Y015
 
 @_typing.final
 class MinimalNote(_message.Message):
-    """Response: represents a minimal Note for search results"""
+    """Minimal note returned by search results."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -261,7 +324,7 @@ Global___MinimalTag: _TypeAlias = MinimalTag  # noqa: Y015
 
 @_typing.final
 class Note(_message.Message):
-    """Response: represents a Note"""
+    """Full Note entity."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -296,7 +359,7 @@ class Note(_message.Message):
     def attachment_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     @_builtins.property
     def shelf_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
-        """sehlves where this note is in. currently maybe empty"""
+        """shelves this note is on; may be empty"""
 
     def __init__(
         self,
@@ -390,7 +453,7 @@ Global___NoteEmbedding: _TypeAlias = NoteEmbedding  # noqa: Y015
 
 @_typing.final
 class PostNoteRequest(_message.Message):
-    """Request to add a note. Either shelf_id or directory_ids must be provided."""
+    """Create a note. Either shelf_id or directory_ids must be provided."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -406,9 +469,7 @@ class PostNoteRequest(_message.Message):
     user_id: _builtins.str
     """the id of the user making the request - used for permission checking"""
     shelf_id: _builtins.str
-    """shelf used to resolve rules, so that the correct 
-    directory is autoselected
-    """
+    """shelf used to resolve rules so the correct directory is autoselected"""
     @_builtins.property
     def directory_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
         """Explicit parent directories instead of relying on rules
@@ -462,7 +523,7 @@ Global___DeleteNoteRequest: _TypeAlias = DeleteNoteRequest  # noqa: Y015
 
 @_typing.final
 class AlterNoteRequest(_message.Message):
-    """Request to alter a note. Any omitted fields will be left unchanged, and any repeated fields will be replaced with the new values."""
+    """Alter a note. Omitted fields are left unchanged; repeated fields are replaced."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -523,9 +584,7 @@ Global___AlterNoteRequest: _TypeAlias = AlterNoteRequest  # noqa: Y015
 
 @_typing.final
 class IdsOrUndefined(_message.Message):
-    """repeated fields dont have a HasField. So we wrap them into a
-    `oneof` to distinguish "not set" from "explicitly cleared".
-    """
+    """Wraps a repeated field in a oneof so we can tell "not set" apart from "explicitly cleared"."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -574,10 +633,8 @@ class Directory(_message.Message):
     def child_note_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
     @_builtins.property
     def shelf_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
-        """ids of every shelf this book (directory) sits on.
-        Populated when the caller opts in via
-        ``include_shelves`` on ``GetDirectoryRequest`` /
-        ``GetDirectoriesRequest``; empty otherwise.
+        """ids of every shelf this book sits on. Populated when the caller opts in
+        via include_shelves on GetDirectoryRequest / GetDirectoriesRequest; empty otherwise.
         """
 
     def __init__(
@@ -638,7 +695,7 @@ Global___GetDirectoryRequest: _TypeAlias = GetDirectoryRequest  # noqa: Y015
 
 @_typing.final
 class GetDirectoriesRequest(_message.Message):
-    """list all directory contents of a given directory <parent_id>"""
+    """List directory contents under a given parent_id."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -706,18 +763,14 @@ class CreateDirectoryRequest(_message.Message):
     description: _builtins.str
     image_url: _builtins.str
     user_id: _builtins.str
-    """the user_id of the user making the request, used for permission checking
-    its also the author of the directory
-    """
+    """used for permission checking; also the author of the directory"""
     @_builtins.property
     def parent_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
         """contains directory parents"""
 
     @_builtins.property
     def shelf_ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
-        """contains shelf parents. we separate it,
-        to prevent extra db calls, just to tell them apart
-        """
+        """shelf parents; kept separate from directory parents to skip a db roundtrip"""
 
     def __init__(
         self,
@@ -751,9 +804,7 @@ Global___CreateDirectoryRequest: _TypeAlias = CreateDirectoryRequest  # noqa: Y0
 
 @_typing.final
 class AlterDirectoryRequest(_message.Message):
-    """any ommited fields will be left unchanged 
-    and any repeated fields will be replaced with the new values.
-    """
+    """Alter a directory. Omitted fields are left unchanged; repeated fields are replaced."""
 
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -1079,7 +1130,7 @@ Global___PermissionsResponse: _TypeAlias = PermissionsResponse  # noqa: Y015
 
 @_typing.final
 class NoteVersionSummary(_message.Message):
-    """Versioning requests and responses"""
+    """Versioning messages."""
 
     DESCRIPTOR: _descriptor.Descriptor
 

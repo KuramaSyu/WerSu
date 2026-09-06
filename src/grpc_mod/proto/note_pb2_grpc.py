@@ -67,9 +67,7 @@ class NoteServiceServicer:
     """
 
     def GetNote(self, request, context):
-        """GetNote returns a Note from DB. If the user is a public/temp user,
-        then an additional id_token_map will be returned, containing a
-        JWT for each attachment in the file. 
+        """For public/temp users, id_token_map carries a JWT per attachment.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')

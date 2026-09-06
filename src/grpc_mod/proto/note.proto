@@ -30,6 +30,21 @@ message GetSearchNotesRequest {
 
     // authentication
     string user_id = 5;
+
+    // Optional structured filter applied on top of the search strategy.
+    NoteSearchFilter filter = 6;
+}
+
+// Optional filters narrowing a search result set. Include/exclude are XOR - one of both
+message NoteSearchFilter {
+    repeated string include_directory_ids = 1;
+    repeated string exclude_directory_ids = 2;
+    optional google.protobuf.Timestamp date_from = 3;
+    optional google.protobuf.Timestamp date_until = 4;
+    repeated string include_shelf_ids = 5;
+    repeated string exclude_shelf_ids = 6;
+    repeated string include_tag_ids = 7;
+    repeated string exclude_tag_ids = 8;
 }
 
 message NotesReply {
