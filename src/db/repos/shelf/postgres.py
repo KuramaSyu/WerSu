@@ -178,12 +178,12 @@ class PostgresShelfRepo(ShelfRepoABC):
         )
         books_by_shelf: Dict[str, List[str]] = {}
         for row in rows or []:
-            shelf_id = str(_row_get(row, "shelf_id"))
-            book_id = str(_row_get(row, "book_id"))
+            shelf_id = row_get(row, "shelf_id")
+            book_id = row_get(row, "book_id")
             if book_id:
                 books_by_shelf.setdefault(shelf_id, []).append(book_id)
         for entity in entities:
-            entity.book_ids = sorted(books_by_shelf.get(str(entity.id), []))
+            entity.book_ids = sorted(books_by_shelf.get(entity.id, []))
         return entities
 
     async def update_shelf(
