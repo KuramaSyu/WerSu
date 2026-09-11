@@ -22,6 +22,14 @@ from __future__ import annotations
 
 from typing import Optional
 
+from src.api.other.relationship import (
+    DirectoryRelationEnum,
+    ObjectRef,
+    ObjectTypeEnum,
+    Relationship,
+    SubjectRef,
+)
+from src.api.other.undefined import UNDEFINED, unwrap_undefined
 from src.api.other.user_context import UserContextABC
 from src.db.entities.shelf import ShelfEntity
 from src.db.migrations.base import MigrationABC
@@ -36,6 +44,16 @@ from src.services.user_service import (
 class Migration(MigrationABC):
 
     async def up(self, ctx: MigrationContext) -> None:
+        # to prevent a half-migrated state, we raise early.
+        shelf_repo = ctx.services.shelf_repo
+        permission_repo = ctx.services.permission_repo
+        if not shelf_repo or not permission_repo:
+            raise ValueError(
+                "MigrationContext.shelf_repo and "
+                "MigrationContext.permission_repo are required for "
+                "user book binding migration"
+            )
+        
         rows = await ctx.db.fetch(
             "SELECT u.id AS user_id, u.username FROM auth.user u ORDER BY u.id"
         )
@@ -50,11 +68,20 @@ class Migration(MigrationABC):
             user_ctx = await self._build_user_ctx(ctx, user_id)
             if user_ctx is None:
                 continue
+
+            # create user shelf
             shelf_entity = await self._ensure_shelf_row(
                 ctx, username, user_ctx,
             )
             if shelf_entity is None:
                 continue
+
+            # bind every unassigned book the user owns to the new shelf
+            await self._bind_user_books(
+                ctx, shelf_entity, user_id, user_ctx,
+            )
+
+            # craete 3 default books if not exist
             await self._run_zettelkasten_bootstrap(
                 ctx, shelf_entity, user_id, user_ctx,
             )
@@ -152,6 +179,63 @@ class Migration(MigrationABC):
             id=str(inserted.get("id")),
             slug=shelf_slug,
         )
+
+    async def _bind_user_books(
+        self,
+        ctx: MigrationContext,
+        shelf: ShelfEntity,
+        user_id: str,
+        user_ctx: UserContextABC,
+    ) -> None:
+        """Bind the user's unassigned books to <shelf>.
+
+        Walks `directory#admin@user:<user_id>` to discover
+        every book the user owns, filters out the ones already
+        sitting on a shelf via `shelf_repo.get_shelves_of_book`,
+        and binds the remainder via `shelf_repo.add_book`.
+        The shelf repo's spicedb decorator writes
+        ``directory:<book>#parent@shelf:<shelf_id>`` so the new
+        shelf becomes the parent.
+
+        Raises:
+        ------
+            ValueError: when the migration context was constructed
+                without a shelf repo or permission repo.
+        """
+        shelf_repo = ctx.services.shelf_repo
+        permission_repo = ctx.services.permission_repo
+        if shelf_repo is None or permission_repo is None:
+            raise ValueError(
+                "MigrationContext.shelf_repo and "
+                "MigrationContext.permission_repo are required for "
+                "user book binding migration"
+            )
+
+        owned_ids = await permission_repo.lookup(
+            Relationship(
+                resource=ObjectRef(
+                    object_type=ObjectTypeEnum.DIRECTORY,
+                    object_id=UNDEFINED,
+                ),
+                relation=DirectoryRelationEnum.ADMIN,
+                subject=SubjectRef(
+                    object_type=ObjectTypeEnum.USER,
+                    object_id=str(user_id),
+                ),
+            )
+        )
+        if not owned_ids:
+            return
+
+        shelf_id = str(unwrap_undefined(shelf.id))
+        for book_id in owned_ids:
+            if await shelf_repo.get_shelves_of_book(book_id):
+                continue
+            await shelf_repo.add_book(
+                shelf_id=shelf_id,
+                book_id=book_id,
+                user_ctx=user_ctx,
+            )
 
     async def _run_zettelkasten_bootstrap(
         self,
