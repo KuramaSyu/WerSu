@@ -92,13 +92,27 @@ def _make_ctx(
     *,
     shelf_repo: Optional[InMemoryShelfRepo] = None,
     permission_repo: Optional[InMemoryPermissionRepo] = None,
+    directory_facade: Optional["_FakeDirectoryFacade"] = None,
+    existing_directory_ids: Optional[List[str]] = None,
 ) -> MigrationContext:
-    """Build a :class:`MigrationContext` with only the fields the helper reads."""
+    """Build a :class:`MigrationContext` with only the fields the helper reads.
+
+    ``directory_facade`` defaults to an empty
+    :class:`_FakeDirectoryFacade` so the safety filter drops every
+    candidate.  Pass ``existing_directory_ids`` (or a populated
+    ``directory_facade``) to let specific ids survive the filter.
+    """
+    facade = directory_facade
+    if facade is None:
+        facade = _FakeDirectoryFacade()
+        for bid in existing_directory_ids or []:
+            facade.add_directory(bid)
     return MigrationContext(
         db=None,
         services=MigrationServices(
             shelf_repo=shelf_repo,
             permission_repo=permission_repo,
+            directory_facade=facade,
         ),
     )
 
@@ -118,6 +132,72 @@ async def _grant_admin(
             )
         ]
     )
+
+
+class _FakeDirectoryFacade:
+    """Minimal directory facade stub for the bind-safety filter test.
+
+    Only :meth:`fetch_directories_by_ids` is implemented; every
+    other ``DirectoryFacadeABC`` member raises so an accidental
+    call from the migration under test fails loudly in CI.
+    """
+
+    def __init__(self) -> None:
+        self._existing_ids: set[str] = set()
+
+    def add_directory(self, book_id: str) -> None:
+        """Seed a directory id as existing."""
+        self._existing_ids.add(str(book_id))
+
+    async def fetch_directories_by_ids(
+        self, ids: List[str],
+    ):
+        from src.db.entities.directory.directory import DirectoryEntity
+        return [
+            DirectoryEntity(id=bid)
+            for bid in ids
+            if str(bid) in self._existing_ids
+        ]
+
+    # Unused abstract stubs - raise loudly if accidentally hit.
+    async def create_directory(self, *args, **kwargs):
+        raise NotImplementedError
+
+    async def fetch_directory(self, *args, **kwargs):
+        raise NotImplementedError
+
+    async def update_directory(self, *args, **kwargs):
+        raise NotImplementedError
+
+    async def delete_directory(self, *args, **kwargs) -> bool:
+        raise NotImplementedError
+
+    async def fetch_directories(self, *args, **kwargs):
+        raise NotImplementedError
+
+    async def list_user_directory_ids(self, *args, **kwargs):
+        raise NotImplementedError
+
+    async def set_parents_of(self, *args, **kwargs) -> None:
+        raise NotImplementedError
+
+    async def get_parents_of(self, *args, **kwargs):
+        raise NotImplementedError
+
+    async def get_children_of(self, *args, **kwargs):
+        raise NotImplementedError
+
+    async def get_children_for(self, *args, **kwargs):
+        raise NotImplementedError
+
+    async def get_parents_for(self, *args, **kwargs):
+        raise NotImplementedError
+
+    async def add_child_to(self, *args, **kwargs) -> None:
+        raise NotImplementedError
+
+    async def remove_child_from(self, *args, **kwargs) -> None:
+        raise NotImplementedError
 
 
 # ---- tests ----------------------------------------------------------------
@@ -140,7 +220,11 @@ async def test_bind_user_books_binds_all_owned_unassigned_books() -> None:
     )
 
     await _make_migration()._bind_user_books(
-        _make_ctx(shelf_repo=shelf_repo, permission_repo=permission_repo),
+        _make_ctx(
+            shelf_repo=shelf_repo,
+            permission_repo=permission_repo,
+            existing_directory_ids=["b-1", "b-2", "b-3"],
+        ),
         shelf=shelf,
         user_id=user_id,
         user_ctx=_UserCtx(user_id),
@@ -169,7 +253,11 @@ async def test_bind_user_books_skips_books_already_on_a_shelf() -> None:
     )
 
     await _make_migration()._bind_user_books(
-        _make_ctx(shelf_repo=shelf_repo, permission_repo=permission_repo),
+        _make_ctx(
+            shelf_repo=shelf_repo,
+            permission_repo=permission_repo,
+            existing_directory_ids=["b-existing", "b-new"],
+        ),
         shelf=new_shelf,
         user_id=user_id,
         user_ctx=_UserCtx(user_id),
@@ -227,7 +315,11 @@ async def test_bind_user_books_ignores_books_user_does_not_own() -> None:
     )
 
     await _make_migration()._bind_user_books(
-        _make_ctx(shelf_repo=shelf_repo, permission_repo=permission_repo),
+        _make_ctx(
+            shelf_repo=shelf_repo,
+            permission_repo=permission_repo,
+            existing_directory_ids=["b-mine", "b-theirs"],
+        ),
         shelf=shelf,
         user_id=me,
         user_ctx=_UserCtx(me),
@@ -237,46 +329,127 @@ async def test_bind_user_books_ignores_books_user_does_not_own() -> None:
 
 
 async def test_bind_user_books_noop_when_services_unwired() -> None:
-    """A Postgres-only / fixture-only run hits the short-circuit.
+    """The helper raises ValueError when shelf_repo or permission_repo is missing.
 
-    Mirrors the migration's own ``None`` guard so the fixture
-    path doesn't crash when no spicedb layer is wired.
+    The migration context must be fully wired for the bind path;
+    anything else is a configuration error and the migration's
+    ``up()`` already raises early to avoid a half-migrated state.
     """
-    migration = _make_migration()
-    shelf = ShelfEntity(
-        id="shelf-1",
-        slug="x",
-    )
+    shelf = ShelfEntity(id="shelf-1", slug="x")
 
     # both services None
-    await _make_migration()._bind_user_books(
-        MigrationContext(db=None),
-        shelf=shelf,
-        user_id="u-1",
-        user_ctx=_UserCtx("u-1"),
-    )
+    with pytest.raises(ValueError):
+        await _make_migration()._bind_user_books(
+            MigrationContext(db=None),
+            shelf=shelf,
+            user_id="u-1",
+            user_ctx=_UserCtx("u-1"),
+        )
 
     # only shelf_repo wired (permission_repo None)
-    await _make_migration()._bind_user_books(
-        MigrationContext(
-            db=None,
-            services=MigrationServices(shelf_repo=InMemoryShelfRepo()),
-        ),
-        shelf=shelf,
-        user_id="u-1",
-        user_ctx=_UserCtx("u-1"),
-    )
+    with pytest.raises(ValueError):
+        await _make_migration()._bind_user_books(
+            MigrationContext(
+                db=None,
+                services=MigrationServices(shelf_repo=InMemoryShelfRepo()),
+            ),
+            shelf=shelf,
+            user_id="u-1",
+            user_ctx=_UserCtx("u-1"),
+        )
 
     # only permission_repo wired (shelf_repo None)
+    with pytest.raises(ValueError):
+        await _make_migration()._bind_user_books(
+            MigrationContext(
+                db=None,
+                services=MigrationServices(
+                    permission_repo=InMemoryPermissionRepo(),
+                ),
+            ),
+            shelf=shelf,
+            user_id="u-1",
+            user_ctx=_UserCtx("u-1"),
+        )
+
+
+async def test_bind_user_books_filters_books_missing_from_directory_repo() -> None:
+    """Books that no longer exist in the directory facade are not bound.
+
+    Defends against the FK gap between SpiceDB and Postgres:
+    if a directory was hard-deleted from ``note.directory`` but
+    its ``directory#admin@user`` SpiceDB edge survived, the
+    migration would otherwise try to insert a ``shelf_book``
+    row referencing a non-existent book id and crash on the FK.
+    """
+    facade = _FakeDirectoryFacade()
+    user_id = "u-1"
+    permission_repo = InMemoryPermissionRepo()
+    shelf_repo = InMemoryShelfRepo()
+
+    # Three owned directories; only ``b-1`` and ``b-2`` exist
+    # in the facade.  ``b-orphan`` mimics a dangling SpiceDB edge.
+    for bid in ("b-1", "b-2", "b-orphan"):
+        await _grant_admin(permission_repo, bid, user_id)
+    facade.add_directory("b-1")
+    facade.add_directory("b-2")
+
+    shelf = await shelf_repo.insert_shelf(
+        slug=users_shelf_slug_for("erin"),
+        display_name="Erin's Shelf",
+        description="",
+        user_ctx=_UserCtx(user_id),
+    )
+
     await _make_migration()._bind_user_books(
         MigrationContext(
             db=None,
-            services=MigrationServices(permission_repo=InMemoryPermissionRepo()),
+            services=MigrationServices(
+                shelf_repo=shelf_repo,
+                permission_repo=permission_repo,
+                directory_facade=facade,
+            ),
         ),
         shelf=shelf,
-        user_id="u-1",
-        user_ctx=_UserCtx("u-1"),
+        user_id=user_id,
+        user_ctx=_UserCtx(user_id),
     )
+
+    assert sorted(await shelf_repo.get_books_of(str(shelf.id))) == [
+        "b-1", "b-2",
+    ]
+
+
+async def test_bind_user_books_noop_when_directory_facade_unwired() -> None:
+    """Without a directory facade, the helper raises ValueError.
+
+    The safety filter is mandatory in production; a misconfigured
+    migration context is a configuration error and must surface
+    immediately instead of silently writing dangling FKs.
+    """
+    user_id = "u-1"
+    permission_repo = InMemoryPermissionRepo()
+    shelf_repo = InMemoryShelfRepo()
+    shelf = await shelf_repo.insert_shelf(
+        slug=users_shelf_slug_for("frank"),
+        display_name="Frank's Shelf",
+        description="",
+        user_ctx=_UserCtx(user_id),
+    )
+
+    with pytest.raises(ValueError):
+        await _make_migration()._bind_user_books(
+            MigrationContext(
+                db=None,
+                services=MigrationServices(
+                    shelf_repo=shelf_repo,
+                    permission_repo=permission_repo,
+                ),
+            ),
+            shelf=shelf,
+            user_id=user_id,
+            user_ctx=_UserCtx(user_id),
+        )
 
 
 __all__ = [
@@ -285,4 +458,6 @@ __all__ = [
     "test_bind_user_books_is_noop_when_no_owned_books",
     "test_bind_user_books_ignores_books_user_does_not_own",
     "test_bind_user_books_noop_when_services_unwired",
+    "test_bind_user_books_filters_books_missing_from_directory_repo",
+    "test_bind_user_books_noop_when_directory_facade_unwired",
 ]
