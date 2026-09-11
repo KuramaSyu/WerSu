@@ -17,8 +17,9 @@ from authzed.api.v1 import AsyncClient
 from testcontainers.postgres import PostgresContainer
 from testcontainers_spicedb import SpiceDBContainer
 
-from src.db.migrations.context import MigrationContext
+from src.db.migrations.context import MigrationContext, MigrationServices
 from src.db.migrations.runner import MigrationRunner
+from src.services.shelf_bootstrap import build_strategy
 from src.db.repos import Database
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
@@ -118,12 +119,6 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
         )
         await wait_until_spicedb_ready(spicedb_client, load_spicedb_schema())
 
-        migration_runner = MigrationRunner(
-            ctx=MigrationContext(db=db, spicedb_client=spicedb_client),
-            log_provider=logging_provider,
-        )
-        await migration_runner.run_pending_migrations()
-
         permission_repo = SpicedbPermissionRepo(
             client=spicedb_client,
             consistent=True,
@@ -214,6 +209,33 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             log=logging_provider,
             shelf_repo=shelf_repo,
         )
+
+        # Run migrations with the full service bundle so the
+        # ``bootstrap-users-shelf`` migration has access to the
+        # shelf repo / permission repo / directory facade it
+        # needs to bind pre-existing books.
+        zettelkasten_strategy = build_strategy(
+            "zettelkasten",
+            shelf_repo=shelf_repo,
+            rule_repo=rule_repo,
+            directory_facade=directory_facade,
+        )
+        ctx = MigrationContext(
+            db=db,
+            spicedb_client=spicedb_client,
+            services=MigrationServices(
+                permission_repo=permission_repo,
+                rule_repo=rule_repo,
+                shelf_repo=shelf_repo,
+                directory_facade=directory_facade,
+                zettelkasten_strategy=zettelkasten_strategy,
+            ),
+        )
+        migration_runner = MigrationRunner(
+            ctx=ctx,
+            log_provider=logging_provider,
+        )
+        await migration_runner.run_pending_migrations()
         version_repo = NoteVersionPostgresRepo(
             snapshot_table=Table(
                 db=db,

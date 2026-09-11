@@ -20,12 +20,14 @@ from src.api.other.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.rule import RuleEntity
-from src.db.migrations.context import MigrationContext
+from src.db.migrations.context import MigrationContext, MigrationServices
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
+from src.services.shelf_bootstrap import build_strategy
 from src.services.user_service import UserServiceImpl
+from src.utils import logging_provider
 from tests.integration_helpers import NoteRelationEnum, assert_user_has_admin_on_directory, make_custom_directory, make_user_entity, spicedb_postgres_env, wait_until
 from tests.stubs.user_context import _UserContext as UserContext
 from typing import Awaitable, Callable, Iterable, Tuple, TypeVar
@@ -524,12 +526,23 @@ async def test_migration_backfills_shelf_and_rule_for_existing_users(
     # migrations, so a re-run of the bootstrap migration should
     # be a no-op.  Run it explicitly anyway so the test fails
     # loudly if a future migration adds side effects.
+    zettelkasten_strategy = build_strategy(
+        "zettelkasten",
+        shelf_repo=env.shelf_repo,
+        rule_repo=env.rule_repo,
+        directory_facade=env.directory_repo,
+    )
     ctx = MigrationContext(
         db=env.db,
         spicedb_client=env.spicedb_client,
-        services={
-            "rule_repo": env.rule_repo,
-        },
+        services=MigrationServices(
+            permission_repo=env.permission_repo,
+            rule_repo=env.rule_repo,
+            shelf_repo=env.shelf_repo,
+            directory_facade=env.directory_repo,
+            user_context_factory=env.user_context_factory,
+            zettelkasten_strategy=zettelkasten_strategy,
+        ),
     )
     runner = MigrationRunner(
         ctx=ctx,
