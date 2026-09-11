@@ -45,11 +45,13 @@ class Migration(MigrationABC):
 
     async def up(self, ctx: MigrationContext) -> None:
         # to prevent a half-migrated state, we raise early.
+        directory_facade = ctx.services.directory_facade
         shelf_repo = ctx.services.shelf_repo
         permission_repo = ctx.services.permission_repo
-        if not shelf_repo or not permission_repo:
+        if not shelf_repo or not permission_repo or not directory_facade:
             raise ValueError(
                 "MigrationContext.shelf_repo and "
+                "MigrationContext.directory_facade and "
                 "MigrationContext.permission_repo are required for "
                 "user book binding migration"
             )
@@ -115,11 +117,8 @@ class Migration(MigrationABC):
         caller can hand it to the strategy.
         """
         shelf_repo = ctx.services.shelf_repo
-        if shelf_repo is None:
-            # Fixture-only / Postgres-only run: fall back to
-            # the raw SQL probe + insert.  No SpiceDB grants
-            # happen in this mode by design.
-            return await self._ensure_shelf_row_raw(ctx, username)
+        # ``up()`` raises when services aren't wired, so this
+        # branch never has to fall back to a raw-SQL path.
 
         existing = await ctx.db.fetchrow(
             "SELECT id FROM note.shelf WHERE slug = $1",
@@ -138,47 +137,6 @@ class Migration(MigrationABC):
             user_ctx=user_ctx,
         )
         return persisted
-
-    async def _ensure_shelf_row_raw(
-        self,
-        ctx: MigrationContext,
-        username: object,
-    ) -> Optional[ShelfEntity]:
-        """Raw-SQL fallback when no shelf repo is registered.
-
-        Mirrors :meth:`_ensure_shelf_row` but skips the
-        SpiceDB grant -- the Postgres-only fixture runs that
-        hit this branch don't exercise the default-fleeting
-        code path.
-        """
-        shelf_slug = users_shelf_slug_for(username)
-        existing = await ctx.db.fetchrow(
-            "SELECT id, slug FROM note.shelf WHERE slug = $1",
-            shelf_slug,
-        )
-        if existing and existing.get("id") is not None:
-            return ShelfEntity(
-                id=str(existing.get("id")),
-                slug=shelf_slug,
-            )
-
-        inserted = await ctx.db.fetchrow(
-            """
-            INSERT INTO note.shelf (
-                slug, display_name, description
-            ) VALUES ($1, $2, $3)
-            RETURNING id
-            """,
-            shelf_slug,
-            users_shelf_display_name_for(username),
-            USERS_SHELF_DESCRIPTION,
-        )
-        if not inserted or inserted.get("id") is None:
-            return None
-        return ShelfEntity(
-            id=str(inserted.get("id")),
-            slug=shelf_slug,
-        )
 
     async def _bind_user_books(
         self,
@@ -204,9 +162,11 @@ class Migration(MigrationABC):
         """
         shelf_repo = ctx.services.shelf_repo
         permission_repo = ctx.services.permission_repo
-        if shelf_repo is None or permission_repo is None:
+        directory_facade = ctx.services.directory_facade
+        if shelf_repo is None or permission_repo is None or directory_facade is None:
             raise ValueError(
-                "MigrationContext.shelf_repo and "
+                "MigrationContext.shelf_repo, "
+                "MigrationContext.directory_facade and "
                 "MigrationContext.permission_repo are required for "
                 "user book binding migration"
             )
@@ -224,12 +184,22 @@ class Migration(MigrationABC):
                 ),
             )
         )
-        if not owned_ids:
-            return
+
+        # If Postgres and SpiceDB are inconsistent, then we will fail
+        # with a FK violation when trying to modify books, which ID only
+        # exists in SpiceDB
+        existing = await directory_facade.fetch_directories_by_ids(
+            [str(b) for b in owned_ids]
+        )
+        existing_ids = {
+            str(d.id) for d in existing if d.id is not None
+        }
+        owned_ids = [b for b in owned_ids if str(b) in existing_ids]
 
         shelf_id = str(unwrap_undefined(shelf.id))
         for book_id in owned_ids:
             if await shelf_repo.get_shelves_of_book(book_id):
+                # book is already bound to a shelf
                 continue
             await shelf_repo.add_book(
                 shelf_id=shelf_id,
