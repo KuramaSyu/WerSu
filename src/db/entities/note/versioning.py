@@ -5,10 +5,11 @@ from datetime import datetime
 from typing import Optional
 
 from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
+from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 
 
 @dataclass
-class NoteVersionSnapshotEntity:
+class NoteVersionSnapshotEntity(AcceptsVisitor):
     """Represents a full-content snapshot for a note version."""
 
     snapshot_id: UndefinedOr[str] = UNDEFINED
@@ -19,9 +20,13 @@ class NoteVersionSnapshotEntity:
     title: UndefinedNoneOr[str] = UNDEFINED
     content: UndefinedNoneOr[str] = UNDEFINED
 
+    def visit(self, visitor: EntityVisitor):
+        """Dispatch this snapshot to ``visitor.visit_note_version_snapshot``."""
+        return visitor.visit_note_version_snapshot(self)
+
 
 @dataclass
-class NoteVersionDeltaEntity:
+class NoteVersionDeltaEntity(AcceptsVisitor):
     """Represents a delta patch applied after a snapshot."""
 
     delta_id: UndefinedOr[str] = UNDEFINED
@@ -32,6 +37,10 @@ class NoteVersionDeltaEntity:
     author_id: UndefinedNoneOr[str] = UNDEFINED
     title_patch: UndefinedNoneOr[str] = UNDEFINED
     content_patch: UndefinedNoneOr[str] = UNDEFINED
+
+    def visit(self, visitor: EntityVisitor):
+        """Dispatch this delta to ``visitor.visit_note_version_delta``."""
+        return visitor.visit_note_version_delta(self)
 
 
 @dataclass
