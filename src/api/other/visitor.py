@@ -53,7 +53,7 @@ class AcceptsVisitor(ABC):
 
         Returns:
             Whatever the visitor's `visit_*` method returns.  Each
-            concrete visitor decides the return type.
+            concrete visitor decides the return type.`
         """
         raise NotImplementedError
 
@@ -69,14 +69,15 @@ class AcceptsVisitor(ABC):
 class EntityVisitor(ABC):
     """Abstract visitor over the domain entities.
 
-    Every concrete visitor implements one `visit_*` method per
-    :class:`AcceptsVisitor` subclass it supports. The default
-    implementations raise :exc:`NotImplementedError` so subclasses
-    must opt in to the entities they care about.
+    TLDR: one ABC, many serializers. Each implementation walks an
+    entity and turns it into a different shape (proto, row dict,
+    log line, ...).
 
     Implementations:
-        * :class:`src.grpc_mod.converter.grpc_visitor.ConvertToGrpcVisitor`
-        * :class:`tests.stubs.visitor.StubVisitor`
+        * ConvertToGrpcVisitor - render every entity as a gRPC protobuf message
+        * PostgresRowConverter - render every entity as a Postgres row dict
+        * EventMetadataVisitor - render activity log rows as rule-engine metadata
+        * StubVisitor (tests) - catch-all double that records every dispatched entity
     """
 
     @abstractmethod
