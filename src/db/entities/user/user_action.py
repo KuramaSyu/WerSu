@@ -22,13 +22,14 @@ from datetime import datetime
 from typing import Literal
 
 from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
+from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 
 
 UserActionKind = Literal["disable", "enable", "delete"]
 
 
 @dataclass
-class UserActionEntity:
+class UserActionEntity(AcceptsVisitor):
     """Represents a scheduled user-action row.
 
     Use ``UNDEFINED`` for fields that are not yet set (the repo will
@@ -49,6 +50,10 @@ class UserActionEntity:
 
     # when the action actually ran; ``NULL`` while pending.
     executed_at: UndefinedNoneOr[datetime] = UNDEFINED
+
+    def visit(self, visitor: EntityVisitor):
+        """Dispatch this user-action row to ``visitor.visit_user_action``."""
+        return visitor.visit_user_action(self)
 
 
 @dataclass
