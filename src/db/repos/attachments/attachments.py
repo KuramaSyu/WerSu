@@ -15,6 +15,9 @@ from src.api.other.undefined import UNDEFINED, UndefinedOr, is_undefined
 from src.api import UserContextABC
 from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 from src.db.table import TableABC
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 from src.utils import convert_entity_for_db, asdict
 
 
@@ -109,25 +112,22 @@ class AttachmentMetadataRepoABC(ABC):
 class AttachmentMetadataPostgresRepo(AttachmentMetadataRepoABC):
     """Postgres-backed metadata repository for attachments."""
 
-    def __init__(self, table: TableABC):
+    def __init__(
+        self,
+        table: TableABC,
+        to_postgres_row: Optional[PostgresRowConverter] = None,
+    ) -> None:
         self._table = table
+        # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
+        self._to_postgres_row = to_postgres_row or PostgresRowConverter()
 
     async def post_metadata(self, attachment: Attachment, user_ctx: UserContextABC) -> None:
         if attachment.key is UNDEFINED:
             raise ValueError("Attachment key must be set before storing metadata")
-        
-        normalized = convert_entity_for_db(attachment)
-        where = {
-            "key": normalized.key,
-            "filename": normalized.filename,
-            "filepath": normalized.filepath,
-            "content_type": normalized.content_type,
-            "size": normalized.size,
-            "created_at": normalized.created_at,
-            "updated_at": normalized.updated_at,
-            "created_by": user_ctx.user_id,
-            "sha256": normalized.sha256
-        }
+
+        # Delegate entity -> row conversion to the PostgresRowConverter visitor.
+        where = attachment.convert(self._to_postgres_row)
+        where["created_by"] = user_ctx.user_id
 
         await self._table.insert(where, returning="key",
         )
@@ -135,15 +135,19 @@ class AttachmentMetadataPostgresRepo(AttachmentMetadataRepoABC):
     async def update_metadata(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
         if attachment.key is UNDEFINED:
             raise ValueError("Attachment key must be set for update")
-        
-        set_values = {}
+
+        # Reuse the visitor so the now() injection lives in one place.
+        stamp = Attachment(
+            key=attachment.key,
+            updated_at=UNDEFINED,
+        ).convert(self._to_postgres_row)
+        set_values: dict[str, object] = {"updated_at": stamp["updated_at"]}
         if not is_undefined(attachment.filename): set_values["filename"] = attachment.filename
         if not is_undefined(attachment.content_type): set_values["content_type"] = attachment.content_type
         if not is_undefined(attachment.content):
             set_values["size"] = attachment.get_size()
             set_values["sha256"] = attachment.sha256
-        set_values["updated_at"] = datetime.now()
-        
+
         where = {"key": attachment.key}
 
         updated_record = await self._table.update(set_values, where, returning="key, filename, filepath, content_type, size, created_at, updated_at, sha256")
