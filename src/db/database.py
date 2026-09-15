@@ -140,7 +140,13 @@ class Database(DatabaseABC):
     
     async def init_db(self):
         try:
-            self._pool = await asyncpg.create_pool(dsn=self._dsn)
+            # cap max connections to prevent from postgres failing because of
+            # too many connections
+            self._pool = await asyncpg.create_pool(
+                dsn=self._dsn,
+                min_size=2,
+                max_size=8,
+            )
             self._log.info("connected")
         except socket.gaierror as e:
             self._log.critical(f"Database connection failed: {e}", exc_info=True)

@@ -3,6 +3,12 @@ services:
     image: pgvector/pgvector:0.8.1-pg18-trixie
     container_name: postgres-wersu
     restart: always
+    # Raise max_connections above the pgvector default of 20 so the
+    # asyncpg pool (8) plus spicedb, pgweb and admin sessions fit.
+    command:
+      - postgres
+      - -c
+      - max_connections=100
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
