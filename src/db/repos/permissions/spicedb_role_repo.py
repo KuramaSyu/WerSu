@@ -35,6 +35,9 @@ from src.db.entities.user.role import (
     UserRoleMembershipEntity,
 )
 from src.db.table import TableABC
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 from src.utils import asdict, logging_provider as default_logging_provider
 from src.utils.dict_helper import drop_undefined
 
@@ -54,10 +57,13 @@ class SpicedbRoleRepo(RoleRepoABC):
         self,
         table: TableABC,
         permission_repo: PermissionRepoABC,
+        to_postgres_row: Optional[PostgresRowConverter] = None,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         self._table = table
         self._permission_repo = permission_repo
+        # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
+        self._to_postgres_row = to_postgres_row or PostgresRowConverter()
         self.log = (logging_provider or default_logging_provider)(__name__, self)
 
     # ---- role metadata (Postgres) ---------------------------------------
@@ -66,13 +72,8 @@ class SpicedbRoleRepo(RoleRepoABC):
         if role.name in (UNDEFINED, None):
             raise ValueError("role.name is required")
 
-        # ``description`` is the only optional column; ``None`` clears
-        # it, ``UNDEFINED`` lets Postgres default to NULL.  We pass
-        # ``None`` through when it was explicitly set, otherwise let
-        # the column default kick in by not including the key.
-        values: dict[str, object] = {"name": role.name}
-        if not is_undefined(role.description):
-            values["description"] = role.description
+        # description is the only optional column; UNDEFINED lets the default apply.
+        values = role.convert(self._to_postgres_row)
 
         records = await self._table.insert(values, returning=self._returning)
         if not records:
@@ -83,8 +84,7 @@ class SpicedbRoleRepo(RoleRepoABC):
         if role.id in (UNDEFINED, None):
             raise ValueError("role.id is required")
 
-        # only ``name`` and ``description`` are mutable; everything
-        # else is dropped to avoid an empty SET clause
+        # Only name and description are mutable; the rest is dropped to keep the SET clause narrow.
         set_values = asdict(
             replace(
                 role,

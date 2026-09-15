@@ -21,6 +21,9 @@ from src.db.entities.user.user_action import (
     UserActionEntity,
 )
 from src.db.table import TableABC
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 from src.utils import asdict, drop_undefined, logging_provider as default_logging_provider
 
 
@@ -32,9 +35,12 @@ class UserActionPostgresRepo(UserActionRepoABC):
     def __init__(
         self,
         table: TableABC,
+        to_postgres_row: Optional[PostgresRowConverter] = None,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         self._table = table
+        # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
+        self._to_postgres_row = to_postgres_row or PostgresRowConverter()
         self.log = (logging_provider or default_logging_provider)(__name__, self)
 
     # ------------------------------------------------------------------
@@ -102,8 +108,8 @@ class UserActionPostgresRepo(UserActionRepoABC):
         if action.execute_at in (UNDEFINED, None):
             raise ValueError("action.execute_at is required")
 
-        # drop UNDEFINED columns; explicit None is preserved and clears the column.
-        values = drop_undefined(asdict(action))
+        # Delegate entity -> row conversion to the PostgresRowConverter visitor.
+        values = action.convert(self._to_postgres_row)
         records = await self._table.insert(values, returning=self._returning)
         if not records:
             raise ValueError("Failed to insert user_action")

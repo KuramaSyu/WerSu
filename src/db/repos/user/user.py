@@ -25,6 +25,9 @@ from asyncpg import Record
 from src.api.other.types import LoggingProvider
 from src.db.entities import UserEntity
 from src.db.table import TableABC
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 from src.utils import asdict, drop_undefined
 from src.utils.logging import logging_provider as default_logging_provider
 
@@ -73,9 +76,12 @@ class UserPostgresRepo(UserRepoABC):
     def __init__(
         self,
         table: TableABC,
+        to_postgres_row: Optional[PostgresRowConverter] = None,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         self._table = table
+        # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
+        self._to_postgres_row = to_postgres_row or PostgresRowConverter()
         self.log = (logging_provider or default_logging_provider)(__name__, self)
 
     @staticmethod
@@ -94,15 +100,9 @@ class UserPostgresRepo(UserRepoABC):
         }
 
     async def insert(self, user: UserEntity) -> UserEntity:
-        """Insert a new user and return the created entity with ID.
-
-        UNDEFINED fields are dropped from the payload so the column
-        defaults (``id`` -> ``uuidv7()``, ``type`` -> ``human``) apply.
-        Discord identity fields are stripped -- they live on
-        ``auth.third_party`` now.
-        """
+        """Insert a new user and return the created entity with ID."""
         records = await self._table.insert(
-            self._strip_moved_fields(drop_undefined(asdict(user))),
+            self._strip_moved_fields(user.convert(self._to_postgres_row)),
             returning=self._returning,
         )
         if not records:
@@ -118,7 +118,7 @@ class UserPostgresRepo(UserRepoABC):
         if not user.id:
             raise ValueError("User ID is required for update operation")
 
-        set_values = self._strip_moved_fields(drop_undefined(asdict(user)))
+        set_values = self._strip_moved_fields(user.convert(self._to_postgres_row))
         set_values.pop("id", None)
         if not set_values:
             current = await self._table.select_row(

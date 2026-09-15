@@ -14,6 +14,9 @@ from src.db.entities.note.versioning import (
     NoteVersionSnapshotEntity,
 )
 from src.db.table import TableABC
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 from src.utils import asdict
 
 
@@ -80,6 +83,7 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         snapshot_table: TableABC,
         delta_table: TableABC,
         max_deltas_per_snapshot: int,
+        to_postgres_row: Optional[PostgresRowConverter] = None,
     ) -> None:
         if max_deltas_per_snapshot < 0:
             raise ValueError("max_deltas_per_snapshot must be >= 0")
@@ -87,6 +91,8 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         self._snapshot_table = snapshot_table
         self._delta_table = delta_table
         self._max_deltas_per_snapshot = max_deltas_per_snapshot
+        # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
+        self._to_postgres_row = to_postgres_row or PostgresRowConverter()
         self._dmp = difflib
 
     @property
@@ -355,8 +361,9 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         return int(rows[0]["max_version"]) + 1
 
     async def _insert_snapshot(self, entity: NoteVersionSnapshotEntity) -> NoteVersionSnapshotEntity:
+        # Delegate entity -> row conversion to the PostgresRowConverter visitor.
         record = await self._snapshot_table.insert(
-            asdict(entity),
+            entity.convert(self._to_postgres_row),
             returning="snapshot_id, note_id, version_index, created_at, author_id, title, content",
         )
         if not record:
@@ -364,8 +371,9 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         return self._snapshot_from_record(record[0])
 
     async def _insert_delta(self, entity: NoteVersionDeltaEntity) -> NoteVersionDeltaEntity:
+        # Same visitor delegation as _insert_snapshot.
         record = await self._delta_table.insert(
-            asdict(entity),
+            entity.convert(self._to_postgres_row),
             returning="delta_id, note_id, snapshot_id, version_index, created_at, author_id, title_patch, content_patch",
         )
         if not record:

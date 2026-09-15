@@ -8,26 +8,49 @@ from asyncpg import Record
 from src.api.repos.note_content_repo import NoteContentRepo
 from src.db.entities import NoteEntity
 from src.db.table import TableABC
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 
+from src.api.other.undefined import UNDEFINED, is_undefined
 from src.utils import asdict
-from src.utils.dict_helper import drop_undefined
+
+# Columns the note.content table actually owns; everything else on NoteEntity
+# (tags, shelves, directories, attachments, embeddings, permissions) is
+# normalised elsewhere and must not reach this row.
+_NOTE_COLUMNS = ("id", "title", "content", "updated_at", "author_id")
+
+
+def _project_to_columns(entity: NoteEntity, converter: PostgresRowConverter) -> dict:
+    """Project a NoteEntity down to the note.content table columns.
+
+    Runs the visitor, then strips ``updated_at`` when the caller left
+    it ``UNDEFINED`` -- the visitor would otherwise fill it with
+    ``now()``, but note.content wants the DB-side default to apply
+    instead.  ``None`` and explicit datetimes pass through.
+    """
+    row = entity.convert(converter)
+    # converter inejcts now() for undefined fields -> clean it in this case.
+    # the service would update the timestamp explicitly if we wanted to override it.
+    if is_undefined(entity.updated_at):
+        row.pop("updated_at", None)
+    return {col: row[col] for col in _NOTE_COLUMNS if col in row}
 
 
 class NoteContentPostgresRepo(NoteContentRepo):
     """Provides an implementation using Postgres as the backend database."""
 
-    def __init__(self, table: TableABC):
+    def __init__(
+        self,
+        table: TableABC,
+        to_postgres_row: Optional[PostgresRowConverter] = None,
+    ) -> None:
         self._table = table
+        # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
+        self._to_postgres_row = to_postgres_row or PostgresRowConverter()
 
     async def insert(self, metadata: NoteEntity) -> NoteEntity:
-        # explicitly declare since the NoteEntity has more fields than the table
-        to_insert = drop_undefined({
-            "id": metadata.note_id,
-            "title": metadata.title,
-            "content": metadata.content,
-            "updated_at": metadata.updated_at,
-            "author_id": metadata.author_id,
-        })
+        to_insert = _project_to_columns(metadata, self._to_postgres_row)
         records = await self._table.insert(
             to_insert,
             returning="id, title, content, updated_at, author_id"
@@ -40,14 +63,8 @@ class NoteContentPostgresRepo(NoteContentRepo):
 
     async def update(self, set: NoteEntity, where: NoteEntity) -> NoteEntity:
         where_arg = asdict(where)
-        to_insert = drop_undefined({
-            "id": set.note_id,
-            "title": set.title,
-            "content": set.content,
-            "updated_at": set.updated_at,
-            "author_id": set.author_id,
-        })
-        # re-map note_id -> id
+        to_insert = _project_to_columns(set, self._to_postgres_row)
+        # re-map note_id -> id on the WHERE side
         where_arg["id"] = where_arg.pop("note_id", None)
 
         record = await self._table.update(
@@ -66,14 +83,10 @@ class NoteContentPostgresRepo(NoteContentRepo):
         SQL_ID = self._table.get_id_fields()[0]
         ENTITY_ID = "note_id"
 
-        # build dict with all valid fields
-        conditions = drop_undefined({
-            SQL_ID: metadata.note_id,  # convert note_id -> id for SQL
-            "title": metadata.title,
-            "content": metadata.content,
-            "updated_at": metadata.updated_at,
-            "author_id": metadata.author_id,
-        })
+        conditions = _project_to_columns(metadata, self._to_postgres_row)
+        # re-map SQL id column back to its name
+        if SQL_ID != "id" and "id" in conditions:
+            conditions[SQL_ID] = conditions.pop("id")
 
         if not conditions:
             raise ValueError(f"At least one field must be set to delete metadata: {metadata}")
@@ -83,7 +96,7 @@ class NoteContentPostgresRepo(NoteContentRepo):
         )
         if not records:
             raise Exception(f"Failed to delete metadata for conditions: {conditions}; returned: {records}")
-        
+
         # convert records to note entities with id conversion
         entities = []
         for r in records:
@@ -93,15 +106,9 @@ class NoteContentPostgresRepo(NoteContentRepo):
             entities.append(entity)
 
         return entities
-    
+
     async def select(self, metadata: NoteEntity) -> List[NoteEntity]:
-        where = drop_undefined({
-            "id": metadata.note_id,
-            "title": metadata.title,
-            "content": metadata.content,
-            "updated_at": metadata.updated_at,
-            "author_id": metadata.author_id,
-        })
+        where = _project_to_columns(metadata, self._to_postgres_row)
 
         records = await self._table.select(
             where=where,

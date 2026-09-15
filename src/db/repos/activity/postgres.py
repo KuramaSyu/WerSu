@@ -37,6 +37,9 @@ from src.db.repos.activity.strategies import get_strategy
 from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.db.sql_builders import SqliteSqlBuilder, WhereClause, WherePair
 from src.db.table import TableABC
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 from src.utils import asdict, drop_undefined, logging_provider as default_logging_provider
 
 
@@ -49,6 +52,7 @@ class PostgresActivityRepo(ActivityRepoABC):
         self,
         table: TableABC,
         directory_repo: Optional[DirectoryFacadeABC] = None,
+        to_postgres_row: Optional[PostgresRowConverter] = None,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         """Initialise the repo.
@@ -66,6 +70,8 @@ class PostgresActivityRepo(ActivityRepoABC):
         """
         self._table = table
         self._directory_repo = directory_repo
+        # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
+        self._to_postgres_row = to_postgres_row or PostgresRowConverter()
         self.log = (logging_provider or default_logging_provider)(__name__, self)
 
     async def get_activities(
@@ -162,13 +168,8 @@ class PostgresActivityRepo(ActivityRepoABC):
 
         _validate_target_shape(activity)
 
-        values = drop_undefined(asdict(activity))
-        # Postgres' JSONB column does not accept a Python ``dict`` from
-        # asyncpg; serialise ``metadata`` to a JSON string before
-        # handing it to the table layer so the same row shape works
-        # on both Postgres and SQLite.
-        if "metadata" in values and not isinstance(values["metadata"], str):
-            values["metadata"] = json.dumps(dict(values["metadata"]))
+        # Delegate entity -> row conversion to the PostgresRowConverter visitor.
+        values = activity.convert(self._to_postgres_row)
 
         records = await self._table.insert(values, returning=self._returning)
         if not records:

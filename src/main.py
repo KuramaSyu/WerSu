@@ -33,6 +33,9 @@ from src.grpc_mod.proto.rule_pb2_grpc import add_RuleServiceServicer_to_server  
 from src.grpc_mod.role_service import GrpcRoleService
 from src.grpc_mod.sharing_service import GrpcSharingService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 from src.services import PermissionServiceImpl, UserServiceImpl, DirectoryActivityServiceImpl, AttachmentFacadeImpl, share_access
 from src.services.user_auth_service import UserAuthServiceImpl
 from src.services.background_process import (
@@ -264,8 +267,13 @@ async def serve():
     log.info(f"Embedding model initialized in {time.perf_counter() - model_init_started:.2f}s")
 
     ### Setup Repos ###
+    # Single PostgresRowConverter instance shared by every repo below;
+    # tests can swap it via to_postgres_row= if they need a pinned clock.
+    postgres_visitor = PostgresRowConverter()
+
     user_repo = UserPostgresRepo(
         table=auth_user_table,
+        to_postgres_row=postgres_visitor,
         logging_provider=logging_provider,
     )
     user_auth_repo = PostgresUserAuthRepoImpl(
@@ -273,10 +281,12 @@ async def serve():
         password_table=auth_password_table,
         passkey_table=auth_passkey_table,
         third_party_table=auth_third_party_table,
+        to_postgres_row=postgres_visitor,
         logging_provider=logging_provider,
     )
     rule_repo = PostgresRuleRepo(
         table=rules_table,
+        to_postgres_row=postgres_visitor,
         logging_provider=logging_provider,
     )
 
@@ -322,9 +332,13 @@ async def serve():
         snapshot_table=version_snapshot_table,
         delta_table=version_delta_table,
         max_deltas_per_snapshot=max_note_deltas,
+        to_postgres_row=postgres_visitor,
     )
 
-    note_content_repo = NoteContentPostgresRepo(content_table)
+    note_content_repo = NoteContentPostgresRepo(
+        content_table,
+        to_postgres_row=postgres_visitor,
+    )
     note_facade: NoteFacadeImpl = NoteFacadeImpl(
         db=db,
         content_repo=note_content_repo,
@@ -346,16 +360,19 @@ async def serve():
         bucket=s3_bucket,
     )
     metadata_repo: AttachmentMetadataRepoABC = AttachmentMetadataPostgresRepo(
-        table=attachments_table
+        table=attachments_table,
+        to_postgres_row=postgres_visitor,
     )
     sharing_repo: SharingRepoABC = SharingPostgresRepo(
         table=shared_table,
+        to_postgres_row=postgres_visitor,
         logging_provider=logging_provider,
     )
 
     role_repo: RoleRepoABC = SpicedbRoleRepo(
         table=roles_table,
         permission_repo=permission_repo,
+        to_postgres_row=postgres_visitor,
         logging_provider=logging_provider,
     )
     
@@ -365,6 +382,7 @@ async def serve():
     user_action_repo = NotifyingUserActionRepo(
         inner=UserActionPostgresRepo(
         table=user_action_table,
+        to_postgres_row=postgres_visitor,
         logging_provider=logging_provider,
     ),
         listeners=[
@@ -376,6 +394,7 @@ async def serve():
     activity_repo = PostgresActivityRepo(
         table=activity_table,
         directory_repo=directory_facade,
+        to_postgres_row=postgres_visitor,
         logging_provider=logging_provider,
     )
 
@@ -613,6 +632,8 @@ async def serve():
         user_auth_service=app_user_auth_service,
         log=logging_provider,
         to_grpc=grpc_visitor,
+        # Route CreateUserAuth through the user service so new users get their bootstrap.
+        user_service=app_user_service,
     )
     add_AuthServiceServicer_to_server(grpc_auth_service, server)
 

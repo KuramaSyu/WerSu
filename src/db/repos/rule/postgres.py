@@ -31,6 +31,9 @@ from src.api.repos.rule_repo import RuleRepoABC
 from src.db.entities.rule import AttachedEntityType, RuleEntity
 from src.db.sql_builders import WhereClause
 from src.db.table import TableABC
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 from src.utils import asdict, drop_undefined, logging_provider as default_logging_provider
 
 
@@ -46,6 +49,7 @@ class PostgresRuleRepo(RuleRepoABC):
     def __init__(
         self,
         table: TableABC,
+        to_postgres_row: Optional[PostgresRowConverter] = None,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         """Initialise the repo.
@@ -56,6 +60,8 @@ class PostgresRuleRepo(RuleRepoABC):
                 :func:`src.utils.logging_provider`.
         """
         self._table = table
+        # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
+        self._to_postgres_row = to_postgres_row or PostgresRowConverter()
         self.log = (logging_provider or default_logging_provider)(__name__, self)
 
 
@@ -212,29 +218,8 @@ class PostgresRuleRepo(RuleRepoABC):
     # ---- (de)serialisation ---------------------------------------------
 
     def _entity_to_insert_dict(self, rule: RuleEntity) -> Dict[str, Any]:
-        """Project a :class:`RuleEntity` to the insertable column dict.
-
-        ``id`` and the timestamps are excluded -- the DB fills
-        them.  JSONB columns are serialised to JSON strings so
-        asyncpg can pass them through transparently.
-        """
-        fields = (
-            "event_type",
-            "attached_entity_type",
-            "attached_entity_id",
-            "condition",
-            "action_type",
-            "action_context",
-            "enabled",
-            "creator_id",
-        )
-        out: Dict[str, Any] = {}
-        for f in fields:
-            value = getattr(rule, f)
-            if is_undefined(value):
-                continue
-            out[f] = self._serialise_value(f, value)
-        return out
+        """Project a RuleEntity to the insertable column dict."""
+        return rule.convert(self._to_postgres_row)
 
     @staticmethod
     def _serialise_value(field_name: str, value: Any) -> Any:

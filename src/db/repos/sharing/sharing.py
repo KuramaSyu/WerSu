@@ -9,6 +9,9 @@ from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.table import TableABC
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 from src.utils import asdict, logging_provider as default_logging_provider
 from src.utils.dict_helper import drop_undefined
 
@@ -28,9 +31,12 @@ class SharingPostgresRepo(SharingRepoABC):
     def __init__(
         self,
         table: TableABC,
+        to_postgres_row: Optional[PostgresRowConverter] = None,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         self._table = table
+        # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
+        self._to_postgres_row = to_postgres_row or PostgresRowConverter()
         self.log = (logging_provider or default_logging_provider)(__name__, self)
 
     async def create_share(self, share: NoteShareEntity, ctx: UserContextABC) -> NoteShareEntity:
@@ -45,7 +51,8 @@ class SharingPostgresRepo(SharingRepoABC):
 
         # permissions live in the permission repo e.g. SpiceDB -> remove it
         share.permission = UNDEFINED
-        normalized_dict = drop_undefined(asdict(share)) 
+        # Delegate entity -> row conversion to the PostgresRowConverter visitor.
+        normalized_dict = share.convert(self._to_postgres_row)
 
         records = await self._table.insert(normalized_dict, returning=self._returning)
         if not records:
@@ -56,8 +63,7 @@ class SharingPostgresRepo(SharingRepoABC):
         if share.id in (UNDEFINED, None):
             raise ValueError("share.id is required")
 
-        # Only mutable fields are passed to SET; UNDEFINED fields are omitted by
-        # `asdict`, while explicit None values remain and clear nullable columns.
+        # Only mutable fields are passed to SET; the rest is dropped to keep it narrow.
         set_values = asdict(
             replace(
                 share,
