@@ -15,7 +15,7 @@ via the visitor pattern -- the adapter just calls
 from __future__ import annotations
 
 import traceback
-from typing import Any
+from typing import Any, Optional
 
 import grpc
 from google.protobuf.empty_pb2 import Empty
@@ -23,13 +23,14 @@ from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
 from src.api.services.user_auth_service import UserAuthServiceABC
-from src.api.services.user_service import UserFilter
+from src.api.services.user_service import UserFilter, UserServiceABC
 from src.db.entities.user.passkey import PasskeyEntity
 from src.db.entities.user.third_party import (
     DiscordLink,
     GoogleLink,
     ThirdPartyFilter,
 )
+from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_auth import UserAuthEntity
 from src.grpc_mod._log_decorator import log_service_call
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
@@ -63,21 +64,17 @@ from src.grpc_mod.proto.auth_pb2_grpc import AuthServiceServicer
 
 
 class GrpcAuthService(AuthServiceServicer):
-    """gRPC adapter for the ``AuthService`` defined in ``auth.proto``.
-
-    Args:
-        user_auth_service: the auth-side service that owns all
-            policy decisions.
-        log: logger factory compatible with :class:`LoggingProvider`.
-    """
+    """gRPC adapter for the AuthService defined in auth.proto."""
 
     def __init__(
         self,
         user_auth_service: UserAuthServiceABC,
         log: LoggingProvider,
         to_grpc: ConvertToGrpcVisitor,
+        user_service: Optional[UserServiceABC] = None,
     ) -> None:
         self._service = user_auth_service
+        self._user_service = user_service
         self.log = log(__name__, self)
         self._to_grpc = to_grpc
 
@@ -136,12 +133,35 @@ class GrpcAuthService(AuthServiceServicer):
     ) -> CreateUserAuthResponse:
         """Create a new user from email + (optional) avatar URL.
 
-        ``password_hash`` is consumed by the proto but not
-        persisted here -- the caller (REST's signup handler) is
-        responsible for hashing and storing via
-        :attr:`UserAuthServiceABC.passwords`.
+        When a UserServiceABC is injected the call is routed through it so
+        the new user gets the shelf / books / rule bootstrap.
         """
         try:
+            if self._user_service is not None:
+                created_user = await self._user_service.create_user(
+                    UserEntity(
+                        email=request.email or None,
+                        username=request.username or None,
+                        avatar=request.avatar_url,
+                        type="human",
+                    )
+                )
+                user_id = str(created_user.id)
+                auth_entity = await self._service.get_user(
+                    UserFilter(user_id=user_id)
+                )
+                if auth_entity is None:
+                    # Insert succeeded but the auth row couldn't be re-read; fail so REST can retry.
+                    self._set_unset(
+                        context,
+                        grpc.StatusCode.INTERNAL,
+                        "user created but auth row missing",
+                    )
+                    return CreateUserAuthResponse()
+                return CreateUserAuthResponse(
+                    user=auth_entity.convert(self._to_grpc)
+                )
+
             created = await self._service.create_user(
                 UserAuthEntity(
                     email=request.email or None,
