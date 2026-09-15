@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime as _dt
-import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -16,10 +15,8 @@ class ThirdPartyEntity(AcceptsVisitor):
     """One linked third-party provider per user.
 
     Provider-specific extras (e.g. Discord's 4-digit
-    ``discriminator``) live in :attr:`extra_fields` -- a JSON
-    column.  Use :meth:`get_extra` / :meth:`set_extra` /
-    :attr:`serialised_extras` rather than indexing the dict
-    directly so the JSON serialisation stays consistent.
+    discriminator) live in extra_fields -- a JSON column.
+    Use get_extra / set_extra rather than indexing the dict directly.
     """
 
     id: UndefinedOr[str] = UNDEFINED
@@ -30,22 +27,15 @@ class ThirdPartyEntity(AcceptsVisitor):
     created_at: Optional[_dt.datetime] = None
 
     def get_extra(self, key: str, default: Any = None) -> Any:
-        """Return ``extra_fields[key]`` if present, else `default`."""
+        """Return extra_fields[key] if present, else default."""
         return self.extra_fields.get(key, default)
 
     def set_extra(self, key: str, value: Any) -> None:
-        """Set ``extra_fields[key] = value``."""
+        """Set extra_fields[key] = value."""
         self.extra_fields[key] = value
 
-    @property
-    def serialised_extras(self) -> Optional[str]:
-        """JSON string of :attr:`extra_fields`, or ``None`` when empty."""
-        if not self.extra_fields:
-            return None
-        return json.dumps(self.extra_fields, default=str)
-
     def visit(self, visitor: EntityVisitor) -> Any:
-        """Dispatch this third-party link to ``visitor.visit_third_party``."""
+        """Dispatch this third-party link to visitor.visit_third_party."""
         return visitor.visit_third_party(self)
 
 
