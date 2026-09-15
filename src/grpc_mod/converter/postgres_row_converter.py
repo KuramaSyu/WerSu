@@ -58,7 +58,13 @@ def _default_now() -> _dt.datetime:
 
 
 class PostgresRowConverter(EntityVisitor):
-    """Render every entity as a column -> value dict for Postgres."""
+    """Render every entity as a column -> value dict for Postgres.
+
+    Internal infrastructure: instantiated once in the composition
+    root and injected into every Postgres repo that writes rows.
+    Most callers should not need to override this; tests may inject
+    a fixed ``now`` to pin timestamps deterministically.
+    """
 
     def __init__(
         self,
