@@ -31,6 +31,9 @@ from src.db.entities.user.password import PasswordEntity
 from src.db.entities.user.third_party import ThirdPartyEntity, ThirdPartyFilter
 from src.db.entities.user.user_auth import UserAuthEntity
 from src.db.table import TableABC
+from src.grpc_mod.converter.postgres_row_converter import (
+    PostgresRowConverter,
+)
 from src.utils.logging import logging_provider as default_logging_provider
 
 
@@ -109,12 +112,15 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
         password_table: TableABC,
         passkey_table: TableABC,
         third_party_table: TableABC,
+        to_postgres_row: Optional[PostgresRowConverter] = None,
         logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         self._user_table = user_table
         self._password_table = password_table
         self._passkey_table = passkey_table
         self._third_party_table = third_party_table
+        # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
+        self._to_postgres_row = to_postgres_row or PostgresRowConverter()
         self.log = (logging_provider or default_logging_provider)(
             __name__, self
         )
@@ -131,15 +137,15 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
         )
         if not records:
             raise RuntimeError("Failed to insert user; no row returned")
-        created = self._user_from_record(records[0])
+        created_user = self._user_from_record(records[0])
 
         for tp in user.third_parties:
             await self.insert_third_party(
-                replace(tp, user_id=created.id)
+                replace(tp, user_id=created_user.id)
             )
 
-        full = await self.select(UserFilter(user_id=str(created.id)))
-        return full if full is not None else created
+        full = await self.select(UserFilter(user_id=str(created_user.id)))
+        return full if full is not None else created_user
 
     async def select(
         self, filter: UserFilter
@@ -203,8 +209,10 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
             existing_by_provider = {tp.provider: tp for tp in existing}
             for tp in user.third_parties:
                 if tp.provider in existing_by_provider:
+                    # Pull extra_fields through the converter so JSON-serialise lives in one place.
+                    row = tp.convert(self._to_postgres_row)
                     await self._third_party_table.update(
-                        set={"extra_fields": tp.serialised_extras},
+                        set={"extra_fields": row["extra_fields"]},
                         where={
                             "id": str(
                                 existing_by_provider[tp.provider].id
@@ -226,13 +234,9 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
         self, password: PasswordEntity
     ) -> PasswordEntity:
         """Upsert the user's password row."""
-        # ``user_id`` is the PK; it's set on the entity by the
-        # service and the column whitelist deliberately omits it.
-        values: dict[str, object] = {
-            "password_hash": password.password_hash,
-            "created_at": password.created_at or _dt.datetime.now(),
-            "updated_at": _dt.datetime.now(),
-        }
+        # user_id is the PK; the visitor drops it; password_hash is re-stamped.
+        values: dict[str, object] = password.convert(self._to_postgres_row)
+        values["password_hash"] = password.password_hash
         record = await self._password_table.upsert(
             values, returning=self._password_returning
         )
@@ -319,11 +323,16 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
                 f"new_sign_count ({new_sign_count}) must be > "
                 f"current ({current.sign_count})"
             )
+        # The visitor fills last_used_at so tests can pin time deterministically.
+        passkey = PasskeyEntity(id=passkey_id, last_used_at=UNDEFINED).convert(
+            self._to_postgres_row
+        )
+        set_values: dict[str, object] = {
+            "sign_count": new_sign_count,
+            "last_used_at": passkey["last_used_at"],
+        }
         record = await self._passkey_table.update(
-            set={
-                "sign_count": new_sign_count,
-                "last_used_at": _dt.datetime.now(),
-            },
+            set=set_values,
             where={"id": passkey_id},
             returning=self._passkey_returning,
         )
@@ -332,18 +341,17 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
         return self._passkey_from_record(record)
 
     async def revoke_passkey(self, passkey_id: str) -> PasskeyEntity:
-        """Stamp ``revoked_at`` on the passkey.
-
-        Idempotent -- keeps the original revoke timestamp on a
-        second call.
-        """
+        """Stamp revoked_at on the passkey; idempotent."""
         existing = await self.find_passkey_by_id(passkey_id)
         if existing is None:
             raise KeyError(f"passkey not found: {passkey_id}")
         if existing.revoked_at is not None:
             return existing
+        revoked_row = PasskeyEntity(id=passkey_id, revoked_at=UNDEFINED).convert(
+            self._to_postgres_row
+        )
         record = await self._passkey_table.update(
-            set={"revoked_at": _dt.datetime.now()},
+            set={"revoked_at": revoked_row["revoked_at"]},
             where={"id": passkey_id},
             returning=self._passkey_returning,
         )
@@ -355,9 +363,9 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
         self, third: ThirdPartyEntity
     ) -> ThirdPartyEntity:
         """Insert a third-party link."""
+        d = third.convert(self._to_postgres_row)
         records = await self._third_party_table.insert(
-            self._third_party_row_from_entity(third),
-            returning=self._third_party_returning,
+            d, returning=self._third_party_returning,
         )
         if not records:
             raise RuntimeError(
@@ -473,16 +481,12 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
     def _third_party_row_from_entity(
         cls, third: ThirdPartyEntity
     ) -> dict[str, object]:
-        """Build an INSERT-shaped row from the ``auth.third_party`` columns."""
+        """Build an INSERT-shaped row from the auth.third_party columns."""
         row: dict[str, object] = {}
         for field_name in cls._third_party_columns:
             value = getattr(third, field_name, UNDEFINED)
             if value is not UNDEFINED:
                 row[field_name] = value
-        # ``extra_fields`` lands as the JSON-serialised string when
-        # non-empty; the column is JSONB and accepts the string.
-        if third.extra_fields:
-            row["extra_fields"] = third.serialised_extras
         return row
 
 
