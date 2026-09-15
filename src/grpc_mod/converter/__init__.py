@@ -1,7 +1,5 @@
-from .grpc_visitor import ConvertToGrpcVisitor
-from .permission_relationship_converter import (
-    to_object_ref,
-    to_permission_object_type,
-    to_permission_resource,
-    to_relationship,
-)
+"""Converters for the gRPC and storage layers.
+
+Submodules are imported lazily to avoid a circular-import warning when
+repo modules load before src.api finishes initialising.
+"""

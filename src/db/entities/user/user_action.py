@@ -52,7 +52,7 @@ class UserActionEntity(AcceptsVisitor):
     executed_at: UndefinedNoneOr[datetime] = UNDEFINED
 
     def visit(self, visitor: EntityVisitor):
-        """Dispatch this user-action row to ``visitor.visit_user_action``."""
+        """Dispatch this user-action row to visitor.visit_user_action."""
         return visitor.visit_user_action(self)
 
 

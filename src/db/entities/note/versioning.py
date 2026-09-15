@@ -21,7 +21,7 @@ class NoteVersionSnapshotEntity(AcceptsVisitor):
     content: UndefinedNoneOr[str] = UNDEFINED
 
     def visit(self, visitor: EntityVisitor):
-        """Dispatch this snapshot to ``visitor.visit_note_version_snapshot``."""
+        """Dispatch this snapshot to visitor.visit_note_version_snapshot."""
         return visitor.visit_note_version_snapshot(self)
 
 
@@ -39,7 +39,7 @@ class NoteVersionDeltaEntity(AcceptsVisitor):
     content_patch: UndefinedNoneOr[str] = UNDEFINED
 
     def visit(self, visitor: EntityVisitor):
-        """Dispatch this delta to ``visitor.visit_note_version_delta``."""
+        """Dispatch this delta to visitor.visit_note_version_delta."""
         return visitor.visit_note_version_delta(self)
 
 
