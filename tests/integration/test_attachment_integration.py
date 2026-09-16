@@ -12,6 +12,7 @@ flow.
 """
 
 from datetime import datetime
+import hashlib
 
 import pytest
 
@@ -121,6 +122,9 @@ async def test_attachment_facade_with_postgres_and_garage(
         created_at=now,
         updated_at=now,
         content=b"ping",
+        # sha256 is NOT NULL in note.attachment; the visitor renames
+        # ``checksum`` to ``sha256`` when present, so populate it.
+        checksum=hashlib.sha256(b"ping").hexdigest(),
     )
 
     stored = await facade.post_attachment(attachment, user_ctx)
