@@ -1,5 +1,6 @@
 # docker-compose
 data/
+data-bak/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
