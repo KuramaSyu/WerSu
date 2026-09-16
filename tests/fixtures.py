@@ -20,7 +20,7 @@ from src.ai.embedding_generator import EmbeddingGenerator, Models
 from src.api.facades.note_facade import NoteFacadeABC
 from src.api.repos.tag_repo import TagRepoABC
 from src.db.entities.user.user import UserEntity
-from src.db.migrations.context import MigrationContext
+from src.db.migrations.context import MigrationContext, MigrationServices
 from src.db.migrations.runner import MigrationRunner
 from src.db.repos import Database, UserPostgresRepo
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
@@ -97,11 +97,54 @@ async def db(dsn):
     db = Database(dsn, logging_provider, init_file="src/init.sql")
     await db.init_db()
 
-    # Apply migrations for test database setup.
+    # Apply migrations for test database setup.  The
+    # ``bootstrap-users-shelf`` migration guards on ``shelf_repo`` /
+    # ``permission_repo`` / ``directory_facade`` being non-None;
+    # wire those in so the guard passes.  The migration only does
+    # work when ``auth.user`` has rows -- which is never true on a
+    # freshly-migrated schema -- so the in-memory fakes are enough
+    # to satisfy the precondition without persisting anything.
+    permission_repo = InMemoryPermissionRepo()
+    rule_repo = InMemoryRuleRepo()
+    shelf_repo = PostgresShelfRepo(
+        shelf_table=Table(
+            db=db,
+            table_name="note.shelf",
+            id_fields=["id"],
+            error_log=True,
+            logging_provider=logging_provider,
+        ),
+        shelf_book_table=Table(
+            db=db,
+            table_name="note.shelf_book",
+            id_fields=["shelf_id", "book_id"],
+            error_log=True,
+            logging_provider=logging_provider,
+        ),
+        logging_provider=logging_provider,
+    )
+    directory_facade = _TestDirectoryRepo(permission_repo=permission_repo)
+    user_repo_for_ctx = UserPostgresRepo(
+        table=Table(
+            db=db,
+            table_name="auth.user",
+            id_fields=["id"],
+            logging_provider=logging_provider,
+        ),
+        logging_provider=logging_provider,
+    )
+    user_context_factory = RepoContextFactory(user_repo=user_repo_for_ctx)
     migration_runner = MigrationRunner(
         ctx=MigrationContext(
             db=db,
             spicedb_client=_TestSpiceDbClient(),
+            services=MigrationServices(
+                permission_repo=permission_repo,
+                rule_repo=rule_repo,
+                shelf_repo=shelf_repo,
+                directory_facade=directory_facade,
+                user_context_factory=user_context_factory,
+            ),
         ),
         log_provider=logging_provider,
     )
