@@ -448,6 +448,26 @@ def test_visit_attachment_drops_content_and_renames_checksum_to_sha256() -> None
     assert row["content_type"] == "text/plain"
 
 
+def test_visit_attachment_computes_sha256_from_content_when_checksum_missing() -> None:
+    """sha256 falls back to hashlib.sha256(content) when caller did not set checksum."""
+    import hashlib
+
+    converter = PostgresRowConverter()
+    entity = Attachment(
+        key="k1",
+        filename="hello.txt",
+        filepath="uploads/hello.txt",
+        content_type="text/plain",
+        size=5,
+        content=b"hello",
+    )
+
+    row = converter.visit_attachment(entity)
+
+    assert "checksum" not in row
+    assert row["sha256"] == hashlib.sha256(b"hello").hexdigest()
+
+
 def test_visit_attachment_metadata_uses_same_logic_as_visit_attachment() -> None:
     """`visit_attachment_metadata` is currently an alias of `visit_attachment`."""
     converter = _converter_with_frozen_now()
