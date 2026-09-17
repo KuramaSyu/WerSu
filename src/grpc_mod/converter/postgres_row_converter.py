@@ -260,9 +260,8 @@ class PostgresRowConverter(EntityVisitor):
         """Convert an Attachment to a Postgres row dict; content is dropped, checksum is renamed to sha256."""
         row = self._collect_fields(entity)
         row.pop("content", None)
-        # Attachment.sha256 is exposed as checksum on the dataclass; rename back for the column.
-        if "checksum" in row:
-            row["sha256"] = row.pop("checksum")
+        # in most cases, checksum is not explicitly provided, hence use the property to calculate it
+        row["sha256"] = row.pop("checksum", None) or entity.sha256
         row = self._apply_timestamp_fields(entity, row)
         return row
 
