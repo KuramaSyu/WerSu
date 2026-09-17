@@ -97,13 +97,8 @@ async def db(dsn):
     db = Database(dsn, logging_provider, init_file="src/init.sql")
     await db.init_db()
 
-    # Apply migrations for test database setup.  The
-    # ``bootstrap-users-shelf`` migration guards on ``shelf_repo`` /
-    # ``permission_repo`` / ``directory_facade`` being non-None;
-    # wire those in so the guard passes.  The migration only does
-    # work when ``auth.user`` has rows -- which is never true on a
-    # freshly-migrated schema -- so the in-memory fakes are enough
-    # to satisfy the precondition without persisting anything.
+    # Apply migrations for test database setup and
+    # prepare migration context
     permission_repo = InMemoryPermissionRepo()
     rule_repo = InMemoryRuleRepo()
     shelf_repo = PostgresShelfRepo(
