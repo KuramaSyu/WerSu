@@ -109,13 +109,12 @@ class ShareAccessServiceImpl(ShareAccessServiceABC):
         """
         # Fetch every action for the user and pick out the executed ones.
         actions = await self._user_action_repo.get_actions_by_user(user_id)
-        executed = [
-            a for a in actions
-            if a.executed_at is not None and a.executed_at is not UNDEFINED
-        ]
+        executed = [a for a in actions if a.executed_at]
         if not executed:
             return False
+        # sort by newest first
         executed.sort(key=lambda a: a.executed_at, reverse=True)  # type: ignore[arg-type,return-value]
+        # is the most recent is disabled, then the user is disabled
         return str(executed[0].action) == "disable"
 
 
