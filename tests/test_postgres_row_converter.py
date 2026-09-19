@@ -530,17 +530,77 @@ def test_visit_user_role_membership_strips_undefined_granted_at() -> None:
     assert row == {"user_id": "u1", "role_id": "r1"}
 
 
-def test_visit_user_action_fills_execute_at_with_now() -> None:
-    """`execute_at` is filled with the injected `now()` when UNDEFINED."""
+def test_visit_user_action_pending_undefined_executed_at_is_null() -> None:
+    """REGRESSION: a pending action must keep executed_at NULL."""
     from src.db.entities.user.user_action import UserActionEntity
     converter = _converter_with_frozen_now()
     entity = UserActionEntity(
-        user_id="u1", action="disable", execute_at=UNDEFINED,
+        user_id="u1",
+        action="disable",
+        execute_at=_dt.datetime(2026, 9, 25, 19, 43, 0, 47_000),
+        # executed_at left at its dataclass default (UNDEFINED)
     )
 
     row = converter.visit_user_action(entity)
 
-    assert row["execute_at"] == _frozen_now()
+    assert "executed_at" not in row
+    assert row["execute_at"] == _dt.datetime(2026, 9, 25, 19, 43, 0, 47_000)
+    assert row["user_id"] == "u1"
+    assert row["action"] == "disable"
+
+
+def test_visit_user_action_pending_explicit_none_stays_null() -> None:
+    """REGRESSION: explicit executed_at=None must stay NULL."""
+    # it just got datetime.now() in a previous version, resulting in instant-disabled users
+    from src.db.entities.user.user_action import UserActionEntity
+    converter = _converter_with_frozen_now()
+    entity = UserActionEntity(
+        user_id="u1",
+        action="disable",
+        execute_at=_dt.datetime(2026, 9, 25, 19, 43, 0),
+        executed_at=None,
+    )
+
+    row = converter.visit_user_action(entity)
+
+    assert row["executed_at"] is None
+
+
+def test_visit_user_action_executed_passes_executed_at_through() -> None:
+    """REGRESSION: executed rows must carry executed_at verbatim."""
+    from src.db.entities.user.user_action import UserActionEntity
+    converter = _converter_with_frozen_now()
+    executed_at = _dt.datetime(2026, 9, 18, 19, 50, 20, 883_406)
+    entity = UserActionEntity(
+        user_id="u1",
+        action="disable",
+        execute_at=_dt.datetime(2026, 10, 18, 19, 50, 19, 432_000),
+        executed_at=executed_at,
+    )
+
+    row = converter.visit_user_action(entity)
+
+    assert row["executed_at"] == executed_at
+
+
+def test_visit_user_action_missing_execute_at_raises() -> None:
+    """REGRESSION: a blank execute_at must raise ValueError."""
+    from src.db.entities.user.user_action import UserActionEntity
+    converter = _converter_with_frozen_now()
+
+    with pytest.raises(
+        ValueError, match="UserActionEntity.execute_at is required"
+    ):
+        converter.visit_user_action(
+            UserActionEntity(user_id="u1", action="disable", execute_at=UNDEFINED)
+        )
+
+    with pytest.raises(
+        ValueError, match="UserActionEntity.execute_at is required"
+    ):
+        converter.visit_user_action(
+            UserActionEntity(user_id="u1", action="disable", execute_at=None)
+        )
 
 
 def test_visit_note_version_snapshot_fills_created_at_with_now() -> None:

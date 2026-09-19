@@ -41,14 +41,13 @@ JSON_FIELDS: tuple[str, ...] = (
 
 
 #: Field names that fall back to now() when the entity left them UNDEFINED.
+# execute_at and executed_at are deliberately excluded; they are validated by visit_user_action.
 TIMESTAMP_FIELDS: tuple[str, ...] = (
     "created_at",
     "updated_at",
     "last_used_at",
     "revoked_at",
     "at",
-    "execute_at",
-    "executed_at",
 )
 
 
@@ -63,7 +62,7 @@ class PostgresRowConverter(EntityVisitor):
     Internal infrastructure: instantiated once in the composition
     root and injected into every Postgres repo that writes rows.
     Most callers should not need to override this; tests may inject
-    a fixed ``now`` to pin timestamps deterministically.
+    a fixed now to pin timestamps deterministically.
     """
 
     def __init__(
@@ -72,7 +71,7 @@ class PostgresRowConverter(EntityVisitor):
     ) -> None:
         self._now = now or _default_now
 
-    # ---- helpers -------------------------------------------------------
+    # helpers
 
     @staticmethod
     def _coerce_timestamp(
@@ -144,7 +143,7 @@ class PostgresRowConverter(EntityVisitor):
         try:
             entity_fields = {f.name for f in _dc_fields(entity)}
         except TypeError:
-            # Not a dataclass -- skip silently.
+            # Not a dataclass; skip silently.
             return row
         for key in TIMESTAMP_FIELDS:
             if key not in entity_fields:
@@ -156,7 +155,7 @@ class PostgresRowConverter(EntityVisitor):
             )
         return row
 
-    # ---- entity handlers ------------------------------------------------
+    # entity handlers
 
     def visit_note(self, entity: NoteEntity) -> Dict[str, Any]:
         """Convert a NoteEntity to a Postgres row dict."""
@@ -296,11 +295,13 @@ class PostgresRowConverter(EntityVisitor):
         return row
 
     def visit_user_action(self, entity: Any) -> Dict[str, Any]:
-        """Convert a UserActionEntity to a Postgres row dict."""
+        """Convert a UserActionEntity to a Postgres row dict; execute_at is required, executed_at stays NULL while pending."""
         from src.db.entities.user.user_action import UserActionEntity
         assert isinstance(entity, UserActionEntity)
+        if entity.execute_at is UNDEFINED or entity.execute_at is None:
+            raise ValueError("UserActionEntity.execute_at is required")
         row = self._collect_fields(entity)
-        row = self._apply_timestamp_fields(entity, row)
+        # executed_at is intentionally absent from TIMESTAMP_FIELDS so pending rows stay NULL.
         return row
 
     def visit_note_version_snapshot(self, entity: Any) -> Dict[str, Any]:
@@ -319,7 +320,7 @@ class PostgresRowConverter(EntityVisitor):
         row = self._apply_timestamp_fields(entity, row)
         return row
 
-    # ---- utility for callers that hold a dataclass instance ------------
+    # utility for callers that hold a dataclass instance
 
     def convert(self, entity: Any) -> Dict[str, Any]:
         """Dispatch entity via its visit method (falls back to _collect_fields)."""
