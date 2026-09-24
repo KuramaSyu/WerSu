@@ -4,7 +4,7 @@ from typing import List, Optional, Self
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import UserContextABC
 from src.api.search_filter import NoteSearchFilter
-from src.ai.embedding_generator import  EmbeddingGeneratorABC, Models
+from src.ai.embedding_generator import  EmbeddingGeneratorABC
 from src.db.database import  DatabaseABC
 from src.db.entities import NoteEntity
 from src.db.repos.permissions import PermissionRepoABC
@@ -244,7 +244,6 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         self.generator = generator
 
     async def search(self) -> list["NoteEntity"]:
-        model = Models.MINI_LM_L6_V2
         note_ids = await self._get_user_note_ids()
         date_filter = self._date_filter_sql()
         query = f"""
@@ -265,9 +264,9 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         """
         query_embedding = self.generator.generate(self.query)
         query_embedding_str = self.generator.tensor_to_str_vec(query_embedding)
+        model_name = self.generator.model_name
         records = await self.db.fetch(
-            query, query_embedding_str,
-            model.value, note_ids,
+            query, query_embedding_str, model_name, note_ids,
         )
 
         # the user can simply have no notes at all
