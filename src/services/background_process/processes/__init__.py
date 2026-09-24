@@ -1,9 +1,10 @@
 """Concrete :class:`BackgroundProcessABC` implementations.
 
-Currently only the user-action pair is here; attachment GC and the
-share-expiry process are future work and land in follow-up PRs that
-use this scaffolding.
+User-action pair plus the one-shot
+:class:`~.missing_embedding_process.MissingEmbeddingProcessImpl` that
+backfills embeddings on startup.
 """
 
+from .missing_embedding_process import MissingEmbeddingProcessImpl  # noqa: F401
 from .user_disable_process import UserDisableProcessImpl  # noqa: F401
 from .user_enable_process import UserEnableProcessImpl  # noqa: F401
