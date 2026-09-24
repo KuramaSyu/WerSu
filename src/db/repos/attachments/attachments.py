@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from typing import List, Optional, Protocol, Callable
 
 from asyncpg import Record
-from sympy import Q
 
 
 from src.api.other.undefined import UNDEFINED, UndefinedOr, is_undefined
