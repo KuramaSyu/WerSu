@@ -30,6 +30,7 @@ class Models(Enum):
     MINI_LM_L6_V2 = "sentence-transformers/all-MiniLM-L6-v2"
     PARAPHRASE_MPNET_BASE_V2 = "sentence-transformers/paraphrase-mpnet-base-v2"
     DISTILBERT_BASE_NLI_STSB_ELECTRA = "sentence-transformers/distilbert-base-nli-stsb-mean-tokens"
+    JINA_EMBEDDINGS_V2_BASE_DE = "jinaai/jina-embeddings-v2-base-de"
 
 
 class EmbeddingGeneratorABC(ABC):

@@ -170,20 +170,24 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
         )
         return embedding
 
-    async def update(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:      
+    async def update(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
         # generate embedding
         embedding_content = f"{title}\n{content}"
         embedding = self._embedding_generator.generate(embedding_content)
         embedding_seq = self._embedding_generator.tensor_to_sequence(embedding)
 
-        # make entity with just the embedding (update fields)
-        update_fields = NoteEmbeddingEntity(note_id=UNDEFINED, model=UNDEFINED, embedding=embedding_seq)
-        
+        # pin model so the upsert lands on the right (note_id, model) slot
+        update_fields = NoteEmbeddingEntity(
+            note_id=UNDEFINED,
+            model=self._embedding_generator.model_name,
+            embedding=embedding_seq,
+        )
+
         # now update it by note_id
         try:
             return await self._update(
                 set=update_fields,
-                where=NoteEmbeddingEntity(note_id, UNDEFINED, UNDEFINED)
+                where=NoteEmbeddingEntity(note_id, UNDEFINED, UNDEFINED),
             )
         except ValueError:
             # if update fails, insert it

@@ -44,6 +44,7 @@ from src.services.background_process import (
     TaskSpawnerAsyncio,
 )
 from src.services.background_process.processes import (
+    MissingEmbeddingProcessImpl,
     UserDisableProcessImpl,
     UserEnableProcessImpl,
 )
@@ -261,7 +262,7 @@ async def serve():
 
     model_init_started = time.perf_counter()
     embedding_generator = FastEmbedEmbeddingGenerator(
-        model_name=Models.MINI_LM_L6_V2,
+        model_name=Models.JINA_EMBEDDINGS_V2_BASE_DE,
         logging_provider=logging_provider,
     )
     log.info(f"Embedding model initialized in {time.perf_counter() - model_init_started:.2f}s")
@@ -339,14 +340,15 @@ async def serve():
         content_table,
         to_postgres_row=postgres_visitor,
     )
+    embedding_repo = NoteEmbeddingPostgresRepo(
+        table=embedding_table,
+        embedding_generator=embedding_generator,
+    )
     note_facade: NoteFacadeImpl = NoteFacadeImpl(
         db=db,
         content_repo=note_content_repo,
         combined_repo=CombinedNotePostgresRepo(db=db),
-        embedding_repo=NoteEmbeddingPostgresRepo(
-            table=embedding_table,
-            embedding_generator=embedding_generator
-        ),
+        embedding_repo=embedding_repo,
         permission_repo=permission_repo,
         directory_repo=directory_facade,
         tag_repo=tag_repo,
@@ -700,6 +702,11 @@ async def serve():
         get_now=lambda: datetime.now(),
         log=logging_provider,
     )
+    missing_embedding_process = MissingEmbeddingProcessImpl(
+        db=db,
+        embedding_repo=embedding_repo,
+        log=logging_provider,
+    )
     background_scheduler = BackgroundSchedulerImpl(
         clock=AsyncClockAsyncio(),
         task_spawner=TaskSpawnerAsyncio(),
@@ -715,6 +722,7 @@ async def serve():
         user_enable_process,
         on_handle=user_enable_listener.bind,
     )
+    background_scheduler.register(missing_embedding_process)
     background_scheduler.attach_handles()
     background_scheduler.start()
 

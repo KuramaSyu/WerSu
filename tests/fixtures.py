@@ -130,7 +130,7 @@ async def db(dsn):
     )
     user_context_factory = RepoContextFactory(user_repo=user_repo_for_ctx)
     embedding_generator = FastEmbedEmbeddingGenerator(
-        model_name=Models.MINI_LM_L6_V2,
+        model_name=Models.JINA_EMBEDDINGS_V2_BASE_DE,
         logging_provider=logging_provider,
     )
     migration_runner = MigrationRunner(
@@ -242,7 +242,7 @@ def note_repo_facade(
         embedding_repo=NoteEmbeddingPostgresRepo(
             table=embedding_table,
             embedding_generator=FastEmbedEmbeddingGenerator(
-                model_name=Models.MINI_LM_L6_V2,
+                model_name=Models.JINA_EMBEDDINGS_V2_BASE_DE,
                 logging_provider=logging_provider,
             ),
         ),
