@@ -3,8 +3,7 @@ requests
 grpclib
 python-dotenv
 asyncpg
-torch
-sentence-transformers
+fastembed
 colorama
 authzed
 typing_extensions
