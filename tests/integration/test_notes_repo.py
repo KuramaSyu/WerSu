@@ -4,7 +4,6 @@ from typing import AsyncGenerator, Optional
 from uuid import UUID
 import pytest
 from testcontainers.postgres import PostgresContainer
-from torch import embedding
 from src.db.repos.note import note_facade
 from tests.stubs.user_context import _UserContext as UserContext
 from src.api.other.types import Pagination

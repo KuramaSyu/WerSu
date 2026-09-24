@@ -16,7 +16,7 @@ keeps the lightweight fixtures the rest of the test suite shares:
   :mod:`tests.fixtures.fakes`).
 """
 
-from src.ai.embedding_generator import EmbeddingGenerator, Models
+from src.ai.embedding_generator import FastEmbedEmbeddingGenerator, Models
 from src.api.facades.note_facade import NoteFacadeABC
 from src.api.repos.tag_repo import TagRepoABC
 from src.db.entities.user.user import UserEntity
@@ -129,6 +129,10 @@ async def db(dsn):
         logging_provider=logging_provider,
     )
     user_context_factory = RepoContextFactory(user_repo=user_repo_for_ctx)
+    embedding_generator = FastEmbedEmbeddingGenerator(
+        model_name=Models.MINI_LM_L6_V2,
+        logging_provider=logging_provider,
+    )
     migration_runner = MigrationRunner(
         ctx=MigrationContext(
             db=db,
@@ -139,6 +143,7 @@ async def db(dsn):
                 shelf_repo=shelf_repo,
                 directory_facade=directory_facade,
                 user_context_factory=user_context_factory,
+                embedding_generator=embedding_generator,
             ),
         ),
         log_provider=logging_provider,
@@ -236,7 +241,7 @@ def note_repo_facade(
         combined_repo=CombinedNotePostgresRepo(db=db),
         embedding_repo=NoteEmbeddingPostgresRepo(
             table=embedding_table,
-            embedding_generator=EmbeddingGenerator(
+            embedding_generator=FastEmbedEmbeddingGenerator(
                 model_name=Models.MINI_LM_L6_V2,
                 logging_provider=logging_provider,
             ),

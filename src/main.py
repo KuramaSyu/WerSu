@@ -107,7 +107,7 @@ from src.grpc_mod.user_service import GrpcUserService
 from src.grpc_mod.auth_service import GrpcAuthService
 from src.services.shelf_service import ShelfServiceImpl
 from src.api.events.rule_dispatcher import RuleDispatcher
-from src.ai.embedding_generator import EmbeddingGenerator, Models
+from src.ai.embedding_generator import FastEmbedEmbeddingGenerator, Models
 from src.services.auth import PyJwtProvider
 from src.services.event_bus import InMemoryEventBus
 from src.services.event_context import InMemoryEventContext
@@ -260,7 +260,7 @@ async def serve():
     
 
     model_init_started = time.perf_counter()
-    embedding_generator = EmbeddingGenerator(
+    embedding_generator = FastEmbedEmbeddingGenerator(
         model_name=Models.MINI_LM_L6_V2,
         logging_provider=logging_provider,
     )
@@ -675,6 +675,7 @@ async def serve():
                 directory_facade=directory_facade,
                 user_context_factory=user_context_factory,
                 zettelkasten_strategy=zettelkasten_strategy,
+                embedding_generator=embedding_generator,
             ),
         ),
         log_provider=logging_provider,

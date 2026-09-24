@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from src.ai.embedding_generator import EmbeddingGeneratorABC
 from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.api.other.user_context import ContextFactory
 from src.api.repos.permission_repo import PermissionRepoABC
@@ -52,6 +53,11 @@ class MigrationServices:
     #: recipe should call ``strategy.apply(...)`` instead of
     #: reimplementing the recipe in raw SQL.
     zettelkasten_strategy: Optional[ShelfBootstrapStrategy] = None
+
+    #: Embedding generator.  Used by migrations that need to
+    #: (re)compute note embeddings through the same backend the
+    #: live composition root is wired with.
+    embedding_generator: Optional[EmbeddingGeneratorABC] = None
 
 
 @dataclass
