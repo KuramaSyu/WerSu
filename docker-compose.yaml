@@ -1,7 +1,7 @@
 services:
-  postgres:
+  wersu-postgres:
     image: pgvector/pgvector:0.8.1-pg18-trixie
-    container_name: postgres-wersu
+    container_name: wersu-postgres
     restart: always
     # Raise max_connections above the pgvector default of 20 so the
     # asyncpg pool (8) plus spicedb, pgweb and admin sessions fit.
@@ -32,11 +32,11 @@ services:
     ports: 
       - "8081:8081" 
     links: 
-      - postgres:postgres  # my database container is called postgres, not db
+      - wersu-postgres:wersu-postgres  # alias kept in sync with service name
     environment:
-      - PGWEB_DATABASE_URL=postgres://postgres:postgres@postgres:5432/db?sslmode=disable
+      - PGWEB_DATABASE_URL=postgres://postgres:postgres@wersu-postgres:5432/db?sslmode=disable
     depends_on:
-      postgres:
+      wersu-postgres:
         condition: service_healthy
 
   # when using postgres as datastore for spicedb, we need to run the migrate command before starting the server
@@ -48,10 +48,10 @@ services:
       - migrate
       - head
       - --datastore-engine=postgres
-      - --datastore-conn-uri=postgres://spicedb:spicedb@postgres:5432/spicedb?sslmode=disable
+      - --datastore-conn-uri=postgres://spicedb:spicedb@wersu-postgres:5432/spicedb?sslmode=disable
     restart: "no"
     depends_on:
-      postgres:
+      wersu-postgres:
         condition: service_healthy
       
   spicedb:
@@ -63,13 +63,13 @@ services:
       - --grpc-preshared-key=somerandomkeyhere
       - --datastore-engine=postgres
       # user is created in the pgvector_init.sql
-      - --datastore-conn-uri=postgres://spicedb:spicedb@postgres:5432/spicedb?sslmode=disable  
+      - --datastore-conn-uri=postgres://spicedb:spicedb@wersu-postgres:5432/spicedb?sslmode=disable  
     ports:
       - "50051:50051" # gRPC
       - "8443:8443"   # HTTP
     restart: unless-stopped
     depends_on:
-      postgres:
+      wersu-postgres:
         condition: service_healthy
       spicedb-migrate:
         condition: service_completed_successfully
@@ -81,7 +81,7 @@ services:
     container_name: wersu-grpc
     restart: unless-stopped
     environment:
-      DATABASE_DSN: postgres://postgres:postgres@postgres:5432/db?sslmode=disable
+      DATABASE_DSN: postgres://postgres:postgres@wersu-postgres:5432/db?sslmode=disable
       GRPC_HOST: 0.0.0.0
       GRPC_PORT: "50052"
       GRPC_SPICEDB_CREDENTIALS: somerandomkeyhere
@@ -96,7 +96,7 @@ services:
     ports:
       - "50052:50052"
     depends_on:
-      postgres:
+      wersu-postgres:
         condition: service_healthy
       spicedb:
         condition: service_started
