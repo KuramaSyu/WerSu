@@ -35,6 +35,7 @@ from src.grpc_mod.proto.note_pb2 import (
     PostNoteRequest,
 )
 from src.grpc_mod.proto.note_pb2_grpc import NoteServiceServicer
+from src.utils import truncate
 from src.utils.grpc_type_helper import grpc_unwrap_oneof, grpc_unwrap_optional
 
 
@@ -69,7 +70,11 @@ class GrpcNoteService(NoteServiceServicer):
                 "include_permissions": False,
                 "include_tag_ids": True,
             })
-            self.log.debug(f"Fetched note response: {response}")
+            self.log.debug(
+                f"Fetched note id={response.note.note_id if response.note else '<none>'} "
+                f"title={truncate(response.note.title if response.note else None)!r} "
+                f"content={truncate(response.note.content if response.note else None)!r}"
+            )
             if response.note is None:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
                 context.set_details(f"Note not found where user with id {request.user_id} has permissions")
@@ -138,7 +143,11 @@ class GrpcNoteService(NoteServiceServicer):
     @log_service_call()
     async def PatchNote(self, request: AlterNoteRequest, context: ServicerContext) -> Note:
         try:
-            self.log.debug(f"Updating note with request: {request}")
+            self.log.debug(
+                f"Updating note id={request.id} "
+                f"title={truncate(request.title)!r} "
+                f"content={truncate(request.content)!r}"
+            )
             self.log.debug(
                 f"{request.WhichOneof('directory_ids_change')=}, "
                 f"{request.WhichOneof('tag_ids_change')=}, "
@@ -176,7 +185,11 @@ class GrpcNoteService(NoteServiceServicer):
                 ),
                 user_ctx,
             )
-            self.log.debug(f"Updated note entity: {note_entity}")
+            self.log.debug(
+                f"Updated note id={note_entity.note_id} "
+                f"title={truncate(note_entity.title)!r} "
+                f"content={truncate(note_entity.content)!r}"
+            )
             return note_entity.convert(self._to_grpc)
         except ValueError as e:
             context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
