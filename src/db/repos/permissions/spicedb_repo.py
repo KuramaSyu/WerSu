@@ -36,7 +36,7 @@ from authzed.api.v1 import (
 from grpcutil import insecure_bearer_token_credentials
 
 from src.api import UNDEFINED, UndefinedNoneOr, UndefinedOr
-
+from src.api import LoggingProvider
 class SpicedbPermissionConverter(PermissionConverterABC):
     """Adapter to convert between domain Relationship and SpiceDB Relationship"""
 
@@ -156,6 +156,7 @@ class SpicedbPermissionRepo(PermissionRepoABC):
     def __init__(
         self,
         client: AsyncClient,
+        log: LoggingProvider,
         permission_candidates_by_object_type: dict[str, list[str]] | None = None,
         consistent: bool = True,
         directory_subdirectory_table: Optional[TableABC] = None,
@@ -193,6 +194,7 @@ class SpicedbPermissionRepo(PermissionRepoABC):
             else self._default_permission_candidates_by_object_type
         )
         self._consistent = consistent
+        self.log = log(__name__, self)
         self._directory_subdirectory_table = directory_subdirectory_table
 
     def _consistency(self) -> Optional[Consistency]:
@@ -217,16 +219,18 @@ class SpicedbPermissionRepo(PermissionRepoABC):
     async def insert(self, relationships: List[Relationship]) -> List[Relationship]:
         # SpiceDB bulk import API consumes a request stream; we send a single batched request.
         #
-        # Writes are *always* fully consistent on the server side; SpiceDB
-        # does not accept a `consistency` field on ``ImportBulkRelationshipsRequest``.
-        # ``ImportBulkRelationships`` is a stream-unary RPC so we cannot pass
-        # ``wait_for_ready`` either: that flag is only legal on unary
-        # gRPC methods.  The caller therefore relies on SpiceDB having
-        # committed the tuples by the time the RPC future resolves.
+        # Writes are *always* fully consistent on the server side;
         requests = [ImportBulkRelationshipsRequest(
             relationships=[self.converter.convert_relationship(rel) for rel in relationships]
         )]
-        await self.client.ImportBulkRelationships((req for req in requests))
+        try:
+            await self.client.ImportBulkRelationships((req for req in requests))
+        except grpc.aio.AioRpcError as e:
+            if e.code() == grpc.StatusCode.ALREADY_EXISTS:
+                # dont raise because of a duplicate
+                self.log.warning(f"Duplicate relationship insert ignored: {e.details()}")
+            else:
+                raise e
         return relationships
 
     @handle_error
