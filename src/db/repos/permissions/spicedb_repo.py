@@ -257,14 +257,15 @@ class SpicedbPermissionRepo(PermissionRepoABC):
                 relation_filter.optional_resource_id = str(rel.resource.object_id)
             if not is_undefined(rel.relation):
                 relation_filter.optional_relation = rel.relation
-            if not is_undefined(rel.subject.object_type):
-                relation_filter.optional_subject_filter.subject_type = (
-                    rel.subject.object_type
-                )
-            if not is_undefined(rel.subject.object_id):
-                relation_filter.optional_subject_filter.optional_subject_id = (
-                    str(rel.subject.object_id)
-                )
+            if not is_undefined(rel.subject):
+                if not is_undefined(rel.subject.object_type):
+                    relation_filter.optional_subject_filter.subject_type = (
+                        rel.subject.object_type
+                    )
+                if not is_undefined(rel.subject.object_id):
+                    relation_filter.optional_subject_filter.optional_subject_id = (
+                        str(rel.subject.object_id)
+                    )
             return relation_filter
 
 
