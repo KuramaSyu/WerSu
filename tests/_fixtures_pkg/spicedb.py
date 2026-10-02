@@ -20,6 +20,7 @@ import pytest
 from testcontainers_spicedb import SpiceDBContainer
 
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
+from src.utils import logging_provider
 from tests._fixtures_pkg.spicedb_schema import (
     SPICEDB_IMAGE,
     create_spicedb_client,
@@ -85,7 +86,7 @@ async def _spicedb_permission_repo_fixture(
             spicedb.get_secret_key(),
         )
         await wait_until_spicedb_ready(client, load_spicedb_schema())
-        repo = SpicedbPermissionRepo(client=client, consistent=True)
+        repo = SpicedbPermissionRepo(client=client, log=logging_provider, consistent=True)
 
         if idempotent_insert:
             _wrap_insert_as_idempotent(repo)

@@ -303,6 +303,7 @@ async def serve():
 
     permission_repo = SpicedbPermissionRepo(
         client=spicedb_client,
+        log=logging_provider,
         consistent=True,
         directory_subdirectory_table=directory_subdirectory_table,
     )

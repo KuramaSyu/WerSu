@@ -121,6 +121,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
 
         permission_repo = SpicedbPermissionRepo(
             client=spicedb_client,
+            log=logging_provider,
             consistent=True,
             directory_subdirectory_table=Table(
                 db=db,
