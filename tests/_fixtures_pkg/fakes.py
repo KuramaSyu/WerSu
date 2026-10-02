@@ -86,11 +86,11 @@ class _FakeEmbeddingRepo(NoteEmbeddingRepo):
     async def insert(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
         return NoteEmbeddingEntity(note_id=note_id, model="fake", embedding=[0.0])
 
-    async def _update(self, set: NoteEmbeddingEntity, where: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
-        return NoteEmbeddingEntity(note_id=where.note_id, model="fake", embedding=[0.0])
-
     async def update(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
         return NoteEmbeddingEntity(note_id=note_id, model="fake", embedding=[0.0])
+
+    async def _update(self, set: NoteEmbeddingEntity, where: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
+        return NoteEmbeddingEntity(note_id=where.note_id, model=where.model, embedding=[0.0])
 
     async def delete(self, embedding: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
         return embedding
