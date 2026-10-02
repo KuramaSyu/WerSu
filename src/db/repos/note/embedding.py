@@ -97,6 +97,28 @@ class NoteEmbeddingRepo(ABC):
         ...
 
     @abstractmethod
+    async def _update(
+        self,
+        set: NoteEmbeddingEntity,
+        where: NoteEmbeddingEntity,
+    ) -> NoteEmbeddingEntity:
+        """updates embedding (just inserting it, given with the `set` parameter)
+
+        Args:
+        -----
+        set: `NoteEmbeddingEntity`
+            the fields to update (note_id and model should be UNDEFINED, only embedding should be set)
+        where: `NoteEmbeddingEntity`
+            the conditions to find the embedding to update (note_id and model should be set, embedding should be UNDEFINED)
+
+        Returns:
+        --------
+        `NoteEmbeddingEntity`:
+            the updated entity
+        """
+        ...
+
+    @abstractmethod
     async def delete(
         self,
         embedding: NoteEmbeddingEntity,
@@ -173,13 +195,14 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
     async def update(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
         # generate embedding
         embedding_content = f"{title}\n{content}"
+        model = self._embedding_generator.model_name
         embedding = self._embedding_generator.generate(embedding_content)
         embedding_seq = self._embedding_generator.tensor_to_sequence(embedding)
 
-        # pin model so the upsert lands on the right (note_id, model) slot
+        # target exactly one (note_id, model) row
         update_fields = NoteEmbeddingEntity(
             note_id=UNDEFINED,
-            model=self._embedding_generator.model_name,
+            model=UNDEFINED,
             embedding=embedding_seq,
         )
 
@@ -187,7 +210,7 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
         try:
             return await self._update(
                 set=update_fields,
-                where=NoteEmbeddingEntity(note_id, UNDEFINED, UNDEFINED),
+                where=NoteEmbeddingEntity(note_id, model, UNDEFINED),
             )
         except ValueError:
             # if update fails, insert it
@@ -196,14 +219,11 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
     async def _update(self, set: NoteEmbeddingEntity, where: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
         set_dict = asdict(set)
         if isinstance(set.embedding, list):
-            set_dict["embedding"] = self._embedding_generator.list_to_str_vec(set.embedding) 
+            set_dict["embedding"] = self._embedding_generator.list_to_str_vec(set.embedding)
         where_dict = asdict(where)
         if isinstance(where.embedding, list):
-            where_dict["embedding"] = self._embedding_generator.list_to_str_vec(where.embedding) 
-        record = await self._table.update(
-            set=set_dict,
-            where=asdict(where)
-        )
+            where_dict["embedding"] = self._embedding_generator.list_to_str_vec(where.embedding)
+        record = await self._table.update(set=set_dict, where=where_dict)
         if not record:
             raise ValueError(f"Failed to update embedding for note_id: {where.note_id}")
         return set
