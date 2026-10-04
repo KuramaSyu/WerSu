@@ -165,8 +165,9 @@ async def test_update_overwrites_content_and_refreshes_embedding() -> None:
     assert result.title == "New title"
     assert result.content == "New content"
     assert result.permissions == []
-    assert len(result.embeddings) == 1
-    assert result.embeddings[0].note_id == "note-1"
+    # Embedding refresh is now scheduled in the background; the
+    # synchronous return carries no fresh embedding payload.
+    assert result.embeddings == []
     # underlying content repo reflects the new state
     persisted = await content_repo.select_by_id("note-1")
     assert persisted.title == "New title"

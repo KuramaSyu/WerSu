@@ -17,6 +17,7 @@ time and otherwise ignores it.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import fields, replace
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -89,6 +90,9 @@ class NoteFacadeImpl(NoteFacadeABC):
         self._shelf_repo = shelf_repo
         self._rule_repo = rule_repo
         self.log = logging_provider(__name__, self)
+        # Holds fire-and-forget embedding refresh tasks so the loop
+        # does not garbage-collect them mid-flight.
+        self._embedding_tasks: "set[asyncio.Task[Any]]" = set()
 
     # ---- private helpers ---------------------------------------------
 
@@ -244,16 +248,50 @@ class NoteFacadeImpl(NoteFacadeABC):
         Returns:
             NoteEntity: updated version (same object).
         """
-        note.directory_ids = await self._directory_facade.get_parents_of(
-            "note", note_id, "directory",
+        directory_ids, tag_ids = await asyncio.gather(
+            self._directory_facade.get_parents_of(
+                "note", note_id, "directory",
+            ),
+            self._tag_repo.list_tags_of("note", note_id),
         )
-        note.tag_ids = await self._tag_repo.list_tags_of("note", note_id)
+        note.directory_ids = directory_ids
+        note.tag_ids = tag_ids
 
         # TODO: actually resolve the wohle hierarchy to get the shelves.
         # for now, we dont fetch any sehlves
         shelf_ids: set[str] = set()
         note.sehlf_ids = list(shelf_ids)
         return note
+
+    def _schedule_embedding_refresh(
+        self,
+        note_id: str,
+        title: str,
+        content: str,
+    ) -> None:
+        """Schedule an embedding refresh; failures must not fail the note update."""
+        self.log.debug(
+            f"embedding: scheduling background refresh note_id={note_id}"
+        )
+
+        async def _run() -> None:
+            try:
+                await self._embedding_repo.update(note_id, title, content)
+                self.log.debug(
+                    f"embedding: background refresh ok note_id={note_id}"
+                )
+            except Exception:
+                self.log.exception(
+                    f"embedding: background refresh failed note_id={note_id}"
+                )
+
+        task = asyncio.create_task(_run())
+        self._embedding_tasks.add(task)
+        task.add_done_callback(self._embedding_tasks.discard)
+        self.log.debug(
+            f"embedding: background task scheduled note_id={note_id} "
+            f"pending={len(self._embedding_tasks)}"
+        )
 
     # ---- insert / update ---------------------------------------------
 
@@ -366,14 +404,15 @@ class NoteFacadeImpl(NoteFacadeABC):
             where=NoteEntity(note_id=note.note_id),
         )
 
-        # Embedding refresh.
+        # Embedding regeneration runs in the background so the user-visible
+        # response only waits on the content write.  A failure here cannot
+        # fail the note update; content is already persisted above.
         if note.content and note.note_id:
-            embedding = await self._embedding_repo.update(
-                note.note_id,
-                note.title if note.title else "",
-                note.content,
+            self._schedule_embedding_refresh(
+                note_id=str(note.note_id),
+                title=note.title if note.title else "",
+                content=note.content,
             )
-            updated.embeddings = [embedding]
 
         # replace tags when given
         if note.tag_ids is not UNDEFINED:

@@ -1,11 +1,15 @@
 from abc import ABC, abstractmethod
-
+import asyncio
+import time
 from typing import TYPE_CHECKING, Any, Dict, List, Protocol
 
 from asyncpg import Record
 from src.api.other.undefined import UNDEFINED
+
 from src.db.entities import NoteEmbeddingEntity
 from src.db.table import TableABC
+from src.api import LoggingProvider
+from src.utils import logging_provider
 
 from src.utils import asdict, str_vec_to_list, tensor_to_str_vec
 
@@ -163,58 +167,103 @@ class NoteEmbeddingRepo(ABC):
         ...
 
 class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
-    """Provides an impementation using Postgres as the backend database"""
-    def __init__(self, table: TableABC, embedding_generator: EmbeddingGeneratorABC):
+    """Postgres-backed implementation."""
+    def __init__(self, table: TableABC, embedding_generator: EmbeddingGeneratorABC, log: LoggingProvider | None = None) -> None:
         self._table = table
         self._embedding_generator = embedding_generator
+        self._log = log or logging_provider(__name__, self)
 
-    async def insert(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
-        # generate embedding
+    async def _generate_embedding_async(
+        self,
+        note_id: str,
+        title: str,
+        content: str,
+    ) -> Any:
+        """Run the (sync) generator on a worker thread and log timings."""
         embedding_content = f"{title}\n{content}"
-        embedding = self._embedding_generator.generate(embedding_content)
-        embedding_str = tensor_to_str_vec(embedding)
+        model = self._embedding_generator.model_name
+        self._log.debug(
+            f"embedding: dispatching note_id={note_id} model={model} "
+            f"chars={len(embedding_content)} to background thread"
+        )
+        start = time.perf_counter()
+        try:
+            embedding = await asyncio.to_thread(
+                self._embedding_generator.generate, embedding_content,
+            )
+        except Exception:
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            self._log.exception(
+                f"embedding: generation failed note_id={note_id} "
+                f"model={model} after {elapsed_ms:.1f}ms"
+            )
+            raise
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        self._log.debug(
+            f"embedding: generation ok note_id={note_id} model={model} "
+            f"took={elapsed_ms:.1f}ms"
+        )
+        return embedding
 
-        # insert embedding
+    async def _store_embedding(
+        self,
+        note_id: str,
+        embedding: Any,
+    ) -> NoteEmbeddingEntity:
+        embedding_str = tensor_to_str_vec(embedding)
+        self._log.debug(
+            f"embedding: persisting note_id={note_id} "
+            f"model={self._embedding_generator.model_name}"
+        )
+        start = time.perf_counter()
         record = await self._table.insert({
             "note_id": note_id,
             "model": self._embedding_generator.model_name,
             "embedding": embedding_str,
         })
+        persist_ms = (time.perf_counter() - start) * 1000.0
         if not record:
+            self._log.error(
+                f"embedding: persist returned no rows note_id={note_id} "
+                f"after {persist_ms:.1f}ms"
+            )
             raise Exception("Failed to insert embedding")
-
-        # create embedding entity
         assert len(record) > 0
-        embedding = NoteEmbeddingEntity(
+        self._log.debug(
+            f"embedding: persist ok note_id={note_id} took={persist_ms:.1f}ms"
+        )
+        return NoteEmbeddingEntity(
             note_id=record[0]["note_id"],
             model=self._embedding_generator.model_name,
             embedding=str_vec_to_list(record[0]["embedding"]),
         )
-        return embedding
+
+    async def insert(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
+        self._log.debug(f"embedding: insert note_id={note_id}")
+        embedding = await self._generate_embedding_async(note_id, title, content)
+        result = await self._store_embedding(note_id, embedding)
+        self._log.debug(f"embedding: insert complete note_id={note_id}")
+        return result
 
     async def update(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
-        # generate embedding
-        embedding_content = f"{title}\n{content}"
+        """Upsert the embedding for an existing note."""
         model = self._embedding_generator.model_name
-        embedding = self._embedding_generator.generate(embedding_content)
-        embedding_seq = self._embedding_generator.tensor_to_sequence(embedding)
-
-        # target exactly one (note_id, model) row
+        self._log.debug(
+            f"embedding: update note_id={note_id} model={model}"
+        )
+        embedding = await self._generate_embedding_async(note_id, title, content)
         update_fields = NoteEmbeddingEntity(
             note_id=UNDEFINED,
             model=UNDEFINED,
-            embedding=embedding_seq,
+            embedding=self._embedding_generator.tensor_to_sequence(embedding),
         )
-
-        # now update it by note_id
         try:
             return await self._update(
                 set=update_fields,
                 where=NoteEmbeddingEntity(note_id, model, UNDEFINED),
             )
         except ValueError:
-            # if update fails, insert it
-            return await self.insert(note_id, title, content)
+            return await self._store_embedding(note_id, embedding)
 
     async def _update(self, set: NoteEmbeddingEntity, where: NoteEmbeddingEntity) -> NoteEmbeddingEntity:
         set_dict = asdict(set)
