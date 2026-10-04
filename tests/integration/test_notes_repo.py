@@ -73,12 +73,11 @@ async def test_update_note(db: Database, note_repo_facade: NoteFacadeABC, user_s
     )
     ret_note = await note_repo_facade.update(updated_note, ctx)
 
-    # assert, that embedding was updated
-    assert isinstance(ret_note.embeddings, list) and len(ret_note.embeddings[0].embedding) > 0  # type: ignore
-    assert ret_note.embeddings[0].embedding != test_note.embeddings[0].embedding  # type: ignore
-    updated_note = replace(updated_note, embeddings=ret_note.embeddings)  # type: ignore
-    
-    assert ret_note == updated_note
+    # Embedding refresh is now scheduled in the background; the
+    # synchronous return carries no fresh embedding payload.
+    assert ret_note.embeddings == []
+
+    assert ret_note == replace(updated_note, embeddings=[])
 
 async def test_create_and_remove_note(
     db: Database,
