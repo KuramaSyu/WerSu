@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
 import difflib
+import json
 from typing import List, Optional
 
 from asyncpg import Record
@@ -141,7 +142,11 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
             # Avoid creating empty version entries if nothing changed.
             return None
 
-        latest_snapshot = await self._get_latest_snapshot(note_id)
+        context = await self._load_append_context(note_id)
+        latest_snapshot = context["snapshot"]
+        delta_count = context["delta_count"]
+        version_index = context["next_version_index"]
+
         if latest_snapshot is None:
             # If we are missing history, the safe fallback is a full snapshot.
             snapshot = await self.record_initial_snapshot(
@@ -152,12 +157,6 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
                 created_at=created_at,
             )
             return self._to_entry_from_snapshot(snapshot)
-
-        delta_count = await self._count_deltas_since_snapshot(
-            note_id=note_id,
-            snapshot_id=str(latest_snapshot.snapshot_id),
-        )
-        version_index = await self._get_next_version_index(note_id)
 
         if delta_count >= self._max_deltas_per_snapshot:
             # Threshold reached → store a full snapshot for faster restore.
@@ -188,6 +187,59 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
             )
         )
         return self._to_entry_from_delta(delta)
+
+    async def _load_append_context(self, note_id: str) -> dict:
+        """Fetch everything `append_version` needs to decide snapshot vs delta.
+
+        Single round-trip: returns the latest snapshot row, the
+        number of deltas that already reference it, and the next
+        free ``version_index`` for the note.
+        """
+        sql = f"""
+            WITH snap AS (
+                SELECT snapshot_id, note_id, version_index, created_at,
+                       author_id, title, content
+                FROM {self._snapshot_table.name}
+                WHERE note_id = $1
+                ORDER BY version_index DESC
+                LIMIT 1
+            ),
+            deltas AS (
+                SELECT COUNT(*) AS delta_count, MAX(snapshot_id::text) AS sample_id
+                FROM {self._delta_table.name}
+                WHERE note_id = $1
+            ),
+            versions AS (
+                SELECT version_index FROM {self._snapshot_table.name} WHERE note_id = $1
+                UNION ALL
+                SELECT version_index FROM {self._delta_table.name} WHERE note_id = $1
+            )
+            SELECT
+                (SELECT row_to_json(s) FROM snap s) AS snapshot_json,
+                (SELECT delta_count FROM deltas) AS delta_count,
+                COALESCE((SELECT MAX(version_index) FROM versions), 0) + 1 AS next_version_index
+        """
+        rows = await self._snapshot_table.fetch(sql, note_id)
+        if not rows:
+            return {
+                "snapshot": None,
+                "delta_count": 0,
+                "next_version_index": 1,
+            }
+        row = rows[0]
+        snapshot_json = row["snapshot_json"]
+        snapshot: Optional[NoteVersionSnapshotEntity] = None
+        if snapshot_json is not None:
+            # asyncpg returns ``row_to_json`` as a JSON string; decode
+            # so we can feed the dict through ``_snapshot_from_record``.
+            snapshot = self._snapshot_from_record(
+                _JsonRecord(json.loads(snapshot_json))
+            )
+        return {
+            "snapshot": snapshot,
+            "delta_count": int(row["delta_count"] or 0),
+            "next_version_index": int(row["next_version_index"]),
+        }
 
     async def list_versions(
         self,
@@ -404,22 +456,45 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         )
 
     def _build_patch(self, old_text: str, new_text: str) -> str:
-        # Ensure diffs always include a line terminator so difflib restores correctly
+        # Use unified_diff: O(N) plus hunk headers, far smaller than ndiff for
+        # large mostly-identical content.  ``n=2`` keeps a small context
+        # window so the patch remains self-describing.
         old_payload = old_text if old_text.endswith("\n") else f"{old_text}\n"
         new_payload = new_text if new_text.endswith("\n") else f"{new_text}\n"
-        diff_lines = self._dmp.ndiff(
+        diff_lines = self._dmp.unified_diff(
             old_payload.splitlines(keepends=True),
             new_payload.splitlines(keepends=True),
+            n=2,
         )
         return "".join(diff_lines)
 
     def _apply_patch(self, patch_text: str, base_text: str) -> str:
+        # Unified-diff reconstruction: skip file/hunk headers, drop
+        # ``-`` lines, keep `` `` and ``+`` lines verbatim.  Built by
+        # hand because ``difflib.restore`` only understands ``ndiff``
+        # output.
         if not patch_text:
             return base_text
         needs_trim = not base_text.endswith("\n")
-        base_payload = base_text if base_text.endswith("\n") else f"{base_text}\n"
         diff_lines = patch_text.splitlines(keepends=True)
-        restored = "".join(self._dmp.restore(diff_lines, 2))
+        restored_parts: list[str] = []
+        for line in diff_lines:
+            head = line[:3]
+            # File headers ("--- ", "+++ ") and hunk headers ("@@ ")
+            # never carry payload bytes.
+            if head in ("---", "+++", "@@ "):
+                continue
+            prefix = line[:1]
+            if prefix == "+":
+                restored_parts.append(line[1:])
+            elif prefix == "-":
+                continue  # dropped
+            elif prefix == " ":
+                restored_parts.append(line[1:])
+            # Other prefixes (e.g. '\\', '%', '#' markers from
+            # "No newline at end of file" / patch-level markers) are
+            # ignored.
+        restored = "".join(restored_parts)
         if needs_trim and restored.endswith("\n"):
             restored = restored[:-1]
         return restored
@@ -447,3 +522,18 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
             is_snapshot=False,
             snapshot_id=str(delta.snapshot_id),
         )
+
+
+class _JsonRecord:
+    """Dict adapter that exposes asyncpg ``Record``-style key access.
+
+    ``row_to_json`` returns a plain ``dict``; this wrapper lets us
+    pass that dict through :meth:`_snapshot_from_record` without
+    rewriting that method to accept both shapes.
+    """
+
+    def __init__(self, payload: dict) -> None:
+        self._payload = payload
+
+    def __getitem__(self, key: str) -> Any:
+        return self._payload[key]
