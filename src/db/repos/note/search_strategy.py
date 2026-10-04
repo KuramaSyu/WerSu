@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import asyncio
 from typing import List, Optional, Self
 
 from src.api.other.undefined import UNDEFINED
@@ -250,7 +251,6 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         self.generator = generator
 
     async def search(self) -> list["NoteEntity"]:
-        note_ids = await self._get_user_note_ids()
         date_filter = self._date_filter_sql()
         readme_filter = self._exclude_readme_sql()
         query = f"""
@@ -266,7 +266,11 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         LIMIT {self.limit}
         OFFSET {self.offset}
         """
-        query_embedding = self.generator.generate(self.query)
+        # run fetches parallel to onnx embedding generation
+        note_ids, query_embedding = await asyncio.gather(
+            self._get_user_note_ids(),
+            asyncio.to_thread(self.generator.generate, self.query),
+        )
         query_embedding_str = self.generator.tensor_to_str_vec(query_embedding)
         model_name = self.generator.model_name
         records = await self.db.fetch(
