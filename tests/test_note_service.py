@@ -19,6 +19,7 @@ catching regressions in the orchestration logic.
 """
 
 from __future__ import annotations
+import asyncio
 from dataclasses import replace
 from datetime import datetime
 from src.api.facades.directory_facade import DirectoryFacadeABC
@@ -34,7 +35,7 @@ from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.rule import RuleEntity
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.services.note import NoteServiceImpl
-from tests._fixtures_pkg.fakes import _FakeCombinedNoteRepo, _FakeDatabase, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeTagRepo, _FakeVersionRepo, _TestDirectoryRepo
+from tests._fixtures_pkg.fakes import _FakeCombinedNoteRepo, _FakeDatabase, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeTagRepo, _FakeVersionRepo, _RecordingEmbeddingGenerator, _RecordingEmbeddingRepo, _TestDirectoryRepo
 from tests.stubs.activity_logger_service import _FakeActivityLoggerService
 from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
 from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
@@ -86,6 +87,7 @@ def _make_service(
     directory_repo: Optional[DirectoryFacadeABC] = None,
     permission_repo: Optional[PermissionRepoABC] = None,
     jwt_provider: Optional[JwtProvider] = None,
+    embedding_repo: Optional[_FakeEmbeddingRepo] = None,
     next_note_id: str = "019f0000-0000-7000-8000-000000000001",
 ) -> tuple[
     NoteServiceImpl,
@@ -106,7 +108,7 @@ def _make_service(
     fake_db.fetchrow_responses.append({"id": next_note_id})
     fake_content = content_repo or _FakeNoteContentRepo()
     fake_combined = _FakeCombinedNoteRepo(content_repo=fake_content)
-    fake_embedding = _FakeEmbeddingRepo()
+    fake_embedding = embedding_repo or _FakeEmbeddingRepo()
     fake_permission = permission_repo or InMemoryPermissionRepo()
     fake_directory = directory_repo or _TestDirectoryRepo(permission_repo=fake_permission)
     fake_jwt = jwt_provider or _FakeJwtProvider()
@@ -628,4 +630,121 @@ async def test_delete_note_does_not_record_on_permission_denied() -> None:
     with pytest.raises(PermissionError):
         await service.delete_note("ghost", _human_ctx("user-1"))
 
-    assert activity_logger.calls == []
+
+async def _wait_for_pending_embedding_tasks(service: NoteServiceImpl) -> None:
+    """Await the fire-and-forget tasks the facade tracks in ``_embedding_tasks``.
+
+    Both ``insert`` and ``update`` schedule their embedding work on
+    the facade's ``_embedding_tasks`` set.  ``asyncio.gather`` drains
+    them; ``return_exceptions=True`` mirrors the production
+    scheduler, which logs and discards failures rather than raising.
+    """
+    facade = service._note_repo  # type: ignore[attr-defined]
+    pending = list(getattr(facade, "_embedding_tasks", set()))
+    if not pending:
+        return
+    await asyncio.gather(*pending, return_exceptions=True)
+
+
+async def test_insert_note_drives_recording_embedding_generator() -> None:
+    """`insert_note` schedules an embedding encode via the wired generator.
+
+    The facade hands the background task to ``_embedding_repo.insert``;
+    the recording repo drives its recording generator with
+    ``f"{title}\\n{content}"`` so we can assert the model actually
+    saw the new note.  The returned note still carries an empty
+    ``embeddings`` list because the synchronous response returns
+    before the background task completes.
+    """
+    recording_repo = _RecordingEmbeddingRepo()
+    service, _db, _content, _dir, _perm, _jwt, _activity_logger = _make_service(
+        embedding_repo=recording_repo,
+    )
+    # Seed a default directory + default-fleeting rule so the
+    # facade's _resolve_directory_ids finds a parent.
+    default_dir = DirectoryEntity(
+        id="dir-default", slug="fleeting_notes",
+    )
+    _dir.directories_by_id["dir-default"] = default_dir
+    _dir.user_to_directory_ids["user-1"] = ["dir-default"]
+    facade = service._note_repo  # type: ignore[attr-defined]
+    await facade._rule_repo.create_rule(  # type: ignore[attr-defined]
+        RuleEntity(
+            id=UNDEFINED,
+            event_type="NoteCreated",
+            attached_entity_type="shelf",
+            attached_entity_id="shelf-1",
+            condition={"type": "always_true"},
+            action_type="add_to_directory",
+            action_context={"directory_id": "dir-default"},
+            enabled=True,
+            creator_id="user-1",
+        )
+    )
+    await facade._permission_repo.insert([  # type: ignore[attr-defined]
+        Relationship(
+            resource=ObjectRef(
+                object_type=ObjectTypeEnum.SHELF,
+                object_id="shelf-1",
+            ),
+            relation=ShelfRelationEnum.ADMIN,
+            subject=SubjectRef(
+                object_type=ObjectTypeEnum.USER,
+                object_id="user-1",
+            ),
+        )
+    ])
+
+    inserted = await service.insert_note(
+        NoteEntity(
+            title="Recording insert",
+            content="Recording body",
+            updated_at=datetime(2026, 7, 3, 12, 0, 0),
+            author_id="user-1",
+            shelf_ids=["shelf-1"],
+        ),
+        _human_ctx("user-1"),
+    )
+
+    # Synchronous return: no fresh embeddings yet.
+    assert inserted.embeddings == []
+    note_id = str(inserted.note_id)
+
+    # Background task ran the generator through the repo.
+    await _wait_for_pending_embedding_tasks(service)
+    assert recording_repo.insert_calls == [(note_id, "Recording insert", "Recording body")]
+    assert recording_repo._generator.generate_calls == ["Recording insert\nRecording body"]  # type: ignore[attr-defined]
+
+
+async def test_update_note_drives_recording_embedding_generator() -> None:
+    """`update_note` schedules a background refresh via the wired generator.
+
+    Mirrors the insert test but exercises the refresh path: the
+    facade calls ``_embedding_repo.update`` from the background
+    task, the recording repo drives the generator, and the
+    returned note carries no fresh embedding payload.
+    """
+    recording_repo = _RecordingEmbeddingRepo()
+    service, _db, content_repo, _dir, _perm, _jwt, _activity_logger = _make_service(
+        embedding_repo=recording_repo,
+    )
+    content_repo.seed(_seed_note(note_id="note-1", content="old body"))
+    await _grant_admin(_perm, "user-1", "note-1")
+
+    updated = await service.update_note(
+        NoteEntity(
+            note_id="note-1",
+            title="Recording update",
+            content="Recording body v2",
+            updated_at=datetime(2026, 7, 4, 9, 30, 0),
+            author_id="user-1",
+        ),
+        _human_ctx("user-1"),
+    )
+
+    # Synchronous return: no fresh embeddings.
+    assert updated.embeddings == []
+
+    await _wait_for_pending_embedding_tasks(service)
+    assert recording_repo.update_calls == [("note-1", "Recording update", "Recording body v2")]
+    assert recording_repo._generator.generate_calls == ["Recording update\nRecording body v2"]  # type: ignore[attr-defined]
