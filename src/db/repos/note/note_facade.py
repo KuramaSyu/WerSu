@@ -263,6 +263,42 @@ class NoteFacadeImpl(NoteFacadeABC):
         note.sehlf_ids = list(shelf_ids)
         return note
 
+    def _schedule_embedding_insert(
+        self,
+        note_id: str,
+        title: str,
+        content: str,
+    ) -> None:
+        """Schedule an embedding insert; failures must not fail the note insert.
+
+        Mirrors :meth:`_schedule_embedding_refresh` but writes a
+        fresh row via ``_embedding_repo.insert`` instead of
+        upserting.  ``MissingEmbeddingProcessImpl`` would re-pick
+        the row up on the next sweep if this task fails.
+        """
+        self.log.debug(
+            f"embedding: scheduling background insert note_id={note_id}"
+        )
+
+        async def _run() -> None:
+            try:
+                await self._embedding_repo.insert(note_id, title, content)
+                self.log.debug(
+                    f"embedding: background insert ok note_id={note_id}"
+                )
+            except Exception:
+                self.log.exception(
+                    f"embedding: background insert failed note_id={note_id}"
+                )
+
+        task = asyncio.create_task(_run())
+        self._embedding_tasks.add(task)
+        task.add_done_callback(self._embedding_tasks.discard)
+        self.log.debug(
+            f"embedding: background task scheduled note_id={note_id} "
+            f"pending={len(self._embedding_tasks)}"
+        )
+
     def _schedule_embedding_refresh(
         self,
         note_id: str,
@@ -312,15 +348,18 @@ class NoteFacadeImpl(NoteFacadeABC):
         self.log.debug(f"Inserted note with ID: {note_id}")
         note.note_id = note_id
 
-        # insert embedding
+        # Embedding generation runs in the background so the
+        # user-visible insert response does not wait on the model.
+        # The returned entity therefore carries an empty
+        # ``embeddings`` list; the background task fills the
+        # ``note.embedding`` row when the model finishes.
         note.embeddings = []
         if note.content:
-            embedding = await self._embedding_repo.insert(
-                note_id,
-                note.title if note.title else "",
-                note.content,
+            self._schedule_embedding_insert(
+                note_id=str(note_id),
+                title=note.title if note.title else "",
+                content=note.content,
             )
-            note.embeddings.append(embedding)
 
         # Resolve directory ids: explicit list wins; otherwise
         # fall back to the default-fleeting rule scoped to the
@@ -438,6 +477,10 @@ class NoteFacadeImpl(NoteFacadeABC):
         # dataclass default `UNDEFINED`
         if updated.permissions is UNDEFINED:
             updated.permissions = []
+        # Embedding refresh is scheduled in the background above, so the
+        # returned entity carries no fresh embedding payload.
+        if updated.embeddings is UNDEFINED:
+            updated.embeddings = []
 
         new_title: str = unwrap_undefined_or(
             note.title, str(current.title),
