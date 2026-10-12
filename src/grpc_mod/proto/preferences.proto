@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package proto;
+option go_package = "github.com/KuramaSyu/WerSu-Rest/src/proto;proto";
+
+// Per-scope preferences service.  The on-wire shape is uniform
+// across scopes; the server enforces different permission rules
+// per scope.
+service PreferencesService {
+    // Get the current preference blob.  Returns an empty object
+    // when no row exists yet (never NOT_FOUND for an empty store).
+    rpc GetPreferences(GetPreferencesRequest) returns (GetPreferencesResponse);
+
+    // Replace the entire blob with the payload.  Returns the
+    // post-replace state.
+    rpc PostPreferences(PostPreferencesRequest) returns (GetPreferencesResponse);
+
+    // Shallow-merge the payload into the stored blob.  Top-level
+    // keys in the input overwrite the same keys in storage;
+    // nested objects and lists are replaced wholesale.  Returns
+    // the merged state.
+    rpc PatchPreferences(PatchPreferencesRequest) returns (GetPreferencesResponse);
+
+    // Drop the stored blob.  Idempotent; success is true iff a
+    // row was actually removed.
+    rpc DeletePreferences(DeletePreferencesRequest) returns (DeletePreferencesResponse);
+}
+
+// Which kind of entity a preference blob is attached to.
+enum PreferenceScope {
+    PREFERENCE_SCOPE_UNSPECIFIED = 0;
+    PREFERENCE_SCOPE_USER = 1;
+    PREFERENCE_SCOPE_SHELF = 2;
+    PREFERENCE_SCOPE_ROLE = 3;
+}
+
+message GetPreferencesRequest {
+    PreferenceScope scope = 1;
+    string target_id = 2;
+    string user_id = 3;
+}
+
+message PostPreferencesRequest {
+    PreferenceScope scope = 1;
+    string target_id = 2;
+    // Raw JSON object as a string.  Must encode a JSON object
+    // (not a list or scalar), otherwise the call is rejected.
+    string preferences_json = 3;
+    string user_id = 4;
+}
+
+message PatchPreferencesRequest {
+    PreferenceScope scope = 1;
+    string target_id = 2;
+    string preferences_json = 3;
+    string user_id = 4;
+}
+
+message DeletePreferencesRequest {
+    PreferenceScope scope = 1;
+    string target_id = 2;
+    string user_id = 3;
+}
+
+message GetPreferencesResponse {
+    // Post-write state, serialised as a JSON object string.
+    // Empty string means {}.
+    string preferences_json = 1;
+}
+
+message DeletePreferencesResponse {
+    bool success = 1;
+}
