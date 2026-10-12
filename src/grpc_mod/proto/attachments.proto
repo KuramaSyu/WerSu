@@ -31,15 +31,34 @@ message PostAttachmentRequest {
 }
 
 message PostAttachmentLinkRequest {
+    // To which type of resource the attachment is linked.
+    // UNSPECIFIED defaults to NOTE.
+    enum LinkTarget {
+        LINK_TARGET_UNSPECIFIED = 0;
+        LINK_TARGET_NOTE = 1;
+        LINK_TARGET_USER = 2;
+    }
+
     string attachment_key = 1;
-    string note_id = 2;
-    string user_id = 3;
+    string note_id_link = 2;       // used when link_target == LINK_TARGET_NOTE
+    string user_id_link = 3;       // used when link_target == LINK_TARGET_USER
+    LinkTarget link_target = 4;
+    string user_id = 5;            // caller identity (auth)
 }
 
 message DeleteAttachmentLinkRequest {
+    // Same semantics as PostAttachmentLinkRequest.LinkTarget.
+    enum LinkTarget {
+        LINK_TARGET_UNSPECIFIED = 0;
+        LINK_TARGET_NOTE = 1;
+        LINK_TARGET_USER = 2;
+    }
+
     string attachment_key = 1;
     string note_id = 2;
-    string user_id = 3;
+    string user_id_link = 3;
+    LinkTarget link_target = 4;
+    string user_id = 5;
 }
 
 message UpdateAttachmentMetadataRequest {

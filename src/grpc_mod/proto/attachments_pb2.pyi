@@ -6,6 +6,7 @@ isort:skip_file
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import timestamp_pb2 as _timestamp_pb2
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 import builtins as _builtins
 import sys
 import typing as _typing
@@ -117,22 +118,50 @@ Global___PostAttachmentRequest: _TypeAlias = PostAttachmentRequest  # noqa: Y015
 class PostAttachmentLinkRequest(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
+    class _LinkTarget:
+        ValueType = _typing.NewType("ValueType", _builtins.int)
+        V: _TypeAlias = ValueType  # noqa: Y015
+
+    class _LinkTargetEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[PostAttachmentLinkRequest._LinkTarget.ValueType], _builtins.type):
+        DESCRIPTOR: _descriptor.EnumDescriptor
+        LINK_TARGET_UNSPECIFIED: PostAttachmentLinkRequest._LinkTarget.ValueType  # 0
+        LINK_TARGET_NOTE: PostAttachmentLinkRequest._LinkTarget.ValueType  # 1
+        LINK_TARGET_USER: PostAttachmentLinkRequest._LinkTarget.ValueType  # 2
+
+    class LinkTarget(_LinkTarget, metaclass=_LinkTargetEnumTypeWrapper):
+        """To which type of resource the attachment is linked.
+        UNSPECIFIED defaults to NOTE.
+        """
+
+    LINK_TARGET_UNSPECIFIED: PostAttachmentLinkRequest.LinkTarget.ValueType  # 0
+    LINK_TARGET_NOTE: PostAttachmentLinkRequest.LinkTarget.ValueType  # 1
+    LINK_TARGET_USER: PostAttachmentLinkRequest.LinkTarget.ValueType  # 2
+
     ATTACHMENT_KEY_FIELD_NUMBER: _builtins.int
-    NOTE_ID_FIELD_NUMBER: _builtins.int
+    NOTE_ID_LINK_FIELD_NUMBER: _builtins.int
+    USER_ID_LINK_FIELD_NUMBER: _builtins.int
+    LINK_TARGET_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
     attachment_key: _builtins.str
-    note_id: _builtins.str
+    note_id_link: _builtins.str
+    """used when link_target == LINK_TARGET_NOTE"""
+    user_id_link: _builtins.str
+    """used when link_target == LINK_TARGET_USER"""
+    link_target: Global___PostAttachmentLinkRequest.LinkTarget.ValueType
     user_id: _builtins.str
+    """caller identity (auth)"""
     def __init__(
         self,
         *,
         attachment_key: _builtins.str = ...,
-        note_id: _builtins.str = ...,
+        note_id_link: _builtins.str = ...,
+        user_id_link: _builtins.str = ...,
+        link_target: Global___PostAttachmentLinkRequest.LinkTarget.ValueType = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["attachment_key", b"attachment_key", "note_id", b"note_id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["attachment_key", b"attachment_key", "link_target", b"link_target", "note_id_link", b"note_id_link", "user_id", b"user_id", "user_id_link", b"user_id_link"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -142,22 +171,45 @@ Global___PostAttachmentLinkRequest: _TypeAlias = PostAttachmentLinkRequest  # no
 class DeleteAttachmentLinkRequest(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
+    class _LinkTarget:
+        ValueType = _typing.NewType("ValueType", _builtins.int)
+        V: _TypeAlias = ValueType  # noqa: Y015
+
+    class _LinkTargetEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[DeleteAttachmentLinkRequest._LinkTarget.ValueType], _builtins.type):
+        DESCRIPTOR: _descriptor.EnumDescriptor
+        LINK_TARGET_UNSPECIFIED: DeleteAttachmentLinkRequest._LinkTarget.ValueType  # 0
+        LINK_TARGET_NOTE: DeleteAttachmentLinkRequest._LinkTarget.ValueType  # 1
+        LINK_TARGET_USER: DeleteAttachmentLinkRequest._LinkTarget.ValueType  # 2
+
+    class LinkTarget(_LinkTarget, metaclass=_LinkTargetEnumTypeWrapper):
+        """Same semantics as PostAttachmentLinkRequest.LinkTarget."""
+
+    LINK_TARGET_UNSPECIFIED: DeleteAttachmentLinkRequest.LinkTarget.ValueType  # 0
+    LINK_TARGET_NOTE: DeleteAttachmentLinkRequest.LinkTarget.ValueType  # 1
+    LINK_TARGET_USER: DeleteAttachmentLinkRequest.LinkTarget.ValueType  # 2
+
     ATTACHMENT_KEY_FIELD_NUMBER: _builtins.int
     NOTE_ID_FIELD_NUMBER: _builtins.int
+    USER_ID_LINK_FIELD_NUMBER: _builtins.int
+    LINK_TARGET_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
     attachment_key: _builtins.str
     note_id: _builtins.str
+    user_id_link: _builtins.str
+    link_target: Global___DeleteAttachmentLinkRequest.LinkTarget.ValueType
     user_id: _builtins.str
     def __init__(
         self,
         *,
         attachment_key: _builtins.str = ...,
         note_id: _builtins.str = ...,
+        user_id_link: _builtins.str = ...,
+        link_target: Global___DeleteAttachmentLinkRequest.LinkTarget.ValueType = ...,
         user_id: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["attachment_key", b"attachment_key", "note_id", b"note_id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["attachment_key", b"attachment_key", "link_target", b"link_target", "note_id", b"note_id", "user_id", b"user_id", "user_id_link", b"user_id_link"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 

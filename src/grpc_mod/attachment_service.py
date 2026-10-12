@@ -134,10 +134,15 @@ class GrpcAttachmentService(AttachmentServiceServicer):
     @log_service_call()
     async def PostAttachmentLink(self, request: PostAttachmentLinkRequest, context: ServicerContext) -> Empty:
         try:
+            sub_type, sub_id = _resolve_link_target(
+                request.link_target, request.note_id_link, request.user_id_link, context
+            )
+            if sub_type is None:
+                return Empty()
             await self.attachment_service.link_attachment(
                 attachment_key=request.attachment_key,
-                sub_type="note",
-                sub_id=request.note_id,
+                sub_type=sub_type,
+                sub_id=sub_id,
                 user_ctx=await self._context.create(request.user_id),
             )
         except Exception:
@@ -168,10 +173,15 @@ class GrpcAttachmentService(AttachmentServiceServicer):
     @log_service_call()
     async def DeleteAttachmentLink(self, request: DeleteAttachmentLinkRequest, context: ServicerContext) -> Empty:
         try:
+            sub_type, sub_id = _resolve_link_target(
+                request.link_target, request.note_id, request.user_id_link, context
+            )
+            if sub_type is None:
+                return Empty()
             await self.attachment_service.unlink_attachment(
                 attachment_key=request.attachment_key,
-                sub_type="note",
-                sub_id=request.note_id,
+                sub_type=sub_type,
+                sub_id=sub_id,
                 user_ctx=await self._context.create(request.user_id),
             )
         except Exception:
@@ -179,3 +189,29 @@ class GrpcAttachmentService(AttachmentServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while unlinking attachment")
         return Empty()
+
+
+def _resolve_link_target(
+    link_target: int,
+    note_id_link: str,
+    user_id_link: str,
+    context: ServicerContext,
+) -> tuple[str | None, str]:
+    """Translate the wire LinkTarget enum to a (sub_type, sub_id) pair."""
+    if link_target == PostAttachmentLinkRequest.LINK_TARGET_USER:
+        if not user_id_link:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(
+                "user_id_link is required when link_target == LINK_TARGET_USER"
+            )
+            return None, ""
+        return "user", user_id_link
+    # UNSPECIFIED + NOTE share the same code path: legacy clients
+    # never set link_target and always set the note id.
+    if not note_id_link:
+        context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+        context.set_details(
+            "note_id_link is required when link_target == LINK_TARGET_NOTE"
+        )
+        return None, ""
+    return "note", note_id_link
