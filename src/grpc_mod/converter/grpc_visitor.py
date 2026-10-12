@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
-from typing import Any
+from typing import Any, Dict
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
@@ -26,6 +26,7 @@ from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.preferences import PreferencesEntity
 from src.db.entities.rule import RuleEntity
 from src.db.entities.user.passkey import PasskeyEntity
 from src.db.entities.user.password import PasswordEntity
@@ -646,6 +647,39 @@ class ConvertToGrpcVisitor(EntityVisitor):
             access_as=unwrap_undefined(entity.access_as),
             permission=_domain_permission_to_grpc(entity.permission),
         )
+
+    # ---- preferences ----------------------------------------------------
+
+    def visit_preferences(self, entity: PreferencesEntity) -> Dict[str, Any]:
+        """Convert a PreferencesEntity to a row-shaped dict.
+
+        Returns the same dict shape as :class:`PostgresRowConverter`
+        -- {user_id|shelf_id|role_id, payload, updated_at, id}.  The
+        proto surface currently models preferences as a JSON-encoded
+        string on GetPreferencesResponse, so callers serialise the
+        payload to a JSON string before sending it on the wire.
+        A dedicated ``Preferences`` proto message would be a future
+        iteration that fits the rest of this visitor surface.
+        """
+        row: Dict[str, Any] = {}
+        row["id"] = (
+            entity.id
+            if not is_undefined(entity.id)
+            else UNDEFINED
+        )
+        # Pick the column that matches the entity's scope.  Exactly one
+        # of user_id, shelf_id, role_id is set on a well-formed row.
+        if not is_undefined(entity.user_id) and entity.user_id is not None:
+            row["user_id"] = entity.user_id
+        elif not is_undefined(entity.shelf_id) and entity.shelf_id is not None:
+            row["shelf_id"] = entity.shelf_id
+        elif not is_undefined(entity.role_id) and entity.role_id is not None:
+            row["role_id"] = entity.role_id
+        if not is_undefined(entity.payload):
+            row["payload"] = entity.payload
+        if not is_undefined(entity.updated_at):
+            row["updated_at"] = entity.updated_at
+        return row
 
     # ---- attachment ----------------------------------------------------
 

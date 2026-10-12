@@ -17,6 +17,7 @@ from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.rule import RuleEntity
 from src.db.entities.shelf import ShelfEntity
 from src.db.entities.user.passkey import PasskeyEntity
+from src.db.entities.preferences import PreferencesEntity
 from src.db.entities.user.password import PasswordEntity
 from src.db.entities.user.role import (
     RoleEntity,
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 #: Field names whose JSON values must be serialised via json.dumps.
 JSON_FIELDS: tuple[str, ...] = (
     "metadata",
+    "payload",
     "condition",
     "action_context",
     "extra_fields",
@@ -252,6 +254,18 @@ class PostgresRowConverter(EntityVisitor):
     def visit_note_share(self, entity: NoteShareEntity) -> Dict[str, Any]:
         """Convert a NoteShareEntity to a Postgres row dict."""
         row = self._collect_fields(entity)
+        row = self._apply_timestamp_fields(entity, row)
+        return row
+
+    def visit_preferences(self, entity: PreferencesEntity) -> Dict[str, Any]:
+        """Convert a PreferencesEntity to a Postgres row dict.
+
+        Picks the column that matches the entity's scope; only one
+        of user_id, shelf_id, role_id is set.  payload is JSON-serialised.
+        """
+        row = self._collect_fields(entity)
+        row.pop("scope", None)
+        row = self._apply_json_fields(entity, row)
         row = self._apply_timestamp_fields(entity, row)
         return row
 
