@@ -36,7 +36,7 @@ from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.converter.postgres_row_converter import (
     PostgresRowConverter,
 )
-from src.services import PermissionServiceImpl, UserServiceImpl, DirectoryActivityServiceImpl, AttachmentFacadeImpl, share_access
+from src.services import PermissionServiceImpl, UserServiceImpl, DirectoryActivityServiceImpl, AttachmentFacadeImpl, share_access, PreferencesServiceImpl
 from src.services.user_auth_service import UserAuthServiceImpl
 from src.services.background_process import (
     AsyncClockAsyncio,
@@ -79,6 +79,7 @@ from src.db.repos.user.user_action import UserActionPostgresRepo
 from src.db.repos.activity.postgres import PostgresActivityRepo
 from src.db.table import Table, setup_table_logging
 from src.grpc_mod.proto.attachments_pb2_grpc import add_AttachmentServiceServicer_to_server  # type: ignore[attr-defined]
+from src.grpc_mod.proto.preferences_pb2_grpc import add_PreferencesServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.note_pb2_grpc import (
     add_DirectoryServiceServicer_to_server,  # type: ignore[attr-defined]
     add_NoteServiceServicer_to_server,  # type: ignore[attr-defined]
@@ -96,7 +97,9 @@ from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.db.repos.rule import PostgresRuleRepo
 from src.db.repos.tag.postgres import PostgresTagRepo
+from src.db.repos.preferences.postgres import PostgresPreferencesRepo
 from src.grpc_mod.attachment_service import GrpcAttachmentService
+from src.grpc_mod.preferences_service import GrpcPreferencesService
 from src.grpc_mod.directory_service import GrpcDirectoryService
 from src.grpc_mod.note_service import GrpcNoteService
 from src.grpc_mod.shelf_service import GrpcShelfService
@@ -208,6 +211,7 @@ async def serve():
         ("note.tag", ["id"]),
         ("note.directory_tag", ["directory_id", "tag_id"]),
         ("note.note_tag", ["note_id", "tag_id"]),
+        ("preferences", ["id"]),
     )
     tables = {
         name: Table(**common_table_kwargs, table_name=name, id_fields=ids)
@@ -237,6 +241,7 @@ async def serve():
     tags_table = tables["note.tag"]
     directory_tags_table = tables["note.directory_tag"]
     note_tags_table = tables["note.note_tag"]
+    preferences_table = tables["preferences"]
 
     # setup S3 connection
     s3_client: Any = boto3.client(  # type: ignore[reportUnknownMemberType]
@@ -409,6 +414,17 @@ async def serve():
         attachments_note_link_table=attachments_note_link_table,
         attachments_user_link_table=attachments_user_link_table,
         log=logging_provider,
+    )
+
+    preferences_repo = PostgresPreferencesRepo(
+        db=db,
+        to_postgres_row=postgres_visitor,
+    )
+
+    preferences_service = PreferencesServiceImpl(
+        preferences_repo=preferences_repo,
+        permission_repo=permission_repo,
+        logging_provider=logging_provider,
     )
 
     permission_service = PermissionServiceImpl(
@@ -648,6 +664,14 @@ async def serve():
         context_factory=user_context_factory,
     )
     add_AttachmentServiceServicer_to_server(grpc_attachment_service, server)
+
+    # setup gRPC preferences service
+    grpc_preferences_service = GrpcPreferencesService(
+        preferences_service=preferences_service,
+        log=logging_provider,
+        context_factory=user_context_factory,
+    )
+    add_PreferencesServiceServicer_to_server(grpc_preferences_service, server)
 
     # setup gRPC activity statistics service
     grpc_activity_statistics_service = GrpcActivityStatisticsService(
