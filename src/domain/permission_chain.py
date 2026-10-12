@@ -603,3 +603,57 @@ class HasAnyNoteManagePerm(PermissionCheckChain):
         return "user has no 'manage' on any note they can view"
 
 
+class HasShelfAdminPerm(PermissionCheckChain):
+    """Permission check: user holds the admin relation on a shelf."""
+    OBJECT_TYPE: ObjectType = "shelf"
+    RELATION_TYPE: DirectoryRelationName = ShelfRelationEnum.ADMIN
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, shelf_id: str) -> None:
+        super().__init__()
+        self._shelf_id = shelf_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        rel = self._get_relation(self._shelf_id, user_ctx.user_id)
+        return await self._get_permission_repo().check(rel)
+
+    def _get_error_message(self) -> str:
+        return f"user has no admin relation on shelf {self._shelf_id}"
+
+
+class HasShelfOwnerPerm(PermissionCheckChain):
+    """Permission check: user holds the owner relation on a shelf."""
+    OBJECT_TYPE: ObjectType = "shelf"
+    RELATION_TYPE: DirectoryRelationName = ShelfRelationEnum.OWNER
+    SUBJECT_TYPE: SubjectType = "user"
+
+    def __init__(self, shelf_id: str) -> None:
+        super().__init__()
+        self._shelf_id = shelf_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        rel = self._get_relation(self._shelf_id, user_ctx.user_id)
+        return await self._get_permission_repo().check(rel)
+
+    def _get_error_message(self) -> str:
+        return f"user has no owner relation on shelf {self._shelf_id}"
+
+
+class IsSelfOrSystem(PermissionCheckChain):
+    """Permission check: caller is the target user, or acting as the system.
+    If the passed in context into `check` has accessed_as == "system", the check passes. 
+    Otherwise it checks, if given user and context user is the same.
+    """
+    def __init__(self, user_id: str) -> None:
+        super().__init__()
+        self._user_id = user_id
+
+    async def _check(self, user_ctx: UserContextABC) -> bool:
+        if user_ctx.accessed_as == "system":
+            return True
+        return user_ctx.user_id == self._user_id
+
+    def _get_error_message(self) -> str:
+        return "user can only modify their own preferences (or a system context is required)"
+
+
