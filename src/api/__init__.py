@@ -62,6 +62,7 @@ from src.api.repos.permission_repo import (
 )
 from src.api.repos.activity_repo import ActivityRepoABC, ActivityFilterBuilder
 from src.api.repos.user_action_repo import UserActionRepoABC
+from src.api.repos.preferences_repo import PreferencesRepoABC
 from src.api.repos.combined_note_repo import CombinedNoteRepoABC
 from src.api.repos.note_content_repo import NoteContentRepo
 from src.api.repos.directory_repo import (
@@ -127,6 +128,11 @@ from src.api.services.jwt_provider import (
     JwtError,
     JwtProvider,
 )
+from src.api.services.preferences_service import (
+    PreferencePayload,
+    PreferenceScope,
+    PreferencesServiceABC,
+)
 from src.api.errors import (
     DatabaseError
 )
@@ -173,6 +179,7 @@ __all__ = [
     "ActivityRepoABC",
     "ActivityFilterBuilder",
     "UserActionRepoABC",
+    "PreferencesRepoABC",
     "CombinedNoteRepoABC",
     "DirectoryHelperMixin",
     "DirectoryRepoABC",
@@ -216,6 +223,9 @@ __all__ = [
     "AttachmentTokenClaims",
     "JwtError",
     "JwtProvider",
+    "PreferencePayload",
+    "PreferenceScope",
+    "PreferencesServiceABC",
     # relationship vocabulary
     "AttachmentRelationEnum",
     "DirectoryRelationEnum",
