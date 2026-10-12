@@ -2,6 +2,7 @@ from dataclasses import replace
 from datetime import datetime
 from typing import AsyncGenerator, Optional
 from uuid import UUID
+import asyncio
 import pytest
 from testcontainers.postgres import PostgresContainer
 from src.db.repos.note import note_facade
@@ -226,12 +227,20 @@ async def test_search_by_context(
 
     for content in notes_contents:
         test_note = NoteEntity(
-            title="Test Note", 
-            content=content, 
-            updated_at=datetime.now(), 
+            title="Test Note",
+            content=content,
+            updated_at=datetime.now(),
             author_id=user.id
         )
         await note_repo_facade.insert(test_note, ctx)
+
+    # Insert schedules the embedding encode in the background; drain
+    # the facade's tracked tasks so every note has a vector before
+    # the search runs. ``return_exceptions=True`` mirrors the
+    # production scheduler, which logs and discards failures.
+    pending = list(getattr(note_repo_facade, "_embedding_tasks", set()))
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
 
     async def search(search_query: str, should_contain: str, negative_search: bool = False) -> bool:
         """Small helper function to make a positive or negative search"""
