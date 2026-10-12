@@ -13,6 +13,8 @@ Each stub lives in its own file:
 * :mod:`tests.stubs.logging`        -> standard-library logger provider
 * :mod:`tests.stubs.directory_service` -> in-memory :class:`DirectoryServiceABC`
 * :mod:`tests.stubs.activity_logger_service` -> in-memory activity logger fake
+* :mod:`tests.stubs.recording_database`   -> recording DatabaseABC for raw-SQL repo tests
+* :mod:`tests.stubs.preferences_repo`    -> in-memory PreferencesRepoABC
 
 The names are also re-exported here so legacy code paths that import
 ``from tests.stubs import _FakeSharingRepo`` keep working.

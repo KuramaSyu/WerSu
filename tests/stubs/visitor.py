@@ -182,6 +182,9 @@ class StubVisitor(EntityVisitor):
     def visit_user_role_membership(self, entity: UserRoleMembershipEntity) -> UserRoleMembershipEntity:
         return entity
 
+    def visit_preferences(self, entity: Any) -> None:
+        return None
+
     def visit_share_user(self, access_as: str, online_until: Any) -> Any:
         self.share_users.append((access_as, online_until))
         return None
