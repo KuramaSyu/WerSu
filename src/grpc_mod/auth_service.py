@@ -22,6 +22,7 @@ from google.protobuf.empty_pb2 import Empty
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
+from src.api.other.undefined import UNDEFINED, is_undefined as _is_undefined
 from src.api.services.user_auth_service import UserAuthServiceABC
 from src.api.services.user_service import UserFilter, UserServiceABC
 from src.db.entities.user.passkey import PasskeyEntity
@@ -61,6 +62,7 @@ from src.grpc_mod.proto.auth_pb2 import (
     UpdateUserAuthResponse,
 )
 from src.grpc_mod.proto.auth_pb2_grpc import AuthServiceServicer
+from src.utils.grpc_type_helper import grpc_unwrap_tri_state
 
 
 class GrpcAuthService(AuthServiceServicer):
@@ -202,26 +204,52 @@ class GrpcAuthService(AuthServiceServicer):
 
             update_fields: dict[str, object] = {"id": request.user_id}
 
-            which = request.WhichOneof("username_change")
-            if which == "username_set":
-                update_fields["username"] = request.username_set or None
-            elif which == "username_clear":
-                update_fields["username"] = None
+            username = grpc_unwrap_tri_state(
+                request, "username_change",
+                set_arm="username_set", clear_arm="username_clear",
+            )
+            if not _is_undefined(username):
+                update_fields["username"] = username
 
-            which = request.WhichOneof("email_change")
-            if which == "email_set":
-                update_fields["email"] = request.email_set or None
-            elif which == "email_clear":
-                update_fields["email"] = None
+            email = grpc_unwrap_tri_state(
+                request, "email_change",
+                set_arm="email_set", clear_arm="email_clear",
+            )
+            if not _is_undefined(email):
+                update_fields["email"] = email
 
-            which = request.WhichOneof("avatar_url_change")
-            if which == "avatar_url_set":
-                update_fields["avatar"] = request.avatar_url_set or ""
-            elif which == "avatar_url_clear":
-                # REST contract: "unset" clears to empty string
-                # (not NULL); the REST controller renders "" as
-                # JSON null.
-                update_fields["avatar"] = ""
+            email_verified_at = grpc_unwrap_tri_state(
+                request, "email_verified_change",
+                set_arm="email_verified_at_set",
+                clear_arm="email_verified_at_clear",
+            )
+            if not _is_undefined(email_verified_at):
+                update_fields["email_verified_at"] = email_verified_at
+
+            # avatar_url_change has a special REST contract: _clear
+            # writes "" (not NULL); the REST controller renders ""
+            # as JSON null.  Reuse the tri-state helper with a
+            # custom clear value so all four oneofs share one path.
+            avatar = grpc_unwrap_tri_state(
+                request, "avatar_url_change",
+                set_arm="avatar_url_set", clear_arm="avatar_url_clear",
+                clear_value="",
+            )
+            if not _is_undefined(avatar):
+                update_fields["avatar"] = avatar
+
+            # Debug: dump each tri-state result so skip/clear/set
+            # are visible in one line (UNDEFINED == skip, None == clear,
+            # concrete value == set).
+            resolved_fields = {k: v for k, v in update_fields.items() if k != "id"}
+            self.log.debug(
+                f"UpdateUserAuth resolved user_id={request.user_id} "
+                f"username={username!r} "
+                f"email={email!r} "
+                f"email_verified_at={email_verified_at!r} "
+                f"avatar={avatar!r} "
+                f"update_fields={resolved_fields}"
+            )
 
             updated = await self._service.update_user(
                 UserAuthEntity(**update_fields),  # type: ignore[arg-type]

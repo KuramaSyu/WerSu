@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
-from src.api.other.undefined import UNDEFINED, UndefinedOr
+from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, UndefinedOr
 from src.api.other.user_context import UserTypeT
 from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 
@@ -22,9 +22,9 @@ class UserAuthEntity(AcceptsVisitor):
     """
 
     id: UndefinedOr[str] = UNDEFINED
-    avatar: Optional[str] = None
-    username: Optional[str] = None
-    email: Optional[str] = None
+    avatar: UndefinedNoneOr[str] = UNDEFINED
+    username: UndefinedNoneOr[str] = UNDEFINED
+    email: UndefinedNoneOr[str] = UNDEFINED
     type: UndefinedOr[UserTypeT] = UNDEFINED
     third_parties: List[ThirdPartyEntity] = field(default_factory=list)
 
