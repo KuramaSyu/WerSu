@@ -21,7 +21,9 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from asyncpg import Record
+from asyncpg.exceptions import UniqueViolationError
 
+from src.api.errors import FriendlyLoginError
 from src.api.other.types import LoggingProvider
 from src.db.entities import UserEntity
 from src.db.table import TableABC
@@ -37,6 +39,24 @@ from src.utils.logging import logging_provider as default_logging_provider
 # payload so the SQL doesn't reference columns that no longer exist
 # on ``auth.user``.
 _FIELDS_NOT_ON_AUTH_USER = frozenset({"discord_id", "discriminator"})
+
+
+def _translate_unique_violation(
+    err: UniqueViolationError, user: UserEntity
+) -> FriendlyLoginError:
+    """Map an asyncpg unique-violation to a :class:`FriendlyLoginError`.
+
+    Mirrors the same helper in
+    :mod:`src.db.repos.user.user_auth_postgres` so the user-service
+    path returns the same friendly error when signup is routed
+    through :class:`UserServiceImpl`.
+    """
+    constraint = (err.constraint_name or "").lower()
+    if "email" in constraint:
+        return FriendlyLoginError("email", user.email or "")
+    if "username" in constraint:
+        return FriendlyLoginError("username", user.username or "")
+    raise err
 
 
 class UserRepoABC(ABC):
@@ -71,7 +91,7 @@ class UserPostgresRepo(UserRepoABC):
     """Provides an implementation using Postgres (more or less - other systems are not tested yet)
     """
 
-    _returning = "id, avatar, username, email, type"
+    _returning = "id, avatar, username, email, display_name, type"
 
     def __init__(
         self,
@@ -101,10 +121,13 @@ class UserPostgresRepo(UserRepoABC):
 
     async def insert(self, user: UserEntity) -> UserEntity:
         """Insert a new user and return the created entity with ID."""
-        records = await self._table.insert(
-            self._strip_moved_fields(user.convert(self._to_postgres_row)),
-            returning=self._returning,
-        )
+        try:
+            records = await self._table.insert(
+                self._strip_moved_fields(user.convert(self._to_postgres_row)),
+                returning=self._returning,
+            )
+        except UniqueViolationError as err:
+            raise _translate_unique_violation(err, user) from err
         if not records:
             raise RuntimeError("Failed to insert user; no row returned")
         return self._from_record(records[0])
@@ -129,11 +152,14 @@ class UserPostgresRepo(UserRepoABC):
                 raise ValueError(f"User not found: {user.id}")
             return self._from_record(current)
 
-        record = await self._table.update(
-            set=set_values,
-            where={"id": user.id},
-            returning=self._returning,
-        )
+        try:
+            record = await self._table.update(
+                set=set_values,
+                where={"id": user.id},
+                returning=self._returning,
+            )
+        except UniqueViolationError as err:
+            raise _translate_unique_violation(err, user) from err
         if not record:
             raise ValueError(f"User not found: {user.id}")
         return self._from_record(record)

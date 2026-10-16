@@ -11,7 +11,10 @@ Wire shape asserted:
 * :meth:`GetUserAuth` resolves by ``user_id``, ``email``, or
   ``discord_id``; returns ``NOT_FOUND`` for misses.
 * :meth:`CreateUserAuth` persists ``avatar_url`` on the
-  :class:`UserAuthEntity`.
+  :class:`UserAuthEntity` and ``password_hash`` on the
+  :class:`PasswordEntity` (one row per user_id) so a follow-up
+  :meth:`FindCredentialByProvider` with ``kind=PASSWORD`` resolves
+  to the stored hash.
 * :meth:`UpdateUserAuth` with ``avatar_url_set`` writes the new
   value; ``avatar_url_clear`` resets to ``""`` (REST renders that
   as JSON null).
@@ -26,6 +29,7 @@ from dataclasses import replace
 from datetime import datetime
 from google.protobuf.empty_pb2 import Empty
 from grpc.aio import ServicerContext
+from src.api.errors import FriendlyLoginError
 from src.api.other.undefined import UNDEFINED
 from src.api.repos.user_auth_repo import UserAuthRepoABC
 from src.api.services.user_service import UserFilter
@@ -35,7 +39,15 @@ from src.db.entities.user.third_party import ThirdPartyEntity, ThirdPartyFilter
 from src.db.entities.user.user_auth import UserAuthEntity
 from src.grpc_mod.auth_service import GrpcAuthService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
-from src.grpc_mod.proto.auth_pb2 import CreateUserAuthRequest, GetUserAuthRequest, RegisterPasskeyRequest, RegisterPasskeyResponse, UpdateUserAuthRequest
+from src.grpc_mod.proto.auth_pb2 import (
+    CredentialKind,
+    CreateUserAuthRequest,
+    FindCredentialByProviderRequest,
+    GetUserAuthRequest,
+    RegisterPasskeyRequest,
+    RegisterPasskeyResponse,
+    UpdateUserAuthRequest,
+)
 from src.services.user_auth_service import UserAuthServiceImpl
 from typing import Any, Dict, List, Optional, cast
 from urllib.parse import urlparse
@@ -119,7 +131,7 @@ class RecordingUserAuthRepo(UserAuthRepoABC):
         if existing is None:
             raise ValueError(f"User not found: {user.id}")
         merged = existing
-        for field_name in ("avatar", "username", "email", "type"):
+        for field_name in ("avatar", "username", "email", "display_name", "type"):
             new_val = getattr(user, field_name, UNDEFINED)
             if not _is_undefined(new_val):
                 merged = replace(merged, **{field_name: new_val})
@@ -287,12 +299,15 @@ def _make_create_request(
     email: str = "alice@example.com",
     username: str = "alice",
     avatar_url: str = "",
+    password_hash: str = "argon2id$...",
+    display_name: str = "",
 ) -> CreateUserAuthRequest:
     return CreateUserAuthRequest(
         email=email,
         username=username,
-        password_hash="argon2id$...",
+        password_hash=password_hash,
         avatar_url=avatar_url,
+        display_name=display_name,
     )
 
 
@@ -504,6 +519,93 @@ async def test_create_user_auth_with_empty_avatar_url_stores_empty_string() -> N
     assert persisted.avatar == ""
 
 
+async def test_create_user_auth_persists_password_hash() -> None:
+    """`CreateUserAuth` writes the ``password_hash`` to ``auth.password``.
+
+    Pins the signup -> signin contract: REST sends a hashed
+    argon2id string; the gRPC adapter must store it on the
+    password row keyed by ``user_id``.  Without this call, the
+    follow-up :meth:`FindCredentialByProvider` lookup returns
+    ``NOT_FOUND`` and REST maps that to ``401 invalid email or
+    password``.
+    """
+    service, repo = _make_service()
+    ctx = _FakeContext()
+    phc = "$argon2id$v=19$m=65536,t=3,p=4$abc$def"
+
+    create_response = await service.CreateUserAuth(
+        _make_create_request(password_hash=phc),
+        cast(ServicerContext, ctx),
+    )
+
+    assert ctx.code is None
+    stored = await repo.find_password(create_response.user.id)
+    assert stored is not None
+    assert stored.password_hash == phc
+    # Wire shape: the adapter called upsert_password exactly once.
+    upsert_calls = [c for c in repo.calls if c.name == "upsert_password"]
+    assert len(upsert_calls) == 1
+    assert upsert_calls[0].args[0].user_id == create_response.user.id
+
+
+async def test_create_user_auth_without_password_hash_skips_password_row() -> None:
+    """`CreateUserAuth` with an empty `password_hash` writes no password row.
+
+    OAuth-only signups (`/auth/signup` is not the only signup
+    path) leave the password row alone so the user can add one
+    later via :meth:`LinkCredential`.
+    """
+    service, repo = _make_service()
+    ctx = _FakeContext()
+
+    create_response = await service.CreateUserAuth(
+        _make_create_request(password_hash=""),
+        cast(ServicerContext, ctx),
+    )
+
+    assert ctx.code is None
+    stored = await repo.find_password(create_response.user.id)
+    assert stored is None
+    assert not any(c.name == "upsert_password" for c in repo.calls)
+
+
+async def test_create_user_auth_then_find_credential_by_password_email() -> None:
+    """Round-trip: signup -> signin returns the stored hash.
+
+    Drives the same flow REST's `POST /auth/login` exercises:
+    `CreateUserAuth` writes the password row, then
+    `FindCredentialByProvider` with kind=PASSWORD and
+    identifier=email resolves it back to the same hash REST
+    stored.
+    """
+    service, repo = _make_service()
+    phc = "$argon2id$v=19$m=65536,t=3,p=4$abc$def"
+
+    create_ctx = _FakeContext()
+    create_response = await service.CreateUserAuth(
+        _make_create_request(
+            email="alice@example.com", password_hash=phc
+        ),
+        cast(ServicerContext, create_ctx),
+    )
+    assert create_ctx.code is None
+    user_id = create_response.user.id
+
+    find_ctx = _FakeContext()
+    find_response = await service.FindCredentialByProvider(
+        FindCredentialByProviderRequest(
+            kind=CredentialKind.CREDENTIAL_KIND_PASSWORD,
+            email="alice@example.com",
+        ),
+        cast(ServicerContext, find_ctx),
+    )
+    assert find_ctx.code is None
+    assert find_response.credential.password_hash == phc
+    assert find_response.user.id == user_id
+    # Sanity-check: find_password on the repo returns the same row.
+    assert (await repo.find_password(user_id)).password_hash == phc
+
+
 # ---------------------------------------------------------------------
 # UpdateUserAuth
 # ---------------------------------------------------------------------
@@ -630,5 +732,194 @@ async def test_register_passkey_routes_through_passkey_service() -> None:
     assert response.passkey.id != ""
     assert response.passkey.user_id == user_id
     assert response.passkey.friendly_name == "My key"
-    # Wire shape: the repo saw an `insert_passkey` call.
+    # Wire shape: the repo saw an insert_passkey call.
     assert any(c.name == "insert_passkey" for c in repo.calls)
+
+
+# ---------------------------------------------------------------------
+# FriendlyLoginError -> ALREADY_EXISTS mapping
+# ---------------------------------------------------------------------
+
+
+class _RaisingAuthService:
+    """Stub that raises :class:`FriendlyLoginError` from create_user.
+
+    Mimics the contract the real auth service exposes for the
+    collision case without dragging in the rest of the
+    UserAuthServiceImpl surface.  The gRPC adapter only needs
+    ``create_user`` to be wired up for this test.
+    """
+
+    def __init__(self, field: str, value: str) -> None:
+        self._field = field
+        self._value = value
+
+    async def create_user(self, user: UserAuthEntity) -> UserAuthEntity:
+        raise FriendlyLoginError(self._field, self._value)
+
+    async def update_user(self, *args: Any, **kwargs: Any) -> UserAuthEntity:
+        raise FriendlyLoginError(self._field, self._value)
+
+    async def get_user(self, *args: Any, **kwargs: Any) -> Any:
+        return None
+
+
+def _make_raising_service(field: str, value: str) -> GrpcAuthService:
+    """Build a gRPC adapter backed by a service that always rejects."""
+    return GrpcAuthService(
+        user_auth_service=cast(Any, _RaisingAuthService(field, value)),
+        log=_log_provider,
+        to_grpc=ConvertToGrpcVisitor(),
+    )
+
+
+async def test_create_user_auth_returns_already_exists_for_duplicate_email() -> None:
+    """A `FriendlyLoginError("email", ...)` from the service maps to ALREADY_EXISTS.
+
+    Pins the wire shape: the gRPC reply carries no user but the
+    status code is ALREADY_EXISTS and the details string mentions
+    the offending field.  REST renders this back to the browser
+    so the signup form can highlight the email input.
+    """
+    service = _make_raising_service("email", "alice@example.com")
+    ctx = _FakeContext()
+
+    response = await service.CreateUserAuth(
+        _make_create_request(email="alice@example.com"),
+        cast(ServicerContext, ctx),
+    )
+
+    assert ctx.code == grpc.StatusCode.ALREADY_EXISTS
+    assert response.user.id == ""
+    assert ctx.details is not None
+    assert "email" in ctx.details
+
+
+async def test_create_user_auth_returns_already_exists_for_duplicate_username() -> None:
+    """A `FriendlyLoginError("username", ...)` maps to ALREADY_EXISTS too."""
+    service = _make_raising_service("username", "alice")
+    ctx = _FakeContext()
+
+    response = await service.CreateUserAuth(
+        _make_create_request(),
+        cast(ServicerContext, ctx),
+    )
+
+    assert ctx.code == grpc.StatusCode.ALREADY_EXISTS
+    assert response.user.id == ""
+    assert ctx.details is not None
+    assert "username" in ctx.details
+
+
+async def test_create_user_auth_persists_display_name() -> None:
+    """`CreateUserAuth` writes the optional `display_name` to the auth row."""
+    service, repo = _make_service()
+    ctx = _FakeContext()
+
+    response = await service.CreateUserAuth(
+        _make_create_request(display_name="Alice in Wonderland"),
+        cast(ServicerContext, ctx),
+    )
+
+    assert ctx.code is None
+    assert response.user.display_name == "Alice in Wonderland"
+    persisted = await repo.select(
+        UserFilter(user_id=response.user.id)
+    )
+    assert persisted is not None
+    assert persisted.display_name == "Alice in Wonderland"
+
+
+async def test_create_user_auth_without_display_name_stores_empty_string() -> None:
+    """`CreateUserAuth` with no `display_name` stores an empty string.
+
+    Empty maps to JSON null in REST so the frontend can tell the
+    field is unset without overloading on the literal "".
+    """
+    service, _ = _make_service()
+    ctx = _FakeContext()
+
+    response = await service.CreateUserAuth(
+        _make_create_request(),
+        cast(ServicerContext, ctx),
+    )
+
+    assert ctx.code is None
+    assert response.user.display_name == ""
+
+
+async def test_update_user_auth_display_name_set_writes_value() -> None:
+    """`UpdateUserAuth` with `display_name_set` writes the new value."""
+    service, _ = _make_service()
+    create_ctx = _FakeContext()
+    create_response = await service.CreateUserAuth(
+        _make_create_request(),
+        cast(ServicerContext, create_ctx),
+    )
+    user_id = create_response.user.id
+
+    update_ctx = _FakeContext()
+    update_response = await service.UpdateUserAuth(
+        UpdateUserAuthRequest(
+            user_id=user_id,
+            requester_id=user_id,
+            display_name_set="Alice the Brave",
+        ),
+        cast(ServicerContext, update_ctx),
+    )
+
+    assert update_ctx.code is None
+    assert update_response.user.display_name == "Alice the Brave"
+
+
+async def test_update_user_auth_display_name_clear_resets_to_empty() -> None:
+    """`UpdateUserAuth` with `display_name_clear` resets the field to empty."""
+    service, _ = _make_service()
+    create_ctx = _FakeContext()
+    create_response = await service.CreateUserAuth(
+        _make_create_request(display_name="Some Name"),
+        cast(ServicerContext, create_ctx),
+    )
+    user_id = create_response.user.id
+    assert create_response.user.display_name == "Some Name"
+
+    update_ctx = _FakeContext()
+    update_response = await service.UpdateUserAuth(
+        UpdateUserAuthRequest(
+            user_id=user_id,
+            requester_id=user_id,
+            display_name_clear=Empty(),
+        ),
+        cast(ServicerContext, update_ctx),
+    )
+
+    assert update_ctx.code is None
+    assert update_response.user.display_name == ""
+
+
+async def test_update_user_auth_returns_already_exists_for_duplicate_email() -> None:
+    """A `FriendlyLoginError` from `update_user` also maps to ALREADY_EXISTS."""
+    repo = RecordingUserAuthRepo()
+    # Seed an existing user so update_user has something to collide on.
+    await repo.insert(
+        UserAuthEntity(email="alice@example.com", username="alice")
+    )
+    service = GrpcAuthService(
+        user_auth_service=cast(Any, _RaisingAuthService("email", "bob@x.com")),
+        log=_log_provider,
+        to_grpc=ConvertToGrpcVisitor(),
+    )
+    user_id = next(iter(repo._by_id.values())).id  # type: ignore[attr-defined]
+
+    ctx = _FakeContext()
+    response = await service.UpdateUserAuth(
+        UpdateUserAuthRequest(
+            user_id=user_id,
+            requester_id=user_id,
+            email_set="bob@x.com",
+        ),
+        cast(ServicerContext, ctx),
+    )
+
+    assert ctx.code == grpc.StatusCode.ALREADY_EXISTS
+    assert response.user.id == ""

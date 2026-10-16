@@ -38,6 +38,9 @@ message UserAuth {
     google.protobuf.Timestamp created_at = 6;
     // Absolute avatar URL. Empty string means none; REST maps empty to JSON null.
     string avatar_url = 7;
+    // Human-friendly display name. Optional and not unique.
+    // Empty string means the user has not picked one.
+    string display_name = 8;
 }
 
 // Stored credential. Exactly one payload oneof field is populated
@@ -110,6 +113,9 @@ message CreateUserAuthRequest {
     // Optional. Absolute avatar URL resolved by REST via Discord/Google/Gravatar.
     // Empty string means none; frontend maps empty to JSON null.
     string avatar_url = 4;
+    // Optional. Human-friendly display name. Not unique; the user
+    // does not have to set one.
+    string display_name = 5;
 }
 
 message CreateUserAuthResponse {
@@ -150,6 +156,14 @@ message UpdateUserAuthRequest {
     oneof avatar_url_change {
         string avatar_url_set = 9;
         google.protobuf.Empty avatar_url_clear = 10;
+    }
+
+    // Tri-state update for display_name: _set writes a new value,
+    // _clear NULLs it, omitting both leaves it unchanged.  Display
+    // names are NOT unique.
+    oneof display_name_change {
+        string display_name_set = 11;
+        google.protobuf.Empty display_name_clear = 12;
     }
 }
 

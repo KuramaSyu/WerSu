@@ -25,6 +25,7 @@ class UserAuthEntity(AcceptsVisitor):
     avatar: UndefinedNoneOr[str] = UNDEFINED
     username: UndefinedNoneOr[str] = UNDEFINED
     email: UndefinedNoneOr[str] = UNDEFINED
+    display_name: UndefinedNoneOr[str] = UNDEFINED
     type: UndefinedOr[UserTypeT] = UNDEFINED
     third_parties: List[ThirdPartyEntity] = field(default_factory=list)
 

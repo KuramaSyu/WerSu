@@ -523,6 +523,7 @@ class ConvertToGrpcVisitor(EntityVisitor):
             is_active=True,
             created_at=Timestamp(),
             avatar_url=self._discord_avatar_url(entity),
+            display_name=entity.display_name or "",
         )
 
     # ---- passkey ----------------------------------------------------

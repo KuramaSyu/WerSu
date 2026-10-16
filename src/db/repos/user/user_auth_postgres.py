@@ -21,7 +21,9 @@ from dataclasses import replace
 from typing import List, Optional
 
 from asyncpg import Record
+from asyncpg.exceptions import UniqueViolationError
 
+from src.api.errors import FriendlyLoginError
 from src.api.other.types import LoggingProvider
 from src.api.other.undefined import UNDEFINED, is_undefined
 from src.api.repos.user_auth_repo import UserAuthRepoABC
@@ -37,6 +39,21 @@ from src.grpc_mod.converter.postgres_row_converter import (
 from src.utils.logging import logging_provider as default_logging_provider
 
 
+def _translate_unique_violation(
+    err: UniqueViolationError, user: UserAuthEntity
+) -> FriendlyLoginError:
+    """Map an asyncpg unique-violation to a :class:`FriendlyLoginError`.
+    """
+    constraint = (err.constraint_name or "").lower()
+    if "email" in constraint:
+        return FriendlyLoginError("email", user.email or "")
+    if "username" in constraint:
+        return FriendlyLoginError("username", user.username or "")
+    # Unknown unique violation: re-raise so we don't swallow
+    # surprises on a different column.
+    raise err
+
+
 class PostgresUserAuthRepoImpl(UserAuthRepoABC):
     """Postgres implementation of the auth storage contract.
 
@@ -50,7 +67,7 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
             project default when ``None``.
     """
 
-    _user_returning = "id, avatar, username, email, type"
+    _user_returning = "id, avatar, username, email, display_name, type"
     _password_returning = "user_id, password_hash, created_at, updated_at"
     _passkey_returning = (
         "id, user_id, credential_id, public_key, sign_count, "
@@ -70,12 +87,14 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
         "avatar",
         "username",
         "email",
+        "display_name",
         "type",
     )
     _user_update_columns: tuple[str, ...] = (
         "avatar",
         "username",
         "email",
+        "display_name",
         "type",
     )
     _password_columns: tuple[str, ...] = (
@@ -131,10 +150,13 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
         ``third_parties`` carried on the entity are written too via
         :meth:`insert_third_party` after the user row lands.
         """
-        records = await self._user_table.insert(
-            self._user_row_from_entity(user),
-            returning=self._user_returning,
-        )
+        try:
+            records = await self._user_table.insert(
+                self._user_row_from_entity(user),
+                returning=self._user_returning,
+            )
+        except UniqueViolationError as err:
+            raise _translate_unique_violation(err, user) from err
         if not records:
             raise RuntimeError("Failed to insert user; no row returned")
         created_user = self._user_from_record(records[0])
@@ -198,11 +220,14 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
             if value is not UNDEFINED:
                 set_values[field_name] = value
         if set_values:
-            await self._user_table.update(
-                set=set_values,
-                where={"id": user_id},
-                returning=self._user_returning,
-            )
+            try:
+                await self._user_table.update(
+                    set=set_values,
+                    where={"id": user_id},
+                    returning=self._user_returning,
+                )
+            except UniqueViolationError as err:
+                raise _translate_unique_violation(err, user) from err
 
         if user.third_parties:
             existing = await self._third_parties_for_user(user_id)

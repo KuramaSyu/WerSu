@@ -14,6 +14,7 @@ class UserEntity(AcceptsVisitor):
     username: Optional[str] = None
     discriminator: Optional[str] = None
     email: Optional[str] = None
+    display_name: Optional[str] = None
     type: UndefinedOr[UserTypeT] = UNDEFINED
 
     def visit(self, visitor: EntityVisitor):
