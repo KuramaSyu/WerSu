@@ -14,6 +14,7 @@ Each stub lives in its own file:
 * :mod:`tests.stubs.directory_service` -> in-memory :class:`DirectoryServiceABC`
 * :mod:`tests.stubs.activity_logger_service` -> in-memory activity logger fake
 * :mod:`tests.stubs.recording_database`   -> recording DatabaseABC for raw-SQL repo tests
+* :mod:`tests.stubs.recording_table`     -> recording TableABC for repo unit tests
 * :mod:`tests.stubs.preferences_repo`    -> in-memory PreferencesRepoABC
 
 The names are also re-exported here so legacy code paths that import
@@ -33,6 +34,7 @@ from .shelf_service import _StubShelfService  # noqa: F401
 from .in_memory_permission_repo import InMemoryPermissionRepo  # noqa: F401
 from .logging import silent_logger  # noqa: F401
 from .permission_service import _FakePermissionService  # noqa: F401
+from .recording_table import RecordingTable  # noqa: F401
 from .sharing_repo import _FakeSharingRepo  # noqa: F401
 from .user_action_repo import _FakeUserActionRepo  # noqa: F401
 from .user_context import _UserContext, _UserContextFactory  # noqa: F401
