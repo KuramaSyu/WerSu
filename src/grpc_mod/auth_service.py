@@ -22,6 +22,7 @@ from google.protobuf.empty_pb2 import Empty
 from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
+from src.api.errors import FriendlyLoginError
 from src.api.other.undefined import UNDEFINED, is_undefined as _is_undefined
 from src.api.services.user_auth_service import UserAuthServiceABC
 from src.api.services.user_service import UserFilter, UserServiceABC
@@ -133,45 +134,84 @@ class GrpcAuthService(AuthServiceServicer):
         request: CreateUserAuthRequest,
         context: ServicerContext[CreateUserAuthRequest, CreateUserAuthResponse],
     ) -> CreateUserAuthResponse:
-        """Create a new user from email + (optional) avatar URL.
+        """Create a new user from email + (optional) avatar URL + (optional) password.
 
         When a UserServiceABC is injected the call is routed through it so
         the new user gets the shelf / books / rule bootstrap.
+
+        ``password_hash`` is the already-hashed argon2id string supplied
+        by REST.  An empty value means the user is signing up without a
+        password (OAuth-only flow) and no row is written to
+        ``auth.password``.
+
+        Returns ``ALREADY_EXISTS`` (with a body-friendly message) when
+        the email or username collides with an existing row.  The repo
+        raises :exc:`FriendlyLoginError` for those collisions; the
+        catch sits *before* the generic ``Exception`` so the right
+        status code reaches the client.
         """
         try:
+            auth_entity: UserAuthEntity
             if self._user_service is not None:
                 created_user = await self._user_service.create_user(
                     UserEntity(
                         email=request.email or None,
                         username=request.username or None,
                         avatar=request.avatar_url,
+                        display_name=request.display_name or None,
                         type="human",
                     )
                 )
                 user_id = str(created_user.id)
+                # Read the auth row back so the response carries the
+                # full entity the visitor expects (passwords, third
+                # parties, etc.).  ``created_user`` is a UserEntity
+                # and is missing those.
                 auth_entity = await self._service.get_user(
                     UserFilter(user_id=user_id)
-                )
-                if auth_entity is None:
-                    # Insert succeeded but the auth row couldn't be re-read; fail so REST can retry.
-                    self._set_unset(
-                        context,
-                        grpc.StatusCode.INTERNAL,
-                        "user created but auth row missing",
-                    )
-                    return CreateUserAuthResponse()
-                return CreateUserAuthResponse(
-                    user=auth_entity.convert(self._to_grpc)
-                )
-
-            created = await self._service.create_user(
-                UserAuthEntity(
+                ) or UserAuthEntity(
+                    id=user_id,
                     email=request.email or None,
                     username=request.username or None,
                     avatar=request.avatar_url,
+                    display_name=request.display_name or None,
                 )
+            else:
+                auth_entity = await self._service.create_user(
+                    UserAuthEntity(
+                        email=request.email or None,
+                        username=request.username or None,
+                        avatar=request.avatar_url,
+                        display_name=request.display_name or None,
+                    )
+                )
+                user_id = str(auth_entity.id)
+
+            # Persist the password row
+            if request.password_hash:
+                await self._service.passwords.set_user_password(
+                    user_id, user_id, request.password_hash
+                )
+
+            if auth_entity is None or not auth_entity.id:
+                # Insert succeeded but the auth row couldn't be re-read; fail so REST can retry.
+                self._set_unset(
+                    context,
+                    grpc.StatusCode.INTERNAL,
+                    "user created but auth row missing",
+                )
+                return CreateUserAuthResponse()
+            return CreateUserAuthResponse(user=auth_entity.convert(self._to_grpc))
+        except FriendlyLoginError as err:
+            self.log.info(
+                f"CreateUserAuth rejected: {err.field} already taken"
             )
-            return CreateUserAuthResponse(user=created.convert(self._to_grpc))
+            self._set_unset(
+                context,
+                grpc.StatusCode.ALREADY_EXISTS,
+                str(err),
+            )
+            return CreateUserAuthResponse()
         except Exception:
             self.log.error(f"Error in CreateUserAuth: {traceback.format_exc()}")
             self._set_unset(
@@ -238,6 +278,13 @@ class GrpcAuthService(AuthServiceServicer):
             if not _is_undefined(avatar):
                 update_fields["avatar"] = avatar
 
+            display_name = grpc_unwrap_tri_state(
+                request, "display_name_change",
+                set_arm="display_name_set", clear_arm="display_name_clear",
+            )
+            if not _is_undefined(display_name):
+                update_fields["display_name"] = display_name
+
             # Debug: dump each tri-state result so skip/clear/set
             # are visible in one line (UNDEFINED == skip, None == clear,
             # concrete value == set).
@@ -248,6 +295,7 @@ class GrpcAuthService(AuthServiceServicer):
                 f"email={email!r} "
                 f"email_verified_at={email_verified_at!r} "
                 f"avatar={avatar!r} "
+                f"display_name={display_name!r} "
                 f"update_fields={resolved_fields}"
             )
 
@@ -265,6 +313,16 @@ class GrpcAuthService(AuthServiceServicer):
                 context,
                 grpc.StatusCode.PERMISSION_DENIED,
                 "requester_id must equal user_id",
+            )
+            return UpdateUserAuthResponse()
+        except FriendlyLoginError as err:
+            self.log.info(
+                f"UpdateUserAuth rejected: {err.field} already taken"
+            )
+            self._set_unset(
+                context,
+                grpc.StatusCode.ALREADY_EXISTS,
+                str(err),
             )
             return UpdateUserAuthResponse()
         except Exception:
