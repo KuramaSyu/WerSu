@@ -125,21 +125,28 @@ message UpdateUserAuthRequest {
     // actor used for permission checks
     string requester_id = 2;
 
+    // Tri-state update for username: _set writes a new value, _clear NULLs it,
+    // omitting both leaves the column unchanged.
     oneof username_change {
         string username_set = 3;
         google.protobuf.Empty username_clear = 4;
     }
 
+    // Tri-state update for email: same set/clear/omit semantics as username.
     oneof email_change {
         string email_set = 5;
         google.protobuf.Empty email_clear = 6;
     }
 
+    // Tri-state update for email_verified_at: _set stamps the timestamp,
+    // _clear NULLs it, omitting both leaves it unchanged.
     oneof email_verified_change {
         google.protobuf.Timestamp email_verified_at_set = 7;
         google.protobuf.Empty email_verified_at_clear = 8;
     }
 
+    // Tri-state update for avatar_url: _set writes a new value, _clear NULLs it,
+    // omitting both leaves it unchanged.
     oneof avatar_url_change {
         string avatar_url_set = 9;
         google.protobuf.Empty avatar_url_clear = 10;
