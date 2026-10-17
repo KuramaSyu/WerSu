@@ -195,11 +195,6 @@ class RecordingUserAuthRepo(UserAuthRepoABC):
             "update_passkey_sign_count", passkey_id, new_sign_count
         )
         pk = self._passkeys[passkey_id]
-        if new_sign_count <= pk.sign_count:
-            raise ValueError(
-                f"new_sign_count ({new_sign_count}) must be > "
-                f"current ({pk.sign_count})"
-            )
         updated = replace(pk, sign_count=new_sign_count)
         self._passkeys[passkey_id] = updated
         return updated

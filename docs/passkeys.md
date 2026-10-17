@@ -140,7 +140,7 @@ sequenceDiagram
     REST->>gRPC: ListPasskeys(user_id)
     gRPC-->>REST: [Passkey]
     REST->>REST: webauthn.FinishPasskeyLogin<br/>(match credential_id, verify COSE<br/>signature, enforce sign_count monotonic)
-    REST->>gRPC: UpdatePasskeyCounter(passkey_id,<br/>new_sign_count)
+    REST->>gRPC: UpdatePasskeyCounter(passkey_id)
     gRPC-->>REST: Passkey row
     REST->>REST: loginUser(c, user) [sets session cookie]
     REST-->>Browser: 200 + UserAuth JSON<br/>Set-Cookie: discord_auth=...
@@ -232,8 +232,11 @@ RegisterPasskeyRequest:
 
 UpdatePasskeyCounterRequest:
     passkey_id
-    new_sign_count
 ```
+
+The server increments the stored `sign_count` by one; cloned-authenticator
+detection now lives entirely in REST's webauthn ceremony (it compares
+`authenticator_data.sign_count` against the value stored at registration).
 
 ## Failure modes
 

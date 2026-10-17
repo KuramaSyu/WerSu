@@ -134,10 +134,15 @@ class UserPasskeyAuthServiceImpl(UserPasskeyAuthServiceABC):
     async def update_sign_count(
         self,
         passkey_id: str,
-        new_sign_count: int,
         requester_id: str,
     ) -> PasskeyEntity:
-        """Bump the sign counter on a passkey."""
+        """Bump the sign counter on a passkey by one.
+
+        The increment happens server-side; cloned-authenticator
+        detection lives in REST's webauthn ceremony (it compares
+        the browser's authenticator_data sign_count against the
+        one we stored on registration).
+        """
         existing = await self._repo.find_passkey_by_id(passkey_id)
         if existing is None:
             self.log.warning(f"update_sign_count: passkey_id={passkey_id} not found")
@@ -148,6 +153,7 @@ class UserPasskeyAuthServiceImpl(UserPasskeyAuthServiceABC):
                 f"passkey.user_id={existing.user_id}"
             )
             raise PermissionError("requester_id must equal user_id")
+        new_sign_count = existing.sign_count + 1
         self.log.debug(
             f"update_sign_count passkey_id={passkey_id} new_sign_count={new_sign_count}"
         )

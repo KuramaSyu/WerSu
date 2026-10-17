@@ -443,7 +443,6 @@ class GrpcAuthService(AuthServiceServicer):
         try:
             updated = await self._service.passkeys.update_sign_count(
                 request.passkey_id,
-                request.new_sign_count,
                 request.requester_id,
             )
             return UpdatePasskeyCounterResponse(
@@ -458,17 +457,6 @@ class GrpcAuthService(AuthServiceServicer):
                 context,
                 grpc.StatusCode.PERMISSION_DENIED,
                 "requester_id must equal user_id",
-            )
-            return UpdatePasskeyCounterResponse()
-        except ValueError:
-            self.log.warning(
-                f"UpdatePasskeyCounter rejected: passkey_id={request.passkey_id} "
-                f"new_sign_count={request.new_sign_count}"
-            )
-            self._set_unset(
-                context,
-                grpc.StatusCode.FAILED_PRECONDITION,
-                "new_sign_count must be strictly greater than current",
             )
             return UpdatePasskeyCounterResponse()
         except Exception:

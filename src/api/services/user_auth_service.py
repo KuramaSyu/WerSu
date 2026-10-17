@@ -107,23 +107,17 @@ class UserPasskeyAuthServiceABC(ABC):
     async def update_sign_count(
         self,
         passkey_id: str,
-        new_sign_count: int,
         requester_id: str,
     ) -> PasskeyEntity:
-        """Bump the sign counter after a successful assertion.
+        """Bump the sign counter after a successful assertion by one.
 
         Args:
             passkey_id: id of the passkey.
-            new_sign_count: the new counter value.  Must be
-                strictly greater than the stored one.
             requester_id: actor performing the write.  Must
                 equal the passkey's ``user_id``.
 
         Raises:
             PermissionError: when ``requester_id != passkey.user_id``.
-            ValueError: when ``new_sign_count`` is not strictly
-                greater than the stored counter (cloned
-                authenticator).
         """
 
     @abstractmethod

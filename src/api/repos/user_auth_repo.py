@@ -98,12 +98,9 @@ class UserAuthRepoABC(ABC):
         passkey_id: str,
         new_sign_count: int,
     ) -> PasskeyEntity:
-        """Bump the sign counter after a successful assertion.
+        """Write the post-call sign_count supplied by the service.
 
         Raises:
-            ValueError: when ``new_sign_count`` is not strictly
-                greater than the stored counter (cloned
-                authenticator).
             KeyError: when no passkey with that id exists.
         """
 

@@ -339,15 +339,10 @@ class PostgresUserAuthRepoImpl(UserAuthRepoABC):
         passkey_id: str,
         new_sign_count: int,
     ) -> PasskeyEntity:
-        """Bump the sign counter; rejects a non-monotonic counter."""
+        """Write the post-call sign_count supplied by the service."""
         current = await self.find_passkey_by_id(passkey_id)
         if current is None:
             raise KeyError(f"passkey not found: {passkey_id}")
-        if new_sign_count <= current.sign_count:
-            raise ValueError(
-                f"new_sign_count ({new_sign_count}) must be > "
-                f"current ({current.sign_count})"
-            )
         # The visitor fills last_used_at so tests can pin time deterministically.
         passkey = PasskeyEntity(id=passkey_id, last_used_at=UNDEFINED).convert(
             self._to_postgres_row

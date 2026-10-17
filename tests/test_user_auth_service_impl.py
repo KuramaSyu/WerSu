@@ -21,8 +21,9 @@ Wire shape asserted:
   gRPC layer no longer does this check.
 * :meth:`UserPasswordAuthServiceImpl.set_user_password`
   upserts on the same user_id.
-* :meth:`UserPasskeyAuthServiceImpl.update_sign_count` rejects
-  a non-monotonic counter.
+* :meth:`UserPasskeyAuthServiceImpl.update_sign_count` increments
+  the stored counter by one and rejects a requester that does not own
+  the passkey.
 * :meth:`UserPasskeyAuthServiceImpl.revoke_passkey` is
   idempotent.
 """
@@ -209,11 +210,6 @@ class RecordingUserAuthRepo(UserAuthRepoABC):
             "update_passkey_sign_count", passkey_id, new_sign_count
         )
         pk = self._passkeys[passkey_id]
-        if new_sign_count <= pk.sign_count:
-            raise ValueError(
-                f"new_sign_count ({new_sign_count}) must be > "
-                f"current ({pk.sign_count})"
-            )
         updated = replace(pk, sign_count=new_sign_count)
         self._passkeys[passkey_id] = updated
         return updated
@@ -500,13 +496,15 @@ async def test_password_set_user_password_via_auth_service_property(
 # ---------------------------------------------------------------------
 
 
-def _passkey(user_id: str = "placeholder") -> PasskeyEntity:
+def _passkey(
+    user_id: str = "placeholder", sign_count: int = 0
+) -> PasskeyEntity:
     return PasskeyEntity(
         id=UNDEFINED,
         user_id=user_id,
         credential_id=b"cred-id",
         public_key=b"public-key",
-        sign_count=0,
+        sign_count=sign_count,
         transports=[],
         friendly_name="Test key",
     )
@@ -616,22 +614,6 @@ async def test_passkey_list_excludes_revoked_by_default(
     )
 
 
-async def test_passkey_update_sign_count_requires_strict_increase(
-    auth_service: UserAuthServiceABC,
-    passkey_service: UserPasskeyAuthServiceABC,
-) -> None:
-    """`update_sign_count` rejects a non-monotonic counter."""
-    seeded = await auth_service.create_user(
-        UserAuthEntity(id=UNDEFINED, username="alice", email="a@b.c")
-    )
-    stored = await passkey_service.register_passkey(
-        seeded.id, seeded.id, _passkey()
-    )
-
-    with pytest.raises(ValueError):
-        await passkey_service.update_sign_count(stored.id, 0, seeded.id)
-
-
 async def test_passkey_update_sign_count_rejects_requester_mismatch(
     auth_service: UserAuthServiceABC,
     passkey_service: UserPasskeyAuthServiceABC,
@@ -646,25 +628,25 @@ async def test_passkey_update_sign_count_rejects_requester_mismatch(
 
     with pytest.raises(PermissionError):
         await passkey_service.update_sign_count(
-            stored.id, 5, "someone-else"
+            stored.id, "someone-else"
         )
 
 
-async def test_passkey_update_sign_count_writes_new_value(
+async def test_passkey_update_sign_count_increments_by_one(
     auth_service: UserAuthServiceABC,
     passkey_service: UserPasskeyAuthServiceABC,
 ) -> None:
-    """`update_sign_count` writes the bumped counter via `repo.update_passkey_sign_count`."""
+    """`update_sign_count` bumps the stored counter by one server-side."""
     seeded = await auth_service.create_user(
         UserAuthEntity(id=UNDEFINED, username="alice", email="a@b.c")
     )
     stored = await passkey_service.register_passkey(
-        seeded.id, seeded.id, _passkey()
+        seeded.id, seeded.id, _passkey(sign_count=4)
     )
 
-    updated = await passkey_service.update_sign_count(stored.id, 5, seeded.id)
+    updated = await passkey_service.update_sign_count(stored.id, seeded.id)
 
-    assert updated.sign_count == 5
+    assert updated.sign_count == stored.sign_count + 1
 
 
 async def test_passkey_revoke_rejects_requester_mismatch(
