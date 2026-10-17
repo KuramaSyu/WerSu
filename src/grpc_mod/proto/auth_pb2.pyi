@@ -591,26 +591,23 @@ Global___ListPasskeysResponse: _TypeAlias = ListPasskeysResponse  # noqa: Y015
 
 @_typing.final
 class UpdatePasskeyCounterRequest(_message.Message):
-    """Bump the sign counter after a successful assertion. REST verifies the
-    signature first, then calls this. Returns FAILED_PRECONDITION if the new
-    counter is not strictly greater than the stored one (cloned authenticator).
-    """
+    """Bump the sign counter after a successful assertion"""
 
     DESCRIPTOR: _descriptor.Descriptor
 
     PASSKEY_ID_FIELD_NUMBER: _builtins.int
-    NEW_SIGN_COUNT_FIELD_NUMBER: _builtins.int
+    REQUESTER_ID_FIELD_NUMBER: _builtins.int
     passkey_id: _builtins.str
-    new_sign_count: _builtins.int
+    requester_id: _builtins.str
     def __init__(
         self,
         *,
         passkey_id: _builtins.str = ...,
-        new_sign_count: _builtins.int = ...,
+        requester_id: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["new_sign_count", b"new_sign_count", "passkey_id", b"passkey_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["passkey_id", b"passkey_id", "requester_id", b"requester_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 

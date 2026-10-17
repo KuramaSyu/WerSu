@@ -208,12 +208,10 @@ message ListPasskeysResponse {
     repeated Passkey passkeys = 1;
 }
 
-// Bump the sign counter after a successful assertion. REST verifies the
-// signature first, then calls this. Returns FAILED_PRECONDITION if the new
-// counter is not strictly greater than the stored one (cloned authenticator).
+// Bump the sign counter after a successful assertion
 message UpdatePasskeyCounterRequest {
     string passkey_id = 1;
-    uint64 new_sign_count = 2;
+    string requester_id = 2;
 }
 
 message UpdatePasskeyCounterResponse {
