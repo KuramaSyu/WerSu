@@ -1640,6 +1640,11 @@ class _StubAttachmentFacade(AttachmentFacadeABC):
     ) -> List[Attachment]:  # pragma: no cover - unused
         raise NotImplementedError
 
+    async def get_attachment_token(
+        self, attachment_key: str, user_ctx: UserContextABC
+    ) -> str:  # pragma: no cover - unused
+        raise NotImplementedError
+
 
 class _FakeCombinedNoteRepo(CombinedNoteRepoABC):
     """In-memory :class:`CombinedNoteRepoABC` used by pure unit tests.

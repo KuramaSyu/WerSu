@@ -33,6 +33,7 @@ from src.db.repos.attachments.attachments import (
 from src.db.table import Table
 from src.services.attachment_facade import AttachmentFacadeImpl
 from src.utils import logging_provider
+from tests._fixtures_pkg.fakes import _FakeJwtProvider
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
@@ -83,6 +84,7 @@ async def test_attachment_facade_with_postgres_and_garage(
         attachments_note_link_table=attachment_note_link_table,
         attachments_user_link_table=attachment_user_link_table,
         log=logging_provider,
+        jwt_provider=_FakeJwtProvider(),
     )
 
     # create user for note

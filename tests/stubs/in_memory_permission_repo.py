@@ -55,6 +55,9 @@ class InMemoryPermissionRepo(PermissionRepoABC):
             "writer": {"writer", "write", "view"},
             "reader": {"reader", "view"},
             "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions"},
+            # Production relation: ``attachment#parent_user@user:<id>``
+            # grants the uploader full CRUD (schema.zed).
+            "parent_user": {"delete", "write", "view"},
         },
         "role": {
             "administrator": {"administrator", "manage"},
@@ -327,6 +330,36 @@ class InMemoryPermissionRepo(PermissionRepoABC):
         for relation in direct_relations:
             # Keep unknown relations as-is so tests can still work with custom schemas.
             permissions.update(implied_map.get(relation, {relation}))
+
+        # Attachments inherit permissions from the note(s) they are
+        # linked to, mirroring the production SpiceDB schema:
+        #
+        #   permission view   = parent_note->view   + parent_user
+        #   permission write  = parent_note->write  + parent_user
+        #   permission delete = parent_note->delete + parent_user
+        #
+        # A user who can view a note can therefore view every
+        # attachment linked to that note without a direct user tuple.
+        if str(resource.object_type) == ObjectTypeEnum.ATTACHMENT.value:
+            for stored in self._store:
+                if (
+                    str(stored.resource.object_type) != ObjectTypeEnum.ATTACHMENT.value
+                    or stored.resource.object_id != resource.object_id
+                    or str(stored.relation) != AttachmentRelationEnum.PARENT_NOTE
+                    or str(stored.subject.object_type) != ObjectTypeEnum.NOTE.value
+                    or stored.subject.object_id in (UNDEFINED, None)
+                ):
+                    continue
+                parent_note_perms = await self.get_permissions(
+                        user,
+                        ObjectRef(
+                            object_type=ObjectTypeEnum.NOTE,
+                            object_id=str(stored.subject.object_id),
+                        ),
+                    )
+                for inherited in ("view", "write", "delete"):
+                    if inherited in parent_note_perms:
+                        permissions.add(inherited)
 
         return sorted(permissions)
 

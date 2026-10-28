@@ -231,6 +231,7 @@ def _wire_real_services(
         attachments_note_link_table=_FakeLinkTable(),
         attachments_user_link_table=_FakeUserLinkTable(),
         log=silent_logger,
+        jwt_provider=jwt_provider,
     )
     directory_service = DirectoryServiceImpl(
         directory_facade=directory_repo,

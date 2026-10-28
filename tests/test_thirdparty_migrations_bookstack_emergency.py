@@ -248,6 +248,9 @@ class _StubAttachmentFacade(AttachmentFacadeABC):
     async def list_attachments(self, sub_type, sub_id, user_ctx):
         raise NotImplementedError
 
+    async def get_attachment_token(self, attachment_key, user_ctx):
+        raise NotImplementedError
+
 
 def _build_zip(payload: dict) -> bytes:
     buf = io.BytesIO()

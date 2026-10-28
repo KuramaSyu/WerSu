@@ -94,6 +94,9 @@ class _StubAttachmentFacade(AttachmentFacadeABC):
     async def list_attachments(self, sub_type, sub_id, user_ctx):
         raise NotImplementedError
 
+    async def get_attachment_token(self, attachment_key, user_ctx):
+        raise NotImplementedError
+
 
 def _build_importer() -> Tuple[BookstackBookImport, _StubDirectoryService]:
     """Wire the orchestrator with the project-level stubs."""

@@ -30,6 +30,7 @@ from src.api import (
     UserContextABC,
 )
 from src.api.services.attachment_facade import AttachmentFacadeABC, LinkTargetType
+from src.api.services.jwt_provider import JwtProvider
 from src.db.repos.attachments.attachments import (
     Attachment,
     AttachmentMetadataRepoABC,
@@ -55,6 +56,7 @@ class AttachmentFacadeImpl(AttachmentFacadeABC):
         attachments_note_link_table: TableABC,
         attachments_user_link_table: TableABC,
         log: LoggingProvider,
+        jwt_provider: JwtProvider,
         get_now: Callable[[], datetime] = lambda: datetime.now(),
     ) -> None:
         self._permission_repo = permission_repo
@@ -62,6 +64,7 @@ class AttachmentFacadeImpl(AttachmentFacadeABC):
         self._metadata_repo = metadata_repo
         self._attachments_note_link_table = attachments_note_link_table
         self._attachments_user_link_table = attachments_user_link_table
+        self._jwt_provider = jwt_provider
         self.log = log(__name__, self)
         self.get_now = get_now
 
@@ -139,6 +142,28 @@ class AttachmentFacadeImpl(AttachmentFacadeABC):
             raise has_permission.error
 
         return await self._metadata_repo.get_metadata(key)
+
+    async def get_attachment_token(
+        self,
+        attachment_key: str,
+        user_ctx: UserContextABC,
+    ) -> str:
+        """Mint a per-attachment JWT for an authorized caller.
+
+        Raises:
+            PermissionError: when the actor cannot view the attachment.
+        """
+        check = HasAttachmentViewPerm(attachment_key).set_permission_repo(
+            self._permission_repo
+        )
+        has_permission = await check.check(user_ctx)
+        if has_permission.error:
+            raise has_permission.error
+
+        return self._jwt_provider.create_attachment_token(
+            user_id=user_ctx.user_id,
+            attachment_id=attachment_key,
+        )
 
     async def delete_attachment(self, key: str, user_ctx: UserContextABC) -> None:
         check = HasAttachmentWritePerm(key).set_permission_repo(self._permission_repo)
