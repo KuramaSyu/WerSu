@@ -70,6 +70,11 @@ class AttachmentServiceStub:
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.DeleteAttachmentLinkRequest.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 _registered_method=True)
+        self.GetAttachmentToken = channel.unary_unary(
+                '/proto.AttachmentService/GetAttachmentToken',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.GetAttachmentTokenRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.GetAttachmentTokenResponse.FromString,
+                _registered_method=True)
 
 
 class AttachmentServiceServicer:
@@ -119,6 +124,12 @@ class AttachmentServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetAttachmentToken(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AttachmentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -156,6 +167,11 @@ def add_AttachmentServiceServicer_to_server(servicer, server):
                     servicer.DeleteAttachmentLink,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.DeleteAttachmentLinkRequest.FromString,
                     response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            ),
+            'GetAttachmentToken': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAttachmentToken,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.GetAttachmentTokenRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_attachments__pb2.GetAttachmentTokenResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -347,6 +363,33 @@ class AttachmentService:
             '/proto.AttachmentService/DeleteAttachmentLink',
             src_dot_grpc__mod_dot_proto_dot_attachments__pb2.DeleteAttachmentLinkRequest.SerializeToString,
             google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetAttachmentToken(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.AttachmentService/GetAttachmentToken',
+            src_dot_grpc__mod_dot_proto_dot_attachments__pb2.GetAttachmentTokenRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_attachments__pb2.GetAttachmentTokenResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -201,5 +201,30 @@ class AttachmentFacadeABC(ABC):
         """
         ...
 
+    @abstractmethod
+    async def get_attachment_token(
+        self,
+        attachment_key: str,
+        user_ctx: UserContextABC,
+    ) -> str:
+        """Mint a per-attachment JWT for an authorized caller.
+
+        Used by live-collaboration peers that have the right to view
+        an attachment but were not handed a token in the initial
+        ``GetNote`` response (e.g. an attachment inserted after the
+        note was fetched).
+
+        Args:
+            attachment_key: attachment the token is scoped to.
+            user_ctx: caller identity.
+
+        Raises:
+            PermissionError: when the actor cannot view the attachment.
+
+        Returns:
+            str: an encoded JWT scoped to the attachment.
+        """
+        ...
+
 
 __all__ = ["AttachmentFacadeABC", "LinkTargetType"]

@@ -91,6 +91,15 @@ message DeleteAttachmentResponse {
     bool success = 1;
 }
 
+message GetAttachmentTokenRequest {
+    string attachment_key = 1;
+    string user_id = 2;
+}
+
+message GetAttachmentTokenResponse {
+    string token = 1;
+}
+
 service AttachmentService {
     rpc PostAttachment(PostAttachmentRequest) returns (Attachment);
     rpc GetAttachment(GetAttachmentRequest) returns (Attachment);
@@ -102,4 +111,7 @@ service AttachmentService {
     // either succeeds fully or fails with an error; no response body needed
     rpc PostAttachmentLink(PostAttachmentLinkRequest) returns (google.protobuf.Empty);
     rpc DeleteAttachmentLink(DeleteAttachmentLinkRequest) returns (google.protobuf.Empty);
+    
+    // to retrieve single attachments later on during edit mode
+    rpc GetAttachmentToken(GetAttachmentTokenRequest) returns (GetAttachmentTokenResponse);
 }
