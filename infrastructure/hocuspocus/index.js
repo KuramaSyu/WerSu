@@ -1,6 +1,41 @@
+import { randomUUID } from 'node:crypto'
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
 import { Server } from '@hocuspocus/server'
 import { v1 } from '@authzed/authzed-node'
 import jwt from 'jsonwebtoken'
+import * as Y from 'yjs'
+
+// Hocuspocus unloads a document from memory when its last client disconnects.
+// Without an onLoadDocument/onStoreDocument pair that state is lost, which is
+// why a reload could reopen an already-populated room as empty. Keep one
+// binary Yjs update file per document on a mounted volume instead.
+const storageDir =
+  process.env.HOCUSPOCUS_STORAGE_DIR || path.join(process.cwd(), 'storage')
+
+function documentFile(documentName) {
+  // Document names are "note-<uuid>", but escape them anyway so a hostile
+  // client cannot escape the storage directory.
+  return path.join(storageDir, `${encodeURIComponent(documentName)}.yjs`)
+}
+
+async function loadDocumentUpdate(documentName) {
+  try {
+    return await fs.readFile(documentFile(documentName))
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null
+    throw error
+  }
+}
+
+async function storeDocumentUpdate(documentName, document) {
+  await fs.mkdir(storageDir, { recursive: true })
+  const target = documentFile(documentName)
+  const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`
+  // Write then rename so an interrupted store never leaves a truncated file.
+  await fs.writeFile(temporary, Y.encodeStateAsUpdate(document))
+  await fs.rename(temporary, target)
+}
 
 const client = v1.NewClient(
   process.env.SPICEDB_CREDENTIALS,
@@ -9,6 +44,15 @@ const client = v1.NewClient(
 )
 const server = new Server({
   port: 8666,
+
+  async onLoadDocument({ documentName, document }) {
+    const update = await loadDocumentUpdate(documentName)
+    if (update) Y.applyUpdate(document, update)
+  },
+
+  async onStoreDocument({ documentName, document }) {
+    await storeDocumentUpdate(documentName, document)
+  },
 
   async onAuthenticate({token, documentName}) {
     var userId = null;
@@ -74,3 +118,14 @@ const server = new Server({
 })
 
 server.listen()
+
+// Flush the debounced onStoreDocument hook before the container exits.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.once(signal, async () => {
+    try {
+      await server.destroy()
+    } finally {
+      process.exit(0)
+    }
+  })
+}
