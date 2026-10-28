@@ -168,6 +168,10 @@ services:
     container_name: wersu-hocuspocus
     restart: always
     env_file: ./.env.prod
+    environment:
+      HOCUSPOCUS_STORAGE_DIR: /data
+    volumes:
+      - ${DATA_PATH}/hocuspocus:/data
     depends_on:
       - spicedb
     networks:

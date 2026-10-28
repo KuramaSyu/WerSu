@@ -13,8 +13,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: db
-    ports:
-      - "5433:5432"
+    # ports:
+    #   - "5433:5432"
     volumes:
       - ./data/pgvector:/var/lib/postgresql
       - ./pgvector_init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -151,6 +151,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       SPICEDB_ADDRESS: ${GRPC_SPICEDB_ADDRESS}
       SPICEDB_CREDENTIALS: ${GRPC_SPICEDB_CREDENTIALS}
+      HOCUSPOCUS_STORAGE_DIR: /data
+    volumes:
+      - ./data/hocuspocus:/data
     restart: unless-stopped
     ports:
       - "8666:8666"
