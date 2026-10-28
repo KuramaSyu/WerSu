@@ -31,6 +31,8 @@ from src.grpc_mod.proto.attachments_pb2 import (
     DeleteAttachmentResponse,
     GetAttachmentMetadataRequest,
     GetAttachmentRequest,
+    GetAttachmentTokenRequest,
+    GetAttachmentTokenResponse,
     PostAttachmentLinkRequest,
     PostAttachmentRequest,
     UpdateAttachmentMetadataRequest,
@@ -169,6 +171,26 @@ class GrpcAttachmentService(AttachmentServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while updating attachment metadata")
             return GrpcAttachmentMetadata()
+
+    @log_service_call()
+    async def GetAttachmentToken(
+        self, request: GetAttachmentTokenRequest, context: ServicerContext
+    ) -> GetAttachmentTokenResponse:
+        try:
+            token = await self.attachment_service.get_attachment_token(
+                request.attachment_key,
+                await self._context.create(request.user_id),
+            )
+            return GetAttachmentTokenResponse(token=token)
+        except PermissionError as exc:
+            context.set_code(grpc.StatusCode.PERMISSION_DENIED)
+            context.set_details(str(exc))
+            return GetAttachmentTokenResponse()
+        except Exception:
+            self.log.error(f"Error getting attachment token: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while getting attachment token")
+            return GetAttachmentTokenResponse()
 
     @log_service_call()
     async def DeleteAttachmentLink(self, request: DeleteAttachmentLinkRequest, context: ServicerContext) -> Empty:

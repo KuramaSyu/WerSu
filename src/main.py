@@ -414,6 +414,7 @@ async def serve():
         attachments_note_link_table=attachments_note_link_table,
         attachments_user_link_table=attachments_user_link_table,
         log=logging_provider,
+        jwt_provider=jwt_provider,
     )
 
     preferences_repo = PostgresPreferencesRepo(
