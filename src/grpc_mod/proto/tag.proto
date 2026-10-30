@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package proto;
+option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
+
+// ``MinimalTag`` (id / slug / display_name) is defined alongside the
+// note messages because it is embedded in ``NotesReply``; the tag
+// service reuses the same message so clients only have one tag shape.
+import "src/grpc_mod/proto/note.proto";
+
+// ===== Requests ==========================================================
+
+message CreateTagRequest {
+    // the id of the user making the request; used to build a context
+    string user_id = 1;
+    // unique machine-readable slug
+    string slug = 2;
+    // human-readable label
+    string display_name = 3;
+}
+
+message GetTagRequest {
+    string user_id = 1;
+    string id = 2;
+}
+
+message ListTagsRequest {
+    string user_id = 1;
+}
+
+// Partially update a tag. Omitted optional fields are left unchanged.
+message UpdateTagRequest {
+    string user_id = 1;
+    string id = 2;
+    optional string slug = 3;
+    optional string display_name = 4;
+}
+
+message DeleteTagRequest {
+    string user_id = 1;
+    string id = 2;
+}
+
+// ===== Responses ========================================================
+
+message TagResponse {
+    MinimalTag tag = 1;
+}
+
+message TagsResponse {
+    repeated MinimalTag tags = 1;
+}
+
+message DeleteTagResponse {
+    // true when a tag row was removed; false when no row matched.
+    bool deleted = 1;
+}
+
+// ===== Service ==========================================================
+
+service TagService {
+    // CRUD for the global tag taxonomy. Tags carry no SpiceDB
+    // relations; visibility of tagged notes/directories stays rooted
+    // in their own relations.
+    rpc CreateTag (CreateTagRequest) returns (TagResponse);
+    rpc GetTag    (GetTagRequest)    returns (TagResponse);
+    rpc ListTags  (ListTagsRequest)  returns (TagsResponse);
+    rpc UpdateTag (UpdateTagRequest) returns (TagResponse);
+    rpc DeleteTag (DeleteTagRequest) returns (DeleteTagResponse);
+}
