@@ -34,7 +34,15 @@ from src.db.table import TableABC
 from src.grpc_mod.converter.postgres_row_converter import (
     PostgresRowConverter,
 )
-from src.utils import asdict, drop_undefined, logging_provider as default_logging_provider
+from src.utils import (
+    asdict,
+    drop_undefined,
+    logging_provider as default_logging_provider,
+    parse_json_columns,
+)
+
+
+_JSON_COLUMNS = ("condition", "action_context")
 
 
 class PostgresRuleRepo(RuleRepoABC):
@@ -224,7 +232,7 @@ class PostgresRuleRepo(RuleRepoABC):
     @staticmethod
     def _serialise_value(field_name: str, value: Any) -> Any:
         """JSON-encode JSONB columns; pass everything else through."""
-        if field_name in ("condition", "action_context") and value is not None:
+        if field_name in _JSON_COLUMNS and value is not None:
             if not isinstance(value, str):
                 return json.dumps(dict(value))
         return value
@@ -237,14 +245,7 @@ class PostgresRuleRepo(RuleRepoABC):
         parse them back into a dict so the entity carries a
         uniform ``Mapping`` shape regardless of dialect.
         """
-        data = dict(record)
-        for col in ("condition", "action_context"):
-            value = data.get(col)
-            if isinstance(value, str):
-                try:
-                    data[col] = json.loads(value)
-                except (TypeError, ValueError):
-                    data[col] = {}
+        data = parse_json_columns(record, _JSON_COLUMNS, default={})
         return RuleEntity(**data)
 
 

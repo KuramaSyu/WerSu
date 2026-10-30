@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
@@ -12,6 +11,7 @@ from src.db.entities.preferences import PreferencesEntity
 from src.grpc_mod.converter.postgres_row_converter import (
     PostgresRowConverter,
 )
+from src.utils import parse_json_object
 
 
 _SCOPE_COLUMNS: Dict[PreferenceScope, str] = {
@@ -72,16 +72,7 @@ class PostgresPreferencesRepo(PreferencesRepoABC):
         )
         if row is None:
             return {}
-        raw = row.get("payload")
-        if raw is None or raw == "":
-            return {}
-        if isinstance(raw, dict):
-            return raw
-        try:
-            parsed = json.loads(raw)
-        except (TypeError, ValueError):
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
+        return parse_json_object(row.get("payload"), default={}) or {}
 
     async def read_entity(
         self, scope: PreferenceScope, target_id: str
@@ -98,14 +89,7 @@ class PostgresPreferencesRepo(PreferencesRepoABC):
         )
         if row is None:
             return None
-        payload = row.get("payload")
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except (TypeError, ValueError):
-                payload = {}
-        if not isinstance(payload, dict):
-            payload = {}
+        payload = parse_json_object(row.get("payload"), default={})
         return PreferencesEntity(
             id=row.get("id") if row.get("id") is not None else UNDEFINED,
             scope=scope,

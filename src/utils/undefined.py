@@ -1,24 +1,10 @@
-"""Helpers for collapsing :data:`UndefinedOr` / :data:`UndefinedNoneOr` values."""
+"""Re-export of the canonical undefined-collapsing helpers.
 
-from __future__ import annotations
+The implementation lives next to the :data:`UNDEFINED` sentinel in
+:mod:`src.api.other.undefined`; this module only re-exports it so
+``src.utils`` consumers keep a stable import path.
+"""
 
-from typing import Optional
-
-from src.api.other.undefined import UndefinedNoneOr, is_undefined
-
-
-def resolve_undefined_none(value: UndefinedNoneOr[str]) -> Optional[str]:
-    """Map a nullable ``UndefinedNoneOr`` into a SQL-friendly ``Optional[str]``.
-
-    * ``UNDEFINED`` -> ``None`` (no value supplied).
-    * ``None``      -> ``None`` (explicitly cleared).
-    * concrete str -> ``str(value)``.
-    """
-    if is_undefined(value):
-        return None
-    if value is None:
-        return None
-    return str(value)
-
+from src.api.other.undefined import resolve_undefined_none
 
 __all__ = ["resolve_undefined_none"]

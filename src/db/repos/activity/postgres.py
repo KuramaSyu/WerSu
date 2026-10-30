@@ -18,7 +18,6 @@ placeholder syntax.
 
 from __future__ import annotations
 
-import json
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -40,7 +39,12 @@ from src.db.table import TableABC
 from src.grpc_mod.converter.postgres_row_converter import (
     PostgresRowConverter,
 )
-from src.utils import asdict, drop_undefined, logging_provider as default_logging_provider
+from src.utils import (
+    asdict,
+    drop_undefined,
+    logging_provider as default_logging_provider,
+    parse_json_columns,
+)
 
 
 class PostgresActivityRepo(ActivityRepoABC):
@@ -295,12 +299,7 @@ class PostgresActivityRepo(ActivityRepoABC):
         rest of the stack (gRPC visitor, statistics service, ...)
         can treat it uniformly.
         """
-        data = dict(record)
-        if isinstance(data.get("metadata"), str):
-            try:
-                data["metadata"] = json.loads(data["metadata"])
-            except (TypeError, ValueError):
-                data["metadata"] = {}
+        data = parse_json_columns(record, ("metadata",), default={})
         return ActivityEntity(**data)
 
 

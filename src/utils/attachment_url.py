@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+from typing import Dict, Optional
 from urllib.parse import quote
 
 
@@ -73,10 +74,35 @@ def is_image_or_pdf_attachment(filename: str) -> bool:
     return ctype.startswith("image/") or ctype == "application/pdf"
 
 
+def resolve_attachment_filename(
+    kind: str,
+    source_id: int,
+    attachment_meta: Optional[Dict[int, str]],
+) -> str:
+    """Return the markdown link text for a BookStack cross-reference.
+
+    Args:
+        kind: cross-ref kind (``"image"`` or ``"attachment"``).
+        source_id: BookStack id of the referenced attachment/image.
+        attachment_meta: optional map of BookStack id -> original
+            filename, looked up when present.
+
+    Returns:
+        str: the original filename when known, otherwise a stable
+        ``image-<id>`` / ``attachment-<id>`` placeholder.
+    """
+    if attachment_meta is not None and source_id in attachment_meta:
+        return attachment_meta[source_id]
+    if kind == "image":
+        return f"image-{source_id}"
+    return f"attachment-{source_id}"
+
+
 __all__ = [
     "build_attachment_url",
     "build_attachment_link_url",
     "is_image_or_pdf_attachment",
+    "resolve_attachment_filename",
     "DEFAULT_BASE",
     "DEFAULT_LINK_BASE",
     "DEFAULT_WIDTH",

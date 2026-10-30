@@ -28,7 +28,10 @@ from __future__ import annotations
 import re
 from typing import Callable, Dict, Optional
 
-from src.utils.attachment_url import is_image_or_pdf_attachment
+from src.utils.attachment_url import (
+    is_image_or_pdf_attachment,
+    resolve_attachment_filename,
+)
 
 from ..context import ConverterContext
 from ..strategy import HtmlPreprocessorStrategy, MarkdownPostprocessorStrategy
@@ -190,7 +193,7 @@ class ImageRefStrategy(MarkdownPostprocessorStrategy):
             if ref_kind == "image":
                 replacement = url_builder(new_key)
                 return f'{match.group("full")}{replacement}{trailing}'
-            filename = _resolve_attachment_filename(
+            filename = resolve_attachment_filename(
                 ref_kind, source_id, attachment_meta
             )
             return f"[{filename}]({link_builder(new_key)})"
@@ -205,27 +208,6 @@ def _lookup(file_index: Dict[str, str], filename: str) -> Optional[str]:
         return file_index[filename]
     basename = filename.rsplit("/", 1)[-1]
     return file_index.get(basename)
-
-
-def _resolve_attachment_filename(
-    kind: str,
-    source_id: int,
-    attachment_meta: Optional[Dict[int, str]],
-) -> str:
-    """Return the filename to use as a markdown link text for a cross-ref.
-
-    `kind` is the cross-ref kind (``"image"`` or ``"attachment"``).
-    For ``"image"`` we have no filename in `attachment_meta` and
-    just return a stable placeholder so the link still renders;
-    for ``"attachment"`` we look up the original filename from
-    `attachment_meta` and fall back to a generic placeholder when
-    the caller did not pass any metadata.
-    """
-    if attachment_meta is not None and source_id in attachment_meta:
-        return attachment_meta[source_id]
-    if kind == "image":
-        return f"image-{source_id}"
-    return f"attachment-{source_id}"
 
 
 __all__ = ["ImageRefStrategy"]

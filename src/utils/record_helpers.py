@@ -7,7 +7,8 @@ by any repo that consumes `asyncpg.Record` rows.
 
 from __future__ import annotations
 
-from typing import Any, List, TypeVar, cast
+import json
+from typing import Any, Dict, List, Mapping, Optional, TypeVar, cast
 
 import asyncpg
 
@@ -48,4 +49,59 @@ def all_valid_items(
     return [cast(_T, v) for v in raw if v]
 
 
-__all__ = ["all_valid_items"]
+def parse_json_columns(
+    record: Mapping[str, Any],
+    columns: tuple[str, ...],
+    *,
+    default: Any = None,
+) -> Dict[str, Any]:
+    """Copy a row mapping, decoding JSON-string ``columns`` into objects.
+
+    asyncpg decodes a ``JSONB`` column as the raw JSON string (and the
+    SQLite test schema stores it as ``TEXT``), so repos that hand the
+    row straight to an entity must parse those columns back into
+    Python objects first.
+
+    Columns that are already decoded (``dict``, ``None``, ...) are
+    left untouched.  A string that fails to parse becomes ``default``.
+
+    Args:
+        record: the asyncpg row or plain mapping to copy.
+        columns: column names that may hold a JSON string.
+        default: value used when a string column fails to parse.
+
+    Returns:
+        Dict[str, Any]: a shallow copy of ``record`` with the JSON
+        columns decoded.
+    """
+    data: Dict[str, Any] = dict(record)
+    for column in columns:
+        value = data.get(column)
+        if not isinstance(value, str):
+            continue
+        try:
+            data[column] = json.loads(value)
+        except (TypeError, ValueError):
+            data[column] = default
+    return data
+
+
+def parse_json_object(value: Any, *, default: Any = None) -> Optional[Dict[str, Any]]:
+    """Coerce ``value`` into a JSON object (``dict``) or ``default``.
+
+    Accepts an already-decoded ``dict`` verbatim, parses a non-empty
+    JSON string, and falls back to ``default`` for ``None``, an empty
+    string, malformed JSON, or a non-object JSON value.
+    """
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str) or not value:
+        return default
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if isinstance(parsed, dict) else default
+
+
+__all__ = ["all_valid_items", "parse_json_columns", "parse_json_object"]

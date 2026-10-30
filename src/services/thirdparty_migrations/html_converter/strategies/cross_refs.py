@@ -18,7 +18,10 @@ from __future__ import annotations
 import re
 from typing import Callable, Dict, Optional
 
-from src.utils.attachment_url import is_image_or_pdf_attachment
+from src.utils.attachment_url import (
+    is_image_or_pdf_attachment,
+    resolve_attachment_filename,
+)
 
 from ..context import ConverterContext
 from ..strategy import MarkdownPostprocessorStrategy
@@ -112,7 +115,7 @@ class CrossRefStrategy(MarkdownPostprocessorStrategy):
         if kind == "image":
             return self._url_builder(target)  # type: ignore[misc]
         if kind == "attachment":
-            filename = _resolve_attachment_filename(
+            filename = resolve_attachment_filename(
                 kind, source_id, self._attachment_meta
             )
             # image/PDF filenames keep the inline image URL
@@ -123,27 +126,6 @@ class CrossRefStrategy(MarkdownPostprocessorStrategy):
                 return self._url_builder(target)  # type: ignore[misc]
             return f"[{filename}]({self._link_builder(target)})"  # type: ignore[misc]
         return ""
-
-
-def _resolve_attachment_filename(
-    kind: str,
-    source_id: int,
-    attachment_meta: Optional[Dict[int, str]],
-) -> str:
-    """Return the filename to use as a markdown link text for a cross-ref.
-
-    `kind` is the cross-ref kind (``"image"`` or ``"attachment"``).
-    For ``"image"`` we have no filename in `attachment_meta` and
-    just return a stable placeholder so the link still renders;
-    for ``"attachment"`` we look up the original filename from
-    `attachment_meta` and fall back to a generic placeholder when
-    the caller did not pass any metadata.
-    """
-    if attachment_meta is not None and source_id in attachment_meta:
-        return attachment_meta[source_id]
-    if kind == "image":
-        return f"image-{source_id}"
-    return f"attachment-{source_id}"
 
 
 __all__ = ["CrossRefStrategy"]

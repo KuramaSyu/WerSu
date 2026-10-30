@@ -16,6 +16,11 @@ def tensor_to_str_vec(tensor: _Tolistable) -> str:
     return f"[{','.join(str(x) for x in tensor.tolist())}]"
 
 
+def tensor_to_list(tensor: _Tolistable) -> List[float]:
+    """Extract the floats from a 1-D tensor / numeric iterable."""
+    return [float(x) for x in tensor.tolist()]
+
+
 def str_vec_to_list(vec_str: str) -> List[float]:
     """Parse a ``[x,y,z]`` string back into a list of floats.
 
@@ -33,4 +38,9 @@ def sequence_to_str_vec(values: Sequence[float]) -> str:
     return f"[{','.join(str(x) for x in values)}]"
 
 
-__all__ = ["tensor_to_str_vec", "str_vec_to_list", "sequence_to_str_vec"]
+__all__ = [
+    "tensor_to_str_vec",
+    "tensor_to_list",
+    "str_vec_to_list",
+    "sequence_to_str_vec",
+]

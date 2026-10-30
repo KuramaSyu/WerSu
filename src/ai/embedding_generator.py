@@ -24,6 +24,12 @@ from typing import Any, Sequence
 import numpy as np
 
 from src.api import LoggingProvider
+from src.utils.embedding_codec import (
+    sequence_to_str_vec as _sequence_to_str_vec,
+    str_vec_to_list as _str_vec_to_list,
+    tensor_to_list as _tensor_to_list,
+    tensor_to_str_vec as _tensor_to_str_vec,
+)
 
 
 class Models(Enum):
@@ -55,25 +61,22 @@ class EmbeddingGeneratorABC(ABC):
     @staticmethod
     def tensor_to_str_vec(tensor: Any) -> str:
         """Serialize a 1-D tensor / numeric iterable as ``[x,y,z]``."""
-        return f"[{','.join(str(x) for x in tensor.tolist())}]"
+        return _tensor_to_str_vec(tensor)
 
     @staticmethod
     def tensor_to_sequence(tensor: Any) -> Sequence[float]:
         """Extract the floats from a 1-D tensor / numeric iterable."""
-        return [float(x) for x in tensor.tolist()]
+        return _tensor_to_list(tensor)
 
     @staticmethod
     def str_vec_to_list(vec_str: str) -> Sequence[float]:
         """Parse a ``[x,y,z]`` string back into a list of floats."""
-        vec_str = vec_str.strip().lstrip("[").rstrip("]")
-        if not vec_str:
-            return []
-        return [float(x) for x in vec_str.split(",")]
+        return _str_vec_to_list(vec_str)
 
     @staticmethod
     def list_to_str_vec(vec_list: Sequence[float]) -> str:
         """Encode an in-memory sequence of floats as ``[x,y,z]``."""
-        return f"[{','.join(str(x) for x in vec_list)}]"
+        return _sequence_to_str_vec(vec_list)
 
 
 def _default_cache_folder() -> str:
