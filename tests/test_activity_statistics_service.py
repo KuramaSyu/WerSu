@@ -16,9 +16,9 @@ from src.db.sqlite_database import SqliteDatabase
 from src.db.table import Table
 from src.services.activity_statistics_service import ActivityStatisticsServiceImpl
 from src.utils.logging import logging_provider
-from tests._fixtures_pkg.fakes import _FakeNoteContentRepo, _TestDirectoryRepo
-from tests.stubs.user_context import _UserContext as _FakeUserContext
-from tests.stubs.view_permission_repo import _FakeViewPermissionRepo as _FakePermissionRepo
+from tests.doubles import _FakeNoteContentRepo, _FakeSpyDirectoryRepo
+from tests.doubles import _DummyUserContext as _FakeUserContext
+from tests.doubles import _StubViewPermissionRepo as _FakePermissionRepo
 from typing import AsyncGenerator, List, Optional
 import math, pytest, uuid
 
@@ -64,13 +64,13 @@ def activity_table(sqlite_db: SqliteDatabase) -> Table:
 
 
 @pytest.fixture
-def directory_repo() -> _TestDirectoryRepo:
+def directory_repo() -> _FakeSpyDirectoryRepo:
     """Directory repo whose ``resolve_subtree`` returns the root alone.
 
     Tests seed ``user_to_directory_ids`` and ``subtree_by_root`` as
     needed so the service's "all visible dirs" path can resolve.
     """
-    repo = _TestDirectoryRepo()
+    repo = _FakeSpyDirectoryRepo()
     # Default: alice can view the two root dirs the statistics tests
     # operate on.  Each test that needs a custom mapping overrides this.
     repo.user_to_directory_ids["alice"] = ["d-root", "d-other"]
@@ -81,7 +81,7 @@ def directory_repo() -> _TestDirectoryRepo:
 
 @pytest.fixture
 def activity_repo(
-    activity_table: Table, directory_repo: _TestDirectoryRepo,
+    activity_table: Table, directory_repo: _FakeSpyDirectoryRepo,
 ) -> PostgresActivityRepo:
     return PostgresActivityRepo(
         table=activity_table,
@@ -158,10 +158,9 @@ async def _insert(
 class TestPermissionGating:
     """The service refuses to query data the actor can't view."""
 
-    @pytest.mark.asyncio
     async def test_get_history_rejects_note_actor_cannot_view(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -175,10 +174,9 @@ class TestPermissionGating:
         with pytest.raises(PermissionError, match="cannot view note"):
             await svc.get_history(alice, note_id="n-1")
 
-    @pytest.mark.asyncio
     async def test_get_history_rejects_directory_actor_cannot_view(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -192,10 +190,9 @@ class TestPermissionGating:
         with pytest.raises(PermissionError, match="cannot view directory"):
             await svc.get_history(alice, directory_id="d-1")
 
-    @pytest.mark.asyncio
     async def test_get_most_used_rejects_note_actor_cannot_view(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -213,10 +210,9 @@ class TestPermissionGating:
 class TestGetHistory:
     """``get_history`` translates kwargs into the right filter."""
 
-    @pytest.mark.asyncio
     async def test_filters_by_note_id_when_allowed(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -237,10 +233,9 @@ class TestGetHistory:
         assert rows[0].note_title == "Note One"
         assert rows[0].note_stripped_content == "hello world"
 
-    @pytest.mark.asyncio
     async def test_filters_by_actor_id(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -260,10 +255,9 @@ class TestGetHistory:
         # enrichment is single-note only -> fired here too
         assert rows[0].note_title == "Note One"
 
-    @pytest.mark.asyncio
     async def test_filters_by_action_set(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -286,10 +280,9 @@ class TestGetHistory:
         # every row pinned to n-1 -> enriched
         assert all(r.note_title == "Note One" for r in rows)
 
-    @pytest.mark.asyncio
     async def test_pagination_via_limit_and_offset(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -320,10 +313,9 @@ class TestGetHistory:
 class TestVisibleDirectoryResolution:
     """When neither target is set, the service resolves visible dirs."""
 
-    @pytest.mark.asyncio
     async def test_no_targets_resolves_to_visible_dirs(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -360,10 +352,9 @@ class TestVisibleDirectoryResolution:
 class TestGetMostUsed:
     """``get_most_used`` exercises the aggregate path."""
 
-    @pytest.mark.asyncio
     async def test_count_strategy(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -391,10 +382,9 @@ class TestGetMostUsed:
         # n-2's body is preserved verbatim because it is short.
         assert contents["n-2"].startswith("another note body")
 
-    @pytest.mark.asyncio
     async def test_log_count_algorithm(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -418,10 +408,9 @@ class TestGetMostUsed:
         assert all(r.title for r in rows)
         assert all(r.stripped_content for r in rows)
 
-    @pytest.mark.asyncio
     async def test_enrichment_truncates_long_content_to_120_chars(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:
@@ -446,10 +435,9 @@ class TestGetMostUsed:
         assert rows[0].title == "Note One"
         assert len(rows[0].stripped_content) == 120
 
-    @pytest.mark.asyncio
     async def test_unique_per_day_algorithm(
         self, activity_repo: PostgresActivityRepo,
-        directory_repo: _TestDirectoryRepo,
+        directory_repo: _FakeSpyDirectoryRepo,
         note_content_repo: _FakeNoteContentRepo,
         alice: _FakeUserContext,
     ) -> None:

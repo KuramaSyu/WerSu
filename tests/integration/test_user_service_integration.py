@@ -29,7 +29,7 @@ from src.services.shelf_bootstrap import build_strategy
 from src.services.user_service import UserServiceImpl
 from src.utils import logging_provider
 from tests.integration_helpers import NoteRelationEnum, assert_user_has_admin_on_directory, make_custom_directory, make_user_entity, spicedb_postgres_env, wait_until
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from typing import Awaitable, Callable, Iterable, Tuple, TypeVar
 import asyncio, pytest
 

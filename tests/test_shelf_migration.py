@@ -34,28 +34,17 @@ from src.api.other.user_context import UserContextABC
 from src.db.entities.shelf import ShelfEntity
 from src.db.migrations.context import MigrationContext, MigrationServices
 from src.services.user_service import users_shelf_slug_for
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import InMemoryShelfRepo
 import pytest
+
+from tests.doubles.dummies.user_ctx import _DummyUserCtx
+from tests.doubles.fakes.shelf_migration import _FakeDirectoryFacade
 
 
 # ---- helpers --------------------------------------------------------------
 
 
-class _UserCtx(UserContextABC):
-    def __init__(self, user_id: str) -> None:
-        self._uid = user_id
-
-    @property
-    def user_id(self) -> str:
-        return self._uid
-
-    @property
-    def type(self):  # type: ignore[override]
-        return UNDEFINED
-
-    async def is_temporary_user(self) -> bool:
-        return False
 
 
 def _make_migration():
@@ -134,70 +123,6 @@ async def _grant_admin(
     )
 
 
-class _FakeDirectoryFacade:
-    """Minimal directory facade stub for the bind-safety filter test.
-
-    Only :meth:`fetch_directories_by_ids` is implemented; every
-    other ``DirectoryFacadeABC`` member raises so an accidental
-    call from the migration under test fails loudly in CI.
-    """
-
-    def __init__(self) -> None:
-        self._existing_ids: set[str] = set()
-
-    def add_directory(self, book_id: str) -> None:
-        """Seed a directory id as existing."""
-        self._existing_ids.add(str(book_id))
-
-    async def fetch_directories_by_ids(
-        self, ids: List[str],
-    ):
-        from src.db.entities.directory.directory import DirectoryEntity
-        return [
-            DirectoryEntity(id=bid)
-            for bid in ids
-            if str(bid) in self._existing_ids
-        ]
-
-    # Unused abstract stubs - raise loudly if accidentally hit.
-    async def create_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def fetch_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def update_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def delete_directory(self, *args, **kwargs) -> bool:
-        raise NotImplementedError
-
-    async def fetch_directories(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def list_user_directory_ids(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def set_parents_of(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    async def get_parents_of(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def get_children_of(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def get_children_for(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def get_parents_for(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def add_child_to(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    async def remove_child_from(self, *args, **kwargs) -> None:
-        raise NotImplementedError
 
 
 # ---- tests ----------------------------------------------------------------
@@ -216,7 +141,7 @@ async def test_bind_user_books_binds_all_owned_unassigned_books() -> None:
         slug=users_shelf_slug_for("alice"),
         display_name="Alice's Shelf",
         description="",
-        user_ctx=_UserCtx(user_id),
+        user_ctx=_DummyUserCtx(user_id),
     )
 
     await _make_migration()._bind_user_books(
@@ -227,7 +152,7 @@ async def test_bind_user_books_binds_all_owned_unassigned_books() -> None:
         ),
         shelf=shelf,
         user_id=user_id,
-        user_ctx=_UserCtx(user_id),
+        user_ctx=_DummyUserCtx(user_id),
     )
 
     assert sorted(await shelf_repo.get_books_of(str(shelf.id))) == [
@@ -249,7 +174,7 @@ async def test_bind_user_books_skips_books_already_on_a_shelf() -> None:
         slug=users_shelf_slug_for("bob"),
         display_name="Bob's Shelf",
         description="",
-        user_ctx=_UserCtx(user_id),
+        user_ctx=_DummyUserCtx(user_id),
     )
 
     await _make_migration()._bind_user_books(
@@ -260,7 +185,7 @@ async def test_bind_user_books_skips_books_already_on_a_shelf() -> None:
         ),
         shelf=new_shelf,
         user_id=user_id,
-        user_ctx=_UserCtx(user_id),
+        user_ctx=_DummyUserCtx(user_id),
     )
 
     # existing binding untouched, new book added to new shelf only
@@ -284,14 +209,14 @@ async def test_bind_user_books_is_noop_when_no_owned_books() -> None:
         slug=users_shelf_slug_for("carol"),
         display_name="Carol's Shelf",
         description="",
-        user_ctx=_UserCtx(user_id),
+        user_ctx=_DummyUserCtx(user_id),
     )
 
     await _make_migration()._bind_user_books(
         _make_ctx(shelf_repo=shelf_repo, permission_repo=permission_repo),
         shelf=shelf,
         user_id=user_id,
-        user_ctx=_UserCtx(user_id),
+        user_ctx=_DummyUserCtx(user_id),
     )
 
     assert await shelf_repo.get_books_of(str(shelf.id)) == []
@@ -311,7 +236,7 @@ async def test_bind_user_books_ignores_books_user_does_not_own() -> None:
         slug=users_shelf_slug_for("dave"),
         display_name="Dave's Shelf",
         description="",
-        user_ctx=_UserCtx(me),
+        user_ctx=_DummyUserCtx(me),
     )
 
     await _make_migration()._bind_user_books(
@@ -322,7 +247,7 @@ async def test_bind_user_books_ignores_books_user_does_not_own() -> None:
         ),
         shelf=shelf,
         user_id=me,
-        user_ctx=_UserCtx(me),
+        user_ctx=_DummyUserCtx(me),
     )
 
     assert await shelf_repo.get_books_of(str(shelf.id)) == ["b-mine"]
@@ -338,16 +263,16 @@ async def test_bind_user_books_noop_when_services_unwired() -> None:
     shelf = ShelfEntity(id="shelf-1", slug="x")
 
     # both services None
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="MigrationContext.shelf_repo"):
         await _make_migration()._bind_user_books(
             MigrationContext(db=None),
             shelf=shelf,
             user_id="u-1",
-            user_ctx=_UserCtx("u-1"),
+            user_ctx=_DummyUserCtx("u-1"),
         )
 
     # only shelf_repo wired (permission_repo None)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="MigrationContext.shelf_repo"):
         await _make_migration()._bind_user_books(
             MigrationContext(
                 db=None,
@@ -355,11 +280,11 @@ async def test_bind_user_books_noop_when_services_unwired() -> None:
             ),
             shelf=shelf,
             user_id="u-1",
-            user_ctx=_UserCtx("u-1"),
+            user_ctx=_DummyUserCtx("u-1"),
         )
 
     # only permission_repo wired (shelf_repo None)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="MigrationContext.shelf_repo"):
         await _make_migration()._bind_user_books(
             MigrationContext(
                 db=None,
@@ -369,7 +294,7 @@ async def test_bind_user_books_noop_when_services_unwired() -> None:
             ),
             shelf=shelf,
             user_id="u-1",
-            user_ctx=_UserCtx("u-1"),
+            user_ctx=_DummyUserCtx("u-1"),
         )
 
 
@@ -398,7 +323,7 @@ async def test_bind_user_books_filters_books_missing_from_directory_repo() -> No
         slug=users_shelf_slug_for("erin"),
         display_name="Erin's Shelf",
         description="",
-        user_ctx=_UserCtx(user_id),
+        user_ctx=_DummyUserCtx(user_id),
     )
 
     await _make_migration()._bind_user_books(
@@ -412,7 +337,7 @@ async def test_bind_user_books_filters_books_missing_from_directory_repo() -> No
         ),
         shelf=shelf,
         user_id=user_id,
-        user_ctx=_UserCtx(user_id),
+        user_ctx=_DummyUserCtx(user_id),
     )
 
     assert sorted(await shelf_repo.get_books_of(str(shelf.id))) == [
@@ -434,10 +359,10 @@ async def test_bind_user_books_noop_when_directory_facade_unwired() -> None:
         slug=users_shelf_slug_for("frank"),
         display_name="Frank's Shelf",
         description="",
-        user_ctx=_UserCtx(user_id),
+        user_ctx=_DummyUserCtx(user_id),
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="MigrationContext.shelf_repo"):
         await _make_migration()._bind_user_books(
             MigrationContext(
                 db=None,
@@ -448,7 +373,7 @@ async def test_bind_user_books_noop_when_directory_facade_unwired() -> None:
             ),
             shelf=shelf,
             user_id=user_id,
-            user_ctx=_UserCtx(user_id),
+            user_ctx=_DummyUserCtx(user_id),
         )
 
 

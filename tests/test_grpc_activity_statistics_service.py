@@ -12,7 +12,7 @@ from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.grpc_mod.activity_statistics_service import GrpcActivityStatisticsService
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.proto.activity_pb2 import ACCESSED_AS_SYSTEM, ACCESSED_AS_USER, Activity, ActivityFilter, GetActivityHistoryRequest, GetMostUsedActivityRequest, MOST_USED_ALGORITHM_COUNT, MOST_USED_ALGORITHM_LOG_COUNT
-from tests.stubs.user_context import _UserContext
+from tests.doubles import _DummyUserContext
 from typing import List
 from unittest.mock import AsyncMock, MagicMock
 import datetime as _dt, grpc, json, pytest
@@ -40,7 +40,7 @@ def visitor() -> ConvertToGrpcVisitor:
 @pytest.fixture
 def context_factory() -> MagicMock:
     cf = MagicMock()
-    cf.create = AsyncMock(return_value=_UserContext(user_id="alice"))
+    cf.create = AsyncMock(return_value=_DummyUserContext(user_id="alice"))
     return cf
 
 
@@ -103,7 +103,6 @@ def _score(note_id: str = "n-1", score: float = 2.0) -> ActivityScore:
 class TestGetActivityHistory:
     """History streams rows from ``get_history`` through the visitor."""
 
-    @pytest.mark.asyncio
     async def test_user_id_required(
         self, grpc_servicer: GrpcActivityStatisticsService, context_factory: MagicMock,
     ) -> None:
@@ -115,7 +114,6 @@ class TestGetActivityHistory:
         ctx.set_details.assert_called_with("user_id is required")
         context_factory.create.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_streams_one_proto_per_row(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -134,7 +132,6 @@ class TestGetActivityHistory:
             rows.append(r)
         assert [r.id for r in rows] == ["a-1", "a-2"]
 
-    @pytest.mark.asyncio
     async def test_filter_kwargs_forwarded(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -157,7 +154,6 @@ class TestGetActivityHistory:
         assert kwargs["limit"] == 10
         assert kwargs["offset"] == 5
 
-    @pytest.mark.asyncio
     async def test_accessed_as_forwarded(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -171,7 +167,6 @@ class TestGetActivityHistory:
             pass
         assert stats_service.get_history.call_args.kwargs["accessed_as"] == "system"
 
-    @pytest.mark.asyncio
     async def test_actions_forwarded(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -187,7 +182,6 @@ class TestGetActivityHistory:
             "note_viewed", "note_edited",
         ]
 
-    @pytest.mark.asyncio
     async def test_unique_per_day_dropped_for_history(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -201,7 +195,6 @@ class TestGetActivityHistory:
             pass
         assert "unique_per_day" not in stats_service.get_history.call_args.kwargs
 
-    @pytest.mark.asyncio
     async def test_permission_error_returns_permission_denied(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -214,7 +207,6 @@ class TestGetActivityHistory:
         ctx.set_code.assert_called_with(grpc.StatusCode.PERMISSION_DENIED)
         ctx.set_details.assert_called_with("denied")
 
-    @pytest.mark.asyncio
     async def test_unexpected_error_returns_internal(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -235,7 +227,6 @@ class TestGetActivityHistory:
 class TestGetMostUsedActivity:
     """Most-used streams scores from ``get_most_used``."""
 
-    @pytest.mark.asyncio
     async def test_user_id_required(
         self, grpc_servicer: GrpcActivityStatisticsService,
     ) -> None:
@@ -245,7 +236,6 @@ class TestGetMostUsedActivity:
             pass
         ctx.set_code.assert_called_with(grpc.StatusCode.INVALID_ARGUMENT)
 
-    @pytest.mark.asyncio
     async def test_streams_one_proto_per_score(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -262,7 +252,6 @@ class TestGetMostUsedActivity:
         assert [s.note_id for s in scores] == ["n-1", "n-2"]
         assert scores[0].score == 3.0
 
-    @pytest.mark.asyncio
     async def test_algorithm_count_translates(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -276,7 +265,6 @@ class TestGetMostUsedActivity:
             pass
         assert stats_service.get_most_used.call_args.kwargs["algorithm"] == "count"
 
-    @pytest.mark.asyncio
     async def test_algorithm_log_count_translates(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -290,7 +278,6 @@ class TestGetMostUsedActivity:
             pass
         assert stats_service.get_most_used.call_args.kwargs["algorithm"] == "log_count"
 
-    @pytest.mark.asyncio
     async def test_unique_per_day_forwarded(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -304,7 +291,6 @@ class TestGetMostUsedActivity:
             pass
         assert stats_service.get_most_used.call_args.kwargs["unique_per_day"] is True
 
-    @pytest.mark.asyncio
     async def test_limit_forwarded_when_set(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -318,7 +304,6 @@ class TestGetMostUsedActivity:
             pass
         assert stats_service.get_most_used.call_args.kwargs["limit"] == 50
 
-    @pytest.mark.asyncio
     async def test_permission_error_returns_permission_denied(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -339,7 +324,6 @@ class TestGetMostUsedActivity:
 class TestVisitorConversion:
     """The visitor + adapter chain produces correct proto messages."""
 
-    @pytest.mark.asyncio
     async def test_activity_proto_carries_metadata_json(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -354,7 +338,6 @@ class TestVisitorConversion:
             rows.append(r)
         assert json.loads(rows[0].metadata_json) == {"from": "v1", "to": "v2"}
 
-    @pytest.mark.asyncio
     async def test_metadata_merges_with_enrichment_without_overriding(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -389,7 +372,6 @@ class TestVisitorConversion:
         assert merged["note_title"] == "Note One"
         assert merged["note_stripped_content"] == "hello world"
 
-    @pytest.mark.asyncio
     async def test_metadata_enrichment_only_overrides_when_set(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -411,7 +393,6 @@ class TestVisitorConversion:
             rows.append(r)
         assert json.loads(rows[0].metadata_json) == {"note_title": "Original"}
 
-    @pytest.mark.asyncio
     async def test_activity_score_proto_carries_title_and_stripped_content(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -435,7 +416,6 @@ class TestVisitorConversion:
         assert scores[0].title == "Note One"
         assert scores[0].stripped_content == "hello world"
 
-    @pytest.mark.asyncio
     async def test_accessed_as_user_proto_value(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,
@@ -448,7 +428,6 @@ class TestVisitorConversion:
             rows.append(r)
         assert rows[0].accessed_as == ACCESSED_AS_USER
 
-    @pytest.mark.asyncio
     async def test_accessed_as_system_proto_value(
         self, grpc_servicer: GrpcActivityStatisticsService,
         stats_service: MagicMock,

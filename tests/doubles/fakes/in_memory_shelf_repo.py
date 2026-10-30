@@ -1,0 +1,205 @@
+from __future__ import annotations
+
+import uuid
+from typing import Dict, List, Optional, Set
+from src.api.other.undefined import (
+    UNDEFINED,
+    UndefinedNoneOr,
+    UndefinedOr,
+    is_undefined,
+    unwrap_undefined_or,
+)
+from src.api.other.user_context import UserContextABC
+from src.api.repos.shelf_repo import ShelfRepoABC
+from src.db.entities.shelf import ShelfEntity
+
+
+class InMemoryShelfRepo(ShelfRepoABC):
+    """In-memory :class:`ShelfRepoABC` for unit tests.
+
+    Args:
+        seeded: optional map of ``{shelf_id: {book_id, ...}}``
+            to populate before a test starts -- lets individual
+            tests pre-stage shelf <-> book bindings without
+            calling :meth:`add_book`.
+    """
+
+    def __init__(
+        self,
+        seeded: Optional[Dict[str, Set[str]]] = None,
+    ) -> None:
+        self._shelves: Dict[str, ShelfEntity] = {}
+        self._books_by_shelf: Dict[str, Set[str]] = {
+            str(sid): set(books) for sid, books in (seeded or {}).items()
+        }
+
+    @property
+    def shelf_ids(self) -> List[str]:
+        """Snapshot of the stored shelf ids (test introspection)."""
+        return list(self._shelves)
+
+    def seed_shelf(self, entity: ShelfEntity) -> None:
+        """Insert a pre-built shelf with a caller-controlled id."""
+        self._shelves[str(entity.id)] = entity
+        self._books_by_shelf.setdefault(str(entity.id), set())
+
+    # ---- shelf row CRUD -------------------------------------------------
+
+    async def insert_shelf(
+        self,
+        *,
+        slug: str,
+        display_name: UndefinedNoneOr[str] = UNDEFINED,
+        description: UndefinedNoneOr[str] = UNDEFINED,
+        image_url: UndefinedNoneOr[str] = UNDEFINED,
+        readme_note_id: UndefinedNoneOr[str] = UNDEFINED,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> ShelfEntity:
+        del user_ctx  # accepted for ABC parity; the in-memory fake does not write auth edges
+        shelf_id = str(uuid.uuid4())
+        entity = ShelfEntity(
+            id=shelf_id,
+            slug=slug,
+            display_name=(
+                unwrap_undefined_or(display_name, None)
+            ),
+            description=(
+                unwrap_undefined_or(description, None)
+            ),
+            image_url=(
+                unwrap_undefined_or(image_url, None)
+            ),
+            readme_note_id=(
+                unwrap_undefined_or(readme_note_id, None)
+            ),
+            book_ids=UNDEFINED,
+        )
+        self._shelves[shelf_id] = entity
+        self._books_by_shelf.setdefault(shelf_id, set())
+        return entity
+
+    async def fetch_shelf(
+        self,
+        id: str,
+        *,
+        include_books: bool = False,
+    ) -> Optional[ShelfEntity]:
+        entity = self._shelves.get(str(id))
+        if entity is None:
+            return None
+        if include_books:
+            entity.book_ids = sorted(self._books_by_shelf.get(str(id), set()))
+        return entity
+
+    async def fetch_shelves_by_ids(
+        self,
+        ids: List[str],
+        *,
+        include_books: bool = False,
+    ) -> List[ShelfEntity]:
+        out: List[ShelfEntity] = []
+        for sid in ids:
+            entity = self._shelves.get(str(sid))
+            if entity is None:
+                continue
+            if include_books:
+                entity.book_ids = sorted(
+                    self._books_by_shelf.get(str(sid), set())
+                )
+            out.append(entity)
+        return out
+
+    async def update_shelf(
+        self,
+        id: str,
+        *,
+        slug: UndefinedOr[str] = UNDEFINED,
+        display_name: UndefinedNoneOr[str] = UNDEFINED,
+        description: UndefinedNoneOr[str] = UNDEFINED,
+        image_url: UndefinedNoneOr[str] = UNDEFINED,
+        readme_note_id: UndefinedNoneOr[str] = UNDEFINED,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> Optional[ShelfEntity]:
+        del user_ctx  # accepted for ABC parity; the in-memory fake does not write auth edges
+        if is_undefined(id):
+            raise ValueError("Shelf ID is required for update")
+        existing = self._shelves.get(str(id))
+        if existing is None:
+            return None
+        if not is_undefined(slug):
+            existing.slug = str(slug)
+        if not is_undefined(display_name):
+            existing.display_name = unwrap_undefined_or(display_name, None)
+        if not is_undefined(description):
+            existing.description = unwrap_undefined_or(description, None)
+        if not is_undefined(image_url):
+            existing.image_url = unwrap_undefined_or(image_url, None)
+        if not is_undefined(readme_note_id):
+            existing.readme_note_id = unwrap_undefined_or(readme_note_id, None)
+        return existing
+
+    async def delete_shelf(
+        self,
+        id: str,
+        *,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> bool:
+        del user_ctx  # accepted for ABC parity; the in-memory fake does not write auth edges
+        if id not in self._shelves:
+            return False
+        del self._shelves[str(id)]
+        self._books_by_shelf.pop(str(id), None)
+        return True
+
+    # ---- shelf <-> book bindings ---------------------------------------
+
+    async def set_books_of(
+        self,
+        shelf_id: str,
+        book_ids: List[str],
+        *,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> List[str]:
+        del user_ctx  # accepted for ABC parity; the in-memory fake does not write auth edges
+        current = set(self._books_by_shelf.get(str(shelf_id), set()))
+        desired = {str(b) for b in book_ids if b}
+        newly_added = sorted(desired - current)
+        self._books_by_shelf[str(shelf_id)] = desired
+        return newly_added
+
+    async def get_books_of(self, shelf_id: str) -> List[str]:
+        return sorted(self._books_by_shelf.get(str(shelf_id), set()))
+
+    async def get_shelves_of_book(self, book_id: str) -> List[str]:
+        return sorted(
+            sid for sid, books in self._books_by_shelf.items()
+            if str(book_id) in books
+        )
+
+    async def add_book(
+        self,
+        shelf_id: str,
+        book_id: str,
+        *,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> None:
+        del user_ctx  # accepted for ABC parity; the in-memory fake does not write auth edges
+        self._books_by_shelf.setdefault(str(shelf_id), set()).add(str(book_id))
+
+    async def remove_book(
+        self,
+        shelf_id: str,
+        book_id: str,
+        *,
+        user_ctx: Optional[UserContextABC] = None,
+    ) -> None:
+        del user_ctx  # accepted for ABC parity; the in-memory fake does not write auth edges
+        bucket = self._books_by_shelf.get(str(shelf_id))
+        if bucket is None:
+            return
+        bucket.discard(str(book_id))
+
+
+__all__ = [
+    'InMemoryShelfRepo',
+]

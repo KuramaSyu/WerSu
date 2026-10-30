@@ -21,7 +21,7 @@ from typing import Tuple
 
 import pytest
 
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.api import ObjectRef, ObjectTypeEnum
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity

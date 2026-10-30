@@ -1,7 +1,7 @@
 """Tests for :class:`src.services.tag_service.TagServiceImpl`.
 
 The real service is driven against the in-memory
-:class:`tests._fixtures_pkg.fakes._FakeTagRepo` so no Postgres is
+:class:`tests.doubles.fakespys.tag_repo._FakeSpyTagRepo` so no Postgres is
 required.  The fake implements the full
 :class:`~src.api.repos.tag_repo.TagRepoABC` surface, which lets us
 assert the service's validation + delegation contract end to end.
@@ -13,16 +13,16 @@ import pytest
 
 from src.db.entities.note.tag import TagEntity
 from src.services.tag_service import TagServiceImpl
-from tests._fixtures_pkg.fakes import _FakeTagRepo
-from tests.stubs.user_context import _UserContext
+from tests.doubles import _FakeSpyTagRepo
+from tests.doubles import _DummyUserContext
 
 
-_ACTOR = _UserContext("actor")
+_ACTOR = _DummyUserContext("actor")
 
 
-def _service() -> tuple[TagServiceImpl, _FakeTagRepo]:
+def _service() -> tuple[TagServiceImpl, _FakeSpyTagRepo]:
     """Build a real :class:`TagServiceImpl` over an in-memory repo."""
-    repo = _FakeTagRepo()
+    repo = _FakeSpyTagRepo()
     return TagServiceImpl(tag_repo=repo), repo
 
 
@@ -144,13 +144,17 @@ async def test_update_tag_rejects_empty_id() -> None:
 
 
 @pytest.mark.parametrize(
-    "kwargs",
-    [{"slug": ""}, {"display_name": ""}],
+    ("kwargs", "message"),
+    [
+        ({"slug": ""}, "slug must not be empty"),
+        ({"display_name": ""}, "display_name must not be empty"),
+    ],
+    ids=["blank-slug", "blank-display-name"],
 )
-async def test_update_tag_rejects_blank_provided_field(kwargs: dict) -> None:
+async def test_update_tag_rejects_blank_provided_field(kwargs: dict, message: str) -> None:
     service, _ = _service()
     created = await service.create_tag("python", "Python", _ACTOR)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=message):
         await service.update_tag(str(created.id), _ACTOR, **kwargs)
 
 

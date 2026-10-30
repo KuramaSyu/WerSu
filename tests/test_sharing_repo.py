@@ -1,26 +1,14 @@
 from datetime import datetime
 
-from tests.stubs.user_context import _UserContext
+from tests.doubles import _DummyUserContext
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 
+from tests.doubles.fakes.sharing_repo import _FakeTable
 
-class _FakeTable:
-    """Records SQL calls while returning predefined rows."""
 
-    name = "shared"
-
-    def __init__(self, records: list[dict] | None = None) -> None:
-        self.records = records or []
-        self.last_sql = ""
-        self.last_args = ()
-
-    async def fetch(self, sql: str, *args):
-        self.last_sql = " ".join(sql.split())
-        self.last_args = args
-        return self.records
 
 
 def _share_record(**overrides) -> dict:
@@ -49,7 +37,7 @@ async def test_get_shares_filters_exact_fields_with_parameterized_sql() -> None:
         access_as="access-user",
     )
 
-    shares = await repo.get_shares(filter, _UserContext())
+    shares = await repo.get_shares(filter, _DummyUserContext())
 
     assert shares == [NoteShareEntity(**_share_record())]
     assert "note_id = $1" in table.last_sql
@@ -67,7 +55,7 @@ async def test_get_shares_filters_online_since_and_until_ranges() -> None:
 
     await repo.get_shares(
         FilterShareNote(online_since=since, online_until=until),
-        _UserContext(),
+        _DummyUserContext(),
     )
 
     assert "online_since >= $1" in table.last_sql
@@ -82,7 +70,7 @@ async def test_get_shares_filters_explicit_null_dates() -> None:
 
     await repo.get_shares(
         FilterShareNote(online_since=None, online_until=None),
-        _UserContext(),
+        _DummyUserContext(),
     )
 
     assert "online_since IS NULL" in table.last_sql
@@ -95,7 +83,7 @@ async def test_get_shares_without_filter_fetches_all_rows() -> None:
     table = _FakeTable(records=[_share_record()])
     repo = SharingPostgresRepo(table)
 
-    shares = await repo.get_shares(FilterShareNote(), _UserContext())
+    shares = await repo.get_shares(FilterShareNote(), _DummyUserContext())
 
     assert shares == [NoteShareEntity(**_share_record())]
     assert "WHERE TRUE" in table.last_sql

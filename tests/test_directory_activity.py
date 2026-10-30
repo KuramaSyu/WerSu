@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Tuple
 
 import pytest
 
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.versioning import NoteVersionEntry
 from src.api.facades.directory_facade import DirectoryFacadeABC
@@ -15,17 +15,17 @@ from src.api.repos.directory_repo import (
     DirectoryParentType,
 )
 from src.db.entities.directory.directory import DirectoryEntity
-from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
+from tests.doubles import _DummyShelfRepo
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
-from tests._fixtures_pkg.fakes import (
+from tests.doubles import (
     _FakeDirectorySubdirectoryTable,
     _FakeDirectoryNoteTable,
     _FakeDirectoryTable,
     _FakeDirectoryTagsTable,
-    _FakeTagRepo,
+    _FakeSpyTagRepo,
 )
-from tests.stubs import _UserContext
+from tests.doubles import _DummyUserContext
 from src.api import (
     DirectoryRelationEnum,
     NoteRelationEnum,
@@ -35,116 +35,14 @@ from src.api import (
     SubjectRef,
 )
 from src.services.directory_activity_service import DirectoryActivityServiceImpl
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.doubles import InMemoryPermissionRepo
 from src.utils import logging_provider
 
-from .fixtures import _FakeVersionRepo
+from .fixtures import _StubVersionRepo
+
+from tests.doubles.fakespys.directory_activity import _FakeSpyActivityDirectoryRepo
 
 
-class _FakeDirectoryRepo(DirectoryFacadeABC):
-    def __init__(self, note_ids: List[str]) -> None:
-        self._note_ids = note_ids
-
-    async def create_directory(self, entity, user_ctx):  # type: ignore[override]
-        raise NotImplementedError()
-
-    async def fetch_directory(self, id: str, *, include=None):  # type: ignore[override]
-        raise NotImplementedError()
-
-    async def update_directory(self, entity):  # type: ignore[override]
-        raise NotImplementedError()
-
-    async def delete_directory(self, entity):  # type: ignore[override]
-        raise NotImplementedError()
-
-    async def list_user_directory_ids(self, user: UserContextABC) -> List[str]:
-        return []
-
-    async def fetch_directories_by_ids(
-        self, ids: List[str],
-    ) -> List[DirectoryEntity]:
-        return []
-
-    async def delete_directory(self, entity) -> bool:  # type: ignore[override]
-        raise NotImplementedError()
-
-    async def resolve_files_of_directory(
-        self,
-        directory_id: Optional[str],
-        actor: UserContextABC,
-        max_depth: int = 10,
-    ) -> List[str]:
-        return list(self._note_ids)
-
-    async def resolve_subtree(
-        self,
-        directory_id: str,
-        max_depth: int = 10,
-    ) -> Tuple[List[str], List[str]]:
-        return (list(self._note_ids), [directory_id])
-
-    # ---- DirectoryHelperMixin: hierarchy helpers (no-op stubs) ------
-
-    async def set_parents_of(
-        self,
-        child_type: DirectoryChildType,
-        child_id: str,
-        parent_type: DirectoryParentType,
-        parent_ids: List[str],
-    ) -> None:
-        return None
-
-    async def get_parents_of(
-        self,
-        child_type: DirectoryChildType,
-        child_id: str,
-        parent_type: DirectoryParentType,
-    ) -> List[str]:
-        return []
-
-    async def get_children_of(
-        self,
-        parent_type: DirectoryParentType,
-        parent_id: str,
-        child_type: DirectoryHierarchyType,
-        depth: int = 1,
-    ) -> List[str]:
-        return []
-
-    async def get_children_for(
-        self,
-        parent_type: DirectoryParentType,
-        parent_ids: List[str],
-        child_type: DirectoryHierarchyType,
-        depth: int = 1,
-    ) -> Dict[str, List[str]]:
-        return {str(d): [] for d in parent_ids}
-
-    async def get_parents_for(
-        self,
-        child_type: DirectoryChildType,
-        child_ids: List[str],
-        parent_type: DirectoryParentType,
-    ) -> Dict[str, List[str]]:
-        return {str(c): [] for c in child_ids}
-
-    async def add_child_to(
-        self,
-        parent_type: DirectoryParentType,
-        parent_id: str,
-        child_type: DirectoryChildType,
-        child_id: str,
-    ) -> None:
-        return None
-
-    async def remove_child_from(
-        self,
-        parent_type: DirectoryParentType,
-        parent_id: str,
-        child_type: DirectoryChildType,
-        child_id: str,
-    ) -> None:
-        return None
 
 
 async def test_resolve_files_of_directory_depth_and_cycle() -> None:
@@ -160,7 +58,7 @@ async def test_resolve_files_of_directory_depth_and_cycle() -> None:
     """
     permission_repo = InMemoryPermissionRepo()
     user_id = "alice"
-    ctx = _UserContext(user_id)
+    ctx = _DummyUserContext(user_id)
 
     await permission_repo.insert(
         [
@@ -192,9 +90,9 @@ async def test_resolve_files_of_directory_depth_and_cycle() -> None:
             directory_note_table=note_table,
         ),
         permission_repo=permission_repo,
-        tag_repo=_FakeTagRepo(),
+        tag_repo=_FakeSpyTagRepo(),
         log=logging_provider,
-        shelf_repo=NoopShelfRepo(),
+        shelf_repo=_DummyShelfRepo(),
     )
 
     note_ids = await directory_repo.resolve_files_of_directory("root", ctx, max_depth=1)
@@ -206,7 +104,7 @@ async def test_resolve_files_of_directory_depth_and_cycle() -> None:
     note_ids = await directory_repo.resolve_files_of_directory("root", ctx, max_depth=3)
     assert set(note_ids) == {"note-root", "note-child", "note-grand"}
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="max_depth must be >= 0"):
         await directory_repo.resolve_files_of_directory("root", ctx, max_depth=-1)
 
 
@@ -233,8 +131,8 @@ async def test_directory_activity_orders_latest_changes() -> None:
         ),
     }
 
-    version_repo = _FakeVersionRepo(entries)
-    directory_repo = _FakeDirectoryRepo(["note-1", "note-2"])
+    version_repo = _StubVersionRepo(entries)
+    directory_repo = _FakeSpyActivityDirectoryRepo(["note-1", "note-2"])
     service = DirectoryActivityServiceImpl(
         version_repo=version_repo,
         directory_repo=directory_repo,
@@ -243,7 +141,7 @@ async def test_directory_activity_orders_latest_changes() -> None:
 
     results = await service.list_directory_activity(
         directory_id="root",
-        actor=_UserContext("user-a"),
+        actor=_DummyUserContext("user-a"),
         max_depth=3,
         limit=10,
         offset=0,

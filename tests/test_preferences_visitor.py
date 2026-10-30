@@ -68,7 +68,7 @@ def test_owner_id_rejects_multiply_shaped_entity() -> None:
         payload={},
         updated_at=_TS,
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="exactly one of"):
         bad.owner_id()
 
 

@@ -20,126 +20,21 @@ from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.shelf import ShelfEntity
 from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
 from src.services.shelf_service import ShelfServiceImpl
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
-from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import InMemoryRuleRepo
+from tests.doubles import InMemoryShelfRepo
 from typing import List, Optional
 import pytest
+
+from tests.doubles.dummies.user_ctx import _DummyUserCtx
+from tests.doubles.fakes.shelf_service import FakeDirectoryFacade
 
 
 # ---- fakes ----------------------------------------------------------------
 
 
-class _UserCtx(UserContextABC):
-    """Minimal :class:`UserContextABC` for tests."""
-
-    def __init__(self, user_id: str) -> None:
-        self._user_id = user_id
-
-    @property
-    def user_id(self) -> str:
-        return self._user_id
-
-    @property
-    def type(self):  # type: ignore[override]
-        return UNDEFINED
-
-    async def is_temporary_user(self) -> bool:
-        return False
 
 
-class FakeDirectoryFacade(DirectoryFacadeABC):
-    """Minimal :class:`DirectoryFacadeABC` for tests.
-
-    The shelf service only consults ``DEFAULT_DIRECTORY_SPECS``
-    (a class-level tuple) and forwards ``create_directory`` to
-    whatever's here.  We capture the created entities and stash
-    them with a deterministic id so the strategy's
-    ``get_default_directory_specs`` loop sees the same shape
-    production does.
-    """
-
-    def __init__(self) -> None:
-        self._counter = 0
-        self.created: List[DirectoryEntity] = []
-
-    def _mint_id(self) -> str:
-        self._counter += 1
-        return f"dir-{self._counter}"
-
-    async def create_directory(
-        self,
-        entity: DirectoryEntity,
-        user_ctx: Optional[UserContextABC] = None,
-    ) -> DirectoryEntity:
-        created = DirectoryEntity(
-            id=self._mint_id(),
-            slug=entity.slug,
-            display_name=entity.display_name,
-            description=entity.description,
-            relations=list(entity.relations or []),
-        )
-        self.created.append(created)
-        return created
-
-    # ---- abstract methods on the mixin / facade: stubs -------------
-
-    async def set_parents_of(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    async def get_parents_of(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def get_children_of(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def get_children_for(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def get_parents_for(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def add_child_to(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    async def remove_child_from(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    async def list_user_directory_ids(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def fetch_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def update_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def delete_directory(self, *args, **kwargs) -> bool:
-        raise NotImplementedError
-
-    async def fetch_all_directories(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def fetch_directories_by_ids(
-        self, ids: List[str],
-    ) -> List[DirectoryEntity]:
-        # Mirror :meth:`_TestDirectoryRepo`'s behaviour: return
-        # whatever matching directories the test pre-seeded into
-        # the facade's ``created`` list (the only directories this
-        # fake knows about).  Missing ids silently drop.
-        out: List[DirectoryEntity] = []
-        for did in ids:
-            for d in self.created:
-                if str(d.id) == str(did):
-                    out.append(d)
-                    break
-        return out
-
-    async def resolve_files_of_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def resolve_subtree(self, *args, **kwargs):
-        raise NotImplementedError
 
 
 def _shelf_rel(user_id: str, shelf_id: str, relation: str) -> Relationship:
@@ -203,14 +98,14 @@ async def test_create_shelf_inserts_owner_relation_and_returns_entity() -> None:
 
     entity = ShelfEntity(slug="my shelf", display_name="My Shelf")
     persisted, bootstrap_result = await service.create_shelf(
-        entity, _UserCtx("u-1"),
+        entity, _DummyUserCtx("u-1"),
     )
 
     assert unwrap_undefined(persisted.id) == unwrap_undefined(persisted.id)
     assert persisted.slug == "my shelf"
     assert bootstrap_result == BootstrapResult()
     # shelf#owner is inserted; admin is derived from owner in the schema.
-    relations = list(permission_repo._store)  # noqa: SLF001
+    relations = permission_repo.relationships
     assert len(relations) == 1
     rel = relations[0]
     assert rel.resource.object_type == ObjectTypeEnum.SHELF
@@ -222,7 +117,7 @@ async def test_create_shelf_without_slug_raises() -> None:
     service = _make_service()
     with pytest.raises(ValueError, match="slug is required"):
         await service.create_shelf(
-            ShelfEntity(), _UserCtx("u-1"),
+            ShelfEntity(), _DummyUserCtx("u-1"),
         )
 
 
@@ -240,13 +135,13 @@ async def test_create_shelf_with_zettelkasten_strategy_creates_books_and_rule() 
 
     persisted, bootstrap_result = await service.create_shelf(
         ShelfEntity(slug="zettelkasten"),
-        _UserCtx("u-1"),
+        _DummyUserCtx("u-1"),
         bootstrap=BootstrapStrategy.ZETTELKASTEN,
     )
 
     # 3 default books + 1 default-fleeting rule
     assert len(directory_facade.created) == 3
-    assert len(rule_repo._rules) == 1  # noqa: SLF001
+    assert len(rule_repo.rules) == 1
     assert len(bootstrap_result.created_directory_ids) == 3
     assert bootstrap_result.created_rule_id is not None
     # The shelf now carries all 3 books as bindings.
@@ -263,13 +158,13 @@ async def test_create_shelf_with_none_strategy_does_not_run_strategy() -> None:
 
     _, bootstrap_result = await service.create_shelf(
         ShelfEntity(slug="bare"),
-        _UserCtx("u-1"),
+        _DummyUserCtx("u-1"),
         bootstrap=BootstrapStrategy.NONE,
     )
 
     assert bootstrap_result.created_directory_ids == []
     assert bootstrap_result.created_rule_id is None
-    assert rule_repo._rules == {}  # noqa: SLF001
+    assert rule_repo.rules == {}
     assert directory_facade.created == []
 
 
@@ -278,30 +173,30 @@ async def test_create_shelf_with_none_strategy_does_not_run_strategy() -> None:
 
 async def test_get_shelf_returns_none_when_missing() -> None:
     service = _make_service()
-    assert await service.get_shelf("missing", _UserCtx("u-1")) is None
+    assert await service.get_shelf("missing", _DummyUserCtx("u-1")) is None
 
 
 async def test_get_shelf_requires_view_permission() -> None:
     permission_repo = InMemoryPermissionRepo()
     service = _make_service(permission_repo=permission_repo)
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="locked"), _UserCtx("owner"),
+        ShelfEntity(slug="locked"), _DummyUserCtx("owner"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
 
     with pytest.raises(ShelfPermissionError):
-        await service.get_shelf(shelf_id, _UserCtx("stranger"))
+        await service.get_shelf(shelf_id, _DummyUserCtx("stranger"))
 
 
 async def test_get_shelf_owner_can_read() -> None:
     permission_repo = InMemoryPermissionRepo()
     service = _make_service(permission_repo=permission_repo)
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
 
-    fetched = await service.get_shelf(shelf_id, _UserCtx("u-1"))
+    fetched = await service.get_shelf(shelf_id, _DummyUserCtx("u-1"))
     assert fetched is not None
     assert fetched.id == shelf_id
 
@@ -310,10 +205,10 @@ async def test_get_shelves_drops_shelves_caller_cannot_view() -> None:
     permission_repo = InMemoryPermissionRepo()
     service = _make_service(permission_repo=permission_repo)
     mine, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     other, _ = await service.create_shelf(
-        ShelfEntity(slug="other"), _UserCtx("u-2"),
+        ShelfEntity(slug="other"), _DummyUserCtx("u-2"),
     )
 
     result = await service.get_shelves(
@@ -321,7 +216,7 @@ async def test_get_shelves_drops_shelves_caller_cannot_view() -> None:
             str(unwrap_undefined(mine.id)),
             str(unwrap_undefined(other.id)),
         ],
-        _UserCtx("u-1"),
+        _DummyUserCtx("u-1"),
     )
     assert [e.id for e in result] == [str(unwrap_undefined(mine.id))]
 
@@ -330,13 +225,13 @@ async def test_list_shelves_filters_via_permission_repo_lookup() -> None:
     permission_repo = InMemoryPermissionRepo()
     service = _make_service(permission_repo=permission_repo)
     mine, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     await service.create_shelf(
-        ShelfEntity(slug="other"), _UserCtx("u-2"),
+        ShelfEntity(slug="other"), _DummyUserCtx("u-2"),
     )
 
-    result = await service.list_shelves(_UserCtx("u-1"))
+    result = await service.list_shelves(_DummyUserCtx("u-1"))
     assert [e.id for e in result] == [str(unwrap_undefined(mine.id))]
 
 
@@ -350,7 +245,7 @@ async def test_list_shelves_paginates_after_permission_filter() -> None:
     created = []
     for i in range(5):
         shelf, _ = await service.create_shelf(
-            ShelfEntity(slug=f"s-{i}"), _UserCtx(f"u-{i}"),
+            ShelfEntity(slug=f"s-{i}"), _DummyUserCtx(f"u-{i}"),
         )
         # Grant view to a single viewer so the lookup filter
         # returns *all* shelves; pagination then trims.
@@ -360,10 +255,10 @@ async def test_list_shelves_paginates_after_permission_filter() -> None:
         created.append(shelf)
 
     page1 = await service.list_shelves(
-        _UserCtx("viewer"), limit=2, offset=0,
+        _DummyUserCtx("viewer"), limit=2, offset=0,
     )
     page2 = await service.list_shelves(
-        _UserCtx("viewer"), limit=2, offset=2,
+        _DummyUserCtx("viewer"), limit=2, offset=2,
     )
 
     assert len(page1) == 2
@@ -374,7 +269,7 @@ async def test_list_shelves_paginates_after_permission_filter() -> None:
 async def test_list_shelves_rejects_negative_offset() -> None:
     service = _make_service()
     with pytest.raises(ValueError, match="offset must be >= 0"):
-        await service.list_shelves(_UserCtx("u-1"), offset=-1)
+        await service.list_shelves(_DummyUserCtx("u-1"), offset=-1)
 
 
 # ---- update ---------------------------------------------------------------
@@ -384,21 +279,21 @@ async def test_update_shelf_requires_write_permission() -> None:
     permission_repo = InMemoryPermissionRepo()
     service = _make_service(permission_repo=permission_repo)
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="locked"), _UserCtx("owner"),
+        ShelfEntity(slug="locked"), _DummyUserCtx("owner"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
 
     with pytest.raises(ShelfPermissionError):
         await service.update_shelf(
             ShelfEntity(id=shelf_id, slug="hacked"),
-            _UserCtx("stranger"),
+            _DummyUserCtx("stranger"),
         )
 
 
 async def test_update_shelf_without_id_raises() -> None:
     service = _make_service()
     with pytest.raises(ValueError, match="id is required"):
-        await service.update_shelf(ShelfEntity(), _UserCtx("u-1"))
+        await service.update_shelf(ShelfEntity(), _DummyUserCtx("u-1"))
 
 
 async def test_update_shelf_owner_can_patch_metadata() -> None:
@@ -406,13 +301,13 @@ async def test_update_shelf_owner_can_patch_metadata() -> None:
     service = _make_service(permission_repo=permission_repo)
     shelf, _ = await service.create_shelf(
         ShelfEntity(slug="mine", description="old"),
-        _UserCtx("u-1"),
+        _DummyUserCtx("u-1"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
 
     updated = await service.update_shelf(
         ShelfEntity(id=shelf_id, description="new"),
-        _UserCtx("u-1"),
+        _DummyUserCtx("u-1"),
     )
     assert updated.description == "new"
     assert updated.slug == "mine"
@@ -428,12 +323,12 @@ async def test_delete_shelf_returns_none_on_real_delete() -> None:
         shelf_repo=shelf_repo, permission_repo=permission_repo,
     )
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
 
-    assert await service.delete_shelf(shelf_id, _UserCtx("u-1")) is None
-    assert await service.get_shelf(shelf_id, _UserCtx("u-1")) is None
+    assert await service.delete_shelf(shelf_id, _DummyUserCtx("u-1")) is None
+    assert await service.get_shelf(shelf_id, _DummyUserCtx("u-1")) is None
 
 
 async def test_delete_shelf_requires_delete_permission() -> None:
@@ -443,7 +338,7 @@ async def test_delete_shelf_requires_delete_permission() -> None:
         shelf_repo=shelf_repo, permission_repo=permission_repo,
     )
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
 
@@ -451,7 +346,7 @@ async def test_delete_shelf_requires_delete_permission() -> None:
     await permission_repo.insert([_shelf_rel("reader", shelf_id, "reader")])
 
     with pytest.raises(ShelfPermissionError):
-        await service.delete_shelf(shelf_id, _UserCtx("reader"))
+        await service.delete_shelf(shelf_id, _DummyUserCtx("reader"))
 
 
 async def test_delete_shelf_dry_returns_cascade_without_removing_row() -> None:
@@ -461,26 +356,26 @@ async def test_delete_shelf_dry_returns_cascade_without_removing_row() -> None:
         shelf_repo=shelf_repo, permission_repo=permission_repo,
     )
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
     await shelf_repo.set_books_of(shelf_id, ["b-1", "b-2", "b-3"])
 
     result = await service.delete_shelf(
-        shelf_id, _UserCtx("u-1"), dry=True,
+        shelf_id, _DummyUserCtx("u-1"), dry=True,
     )
 
     assert isinstance(result, DryDeleteResult)
     assert result.affected_book_ids == ["b-1", "b-2", "b-3"]
     assert result.binding_count == 3
     # Row is still there.
-    assert await service.get_shelf(shelf_id, _UserCtx("u-1")) is not None
+    assert await service.get_shelf(shelf_id, _DummyUserCtx("u-1")) is not None
 
 
 async def test_delete_shelf_without_id_raises() -> None:
     service = _make_service()
     with pytest.raises(ValueError, match="id is required"):
-        await service.delete_shelf("", _UserCtx("u-1"))
+        await service.delete_shelf("", _DummyUserCtx("u-1"))
 
 
 # ---- book bindings --------------------------------------------------------
@@ -490,12 +385,12 @@ async def test_set_books_requires_write_permission() -> None:
     permission_repo = InMemoryPermissionRepo()
     service = _make_service(permission_repo=permission_repo)
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
 
     with pytest.raises(ShelfPermissionError):
-        await service.set_books(shelf_id, ["b-1"], _UserCtx("stranger"))
+        await service.set_books(shelf_id, ["b-1"], _DummyUserCtx("stranger"))
 
 
 async def test_set_books_replaces_full_set() -> None:
@@ -505,14 +400,14 @@ async def test_set_books_replaces_full_set() -> None:
         shelf_repo=shelf_repo, permission_repo=permission_repo,
     )
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
 
-    await service.set_books(shelf_id, ["b-1", "b-2"], _UserCtx("u-1"))
+    await service.set_books(shelf_id, ["b-1", "b-2"], _DummyUserCtx("u-1"))
     assert await shelf_repo.get_books_of(shelf_id) == ["b-1", "b-2"]
 
-    await service.set_books(shelf_id, ["b-3"], _UserCtx("u-1"))
+    await service.set_books(shelf_id, ["b-3"], _DummyUserCtx("u-1"))
     assert await shelf_repo.get_books_of(shelf_id) == ["b-3"]
 
 
@@ -523,16 +418,16 @@ async def test_attach_and_detach_book_are_idempotent() -> None:
         shelf_repo=shelf_repo, permission_repo=permission_repo,
     )
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
 
-    await service.attach_book(shelf_id, "b-1", _UserCtx("u-1"))
-    await service.attach_book(shelf_id, "b-1", _UserCtx("u-1"))  # idempotent
+    await service.attach_book(shelf_id, "b-1", _DummyUserCtx("u-1"))
+    await service.attach_book(shelf_id, "b-1", _DummyUserCtx("u-1"))  # idempotent
     assert await shelf_repo.get_books_of(shelf_id) == ["b-1"]
 
-    await service.detach_book(shelf_id, "b-1", _UserCtx("u-1"))
-    await service.detach_book(shelf_id, "b-1", _UserCtx("u-1"))  # idempotent
+    await service.detach_book(shelf_id, "b-1", _DummyUserCtx("u-1"))
+    await service.detach_book(shelf_id, "b-1", _DummyUserCtx("u-1"))  # idempotent
     assert await shelf_repo.get_books_of(shelf_id) == []
 
 
@@ -540,12 +435,12 @@ async def test_get_books_of_shelf_requires_view() -> None:
     permission_repo = InMemoryPermissionRepo()
     service = _make_service(permission_repo=permission_repo)
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     shelf_id = str(unwrap_undefined(shelf.id))
 
     with pytest.raises(ShelfPermissionError):
-        await service.get_books_of_shelf(shelf_id, _UserCtx("stranger"))
+        await service.get_books_of_shelf(shelf_id, _DummyUserCtx("stranger"))
 
 
 async def test_get_shelves_of_book_filters_by_view_permission() -> None:
@@ -555,10 +450,10 @@ async def test_get_shelves_of_book_filters_by_view_permission() -> None:
         shelf_repo=shelf_repo, permission_repo=permission_repo,
     )
     shelf, _ = await service.create_shelf(
-        ShelfEntity(slug="mine"), _UserCtx("u-1"),
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
     )
     other, _ = await service.create_shelf(
-        ShelfEntity(slug="other"), _UserCtx("u-2"),
+        ShelfEntity(slug="other"), _DummyUserCtx("u-2"),
     )
     mine_id = str(unwrap_undefined(shelf.id))
     other_id = str(unwrap_undefined(other.id))
@@ -567,14 +462,14 @@ async def test_get_shelves_of_book_filters_by_view_permission() -> None:
     await shelf_repo.add_book(mine_id, "b-1")
     await shelf_repo.add_book(other_id, "b-1")
 
-    visible = await service.get_shelves_of_book("b-1", _UserCtx("u-1"))
+    visible = await service.get_shelves_of_book("b-1", _DummyUserCtx("u-1"))
     assert visible == [mine_id]
 
 
 async def test_get_shelves_of_book_without_book_id_raises() -> None:
     service = _make_service()
     with pytest.raises(ValueError, match="book_id is required"):
-        await service.get_shelves_of_book("", _UserCtx("u-1"))
+        await service.get_shelves_of_book("", _DummyUserCtx("u-1"))
 
 
 # ---- read-options ---------------------------------------------------------

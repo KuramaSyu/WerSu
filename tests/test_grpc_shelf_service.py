@@ -1,7 +1,7 @@
 """Unit tests for :class:`src.grpc_mod.shelf_service.GrpcShelfService`.
 
 These tests pin the gRPC adapter's behaviour on top of the shared
-:class:`~tests.stubs.shelf_service._StubShelfService` so they do not
+:class:`~tests.doubles.fakespys.shelf_service._FakeSpyShelfService` so they do not
 require Postgres, SpiceDB, or any other infrastructure.
 
 Coverage:
@@ -23,7 +23,7 @@ from typing import Optional, cast
 import grpc
 from grpc.aio import ServicerContext
 
-from tests.stubs import _StubShelfService, _UserContextFactory, silent_logger
+from tests.doubles import _FakeSpyShelfService, _StubUserContextFactory, silent_logger
 from src.api.services.shelf_service import (
     BootstrapResult,
     BootstrapStrategy,
@@ -47,33 +47,25 @@ from src.grpc_mod.proto.shelf_pb2 import (
     UpdateShelfRequest,
 )
 
+from tests.doubles.dummies.fake_context import _DummyContext
+
 
 def _to_grpc() -> ConvertToGrpcVisitor:
     return ConvertToGrpcVisitor()
 
 
-class _FakeContext:
-    def __init__(self) -> None:
-        self.code: Optional[grpc.StatusCode] = None
-        self.details: Optional[str] = None
-
-    def set_code(self, code: grpc.StatusCode) -> None:
-        self.code = code
-
-    def set_details(self, details: str) -> None:
-        self.details = details
 
 
-def _service(impl: _StubShelfService) -> GrpcShelfService:
+def _service(impl: _FakeSpyShelfService) -> GrpcShelfService:
     return GrpcShelfService(
         shelf_service=impl,
         log=silent_logger,
         to_grpc=_to_grpc(),
-        context_factory=_UserContextFactory(),
+        context_factory=_StubUserContextFactory(),
     )
 
 
-def _seed(impl: _StubShelfService, shelf_id: str = "shelf-1", slug: str = "my shelf") -> ShelfEntity:
+def _seed(impl: _FakeSpyShelfService, shelf_id: str = "shelf-1", slug: str = "my shelf") -> ShelfEntity:
     shelf = ShelfEntity(id=shelf_id, slug=slug, display_name="My Shelf")
     impl.shelves_by_id[shelf_id] = shelf
     return shelf
@@ -83,9 +75,9 @@ def _seed(impl: _StubShelfService, shelf_id: str = "shelf-1", slug: str = "my sh
 
 
 async def test_get_shelf_requires_user_id() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.GetShelf(
         GetShelfRequest(id="s-1", user_id=""),
@@ -98,9 +90,9 @@ async def test_get_shelf_requires_user_id() -> None:
 
 
 async def test_get_shelf_requires_id() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.GetShelf(
         GetShelfRequest(id="", user_id="u-1"),
@@ -112,9 +104,9 @@ async def test_get_shelf_requires_id() -> None:
 
 
 async def test_get_shelf_returns_not_found_when_service_reports_missing() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.GetShelf(
         GetShelfRequest(id="missing", user_id="u-1"),
@@ -126,11 +118,11 @@ async def test_get_shelf_returns_not_found_when_service_reports_missing() -> Non
 
 
 async def test_get_shelf_returns_permission_denied_when_service_raises() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     impl.get_deny = True
     _seed(impl)
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.GetShelf(
         GetShelfRequest(id="shelf-1", user_id="u-1"),
@@ -141,10 +133,10 @@ async def test_get_shelf_returns_permission_denied_when_service_raises() -> None
 
 
 async def test_get_shelf_forwards_include_books_flag() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     _seed(impl)
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.GetShelf(
         GetShelfRequest(id="shelf-1", user_id="u-1", include_books=True),
@@ -158,11 +150,11 @@ async def test_get_shelf_forwards_include_books_flag() -> None:
 
 
 async def test_get_shelves_returns_shelves_in_input_order() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     _seed(impl, "shelf-1")
     _seed(impl, "shelf-2", "second")
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.GetShelves(
         GetShelvesRequest(user_id="u-1", ids=["shelf-1", "shelf-2"]),
@@ -174,10 +166,10 @@ async def test_get_shelves_returns_shelves_in_input_order() -> None:
 
 
 async def test_get_shelves_returns_permission_denied() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     impl.get_shelves_deny = True
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.GetShelves(
         GetShelvesRequest(user_id="u-1", ids=["shelf-1"]),
@@ -191,9 +183,9 @@ async def test_get_shelves_returns_permission_denied() -> None:
 
 
 async def test_list_shelves_passes_limit_and_offset() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.ListShelves(
         ListShelvesRequest(user_id="u-1", limit=10, offset=5, include_books=True),
@@ -207,10 +199,10 @@ async def test_list_shelves_passes_limit_and_offset() -> None:
 
 
 async def test_list_shelves_returns_permission_denied() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     impl.list_deny = True
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.ListShelves(
         ListShelvesRequest(user_id="u-1"),
@@ -224,9 +216,9 @@ async def test_list_shelves_returns_permission_denied() -> None:
 
 
 async def test_create_shelf_dispatches_bootstrap_strategy() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = CreateShelfRequest(user_id="u-1", slug="my shelf")
     request.display_name = "My Shelf"
@@ -243,9 +235,9 @@ async def test_create_shelf_dispatches_bootstrap_strategy() -> None:
 
 
 async def test_create_shelf_requires_user_id() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = CreateShelfRequest(user_id="", slug="my shelf")
     response = await service.CreateShelf(
@@ -256,10 +248,10 @@ async def test_create_shelf_requires_user_id() -> None:
 
 
 async def test_create_shelf_returns_permission_denied() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     impl.create_deny = True
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.CreateShelf(
         CreateShelfRequest(user_id="u-1", slug="my shelf"),
@@ -270,14 +262,14 @@ async def test_create_shelf_returns_permission_denied() -> None:
 
 
 async def test_create_shelf_projects_bootstrap_result_to_proto() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     impl.next_bootstrap_result = BootstrapResult(
         created_directory_ids=["dir-1", "dir-2"],
         created_rule_id="rule-1",
         description="3 default books and the default-fleeting rule",
     )
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.CreateShelf(
         CreateShelfRequest(user_id="u-1", slug="my shelf"),
@@ -295,9 +287,9 @@ async def test_create_shelf_projects_bootstrap_result_to_proto() -> None:
 
 
 async def test_update_shelf_requires_id() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.UpdateShelf(
         UpdateShelfRequest(user_id="u-1", id=""),
@@ -308,11 +300,11 @@ async def test_update_shelf_requires_id() -> None:
 
 
 async def test_update_shelf_returns_permission_denied() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     impl.update_deny = True
     _seed(impl)
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.UpdateShelf(
         UpdateShelfRequest(user_id="u-1", id="shelf-1", slug="new"),
@@ -323,10 +315,10 @@ async def test_update_shelf_returns_permission_denied() -> None:
 
 
 async def test_update_shelf_passes_entity_to_service() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     _seed(impl)
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.UpdateShelf(
         UpdateShelfRequest(
@@ -343,9 +335,9 @@ async def test_update_shelf_passes_entity_to_service() -> None:
 
 
 async def test_delete_shelf_requires_id() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.DeleteShelf(
         DeleteShelfRequest(user_id="u-1", id=""),
@@ -356,13 +348,13 @@ async def test_delete_shelf_requires_id() -> None:
 
 
 async def test_delete_shelf_dry_returns_cascade() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     impl.delete_result = DryDeleteResult(
         affected_book_ids=["b-1", "b-2"], binding_count=2,
     )
     _seed(impl)
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.DeleteShelf(
         DeleteShelfRequest(user_id="u-1", id="shelf-1", dry=True),
@@ -377,10 +369,10 @@ async def test_delete_shelf_dry_returns_cascade() -> None:
 
 
 async def test_delete_shelf_real_returns_empty_response() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     _seed(impl)
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.DeleteShelf(
         DeleteShelfRequest(user_id="u-1", id="shelf-1", dry=False),
@@ -394,11 +386,11 @@ async def test_delete_shelf_real_returns_empty_response() -> None:
 
 
 async def test_delete_shelf_returns_permission_denied() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     impl.delete_deny = True
     _seed(impl)
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.DeleteShelf(
         DeleteShelfRequest(user_id="u-1", id="shelf-1", dry=False),
@@ -412,9 +404,9 @@ async def test_delete_shelf_returns_permission_denied() -> None:
 
 
 async def test_set_books_requires_shelf_id() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.SetBooks(
         SetBooksRequest(user_id="u-1", shelf_id=""),
@@ -425,9 +417,9 @@ async def test_set_books_requires_shelf_id() -> None:
 
 
 async def test_set_books_passes_book_ids() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.SetBooks(
         SetBooksRequest(user_id="u-1", shelf_id="s-1", book_ids=["b-1", "b-2"]),
@@ -440,9 +432,9 @@ async def test_set_books_passes_book_ids() -> None:
 
 
 async def test_attach_book_requires_book_id() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.AttachBook(
         AttachBookRequest(user_id="u-1", shelf_id="s-1", book_id=""),
@@ -453,9 +445,9 @@ async def test_attach_book_requires_book_id() -> None:
 
 
 async def test_detach_book_passes_ids() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.DetachBook(
         DetachBookRequest(user_id="u-1", shelf_id="s-1", book_id="b-1"),
@@ -467,9 +459,9 @@ async def test_detach_book_passes_ids() -> None:
 
 
 async def test_get_books_of_shelf_requires_shelf_id() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.GetBooksOfShelf(
         GetBooksOfShelfRequest(user_id="u-1", shelf_id=""),
@@ -480,9 +472,9 @@ async def test_get_books_of_shelf_requires_shelf_id() -> None:
 
 
 async def test_get_shelves_of_book_requires_book_id() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.GetShelvesOfBook(
         GetShelvesOfBookRequest(user_id="u-1", book_id=""),
@@ -493,10 +485,10 @@ async def test_get_shelves_of_book_requires_book_id() -> None:
 
 
 async def test_bindings_return_permission_denied() -> None:
-    impl = _StubShelfService()
+    impl = _FakeSpyShelfService()
     impl.set_books_deny = True
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.SetBooks(
         SetBooksRequest(user_id="u-1", shelf_id="s-1", book_ids=["b-1"]),

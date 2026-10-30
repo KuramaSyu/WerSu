@@ -80,7 +80,6 @@ def test_extract_event_type_raises_on_unresolved_typevar_subclass():
 # ---- Bus dispatch ---------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_in_memory_bus_routes_to_matching_listener():
     received: list[NoteCreated] = []
 
@@ -98,7 +97,6 @@ async def test_in_memory_bus_routes_to_matching_listener():
     assert received == [event]
 
 
-@pytest.mark.asyncio
 async def test_in_memory_bus_does_not_route_to_other_listeners():
     note_created: list[NoteCreated] = []
     note_updated: list[NoteUpdated] = []
@@ -124,7 +122,6 @@ async def test_in_memory_bus_does_not_route_to_other_listeners():
     assert note_updated[0].note_id == "2"
 
 
-@pytest.mark.asyncio
 async def test_in_memory_bus_unsubscribe_is_idempotent():
     seen: list[NoteCreated] = []
 
@@ -143,16 +140,23 @@ async def test_in_memory_bus_unsubscribe_is_idempotent():
     assert seen == []
 
 
-@pytest.mark.asyncio
 async def test_in_memory_bus_unknown_event_is_noop():
-    """Notifying with no subscribers does not raise."""
+    """Notifying an event that has no subscribers does not raise."""
+
+    seen: list[NoteCreated] = []
+
+    class L(Listener[NoteCreated]):
+        async def on_event(self, event, ctx):
+            seen.append(event)
 
     bus = InMemoryEventBus()
-    # No listeners subscribed -- should silently succeed.
+    await bus.subscribe(L())
+    # The subscriber listens for NoteCreated, not DirectoryCreated.
     await bus.notify(DirectoryCreated(directory_id="d1", actor_id="u"))
 
+    assert seen == []
 
-@pytest.mark.asyncio
+
 async def test_in_memory_bus_isolates_per_listener_failures():
     """One failing listener must not abort the others."""
 
@@ -177,7 +181,6 @@ async def test_in_memory_bus_isolates_per_listener_failures():
     assert successes[0].note_id == "1"
 
 
-@pytest.mark.asyncio
 async def test_in_memory_bus_dispatches_concurrently():
     """Listeners run concurrently, not sequentially.
 
@@ -214,7 +217,6 @@ async def test_in_memory_bus_dispatches_concurrently():
 # ---- NoopEventBus ---------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_noop_bus_drops_everything():
     seen: list[NoteCreated] = []
 
@@ -231,19 +233,23 @@ async def test_noop_bus_drops_everything():
     assert seen == []
 
 
-@pytest.mark.asyncio
 async def test_noop_bus_does_not_require_listener_event_classvar():
     """Subscribing an instance whose class never resolved ``event`` is fine
     on a no-op bus because the bus never inspects the type.
     """
 
+    seen: list[object] = []
+
     class Bare(Listener):  # type: ignore[type-arg]
         async def on_event(self, event, ctx):
-            return None
+            seen.append(event)
 
     bus: EventBus = NoopEventBus()
     # Would raise on InMemoryEventBus; must NOT raise here.
     await bus.subscribe(Bare())
+    await bus.notify(NoteCreated(note_id="1", actor_id="u"))
+
+    assert seen == []
 
 
 # ---- Type-level discrimination --------------------------------------------

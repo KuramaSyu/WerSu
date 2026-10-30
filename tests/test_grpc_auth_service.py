@@ -53,6 +53,10 @@ from typing import Any, Dict, List, Optional, cast
 from urllib.parse import urlparse
 import grpc, logging
 
+from tests.doubles.dummies.fake_context import _DummyContext
+from tests.doubles.spys.user_auth_repo_grpc import RecordingUserAuthRepo, _Call, _is_undefined
+from tests.doubles.mocks.raising_auth_service import _MockRaisingAuthService
+
 
 # ---------------------------------------------------------------------
 # Recording fake -- the same shape as
@@ -61,198 +65,10 @@ import grpc, logging
 # ---------------------------------------------------------------------
 
 
-class _Call:
-    """One recorded call on the fake repo."""
-
-    def __init__(self, name: str, *args: Any, **kwargs: Any) -> None:
-        self.name = name
-        self.args = args
-        self.kwargs = kwargs
 
 
-class RecordingUserAuthRepo(UserAuthRepoABC):
-    """In-memory + recording :class:`UserAuthRepoABC`."""
-
-    def __init__(self) -> None:
-        self.calls: List[_Call] = []
-        self._counter = 0
-        self._by_id: Dict[str, UserAuthEntity] = {}
-        self._by_email: Dict[str, str] = {}
-        self._passwords: Dict[str, PasswordEntity] = {}
-        self._passkeys: Dict[str, PasskeyEntity] = {}
-        self._third_parties: Dict[str, ThirdPartyEntity] = {}
-
-    def _record(self, name: str, *args: Any, **kwargs: Any) -> None:
-        self.calls.append(_Call(name, *args, **kwargs))
-
-    def _next_id(self, prefix: str) -> str:
-        self._counter += 1
-        return f"{prefix}-{self._counter}"
-
-    async def insert(self, user: UserAuthEntity) -> UserAuthEntity:
-        self._record("insert", user)
-        uid = self._next_id("u")
-        created = replace(user, id=uid)
-        self._by_id[uid] = created
-        if created.email is not None:
-            self._by_email[created.email] = uid
-        for tp in user.third_parties:
-            await self.insert_third_party(replace(tp, user_id=uid))
-        return await self.select(UserFilter(user_id=uid)) or created
-
-    async def select(
-        self, filter: UserFilter
-    ) -> Optional[UserAuthEntity]:
-        self._record("select", filter)
-        if filter.is_empty():
-            return None
-        for user in self._by_id.values():
-            if (
-                not _is_undefined(filter.user_id)
-                and user.id != filter.user_id
-            ):
-                continue
-            if (
-                not _is_undefined(filter.email)
-                and user.email != filter.email
-            ):
-                continue
-            if (
-                not _is_undefined(filter.discord_id)
-                and user.discord_id() != filter.discord_id
-            ):
-                continue
-            return replace(user, third_parties=list(user.third_parties))
-        return None
-
-    async def update(self, user: UserAuthEntity) -> UserAuthEntity:
-        self._record("update", user)
-        existing = self._by_id.get(user.id)  # type: ignore[arg-type]
-        if existing is None:
-            raise ValueError(f"User not found: {user.id}")
-        merged = existing
-        for field_name in ("avatar", "username", "email", "display_name", "type"):
-            new_val = getattr(user, field_name, UNDEFINED)
-            if not _is_undefined(new_val):
-                merged = replace(merged, **{field_name: new_val})
-        if user.third_parties:
-            merged = replace(merged, third_parties=list(user.third_parties))
-        self._by_id[merged.id] = merged  # type: ignore[arg-type]
-        return (
-            await self.select(UserFilter(user_id=merged.id)) or merged  # type: ignore[arg-type]
-        )
-
-    async def upsert_password(
-        self, password: PasswordEntity
-    ) -> PasswordEntity:
-        self._record("upsert_password", password)
-        self._passwords[password.user_id] = password
-        return password
-
-    async def find_password(self, user_id: str) -> Optional[PasswordEntity]:
-        self._record("find_password", user_id)
-        return self._passwords.get(user_id)
-
-    async def insert_passkey(self, passkey: PasskeyEntity) -> PasskeyEntity:
-        self._record("insert_passkey", passkey)
-        pid = self._next_id("pk")
-        stored = replace(passkey, id=pid)
-        self._passkeys[pid] = stored
-        return stored
-
-    async def find_passkey(
-        self, credential_id: bytes
-    ) -> Optional[PasskeyEntity]:
-        self._record("find_passkey", credential_id)
-        for pk in self._passkeys.values():
-            if pk.credential_id == credential_id:
-                return pk
-        return None
-
-    async def find_passkey_by_id(
-        self, passkey_id: str
-    ) -> Optional[PasskeyEntity]:
-        self._record("find_passkey_by_id", passkey_id)
-        return self._passkeys.get(passkey_id)
-
-    async def list_passkeys(
-        self, user_id: str, include_revoked: bool = False
-    ) -> List[PasskeyEntity]:
-        self._record("list_passkeys", user_id, include_revoked=include_revoked)
-        return [
-            pk
-            for pk in self._passkeys.values()
-            if pk.user_id == user_id
-            and (include_revoked or pk.revoked_at is None)
-        ]
-
-    async def update_passkey_sign_count(
-        self,
-        passkey_id: str,
-        new_sign_count: int,
-    ) -> PasskeyEntity:
-        self._record(
-            "update_passkey_sign_count", passkey_id, new_sign_count
-        )
-        pk = self._passkeys[passkey_id]
-        updated = replace(pk, sign_count=new_sign_count)
-        self._passkeys[passkey_id] = updated
-        return updated
-
-    async def revoke_passkey(self, passkey_id: str) -> PasskeyEntity:
-        self._record("revoke_passkey", passkey_id)
-        pk = self._passkeys[passkey_id]
-        revoked = replace(pk, revoked_at=datetime.now())
-        self._passkeys[passkey_id] = revoked
-        return revoked
-
-    async def insert_third_party(
-        self, third: ThirdPartyEntity
-    ) -> ThirdPartyEntity:
-        self._record("insert_third_party", third)
-        tid = self._next_id("tp")
-        stored = replace(third, id=tid)
-        self._third_parties[tid] = stored
-        return stored
-
-    async def find_third_party(
-        self, filter: ThirdPartyFilter
-    ) -> List[ThirdPartyEntity]:
-        self._record("find_third_party", filter)
-        if filter.is_empty():
-            return []
-        out: List[ThirdPartyEntity] = []
-        for tp in self._third_parties.values():
-            if (
-                not _is_undefined(filter.id)
-                and str(tp.id or "") != filter.id
-            ):
-                continue
-            if (
-                not _is_undefined(filter.user_id)
-                and tp.user_id != filter.user_id
-            ):
-                continue
-            if (
-                not _is_undefined(filter.provider)
-                and tp.provider != filter.provider
-            ):
-                continue
-            if (
-                not _is_undefined(filter.provider_user_id)
-                and tp.provider_user_id != filter.provider_user_id
-            ):
-                continue
-            out.append(tp)
-        return out
-
-    async def delete_third_party(self, third_party_id: str) -> bool:
-        self._record("delete_third_party", third_party_id)
-        return self._third_parties.pop(third_party_id, None) is not None
 
 
-def _is_undefined(value: Any) -> bool:
-    return value is UNDEFINED
 
 
 # ---------------------------------------------------------------------
@@ -260,16 +76,6 @@ def _is_undefined(value: Any) -> bool:
 # ---------------------------------------------------------------------
 
 
-class _FakeContext:
-    def __init__(self) -> None:
-        self.code: Optional[grpc.StatusCode] = None
-        self.details: Optional[str] = None
-
-    def set_code(self, code: grpc.StatusCode) -> None:
-        self.code = code
-
-    def set_details(self, details: str) -> None:
-        self.details = details
 
 
 def _log_provider(*_args, **_kwargs):
@@ -314,14 +120,14 @@ def _make_create_request(
 async def test_get_user_auth_resolves_by_user_id() -> None:
     """`GetUserAuth` with `user_id` returns the stored user."""
     service, repo = _make_service()
-    create_ctx = _FakeContext()
+    create_ctx = _DummyContext()
     create_response = await service.CreateUserAuth(
         _make_create_request(avatar_url="https://example.com/a.png"),
         cast(ServicerContext, create_ctx),
     )
     user_id = create_response.user.id
 
-    get_ctx = _FakeContext()
+    get_ctx = _DummyContext()
     response = await service.GetUserAuth(
         GetUserAuthRequest(user_id=user_id),
         cast(ServicerContext, get_ctx),
@@ -340,7 +146,7 @@ async def test_get_user_auth_resolves_by_user_id() -> None:
 async def test_get_user_auth_resolves_by_email() -> None:
     """`GetUserAuth` with `email` returns the user matching that email."""
     service, _ = _make_service()
-    create_ctx = _FakeContext()
+    create_ctx = _DummyContext()
     await service.CreateUserAuth(
         _make_create_request(
             email="alice@example.com", avatar_url="https://example.com/a.png"
@@ -348,7 +154,7 @@ async def test_get_user_auth_resolves_by_email() -> None:
         cast(ServicerContext, create_ctx),
     )
 
-    get_ctx = _FakeContext()
+    get_ctx = _DummyContext()
     response = await service.GetUserAuth(
         GetUserAuthRequest(email="alice@example.com"),
         cast(ServicerContext, get_ctx),
@@ -374,7 +180,7 @@ async def test_get_user_auth_resolves_by_discord_id() -> None:
         )
     )
 
-    get_ctx = _FakeContext()
+    get_ctx = _DummyContext()
     response = await service.GetUserAuth(
         GetUserAuthRequest(discord_id=987654321),
         cast(ServicerContext, get_ctx),
@@ -407,7 +213,7 @@ async def test_get_user_auth_avatar_url_is_discord_cdn_url() -> None:
         )
     )
 
-    ctx = _FakeContext()
+    ctx = _DummyContext()
     response = await service.GetUserAuth(
         GetUserAuthRequest(discord_id=123456789),
         cast(ServicerContext, ctx),
@@ -442,7 +248,7 @@ async def test_get_user_auth_passes_through_existing_url_avatar() -> None:
         )
     )
 
-    ctx = _FakeContext()
+    ctx = _DummyContext()
     response = await service.GetUserAuth(
         GetUserAuthRequest(discord_id=222222222),
         cast(ServicerContext, ctx),
@@ -455,7 +261,7 @@ async def test_get_user_auth_passes_through_existing_url_avatar() -> None:
 async def test_get_user_auth_returns_not_found_for_unknown_id() -> None:
     """`GetUserAuth` for an unknown user_id returns `NOT_FOUND`."""
     service, _ = _make_service()
-    ctx = _FakeContext()
+    ctx = _DummyContext()
 
     response = await service.GetUserAuth(
         GetUserAuthRequest(user_id="does-not-exist"),
@@ -474,7 +280,7 @@ async def test_get_user_auth_returns_not_found_for_unknown_id() -> None:
 async def test_create_user_auth_round_trips_avatar_url() -> None:
     """`CreateUserAuth` persists the avatar_url; `GetUserAuth` returns it."""
     service, _ = _make_service()
-    ctx = _FakeContext()
+    ctx = _DummyContext()
 
     create_response = await service.CreateUserAuth(
         _make_create_request(avatar_url="https://example.com/a.png"),
@@ -486,7 +292,7 @@ async def test_create_user_auth_round_trips_avatar_url() -> None:
         create_response.user.avatar_url == "https://example.com/a.png"
     )
 
-    get_ctx = _FakeContext()
+    get_ctx = _DummyContext()
     response = await service.GetUserAuth(
         GetUserAuthRequest(user_id=create_response.user.id),
         cast(ServicerContext, get_ctx),
@@ -497,7 +303,7 @@ async def test_create_user_auth_round_trips_avatar_url() -> None:
 async def test_create_user_auth_with_empty_avatar_url_stores_empty_string() -> None:
     """`CreateUserAuth` with avatar_url="" persists the empty string."""
     service, repo = _make_service()
-    ctx = _FakeContext()
+    ctx = _DummyContext()
 
     create_response = await service.CreateUserAuth(
         _make_create_request(avatar_url=""),
@@ -525,7 +331,7 @@ async def test_create_user_auth_persists_password_hash() -> None:
     password``.
     """
     service, repo = _make_service()
-    ctx = _FakeContext()
+    ctx = _DummyContext()
     phc = "$argon2id$v=19$m=65536,t=3,p=4$abc$def"
 
     create_response = await service.CreateUserAuth(
@@ -551,7 +357,7 @@ async def test_create_user_auth_without_password_hash_skips_password_row() -> No
     later via :meth:`LinkCredential`.
     """
     service, repo = _make_service()
-    ctx = _FakeContext()
+    ctx = _DummyContext()
 
     create_response = await service.CreateUserAuth(
         _make_create_request(password_hash=""),
@@ -576,7 +382,7 @@ async def test_create_user_auth_then_find_credential_by_password_email() -> None
     service, repo = _make_service()
     phc = "$argon2id$v=19$m=65536,t=3,p=4$abc$def"
 
-    create_ctx = _FakeContext()
+    create_ctx = _DummyContext()
     create_response = await service.CreateUserAuth(
         _make_create_request(
             email="alice@example.com", password_hash=phc
@@ -586,7 +392,7 @@ async def test_create_user_auth_then_find_credential_by_password_email() -> None
     assert create_ctx.code is None
     user_id = create_response.user.id
 
-    find_ctx = _FakeContext()
+    find_ctx = _DummyContext()
     find_response = await service.FindCredentialByProvider(
         FindCredentialByProviderRequest(
             kind=CredentialKind.CREDENTIAL_KIND_PASSWORD,
@@ -609,14 +415,14 @@ async def test_create_user_auth_then_find_credential_by_password_email() -> None
 async def test_update_user_auth_avatar_url_set_writes_new_value() -> None:
     """`UpdateUserAuth` with `avatar_url_set` overwrites the avatar."""
     service, _ = _make_service()
-    create_ctx = _FakeContext()
+    create_ctx = _DummyContext()
     create_response = await service.CreateUserAuth(
         _make_create_request(avatar_url="https://example.com/old.png"),
         cast(ServicerContext, create_ctx),
     )
     user_id = create_response.user.id
 
-    update_ctx = _FakeContext()
+    update_ctx = _DummyContext()
     update_response = await service.UpdateUserAuth(
         UpdateUserAuthRequest(
             user_id=user_id,
@@ -633,14 +439,14 @@ async def test_update_user_auth_avatar_url_set_writes_new_value() -> None:
 async def test_update_user_auth_avatar_url_clear_resets_to_empty_string() -> None:
     """`UpdateUserAuth` with `avatar_url_clear` sets avatar to ``""``."""
     service, _ = _make_service()
-    create_ctx = _FakeContext()
+    create_ctx = _DummyContext()
     create_response = await service.CreateUserAuth(
         _make_create_request(avatar_url="https://example.com/start.png"),
         cast(ServicerContext, create_ctx),
     )
     user_id = create_response.user.id
 
-    update_ctx = _FakeContext()
+    update_ctx = _DummyContext()
     update_response = await service.UpdateUserAuth(
         UpdateUserAuthRequest(
             user_id=user_id,
@@ -657,14 +463,14 @@ async def test_update_user_auth_avatar_url_clear_resets_to_empty_string() -> Non
 async def test_update_user_auth_propagates_permission_error_from_service() -> None:
     """A `PermissionError` from the service maps to `PERMISSION_DENIED`."""
     service, _ = _make_service()
-    create_ctx = _FakeContext()
+    create_ctx = _DummyContext()
     create_response = await service.CreateUserAuth(
         _make_create_request(avatar_url="https://example.com/a.png"),
         cast(ServicerContext, create_ctx),
     )
     user_id = create_response.user.id
 
-    update_ctx = _FakeContext()
+    update_ctx = _DummyContext()
     response = await service.UpdateUserAuth(
         UpdateUserAuthRequest(
             user_id=user_id,
@@ -681,7 +487,7 @@ async def test_update_user_auth_propagates_permission_error_from_service() -> No
 async def test_update_user_auth_rejects_missing_user_id() -> None:
     """`UpdateUserAuth` with no `user_id` returns `INVALID_ARGUMENT`."""
     service, _ = _make_service()
-    ctx = _FakeContext()
+    ctx = _DummyContext()
 
     response = await service.UpdateUserAuth(
         UpdateUserAuthRequest(
@@ -704,14 +510,14 @@ async def test_update_user_auth_rejects_missing_user_id() -> None:
 async def test_register_passkey_routes_through_passkey_service() -> None:
     """`RegisterPasskey` calls `passkey_service.register_passkey`."""
     service, repo = _make_service()
-    create_ctx = _FakeContext()
+    create_ctx = _DummyContext()
     create_response = await service.CreateUserAuth(
         _make_create_request(),
         cast(ServicerContext, create_ctx),
     )
     user_id = create_response.user.id
 
-    ctx = _FakeContext()
+    ctx = _DummyContext()
     response: RegisterPasskeyResponse = await service.RegisterPasskey(
         RegisterPasskeyRequest(
             user_id=user_id,
@@ -736,33 +542,12 @@ async def test_register_passkey_routes_through_passkey_service() -> None:
 # ---------------------------------------------------------------------
 
 
-class _RaisingAuthService:
-    """Stub that raises :class:`FriendlyLoginError` from create_user.
-
-    Mimics the contract the real auth service exposes for the
-    collision case without dragging in the rest of the
-    UserAuthServiceImpl surface.  The gRPC adapter only needs
-    ``create_user`` to be wired up for this test.
-    """
-
-    def __init__(self, field: str, value: str) -> None:
-        self._field = field
-        self._value = value
-
-    async def create_user(self, user: UserAuthEntity) -> UserAuthEntity:
-        raise FriendlyLoginError(self._field, self._value)
-
-    async def update_user(self, *args: Any, **kwargs: Any) -> UserAuthEntity:
-        raise FriendlyLoginError(self._field, self._value)
-
-    async def get_user(self, *args: Any, **kwargs: Any) -> Any:
-        return None
 
 
 def _make_raising_service(field: str, value: str) -> GrpcAuthService:
     """Build a gRPC adapter backed by a service that always rejects."""
     return GrpcAuthService(
-        user_auth_service=cast(Any, _RaisingAuthService(field, value)),
+        user_auth_service=cast(Any, _MockRaisingAuthService(field, value)),
         log=_log_provider,
         to_grpc=ConvertToGrpcVisitor(),
     )
@@ -777,7 +562,7 @@ async def test_create_user_auth_returns_already_exists_for_duplicate_email() -> 
     so the signup form can highlight the email input.
     """
     service = _make_raising_service("email", "alice@example.com")
-    ctx = _FakeContext()
+    ctx = _DummyContext()
 
     response = await service.CreateUserAuth(
         _make_create_request(email="alice@example.com"),
@@ -793,7 +578,7 @@ async def test_create_user_auth_returns_already_exists_for_duplicate_email() -> 
 async def test_create_user_auth_returns_already_exists_for_duplicate_username() -> None:
     """A `FriendlyLoginError("username", ...)` maps to ALREADY_EXISTS too."""
     service = _make_raising_service("username", "alice")
-    ctx = _FakeContext()
+    ctx = _DummyContext()
 
     response = await service.CreateUserAuth(
         _make_create_request(),
@@ -809,7 +594,7 @@ async def test_create_user_auth_returns_already_exists_for_duplicate_username() 
 async def test_create_user_auth_persists_display_name() -> None:
     """`CreateUserAuth` writes the optional `display_name` to the auth row."""
     service, repo = _make_service()
-    ctx = _FakeContext()
+    ctx = _DummyContext()
 
     response = await service.CreateUserAuth(
         _make_create_request(display_name="Alice in Wonderland"),
@@ -832,7 +617,7 @@ async def test_create_user_auth_without_display_name_stores_empty_string() -> No
     field is unset without overloading on the literal "".
     """
     service, _ = _make_service()
-    ctx = _FakeContext()
+    ctx = _DummyContext()
 
     response = await service.CreateUserAuth(
         _make_create_request(),
@@ -846,14 +631,14 @@ async def test_create_user_auth_without_display_name_stores_empty_string() -> No
 async def test_update_user_auth_display_name_set_writes_value() -> None:
     """`UpdateUserAuth` with `display_name_set` writes the new value."""
     service, _ = _make_service()
-    create_ctx = _FakeContext()
+    create_ctx = _DummyContext()
     create_response = await service.CreateUserAuth(
         _make_create_request(),
         cast(ServicerContext, create_ctx),
     )
     user_id = create_response.user.id
 
-    update_ctx = _FakeContext()
+    update_ctx = _DummyContext()
     update_response = await service.UpdateUserAuth(
         UpdateUserAuthRequest(
             user_id=user_id,
@@ -870,7 +655,7 @@ async def test_update_user_auth_display_name_set_writes_value() -> None:
 async def test_update_user_auth_display_name_clear_resets_to_empty() -> None:
     """`UpdateUserAuth` with `display_name_clear` resets the field to empty."""
     service, _ = _make_service()
-    create_ctx = _FakeContext()
+    create_ctx = _DummyContext()
     create_response = await service.CreateUserAuth(
         _make_create_request(display_name="Some Name"),
         cast(ServicerContext, create_ctx),
@@ -878,7 +663,7 @@ async def test_update_user_auth_display_name_clear_resets_to_empty() -> None:
     user_id = create_response.user.id
     assert create_response.user.display_name == "Some Name"
 
-    update_ctx = _FakeContext()
+    update_ctx = _DummyContext()
     update_response = await service.UpdateUserAuth(
         UpdateUserAuthRequest(
             user_id=user_id,
@@ -900,13 +685,13 @@ async def test_update_user_auth_returns_already_exists_for_duplicate_email() -> 
         UserAuthEntity(email="alice@example.com", username="alice")
     )
     service = GrpcAuthService(
-        user_auth_service=cast(Any, _RaisingAuthService("email", "bob@x.com")),
+        user_auth_service=cast(Any, _MockRaisingAuthService("email", "bob@x.com")),
         log=_log_provider,
         to_grpc=ConvertToGrpcVisitor(),
     )
     user_id = next(iter(repo._by_id.values())).id  # type: ignore[attr-defined]
 
-    ctx = _FakeContext()
+    ctx = _DummyContext()
     response = await service.UpdateUserAuth(
         UpdateUserAuthRequest(
             user_id=user_id,

@@ -29,49 +29,13 @@ from src.db.repos.user.notifying_user_action_repo import (
     NotifyingUserActionRepo,
     UserActionListener,
 )
-from tests.stubs.user_action_repo import _FakeUserActionRepo
+from tests.doubles import _FakeSpyUserActionRepo
+
+from tests.doubles.spys.notifying_user_action_repo import _RecordingSchedulerHandle, _Listeners
 
 
-class _RecordingSchedulerHandle(SchedulerHandleABC):
-    """Scheduler handle that records every ``wake_at`` call.
-
-    ``fail_next`` lets a single test force the next ``wake_at`` to
-    raise so the decorator's failure isolation path is exercised.
-    """
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-        self.calls: List[tuple[datetime, Dict[str, Any]]] = []
-        self.fail_next: Optional[Exception] = None
-
-    async def wake_at(self, when: datetime, why: Dict[str, Any]) -> None:
-        if self.fail_next is not None:
-            exc = self.fail_next
-            self.fail_next = None
-            raise exc
-        self.calls.append((when, dict(why)))
 
 
-class _Listeners:
-    """Per-kind :class:`UserActionListener` factory for tests.
-
-    Builds one :class:`UserActionListener` per requested kind, each
-    wrapping a :class:`_RecordingSchedulerHandle`.  The decorator is
-    given the listener list directly; tests read recorded calls off
-    :attr:`handles`.
-    """
-
-    def __init__(
-        self,
-        kinds: tuple[UserActionKind, ...] = ("disable", "enable", "delete"),
-    ) -> None:
-        self.handles: Dict[UserActionKind, _RecordingSchedulerHandle] = {
-            kind: _RecordingSchedulerHandle(name=f"handle-{kind}") for kind in kinds
-        }
-        self.listeners: List[UserActionListener] = [
-            UserActionListener(kind=kind, handle=handle)
-            for kind, handle in self.handles.items()
-        ]
 
 
 def _entity(**overrides: Any) -> UserActionEntity:
@@ -90,7 +54,7 @@ def _entity(**overrides: Any) -> UserActionEntity:
 
 async def test_add_action_wakes_disable_listener_with_execute_at() -> None:
     """A disable insert pushes one wakeup to the disable listener."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners(kinds=("disable", "enable"))
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -105,7 +69,7 @@ async def test_add_action_wakes_disable_listener_with_execute_at() -> None:
 
 async def test_wakeup_payload_contains_name_kind_and_ids() -> None:
     """The ``why`` payload maps kind to ``name`` and carries entity fields."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -121,7 +85,7 @@ async def test_wakeup_payload_contains_name_kind_and_ids() -> None:
 
 async def test_enable_action_only_wakes_enable_listener() -> None:
     """Per-kind routing: an enable insert must not wake the disable listener."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -133,7 +97,7 @@ async def test_enable_action_only_wakes_enable_listener() -> None:
 
 async def test_delete_kind_resolves_to_delete_user_name() -> None:
     """The name map covers every kind defined on :class:`UserActionKind`."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -146,7 +110,7 @@ async def test_delete_kind_resolves_to_delete_user_name() -> None:
 
 async def test_inner_repo_persists_and_returns_saved_entity() -> None:
     """The decorator forwards the insert and returns the persisted entity."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -162,7 +126,7 @@ async def test_inner_repo_persists_and_returns_saved_entity() -> None:
 
 async def test_add_action_skips_wakeup_when_kind_is_undefined() -> None:
     """No kind -> no listener lookup -> no wakeup, insert still succeeds."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -175,7 +139,7 @@ async def test_add_action_skips_wakeup_when_kind_is_undefined() -> None:
 
 async def test_add_action_skips_wakeup_when_kind_is_none() -> None:
     """``None`` is treated the same as ``UNDEFINED`` for the kind."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -187,7 +151,7 @@ async def test_add_action_skips_wakeup_when_kind_is_none() -> None:
 
 async def test_add_action_skips_wakeup_when_execute_at_is_missing() -> None:
     """``execute_at`` is the wakeup time; without it there is nothing to schedule."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -199,7 +163,7 @@ async def test_add_action_skips_wakeup_when_execute_at_is_missing() -> None:
 
 async def test_add_action_skips_wakeup_when_no_listener_registered() -> None:
     """A kind with no registered listener is silently skipped (boot-time)."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners(kinds=())  # empty registry
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -214,7 +178,7 @@ async def test_add_action_skips_wakeup_when_no_listener_registered() -> None:
 
 async def test_listener_list_is_mutable_after_construction() -> None:
     """The decorator holds the list by reference, so late appends are seen."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners(kinds=("disable",))
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -240,7 +204,7 @@ async def test_unbound_listener_skips_wakeups_until_bound() -> None:
     site, and :meth:`bind` is called later after
     :meth:`attach_handles` hands out the per-process handles.
     """
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners: List[UserActionListener] = [UserActionListener(kind="disable")]
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners)
 
@@ -260,7 +224,7 @@ async def test_unbound_listener_skips_wakeups_until_bound() -> None:
 
 async def test_get_actions_delegates_to_inner() -> None:
     """Read-only methods must not touch the scheduler."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -272,7 +236,7 @@ async def test_get_actions_delegates_to_inner() -> None:
 
 
 async def test_get_actions_by_user_delegates_to_inner() -> None:
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -288,7 +252,7 @@ async def test_get_actions_by_user_delegates_to_inner() -> None:
 async def test_update_action_does_not_wake_scheduler() -> None:
     """``update_action`` is called from the background process itself."""
     seeded = _entity()
-    inner = _FakeUserActionRepo(initial=[seeded])
+    inner = _FakeSpyUserActionRepo(initial=[seeded])
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -303,7 +267,7 @@ async def test_update_action_does_not_wake_scheduler() -> None:
 async def test_remove_action_does_not_wake_scheduler() -> None:
     """``remove_action`` cancels an action; the next poll sees the row gone."""
     seeded = _entity()
-    inner = _FakeUserActionRepo(initial=[seeded])
+    inner = _FakeSpyUserActionRepo(initial=[seeded])
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
 
@@ -319,7 +283,7 @@ async def test_remove_action_does_not_wake_scheduler() -> None:
 
 async def test_scheduler_failure_does_not_break_insert() -> None:
     """A raising handle must not propagate: the insert still returns."""
-    inner = _FakeUserActionRepo()
+    inner = _FakeSpyUserActionRepo()
     listeners = _Listeners()
     repo = NotifyingUserActionRepo(inner=inner, listeners=listeners.listeners)
     listeners.handles["disable"].fail_next = RuntimeError("scheduler down")

@@ -6,9 +6,9 @@ Pins the policy the service applies on top of the
 ``edit_permissions``, and routes reads through the facade so the
 repo / user-repo / action-repo details never leak.
 
-The fakes (``_FakeSharingRepo``, ``InMemoryPermissionRepo``,
-``_FakePermissionService``, ``_FakeUserRepo``, ``_FakeUserActionRepo``)
-live in :mod:`tests.stubs`.  Facade-direct tests live in
+The fakes (``_FakeSpySharingRepo``, ``InMemoryPermissionRepo``,
+``_FakeSpyPermissionService``, ``_FakeSpyUserRepo``, ``_FakeSpyUserActionRepo``)
+live in :mod:`tests.doubles`.  Facade-direct tests live in
 :mod:`tests.test_share_action_facade`; this file only covers the
 service layer.
 """
@@ -22,14 +22,14 @@ from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.user_action import UserActionEntity
 from src.db.repos.sharing.share_action_facade import ShareActionFacade
 from src.services.sharing import SharingServiceImpl
-from tests.stubs.activity_logger_service import _FakeActivityLoggerService
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.logging import silent_logger
-from tests.stubs.permission_service import _FakePermissionService
-from tests.stubs.sharing_repo import _FakeSharingRepo
-from tests.stubs.user_action_repo import _FakeUserActionRepo
-from tests.stubs.user_context import _UserContext as UserContext, _UserContext
-from tests.stubs.user_repo import _FakeUserRepo
+from tests.doubles import _FakeSpyActivityLoggerService
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import silent_logger
+from tests.doubles import _FakeSpyPermissionService
+from tests.doubles import _FakeSpySharingRepo
+from tests.doubles import _FakeSpyUserActionRepo
+from tests.doubles import _DummyUserContext as UserContext, _DummyUserContext
+from tests.doubles import _FakeSpyUserRepo
 from typing import Optional
 import pytest
 
@@ -61,26 +61,26 @@ async def _perms_with_edit(
 
 
 async def _build_service(
-    sharing_repo: Optional[_FakeSharingRepo] = None,
+    sharing_repo: Optional[_FakeSpySharingRepo] = None,
     permissions: Optional[InMemoryPermissionRepo] = None,
-    permission_service: Optional[_FakePermissionService] = None,
-    user_repo: Optional[_FakeUserRepo] = None,
-    user_action_repo: Optional[_FakeUserActionRepo] = None,
-    activity_logger: Optional[_FakeActivityLoggerService] = None,
-) -> tuple[SharingServiceImpl, _FakeActivityLoggerService]:
+    permission_service: Optional[_FakeSpyPermissionService] = None,
+    user_repo: Optional[_FakeSpyUserRepo] = None,
+    user_action_repo: Optional[_FakeSpyUserActionRepo] = None,
+    activity_logger: Optional[_FakeSpyActivityLoggerService] = None,
+) -> tuple[SharingServiceImpl, _FakeSpyActivityLoggerService]:
     """Assemble a :class:`SharingServiceImpl` with fakes for every dep."""
-    activity_logger = activity_logger or _FakeActivityLoggerService()
+    activity_logger = activity_logger or _FakeSpyActivityLoggerService()
     service = SharingServiceImpl(
         share_facade=ShareActionFacade(
-            sharing_repo=sharing_repo or _FakeSharingRepo(),
-            user_repo=user_repo or _FakeUserRepo(),
-            user_action_repo=user_action_repo or _FakeUserActionRepo(),
+            sharing_repo=sharing_repo or _FakeSpySharingRepo(),
+            user_repo=user_repo or _FakeSpyUserRepo(),
+            user_action_repo=user_action_repo or _FakeSpyUserActionRepo(),
             logging_provider=silent_logger,
         ),
         permission_repo=permissions or InMemoryPermissionRepo(),
-        permission_service=permission_service or _FakePermissionService(),
+        permission_service=permission_service or _FakeSpyPermissionService(),
         logging_provider=silent_logger,
-        user_repo=user_repo or _FakeUserRepo(),
+        user_repo=user_repo or _FakeSpyUserRepo(),
         activity_logger=activity_logger,
     )
     return service, activity_logger
@@ -108,7 +108,7 @@ def _share(
 
 async def test_create_share_populates_service_audit_defaults() -> None:
     """Service fills ``created_at`` / ``created_by`` / ``id`` before delegating."""
-    repo = _FakeSharingRepo()
+    repo = _FakeSpySharingRepo()
     service, _activity_logger = await _build_service(
         sharing_repo=repo,
         permissions=await _perms_with_edit(user_id="creator-1", editable_note_ids={"note-1"}),
@@ -116,7 +116,7 @@ async def test_create_share_populates_service_audit_defaults() -> None:
 
     created = await service.create_share(
         NoteShareEntity(id="client-id", note_id="note-1", permission="read"),
-        _UserContext("creator-1"),
+        _DummyUserContext("creator-1"),
     )
 
     assert created.id is UNDEFINED
@@ -138,7 +138,7 @@ async def test_create_share_overrides_explicit_audit_values() -> None:
             created_by="explicit-creator",
             permission="read",
         ),
-        _UserContext("actor"),
+        _DummyUserContext("actor"),
     )
 
     assert created.created_at == datetime(2026, 6, 20)
@@ -157,7 +157,7 @@ async def test_create_share_inserts_reader_or_writer_relation(permission: str) -
 
     await service.create_share(
         NoteShareEntity(note_id="note-1", permission=permission),
-        _UserContext("creator-1"),
+        _DummyUserContext("creator-1"),
     )
 
     expected_relation = (
@@ -167,15 +167,15 @@ async def test_create_share_inserts_reader_or_writer_relation(permission: str) -
         rel.relation == expected_relation
         and str(rel.subject.object_id) == rel.subject.object_id  # subject is the temp user
         and str(rel.resource.object_id) == "note-1"
-        for rel in permissions._store
+        for rel in permissions.relationships
     )
 
 
 async def test_create_share_denies_without_edit_permission() -> None:
     """No ``edit_permissions`` -> :exc:`PermissionError`, no shares / actions / relations written."""
-    user_action_repo = _FakeUserActionRepo()
-    user_repo = _FakeUserRepo()
-    sharing_repo = _FakeSharingRepo()
+    user_action_repo = _FakeSpyUserActionRepo()
+    user_repo = _FakeSpyUserRepo()
+    sharing_repo = _FakeSpySharingRepo()
     permissions = InMemoryPermissionRepo()
     service, _activity_logger = await _build_service(
         sharing_repo=sharing_repo,
@@ -187,29 +187,37 @@ async def test_create_share_denies_without_edit_permission() -> None:
     with pytest.raises(PermissionError):
         await service.create_share(
             NoteShareEntity(note_id="note-1", permission="read"),
-            _UserContext("creator-1"),
+            _DummyUserContext("creator-1"),
         )
 
     assert sharing_repo.created_share is None
     assert user_repo.inserted == []
     assert user_action_repo.add_action_calls == []
-    assert permissions._store == []
+    assert permissions.is_empty()
 
 
 @pytest.mark.parametrize(
-    "bad_permission",
-    [UNDEFINED, None, "owner", "READ", ""],
+    ("bad_permission", "message"),
+    [
+        (UNDEFINED, "share.permission is required"),
+        (None, "share.permission is required"),
+        ("owner", "Invalid permission for a share"),
+        ("READ", "Invalid permission for a share"),
+        ("", "share.permission is required"),
+    ],
 )
-async def test_create_share_rejects_bad_permission(bad_permission: object) -> None:
+async def test_create_share_rejects_bad_permission(
+    bad_permission: object, message: str
+) -> None:
     """Anything outside ``"read"`` / ``"write"`` raises :exc:`ValueError`."""
     service, _activity_logger = await _build_service(
         permissions=await _perms_with_edit(user_id="creator-1", editable_note_ids={"note-1"}),
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=message):
         await service.create_share(
             NoteShareEntity(note_id="note-1", permission=bad_permission),  # type: ignore[arg-type]
-            _UserContext("creator-1"),
+            _DummyUserContext("creator-1"),
         )
 
 
@@ -235,13 +243,13 @@ async def test_update_share_swaps_reader_relation_to_writer_via_permission_servi
         )
     ])
     service, _activity_logger = await _build_service(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         permissions=permissions,
     )
 
     updated = await service.update_share(
         NoteShareEntity(id="share-1", permission="write"),
-        _UserContext("creator-1"),
+        _DummyUserContext("creator-1"),
     )
 
     assert updated.permission == "write"
@@ -284,13 +292,13 @@ async def test_update_share_preserves_unrelated_relationships() -> None:
     permissions = InMemoryPermissionRepo()
     await permissions.insert([owner_rel, existing_reader, admin_rel])
     service, _activity_logger = await _build_service(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         permissions=permissions,
     )
 
     await service.update_share(
         NoteShareEntity(id="share-1", permission="write"),
-        _UserContext("creator-1"),
+        _DummyUserContext("creator-1"),
     )
 
     stored = await permissions.list_relationships(
@@ -310,14 +318,14 @@ async def test_update_share_without_permission_field_does_not_call_permission_se
     )
     before = await permissions.list_relationships(ObjectRef("note", "note-1"))
     service, _activity_logger = await _build_service(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         permissions=permissions,
-        permission_service=_FakePermissionService(),
+        permission_service=_FakeSpyPermissionService(),
     )
 
     updated = await service.update_share(
         NoteShareEntity(id="share-1", description="new"),
-        _UserContext("creator-1"),
+        _DummyUserContext("creator-1"),
     )
 
     assert updated.description == "new"
@@ -329,15 +337,15 @@ async def test_update_share_without_permission_field_does_not_call_permission_se
 async def test_update_share_denies_without_edit_permission() -> None:
     """No ``edit_permissions`` -> :exc:`PermissionError`, no permission swap."""
     service, _activity_logger = await _build_service(
-        sharing_repo=_FakeSharingRepo([_share(note_id="note-denied")]),
+        sharing_repo=_FakeSpySharingRepo([_share(note_id="note-denied")]),
         permissions=InMemoryPermissionRepo(),
-        permission_service=_FakePermissionService(),
+        permission_service=_FakeSpyPermissionService(),
     )
 
     with pytest.raises(PermissionError):
         await service.update_share(
             NoteShareEntity(id="share-1", description="x"),
-            _UserContext("creator-1"),
+            _DummyUserContext("creator-1"),
         )
 
 
@@ -348,7 +356,7 @@ async def test_update_share_denies_without_edit_permission() -> None:
 
 async def test_get_shares_filters_unauthorized_entries() -> None:
     """``get_shares`` only returns shares for notes the actor can edit."""
-    sharing_repo = _FakeSharingRepo(
+    sharing_repo = _FakeSpySharingRepo(
         [
             _share(id="allowed", note_id="note-allowed"),
             _share(id="denied", note_id="note-denied"),
@@ -362,31 +370,30 @@ async def test_get_shares_filters_unauthorized_entries() -> None:
         permissions=permissions,
     )
 
-    shares = await service.get_shares(FilterShareNote(), _UserContext("creator-1"))
+    shares = await service.get_shares(FilterShareNote(), _DummyUserContext("creator-1"))
 
     assert [share.id for share in shares] == ["allowed"]
 
 
 async def test_get_share_template_delegates_to_get_shares() -> None:
     service, _activity_logger = await _build_service(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         permissions=await _perms_with_edit(user_id="creator-1", editable_note_ids={"note-1"}),
     )
     filter = FilterShareNote(note_id="note-1")
 
-    share = await service.get_share(filter, _UserContext("creator-1"))
+    share = await service.get_share(filter, _DummyUserContext("creator-1"))
 
     assert share.id == "share-1"
-    assert service._share_facade is not None
 
 
 async def test_get_share_by_id_delegates_to_facade() -> None:
     service, _activity_logger = await _build_service(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         permissions=await _perms_with_edit(user_id="creator-1", editable_note_ids={"note-1"}),
     )
 
-    share = await service.get_share_by_id("share-1", _UserContext("creator-1"))
+    share = await service.get_share_by_id("share-1", _DummyUserContext("creator-1"))
 
     assert share.id == "share-1"
 
@@ -408,11 +415,11 @@ async def test_get_shares_resolves_share_permission_from_spicedb() -> None:
         ),
     ])
     service, _activity_logger = await _build_service(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         permissions=permissions,
     )
 
-    shares = await service.get_shares(FilterShareNote(), _UserContext("creator-1"))
+    shares = await service.get_shares(FilterShareNote(), _DummyUserContext("creator-1"))
 
     assert shares[0].permission == "read"
 
@@ -430,9 +437,9 @@ async def test_delete_shares_removes_relation_row_user_and_actions() -> None:
         action="disable",
         execute_at=datetime(2026, 7, 1),
     )
-    action_repo = _FakeUserActionRepo(initial=[pending])
-    user_repo = _FakeUserRepo()
-    sharing_repo = _FakeSharingRepo([_share()])
+    action_repo = _FakeSpyUserActionRepo(initial=[pending])
+    user_repo = _FakeSpyUserRepo()
+    sharing_repo = _FakeSpySharingRepo([_share()])
     permissions = InMemoryPermissionRepo()
     await permissions.insert([
         Relationship(
@@ -453,12 +460,12 @@ async def test_delete_shares_removes_relation_row_user_and_actions() -> None:
         user_action_repo=action_repo,
     )
 
-    await service.delete_shares(["share-1"], _UserContext("creator-1"))
+    await service.delete_shares(["share-1"], _DummyUserContext("creator-1"))
 
     # the reader/writer relation for the access user is gone
     assert not any(
         rel
-        for rel in permissions._store
+        for rel in permissions.relationships
         if str(rel.subject.object_id) == "access-user"
     )
     # share row, action, and temp user all removed
@@ -475,14 +482,14 @@ async def test_delete_shares_leaves_unrelated_actions_alone() -> None:
         action="disable",
         execute_at=datetime(2026, 7, 1),
     )
-    action_repo = _FakeUserActionRepo(initial=[other_user_action])
+    action_repo = _FakeSpyUserActionRepo(initial=[other_user_action])
     service, _activity_logger = await _build_service(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         permissions=await _perms_with_edit(user_id="creator-1", editable_note_ids={"note-1"}),
         user_action_repo=action_repo,
     )
 
-    await service.delete_shares(["share-1"], _UserContext("creator-1"))
+    await service.delete_shares(["share-1"], _DummyUserContext("creator-1"))
 
     assert other_user_action.id not in action_repo.remove_action_calls
     assert action_repo.for_user("somebody-else") == [other_user_action]
@@ -491,13 +498,13 @@ async def test_delete_shares_leaves_unrelated_actions_alone() -> None:
 async def test_delete_shares_requires_non_empty_input() -> None:
     service, _activity_logger = await _build_service()
 
-    with pytest.raises(ValueError):
-        await service.delete_shares([], _UserContext("creator-1"))
+    with pytest.raises(ValueError, match="At least one share_id is required"):
+        await service.delete_shares([], _DummyUserContext("creator-1"))
 
 
 async def test_delete_shares_checks_all_note_ids_before_any_teardown() -> None:
     """If any note fails the ``edit_permissions`` check, no share is deleted."""
-    sharing_repo = _FakeSharingRepo(
+    sharing_repo = _FakeSpySharingRepo(
         [
             _share(id="share-ok", note_id="note-ok"),
             _share(id="share-bad", note_id="note-bad"),
@@ -512,7 +519,7 @@ async def test_delete_shares_checks_all_note_ids_before_any_teardown() -> None:
     )
 
     with pytest.raises(PermissionError):
-        await service.delete_shares(["share-ok", "share-bad"], _UserContext("creator-1"))
+        await service.delete_shares(["share-ok", "share-bad"], _DummyUserContext("creator-1"))
 
     assert sharing_repo.deleted_ids == []
 
@@ -531,7 +538,7 @@ async def test_create_share_records_note_shared_with_metadata() -> None:
 
     created = await service.create_share(
         NoteShareEntity(note_id="note-1", permission="read"),
-        _UserContext("creator-1"),
+        _DummyUserContext("creator-1"),
     )
 
     access_as = str(created.access_as)
@@ -558,7 +565,7 @@ async def test_create_share_does_not_record_when_denied() -> None:
     with pytest.raises(PermissionError):
         await service.create_share(
             NoteShareEntity(note_id="note-1", permission="read"),
-            _UserContext("actor"),
+            _DummyUserContext("actor"),
         )
 
     assert activity_logger.calls == []
@@ -566,7 +573,7 @@ async def test_create_share_does_not_record_when_denied() -> None:
 
 async def test_delete_shares_records_note_unshared_per_share() -> None:
     """`delete_shares` records `note_unshared` for every share it removes."""
-    sharing_repo = _FakeSharingRepo([_share(id="share-1"), _share(id="share-2")])
+    sharing_repo = _FakeSpySharingRepo([_share(id="share-1"), _share(id="share-2")])
     permissions = await _perms_with_edit(
         user_id="creator", editable_note_ids={"note-1"}
     )
@@ -575,7 +582,7 @@ async def test_delete_shares_records_note_unshared_per_share() -> None:
         permissions=permissions,
     )
 
-    await service.delete_shares(["share-1", "share-2"], _UserContext("creator"))
+    await service.delete_shares(["share-1", "share-2"], _DummyUserContext("creator"))
 
     actions = [entry[0] for entry in activity_logger.calls]
     assert actions == ["note_unshared", "note_unshared"]
@@ -590,11 +597,11 @@ async def test_delete_shares_records_note_unshared_per_share() -> None:
 async def test_delete_shares_does_not_record_when_denied() -> None:
     """`delete_shares` records nothing when an `edit_permissions` check fails."""
     service, activity_logger = await _build_service(
-        sharing_repo=_FakeSharingRepo([_share(note_id="note-denied")]),
+        sharing_repo=_FakeSpySharingRepo([_share(note_id="note-denied")]),
         permissions=InMemoryPermissionRepo(),
     )
 
     with pytest.raises(PermissionError):
-        await service.delete_shares(["share-1"], _UserContext("creator-1"))
+        await service.delete_shares(["share-1"], _DummyUserContext("creator-1"))
 
     assert activity_logger.calls == []

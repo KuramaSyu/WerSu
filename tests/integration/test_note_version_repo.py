@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.note.content import NoteContentPostgresRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo

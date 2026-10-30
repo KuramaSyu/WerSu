@@ -1,10 +1,10 @@
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.api import (
     ObjectRef,
     Relationship,
     SubjectRef,
 )
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.doubles import InMemoryPermissionRepo
 
 
 async def test_in_memory_has_permission_with_implied_permissions() -> None:

@@ -32,10 +32,32 @@ Notes:
 from __future__ import annotations
 
 import asyncio
+import datetime
 import sqlite3
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+
+
+# Python 3.12 deprecated the *implicit* default adapters for date/time
+# values.  Register explicit ones that reproduce the old output format
+# (``isoformat(" ")`` for datetimes, ``isoformat()`` for dates/times) so
+# bound parameters still serialise exactly as before.
+def _adapt_datetime(value: datetime.datetime) -> str:
+    return value.isoformat(" ")
+
+
+def _adapt_date(value: datetime.date) -> str:
+    return value.isoformat()
+
+
+def _adapt_time(value: datetime.time) -> str:
+    return value.isoformat()
+
+
+sqlite3.register_adapter(datetime.datetime, _adapt_datetime)
+sqlite3.register_adapter(datetime.date, _adapt_date)
+sqlite3.register_adapter(datetime.time, _adapt_time)
 
 
 class SqliteDatabase:

@@ -6,18 +6,18 @@ linked to must be able to mint a token for that attachment, while a
 peer with no relationship to the attachment must be declined.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
-from tests._fixtures_pkg.fakes import _FakeJwtProvider
-from tests.stubs.attachments import (
+from tests.doubles import _FakeSpyJwtProvider
+from tests.doubles import (
     InMemoryAttachmentMetadataRepo,
     InMemoryAttachmentRepo,
 )
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.recording_table import RecordingTable
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import RecordingTable
+from tests.doubles import _DummyUserContext as UserContext
 from src.api.other.relationship import (
     AttachmentRelationEnum,
     NoteRelationEnum,
@@ -40,7 +40,7 @@ def _make_facade(permission_repo: InMemoryPermissionRepo) -> AttachmentFacadeImp
         attachments_note_link_table=RecordingTable(name="note_link"),
         attachments_user_link_table=RecordingTable(name="user_link"),
         log=logging_provider,
-        jwt_provider=_FakeJwtProvider(),
+        jwt_provider=_FakeSpyJwtProvider(),
     )
 
 
@@ -145,10 +145,10 @@ async def test_attachment_facade_round_trip() -> None:
         attachments_note_link_table=RecordingTable(name="note_link"),
         attachments_user_link_table=RecordingTable(name="user_link"),
         log=logging_provider,
-        jwt_provider=_FakeJwtProvider(),
+        jwt_provider=_FakeSpyJwtProvider(),
     )
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     attachment = Attachment(
         key=UNDEFINED,
         filename="hello.txt",

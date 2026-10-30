@@ -49,7 +49,7 @@ from tests.integration_helpers import (
     make_user_entity,
     wait_until,
 )
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]

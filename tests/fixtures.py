@@ -1,7 +1,7 @@
 """Generic (non-infrastructure) pytest fixtures.
 
-Anything that requires a container (Postgres, SpiceDB, Garage, ...) now
-lives under :mod:`tests.fixtures` as its own module.  This module
+Anything that requires a container (Postgres, SpiceDB, Garage, ...)
+lives under :mod:`tests._fixtures_pkg` as its own module.  This module
 keeps the lightweight fixtures the rest of the test suite shares:
 
 * :func:`dsn`            Postgres-only bootstrap
@@ -13,7 +13,7 @@ keeps the lightweight fixtures the rest of the test suite shares:
                          in-memory :class:`NoteFacadeImpl` for unit
                          tests of the note code paths
 * The in-memory test doubles (re-exported from
-  :mod:`tests.fixtures.fakes`).
+  :mod:`tests.doubles`).
 """
 
 from src.ai.embedding_generator import FastEmbedEmbeddingGenerator, Models
@@ -39,10 +39,10 @@ from src.services.shelf_service import ShelfServiceImpl
 from src.services.user_service import UserServiceImpl
 from src.utils import logging_provider
 from testcontainers.postgres import PostgresContainer
-from tests._fixtures_pkg.fakes import _FakeDatabase, _FakeEmbeddingGenerator, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeNoteRepoFacade, _FakeVersionRepo, _TestDirectoryRepo, _TestSpiceDbClient
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
-from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
+from tests.doubles import _FakeDatabase, _StubEmbeddingGenerator, _StubEmbeddingRepo, _FakeSpyJwtProvider, _FakeNoteContentRepo, _FakeSpyNoteRepoFacade, _StubVersionRepo, _FakeSpyDirectoryRepo, _DummySpiceDbClient
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import InMemoryRuleRepo
+from tests.doubles import _DummyShelfRepo
 from typing import Iterator
 import pytest
 
@@ -118,7 +118,7 @@ async def db(dsn):
         ),
         logging_provider=logging_provider,
     )
-    directory_facade = _TestDirectoryRepo(permission_repo=permission_repo)
+    directory_facade = _FakeSpyDirectoryRepo(permission_repo=permission_repo)
     user_repo_for_ctx = UserPostgresRepo(
         table=Table(
             db=db,
@@ -136,7 +136,7 @@ async def db(dsn):
     migration_runner = MigrationRunner(
         ctx=MigrationContext(
             db=db,
-            spicedb_client=_TestSpiceDbClient(),
+            spicedb_client=_DummySpiceDbClient(),
             services=MigrationServices(
                 permission_repo=permission_repo,
                 rule_repo=rule_repo,
@@ -185,15 +185,15 @@ async def db(dsn):
 
 
 @pytest.fixture(scope="function")
-def directory_repo() -> _TestDirectoryRepo:
-    """Return an empty :class:`_TestDirectoryRepo` for tests to seed."""
-    return _TestDirectoryRepo()
+def directory_repo() -> _FakeSpyDirectoryRepo:
+    """Return an empty :class:`_FakeSpyDirectoryRepo` for tests to seed."""
+    return _FakeSpyDirectoryRepo()
 
 
 @pytest.fixture(scope="function")
 def note_repo_facade(
     db: Database,
-    directory_repo: _TestDirectoryRepo,
+    directory_repo: _FakeSpyDirectoryRepo,
     tag_repo: TagRepoABC,
 ) -> NoteFacadeABC:
     """Return an in-memory :class:`NoteFacadeImpl` for unit tests.
@@ -253,7 +253,7 @@ def note_repo_facade(
         tag_repo=tag_repo,
         logging_provider=logging_provider,
         version_repo=version_repo,
-        shelf_repo=NoopShelfRepo(),
+        shelf_repo=_DummyShelfRepo(),
         rule_repo=InMemoryRuleRepo(),
     )
 
@@ -304,7 +304,7 @@ async def user_service(
     db: Database,
     user_repo: UserRepoABC,
     note_repo_facade: NoteFacadeABC,
-    directory_repo: _TestDirectoryRepo,
+    directory_repo: _FakeSpyDirectoryRepo,
     tag_repo: TagRepoABC,
 ):
     """Return a :class:`UserServiceImpl` wired against real DB + in-memory fakes.
@@ -313,9 +313,9 @@ async def user_service(
     ``create_user`` must persist them) and the same in-memory
     permission + rule repos that :func:`note_repo_facade`
     consults.  The directory facade's ``directory_repo`` is the
-    in-memory :class:`_TestDirectoryRepo` -- it accepts the
+    in-memory :class:`_FakeSpyDirectoryRepo` -- it accepts the
     bootstrap inserts and its
-    :meth:`_TestDirectoryRepo.list_user_directory_ids` falls
+    :meth:`_FakeSpyDirectoryRepo.list_user_directory_ids` falls
     back to scanning the shared permission repo for
     ``directory#admin@user`` relations, so the rule's resolved
     ``directory_id`` is accepted as visible to the user.  The

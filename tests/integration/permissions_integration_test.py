@@ -11,7 +11,7 @@ from typing import AsyncIterator
 import pytest
 
 import uuid
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.api import ObjectRef, Relationship, SubjectRef, UNDEFINED
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 

@@ -1,7 +1,7 @@
 """Fast unit tests for :class:`src.db.repos.note.note.NoteFacadeImpl`.
 
 These tests use the in-memory fakes from
-:mod:`tests._fixtures_pkg.fakes` so they do not require a Postgres
+:mod:`tests.doubles` so they do not require a Postgres
 container.  They cover the CRUD surface that
 :class:`src.services.note.NoteServiceImpl` and the gRPC adapters call.
 
@@ -25,11 +25,11 @@ from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.rule import RuleEntity
 from src.db.repos.note import note_facade as note_module
 from src.db.repos.note.note_facade import DateNoteSearchStrategy, NoteFacadeImpl
-from tests._fixtures_pkg.fakes import _FakeCombinedNoteRepo, _FakeDatabase, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeTagRepo, _FakeVersionRepo, _TestDirectoryRepo
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
-from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _FakeCombinedNoteRepo, _FakeDatabase, _StubEmbeddingRepo, _FakeSpyJwtProvider, _FakeNoteContentRepo, _FakeSpyTagRepo, _StubVersionRepo, _FakeSpyDirectoryRepo
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import InMemoryRuleRepo
+from tests.doubles import InMemoryShelfRepo
+from tests.doubles import _DummyUserContext as UserContext
 from typing import Optional
 from uuid import UUID
 import logging, pytest
@@ -37,25 +37,25 @@ import logging, pytest
 
 def _make_facade(
     *,
-    version_repo: Optional[_FakeVersionRepo] = None,
+    version_repo: Optional[_StubVersionRepo] = None,
     db: Optional[_FakeDatabase] = None,
     content_repo: Optional[_FakeNoteContentRepo] = None,
     combined_repo: Optional[_FakeCombinedNoteRepo] = None,
-    tag_repo: Optional[_FakeTagRepo] = None,
+    tag_repo: Optional[_FakeSpyTagRepo] = None,
     permission_repo: Optional[InMemoryPermissionRepo] = None,
     directory_repo: Optional[DirectoryFacadeABC] = None,
     shelf_repo=None,
     rule_repo=None,
-) -> tuple[NoteFacadeImpl, _FakeDatabase, _FakeNoteContentRepo, _FakeEmbeddingRepo, DirectoryFacadeABC, _FakeCombinedNoteRepo, _FakeTagRepo, _FakeVersionRepo]:
+) -> tuple[NoteFacadeImpl, _FakeDatabase, _FakeNoteContentRepo, _StubEmbeddingRepo, DirectoryFacadeABC, _FakeCombinedNoteRepo, _FakeSpyTagRepo, _StubVersionRepo]:
     """Build a :class:`NoteFacadeImpl` wired against the in-memory fakes."""
     fake_db = db or _FakeDatabase()
     fake_content = content_repo or _FakeNoteContentRepo()
     fake_combined = combined_repo or _FakeCombinedNoteRepo(content_repo=fake_content)
-    fake_embedding = _FakeEmbeddingRepo()
+    fake_embedding = _StubEmbeddingRepo()
     fake_permission = permission_repo or InMemoryPermissionRepo()
-    fake_directory = directory_repo or _TestDirectoryRepo()
-    fake_tags = tag_repo or _FakeTagRepo()
-    fake_version_repo = version_repo or _FakeVersionRepo()
+    fake_directory = directory_repo or _FakeSpyDirectoryRepo()
+    fake_tags = tag_repo or _FakeSpyTagRepo()
+    fake_version_repo = version_repo or _StubVersionRepo()
     facade = NoteFacadeImpl(
         db=fake_db,
         content_repo=fake_content,
@@ -121,7 +121,7 @@ async def test_insert_without_content_skips_embedding() -> None:
 
 async def test_insert_records_initial_snapshot_when_version_repo_present() -> None:
     """`insert` records an initial version snapshot via the version repo."""
-    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade(version_repo=_FakeVersionRepo())
+    facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade(version_repo=_StubVersionRepo())
     fake_db.fetchrow_responses.append({"id": "note-snap"})
     # Seed default directory + rule so insert resolves a parent.
     default_dir = DirectoryEntity(
@@ -142,9 +142,13 @@ async def test_insert_records_initial_snapshot_when_version_repo_present() -> No
     )
     await facade.insert(note, UserContext("user-1"))
 
-    # No assertions on the snapshot body here; the version repo stub
-    # records calls in its own state.  We only need to confirm the
-    # facade passed through without raising.
+    assert _version_repo.last_snapshot is not None
+    kwargs = _version_repo.last_snapshot["kwargs"]
+    assert kwargs["note_id"] == str(note.note_id)
+    assert kwargs["title"] == "Snap title"
+    assert kwargs["content"] == "Snap content"
+    assert kwargs["author_id"] == "user-1"
+    assert kwargs["created_at"] == datetime(2026, 7, 3, 12, 0, 0)
 
 
 async def test_update_overwrites_content_and_refreshes_embedding() -> None:
@@ -176,7 +180,7 @@ async def test_update_overwrites_content_and_refreshes_embedding() -> None:
 
 async def test_update_appends_version_entry_when_version_repo_present() -> None:
     """`update` forwards the before/after pair to `version_repo.append_version`."""
-    version_repo = _FakeVersionRepo()
+    version_repo = _StubVersionRepo()
     facade, _db, content_repo, _embedding, _directory, _combined, _tags, _version_repo = _make_facade(version_repo=version_repo)
     content_repo.seed(_seed_note(note_id="note-1", content="old content"))
 
@@ -421,4 +425,3 @@ async def test_insert_note_with_explicit_directory_bypasses_rule() -> None:
 
     # The note ends up in dir-custom, NOT in the rule's target.
     assert result.directory_ids == ["dir-custom"]
-

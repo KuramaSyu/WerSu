@@ -3,7 +3,7 @@
 The :class:`RuleRepoABC` is the cross-layer contract the rule
 service depends on for CRUD; the concrete implementations live
 under :mod:`src.db.repos.rule` (Postgres) and
-:mod:`tests.stubs` (in-memory fake for unit tests).
+:mod:`tests.doubles` (in-memory fake for unit tests).
 
 The repo deliberately does **not** perform any permission or
 business validation.  Authorisation, scope matching, condition
@@ -12,7 +12,7 @@ dispatcher.
 
 Implementations:
 * :class:`src.db.repos.rule.postgres.PostgresRuleRepo`
-* :class:`tests.stubs.in_memory_rule_repo.InMemoryRuleRepo`
+* :class:`tests.doubles.fakes.in_memory_rule_repo.InMemoryRuleRepo`
 """
 
 from __future__ import annotations

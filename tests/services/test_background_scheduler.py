@@ -1,6 +1,6 @@
 """Tests for the background-process scheduler.
 
-Time is driven by :class:`tests.stubs.background_process.ManualClock`,
+Time is driven by :class:`tests.doubles.fakes.background_process.ManualClock`,
 which is a plain boolean + parked-future list -- no threading, no
 ``asyncio.Event``.  Synchronisation with the scheduler is via
 :meth:`BackgroundSchedulerImpl.drain`, which fires every due process
@@ -17,9 +17,9 @@ from src.services.background_process.async_clock import AsyncClockAsyncio
 from src.services.background_process.background_scheduler import BackgroundSchedulerImpl
 from src.services.background_process.processes import UserDisableProcessImpl
 from src.services.background_process.task_spawner import TaskSpawnerAsyncio
-from tests.stubs.background_process import FakeBackgroundProcess, InMemoryTaskSpawner, ManualClock
-from tests.stubs.logging import silent_logger
-from tests.stubs.user_action_repo import _FakeUserActionRepo
+from tests.doubles import FakeSpyBackgroundProcess, InMemoryTaskSpawner, ManualClock
+from tests.doubles import silent_logger
+from tests.doubles import _FakeSpyUserActionRepo
 import asyncio, pytest
 
 
@@ -48,7 +48,7 @@ async def scheduler_pair():
 
 async def test_register_attaches_handle_and_schedules_wakeup(scheduler_pair) -> None:
     clock, scheduler = scheduler_pair
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = [clock.now + timedelta(seconds=60)]
 
     scheduler.register(process)
@@ -60,12 +60,12 @@ async def test_register_attaches_handle_and_schedules_wakeup(scheduler_pair) -> 
     assert len(events) == 1
     entry = next(iter(events.values()))
     assert entry.process is process
-    assert entry.why["name"] == "FakeBackgroundProcess"
+    assert entry.why["name"] == "FakeSpyBackgroundProcess"
 
 
 async def test_loop_calls_run_when_delay_elapses(scheduler_pair) -> None:
     clock, scheduler = scheduler_pair
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = [clock.now + timedelta(seconds=30), None]
 
     scheduler.register(process)
@@ -81,7 +81,7 @@ async def test_loop_calls_run_when_delay_elapses(scheduler_pair) -> None:
 
 async def test_wake_at_with_earlier_time_shortens_pending_sleep(scheduler_pair) -> None:
     clock, scheduler = scheduler_pair
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = [clock.now + timedelta(seconds=600), None]
 
     scheduler.register(process)
@@ -97,7 +97,7 @@ async def test_wake_at_with_earlier_time_shortens_pending_sleep(scheduler_pair) 
 
 async def test_wake_at_with_later_time_is_noop(scheduler_pair) -> None:
     clock, scheduler = scheduler_pair
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = [
         clock.now + timedelta(seconds=60),
         clock.now + timedelta(seconds=120),
@@ -120,8 +120,8 @@ async def test_wake_at_with_later_time_is_noop(scheduler_pair) -> None:
 
 async def test_run_exception_does_not_kill_scheduler(scheduler_pair) -> None:
     clock, scheduler = scheduler_pair
-    bad = FakeBackgroundProcess("Bad")
-    good = FakeBackgroundProcess("Good")
+    bad = FakeSpyBackgroundProcess("Bad")
+    good = FakeSpyBackgroundProcess("Good")
     bad.next_wakeup_values = [clock.now + timedelta(seconds=10), None]
     good.next_wakeup_values = [clock.now + timedelta(seconds=20), None]
 
@@ -150,7 +150,7 @@ async def test_stop_cancels_in_flight_sleep() -> None:
     """Scheduler created and torn down inside the test (no fixture)."""
     clock = ManualClock()
     scheduler = _make_scheduler(clock)
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = [clock.now + timedelta(seconds=10_000)]
 
     scheduler.register(process)
@@ -164,7 +164,7 @@ async def test_stop_cancels_in_flight_sleep() -> None:
 
 async def test_process_returning_none_next_wakeup_is_parked_until_wake_at(scheduler_pair) -> None:
     clock, scheduler = scheduler_pair
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = []
 
     scheduler.register(process)
@@ -184,7 +184,7 @@ async def test_process_returning_none_next_wakeup_is_parked_until_wake_at(schedu
 
 async def test_unregister_removes_process(scheduler_pair) -> None:
     clock, scheduler = scheduler_pair
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = [clock.now + timedelta(seconds=5)]
 
     scheduler.register(process)
@@ -200,8 +200,8 @@ async def test_unregister_removes_process(scheduler_pair) -> None:
 
 async def test_two_processes_share_one_loop(scheduler_pair) -> None:
     clock, scheduler = scheduler_pair
-    a = FakeBackgroundProcess("A")
-    b = FakeBackgroundProcess("B")
+    a = FakeSpyBackgroundProcess("A")
+    b = FakeSpyBackgroundProcess("B")
     a.next_wakeup_values = [clock.now + timedelta(seconds=10), None]
     b.next_wakeup_values = [clock.now + timedelta(seconds=20), None]
 
@@ -223,8 +223,8 @@ async def test_two_processes_share_one_loop(scheduler_pair) -> None:
 
 async def test_list_events_reflects_current_heap(scheduler_pair) -> None:
     clock, scheduler = scheduler_pair
-    a = FakeBackgroundProcess("A")
-    b = FakeBackgroundProcess("B")
+    a = FakeSpyBackgroundProcess("A")
+    b = FakeSpyBackgroundProcess("B")
     a_at = clock.now + timedelta(seconds=10)
     b_at = clock.now + timedelta(seconds=30)
     a.next_wakeup_values = [a_at]
@@ -249,7 +249,7 @@ async def test_list_events_reflects_current_heap(scheduler_pair) -> None:
 async def test_start_without_attach_handles_raises() -> None:
     clock = ManualClock()
     scheduler = _make_scheduler(clock)
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = [clock.now + timedelta(seconds=1)]
 
     scheduler.register(process)
@@ -269,8 +269,8 @@ async def test_register_after_attach_handles_is_allowed() -> None:
     ``register`` appends a process whose handle is not yet bound."""
     clock = ManualClock()
     scheduler = _make_scheduler(clock)
-    a = FakeBackgroundProcess("A")
-    b = FakeBackgroundProcess("B")
+    a = FakeSpyBackgroundProcess("A")
+    b = FakeSpyBackgroundProcess("B")
     a.next_wakeup_values = [clock.now + timedelta(seconds=10)]
     b.next_wakeup_values = [clock.now + timedelta(seconds=20)]
 
@@ -290,7 +290,7 @@ async def test_attach_handles_with_no_new_process_raises() -> None:
     between calls) is a misconfiguration -- raises."""
     clock = ManualClock()
     scheduler = _make_scheduler(clock)
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = [clock.now + timedelta(seconds=1)]
 
     scheduler.register(process)
@@ -306,7 +306,7 @@ async def test_register_with_on_handle_invokes_callback_on_attach(scheduler_pair
     private state.
     """
     clock, scheduler = scheduler_pair
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = [clock.now + timedelta(seconds=60)]
 
     captured: list = []
@@ -335,7 +335,7 @@ async def test_on_handle_wires_real_listener_to_real_process(scheduler_pair) -> 
     and marks the row as executed.
 
     All collaborators are real except the storage layer
-    (the in-memory :class:`_FakeUserActionRepo`) and the clock
+    (the in-memory :class:`_FakeSpyUserActionRepo`) and the clock
     (a :class:`ManualClock` whose time only advances on test calls).
     """
 
@@ -343,7 +343,7 @@ async def test_on_handle_wires_real_listener_to_real_process(scheduler_pair) -> 
     clock, scheduler = scheduler_pair
     clock.set_now(datetime(2026, 1, 1, 12, tzinfo=timezone.utc))
 
-    fake_repo = _FakeUserActionRepo()
+    fake_repo = _FakeSpyUserActionRepo()
     listener = UserActionListener(kind="disable")
     notifying_repo = NotifyingUserActionRepo(
         inner=fake_repo,
@@ -386,7 +386,7 @@ async def test_on_handle_is_not_invoked_before_attach_handles(scheduler_pair) ->
     """
 
     clock, scheduler = scheduler_pair
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     process.next_wakeup_values = [clock.now + timedelta(seconds=60)]
 
     captured: list = []
@@ -438,7 +438,7 @@ async def test_production_loop_fires_after_real_sleep() -> None:
         run_background_loop=True,
     )
 
-    process = FakeBackgroundProcess()
+    process = FakeSpyBackgroundProcess()
     # First wakeup: 0.2s in the future.  Second: None so the process
     # is removed from the heap after firing.
     process.next_wakeup_values = [scheduled_at, None]

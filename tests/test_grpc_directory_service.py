@@ -1,7 +1,7 @@
 """Unit tests for :class:`src.grpc_mod.directory_service.GrpcDirectoryService`.
 
 These tests pin the gRPC adapter's behaviour on top of the shared
-:class:`~tests.stubs.directory_service._StubDirectoryService` so they
+:class:`~tests.doubles.fakespys.directory_service._FakeSpyDirectoryService` so they
 do not require Postgres, SpiceDB, or any other infrastructure.
 
 Coverage:
@@ -24,7 +24,7 @@ from typing import Optional, cast
 import grpc
 from grpc.aio import ServicerContext
 
-from tests.stubs import _StubDirectoryService, _UserContextFactory, silent_logger
+from tests.doubles import _FakeSpyDirectoryService, _StubUserContextFactory, silent_logger
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
@@ -40,36 +40,28 @@ from src.grpc_mod.proto.note_pb2 import (
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.directory_service import GrpcDirectoryService
 
+from tests.doubles.dummies.fake_context import _DummyContext
+
 
 def _to_grpc() -> ConvertToGrpcVisitor:
     return ConvertToGrpcVisitor()
 
 
-class _FakeContext:
-    def __init__(self) -> None:
-        self.code: Optional[grpc.StatusCode] = None
-        self.details: Optional[str] = None
-
-    def set_code(self, code: grpc.StatusCode) -> None:
-        self.code = code
-
-    def set_details(self, details: str) -> None:
-        self.details = details
 
 
-def _service(impl: _StubDirectoryService) -> GrpcDirectoryService:
+def _service(impl: _FakeSpyDirectoryService) -> GrpcDirectoryService:
     return GrpcDirectoryService(
         directory_service=impl,
         log=silent_logger,
         to_grpc=_to_grpc(),
-        context_factory=_UserContextFactory(),
+        context_factory=_StubUserContextFactory(),
     )
 
 
 async def test_get_directories_requires_user_id() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetDirectoriesRequest(user_id="")
     result = [
@@ -86,10 +78,10 @@ async def test_get_directories_returns_only_user_visible_directories() -> None:
     dir_2 = DirectoryEntity(id="dir-2", slug="two", parent_directory_ids=["parent-a"], relations=[])
     dir_3 = DirectoryEntity(id="dir-3", slug="three", parent_directory_ids=["parent-b"], relations=[])
 
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.directories_for_user["user-1"] = [dir_1, dir_2, dir_3]
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetDirectoriesRequest(user_id="user-1", parent_id="parent-a", limit=1, offset=1)
     result = [
@@ -105,10 +97,10 @@ async def test_get_directories_returns_only_user_visible_directories() -> None:
 
 
 async def test_get_directories_permission_denied_returns_perm_code() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.get_directories_deny = True
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetDirectoriesRequest(user_id="user-1")
     result = [
@@ -120,9 +112,9 @@ async def test_get_directories_permission_denied_returns_perm_code() -> None:
 
 
 async def test_get_directory_returns_not_found_when_service_reports_missing() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.GetDirectory(
         GetDirectoryRequest(id="dir-missing", user_id="user-1"),
@@ -134,10 +126,10 @@ async def test_get_directory_returns_not_found_when_service_reports_missing() ->
 
 
 async def test_get_directory_returns_permission_denied_when_service_raises() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.get_directory_deny = True
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.GetDirectory(
         GetDirectoryRequest(id="dir-1", user_id="user-1"),
@@ -149,9 +141,9 @@ async def test_get_directory_returns_permission_denied_when_service_raises() -> 
 
 
 async def test_get_directory_requires_id() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.GetDirectory(
         GetDirectoryRequest(id="", user_id="user-1"),
@@ -163,9 +155,9 @@ async def test_get_directory_requires_id() -> None:
 
 
 async def test_delete_directory_requires_id() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.DeleteDirectory(
         DeleteDirectoryRequest(id="", user_id="user-1"),
@@ -177,10 +169,10 @@ async def test_delete_directory_requires_id() -> None:
 
 
 async def test_delete_directory_returns_not_found_when_service_reports_missing() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.delete_result = False
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.DeleteDirectory(
         DeleteDirectoryRequest(id="dir-missing", user_id="user-1"),
@@ -194,9 +186,9 @@ async def test_delete_directory_returns_not_found_when_service_reports_missing()
 
 
 async def test_delete_directory_returns_deleted_id_on_success() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.DeleteDirectory(
         DeleteDirectoryRequest(id="dir-1", user_id="user-1"),
@@ -209,10 +201,10 @@ async def test_delete_directory_returns_deleted_id_on_success() -> None:
 
 
 async def test_delete_directory_returns_permission_denied_when_service_raises() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.delete_deny = True
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.DeleteDirectory(
         DeleteDirectoryRequest(id="dir-1", user_id="user-1"),
@@ -224,9 +216,9 @@ async def test_delete_directory_returns_permission_denied_when_service_raises() 
 
 
 async def test_patch_directory_requires_id() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.PatchDirectory(
         AlterDirectoryRequest(id="", user_id="user-1", name="new-name"),
@@ -238,10 +230,10 @@ async def test_patch_directory_requires_id() -> None:
 
 
 async def test_patch_directory_returns_not_found_for_missing_directory() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.patch_result = None
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.PatchDirectory(
         AlterDirectoryRequest(id="dir-missing", user_id="user-1", name="new-name"),
@@ -253,7 +245,7 @@ async def test_patch_directory_returns_not_found_for_missing_directory() -> None
 
 
 async def test_patch_directory_passes_entity_to_service() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.patch_result = DirectoryEntity(
         id="dir-1",
         slug="new-name",
@@ -262,7 +254,7 @@ async def test_patch_directory_passes_entity_to_service() -> None:
         relations=[],
     )
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.PatchDirectory(
         AlterDirectoryRequest(
@@ -287,10 +279,10 @@ async def test_patch_directory_passes_entity_to_service() -> None:
 
 async def test_patch_directory_shelf_ids_change_forwards_to_service() -> None:
     """`shelf_ids_change` flows verbatim into `patch_directory`."""
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.patch_result = DirectoryEntity(id="dir-1", slug="d", relations=[])
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.PatchDirectory(
         AlterDirectoryRequest(
@@ -310,10 +302,10 @@ async def test_patch_directory_shelf_ids_change_forwards_to_service() -> None:
 
 async def test_patch_directory_omitted_oneofs_leave_fields_undefined() -> None:
     """Without any oneof arms, the corresponding entity fields stay UNDEFINED."""
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.patch_result = DirectoryEntity(id="dir-1", slug="d", relations=[])
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.PatchDirectory(
         AlterDirectoryRequest(id="dir-1", user_id="user-1"),
@@ -329,10 +321,10 @@ async def test_patch_directory_omitted_oneofs_leave_fields_undefined() -> None:
 
 async def test_patch_directory_empty_ids_replaces_with_empty_list() -> None:
     """Explicit empty ids list stays [] (not collapsed to UNDEFINED)."""
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.patch_result = DirectoryEntity(id="dir-1", slug="d", relations=[])
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     await service.PatchDirectory(
         AlterDirectoryRequest(
@@ -350,9 +342,9 @@ async def test_patch_directory_empty_ids_replaces_with_empty_list() -> None:
 
 
 async def test_create_directory_requires_name() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.CreateDirectory(
         CreateDirectoryRequest(name="", user_id="user-1"),
@@ -364,10 +356,10 @@ async def test_create_directory_requires_name() -> None:
 
 
 async def test_create_directory_permission_denied() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.create_deny = True
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     result = await service.CreateDirectory(
         CreateDirectoryRequest(name="root", user_id="user-1"),
@@ -379,9 +371,9 @@ async def test_create_directory_permission_denied() -> None:
 
 
 async def test_get_notes_of_directory_requires_directory_id() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetNotesOfDirectoryRequest(directory_id="", user_id="user-1")
     result = await service.GetNotesOfDirectory(request, cast(ServicerContext, context))
@@ -392,9 +384,9 @@ async def test_get_notes_of_directory_requires_directory_id() -> None:
 
 
 async def test_get_notes_of_directory_requires_user_id() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetNotesOfDirectoryRequest(directory_id="dir-1", user_id="")
     result = await service.GetNotesOfDirectory(request, cast(ServicerContext, context))
@@ -405,10 +397,10 @@ async def test_get_notes_of_directory_requires_user_id() -> None:
 
 
 async def test_get_notes_of_directory_permission_denied() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.get_notes_deny = True
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetNotesOfDirectoryRequest(
         directory_id="dir-1", user_id="user-1", limit=10, offset=0
@@ -424,11 +416,11 @@ async def test_get_notes_of_directory_yields_paginated_notes() -> None:
         NoteEntity(note_id=f"note-{i}", title=f"note-{i}", author_id="user-1", content="")
         for i in range(3)
     ]
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     impl.notes_for_directory["dir-1"] = notes
 
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetNotesOfDirectoryRequest(
         directory_id="dir-1", user_id="user-1", limit=2, offset=0
@@ -444,9 +436,9 @@ async def test_get_notes_of_directory_yields_paginated_notes() -> None:
 
 
 async def test_get_notes_of_directory_rejects_negative_offset() -> None:
-    impl = _StubDirectoryService()
+    impl = _FakeSpyDirectoryService()
     service = _service(impl)
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetNotesOfDirectoryRequest(
         directory_id="dir-1", user_id="user-1", limit=10, offset=-1

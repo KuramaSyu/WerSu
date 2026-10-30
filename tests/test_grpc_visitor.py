@@ -20,7 +20,7 @@ from datetime import datetime
 
 import pytest
 
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.api.services.note_service import NoteResponse
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
@@ -35,7 +35,7 @@ from src.grpc_mod.proto.note_pb2 import Directory, Note, NoteResponse as GrpcNot
 from src.grpc_mod.proto.sharing_pb2 import NoteShare
 from src.grpc_mod.proto.user_pb2 import User
 from src.grpc_mod.proto.shelf_pb2 import Shelf as GrpcShelf
-from tests.stubs.visitor import StubVisitor, make_relationship
+from tests.doubles import SpyVisitor, make_relationship
 
 
 # ---------------------------------------------------------------------------
@@ -50,8 +50,8 @@ def _visitor() -> ConvertToGrpcVisitor:
     return ConvertToGrpcVisitor()
 
 
-def _stub() -> StubVisitor:
-    return StubVisitor()
+def _stub() -> SpyVisitor:
+    return SpyVisitor()
 
 
 # ---------------------------------------------------------------------------
@@ -413,8 +413,8 @@ def test_visit_note_response_forwards_id_token_map_for_temporary_users() -> None
 
 
 def test_stub_visitor_records_note_responses() -> None:
-    """`StubVisitor.visit_note_response` records responses when enabled."""
-    stub = StubVisitor()
+    """`SpyVisitor.visit_note_response` records responses when enabled."""
+    stub = SpyVisitor()
     response = NoteResponse(note=NoteEntity(note_id="n1", title="t", content="c", author_id="a1"))
 
     result = stub.visit_note_response(response)
@@ -425,7 +425,7 @@ def test_stub_visitor_records_note_responses() -> None:
 
 def test_stub_visitor_can_mute_note_response_recording() -> None:
     """`record_note_response=False` makes `visit_note_response` a pass-through."""
-    stub = StubVisitor(record_note_response=False)
+    stub = SpyVisitor(record_note_response=False)
     response = NoteResponse(note=NoteEntity(note_id="n1", title="t", content="c", author_id="a1"))
 
     result = stub.visit_note_response(response)
@@ -457,8 +457,11 @@ def test_note_response_convert_is_an_alias_for_visit() -> None:
         permissions=[],
     )
     response = NoteResponse(note=entity)
-    visitor = _visitor()
+    spy = _stub()
 
+    assert response.visit(spy) is response
+    assert response.convert(spy) is response
+    assert spy.note_responses == [response, response]
 
 
 # ---------------------------------------------------------------------------

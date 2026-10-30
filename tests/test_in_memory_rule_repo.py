@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from src.api.other.undefined import UNDEFINED
-from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
+from tests.doubles import InMemoryRuleRepo
 from src.db.entities.rule import RuleEntity
 
 
@@ -34,7 +34,6 @@ def _make(
     )
 
 
-@pytest.mark.asyncio
 async def test_create_rule_assigns_id_and_timestamps():
     repo = InMemoryRuleRepo()
     rule = await repo.create_rule(_make())
@@ -43,7 +42,6 @@ async def test_create_rule_assigns_id_and_timestamps():
     assert rule.updated_at is not None
 
 
-@pytest.mark.asyncio
 async def test_create_rule_validates_required_fields():
     repo = InMemoryRuleRepo()
     bad = RuleEntity(
@@ -59,27 +57,23 @@ async def test_create_rule_validates_required_fields():
         await repo.create_rule(bad)
 
 
-@pytest.mark.asyncio
 async def test_get_rule_by_id_returns_none_for_missing():
     repo = InMemoryRuleRepo()
     assert await repo.get_rule_by_id("missing") is None
 
 
-@pytest.mark.asyncio
 async def test_update_rule_requires_id():
     repo = InMemoryRuleRepo()
     with pytest.raises(ValueError, match="id is required"):
         await repo.update_rule(RuleEntity(id=UNDEFINED, enabled=False))
 
 
-@pytest.mark.asyncio
 async def test_update_rule_404s_on_missing():
     repo = InMemoryRuleRepo()
     with pytest.raises(ValueError, match="rule not found"):
         await repo.update_rule(RuleEntity(id="missing", enabled=False))
 
 
-@pytest.mark.asyncio
 async def test_update_rule_bumps_updated_at():
     repo = InMemoryRuleRepo()
     created = await repo.create_rule(_make())
@@ -93,14 +87,12 @@ async def test_update_rule_bumps_updated_at():
     assert updated.created_at == created.created_at
 
 
-@pytest.mark.asyncio
 async def test_delete_rule_404s_on_missing():
     repo = InMemoryRuleRepo()
     with pytest.raises(ValueError, match="rule not found"):
         await repo.delete_rule("missing")
 
 
-@pytest.mark.asyncio
 async def test_delete_rule_removes():
     repo = InMemoryRuleRepo()
     created = await repo.create_rule(_make())
@@ -108,7 +100,6 @@ async def test_delete_rule_removes():
     assert await repo.get_rule_by_id(created.id) is None
 
 
-@pytest.mark.asyncio
 async def test_list_rules_filters_by_event_type():
     repo = InMemoryRuleRepo()
     await repo.create_rule(_make(event_type="NoteCreated"))
@@ -118,7 +109,6 @@ async def test_list_rules_filters_by_event_type():
     assert out[0].event_type == "NoteCreated"
 
 
-@pytest.mark.asyncio
 async def test_list_rules_filters_by_enabled_only():
     repo = InMemoryRuleRepo()
     await repo.create_rule(_make(enabled=True))
@@ -128,7 +118,6 @@ async def test_list_rules_filters_by_enabled_only():
     assert out[0].enabled is True
 
 
-@pytest.mark.asyncio
 async def test_list_rules_filters_by_attached_entity():
     repo = InMemoryRuleRepo()
     await repo.create_rule(_make(
@@ -147,7 +136,6 @@ async def test_list_rules_filters_by_attached_entity():
     assert out[0].attached_entity_id == "d1"
 
 
-@pytest.mark.asyncio
 async def test_list_rules_filters_by_creator_id():
     repo = InMemoryRuleRepo()
     await repo.create_rule(_make(creator_id="alice"))
@@ -157,7 +145,6 @@ async def test_list_rules_filters_by_creator_id():
     assert out[0].creator_id == "alice"
 
 
-@pytest.mark.asyncio
 async def test_list_rules_for_event_only_returns_enabled():
     repo = InMemoryRuleRepo()
     await repo.create_rule(_make(event_type="NoteCreated", enabled=True))

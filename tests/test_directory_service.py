@@ -1,11 +1,11 @@
 """Unit tests for :class:`src.services.directory.DirectoryServiceImpl`.
 
 These tests reuse the shared test doubles from
-:mod:`tests._fixtures_pkg.fakes` and :mod:`tests.db.repos.permissions`
+:mod:`tests.doubles` and :mod:`tests.db.repos.permissions`
 so the suite does not need Postgres or SpiceDB.  The
-:class:`~tests._fixtures_pkg.fakes._FakeNoteRepoFacade` covers the
+:class:`~tests.doubles.fakespys.note_repo_facade._FakeSpyNoteRepoFacade` covers the
 note-repo surface and the canonical in-memory
-:class:`~tests.stubs.in_memory_permission_repo.InMemoryPermissionRepo`
+:class:`~tests.doubles.fakes.in_memory_permission_repo.InMemoryPermissionRepo`
 covers permissions.
 
 Coverage:
@@ -17,9 +17,11 @@ Coverage:
 
 from __future__ import annotations
 
+import pytest
+
 from datetime import datetime
 
-from tests.stubs.user_context import _UserContext
+from tests.doubles import _DummyUserContext
 from src.api.other.relationship import (
     DirectoryRelationEnum,
     NoteRelationEnum,
@@ -32,22 +34,22 @@ from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory_facade import DirectoryEntity
 from src.services.directory import DirectoryServiceImpl, README_TITLE
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests._fixtures_pkg.fakes import _FakeNoteRepoFacade, _TestDirectoryRepo
-from tests.stubs.activity_logger_service import _FakeActivityLoggerService
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import _FakeSpyNoteRepoFacade, _FakeSpyDirectoryRepo
+from tests.doubles import _FakeSpyActivityLoggerService
 
 
 def _make_service() -> tuple[
     DirectoryServiceImpl,
-    _TestDirectoryRepo,
-    _FakeNoteRepoFacade,
+    _FakeSpyDirectoryRepo,
+    _FakeSpyNoteRepoFacade,
     InMemoryPermissionRepo,
-    _FakeActivityLoggerService,
+    _FakeSpyActivityLoggerService,
 ]:
     permission_repo = InMemoryPermissionRepo()
-    directory_repo = _TestDirectoryRepo(permission_repo=permission_repo)
-    note_repo = _FakeNoteRepoFacade()
-    activity_logger = _FakeActivityLoggerService()
+    directory_repo = _FakeSpyDirectoryRepo(permission_repo=permission_repo)
+    note_repo = _FakeSpyNoteRepoFacade()
+    activity_logger = _FakeSpyActivityLoggerService()
     service = DirectoryServiceImpl(
         directory_facade=directory_repo,
         note_facade=note_repo,
@@ -97,7 +99,7 @@ async def test_get_directory_notes_creates_readme_when_missing() -> None:
     )
 
     notes = await service.get_directory_notes(
-        "dir-1", _UserContext("user-1"), limit=10, offset=0
+        "dir-1", _DummyUserContext("user-1"), limit=10, offset=0
     )
 
     assert len(note_repo.insert_calls) == 1
@@ -146,7 +148,7 @@ async def test_get_directory_notes_returns_existing_readme_at_offset_zero() -> N
     )
 
     notes = await service.get_directory_notes(
-        "dir-1", _UserContext("user-1"), limit=10, offset=0
+        "dir-1", _DummyUserContext("user-1"), limit=10, offset=0
     )
 
     assert [n.note_id for n in notes] == ["note-1", "note-2"]
@@ -195,10 +197,10 @@ async def test_get_directory_notes_paginates_with_offset() -> None:
     await permission_repo.insert(rels)
 
     page0 = await service.get_directory_notes(
-        "dir-1", _UserContext("user-1"), limit=2, offset=0
+        "dir-1", _DummyUserContext("user-1"), limit=2, offset=0
     )
     page1 = await service.get_directory_notes(
-        "dir-1", _UserContext("user-1"), limit=2, offset=2
+        "dir-1", _DummyUserContext("user-1"), limit=2, offset=2
     )
 
     assert [n.note_id for n in page0] == ["readme-id", "note-0"]
@@ -207,28 +209,26 @@ async def test_get_directory_notes_paginates_with_offset() -> None:
 
 
 async def test_patch_directory_requires_write_permission() -> None:
-    service, _, _, _, _ = _make_service()
+    service, directory_repo, _, _, _ = _make_service()
 
-    try:
+    with pytest.raises(PermissionError):
         await service.patch_directory(
             DirectoryEntity(id="dir-1", slug="x"),
-            _UserContext("user-1"),
+            _DummyUserContext("user-1"),
         )
-    except PermissionError:
-        pass
-    else:
-        raise AssertionError("expected PermissionError for unknown directory")
+
+    # The denied patch must not reach the repo.
+    assert directory_repo.updated == []
 
 
 async def test_delete_directory_requires_delete_permission() -> None:
-    service, _, _, _, _ = _make_service()
+    service, directory_repo, _, _, _ = _make_service()
 
-    try:
-        await service.delete_directory("dir-1", _UserContext("user-1"))
-    except PermissionError:
-        pass
-    else:
-        raise AssertionError("expected PermissionError for unknown directory")
+    with pytest.raises(PermissionError):
+        await service.delete_directory("dir-1", _DummyUserContext("user-1"))
+
+    # The denied delete must not reach the repo.
+    assert directory_repo.deleted == []
 
 
 async def test_create_directory_grants_caller_admin_relation() -> None:
@@ -236,7 +236,7 @@ async def test_create_directory_grants_caller_admin_relation() -> None:
 
     await service.create_directory(
         DirectoryEntity(slug="root"),
-        _UserContext("user-1"),
+        _DummyUserContext("user-1"),
     )
 
     assert len(directory_repo.created) == 1
@@ -255,7 +255,7 @@ async def test_create_directory_binds_readme_note_when_not_supplied() -> None:
 
     created = await service.create_directory(
         DirectoryEntity(slug="root"),
-        _UserContext("user-1"),
+        _DummyUserContext("user-1"),
     )
 
     # one README note was inserted during create_directory
@@ -294,7 +294,7 @@ async def test_create_directory_does_not_overwrite_supplied_readme_note_id() -> 
 
     created = await service.create_directory(
         DirectoryEntity(slug="root", readme_note_id="preset-readme"),
-        _UserContext("user-1"),
+        _DummyUserContext("user-1"),
     )
 
     assert note_repo.insert_calls == []
@@ -323,7 +323,7 @@ async def test_get_directory_records_directory_viewed() -> None:
     )
     await _grant_view(permission_repo, "user-1", "dir-1")
 
-    await service.get_directory("dir-1", _UserContext("user-1"))
+    await service.get_directory("dir-1", _DummyUserContext("user-1"))
 
     assert activity_logger.calls == [
         ("directory_viewed", "dir-1", "user-1", {"directory_slug": "root"})
@@ -336,7 +336,7 @@ async def test_get_directory_does_not_record_on_miss() -> None:
     directory_repo.directories_by_id.clear()
 
     try:
-        await service.get_directory("missing", _UserContext("user-1"))
+        await service.get_directory("missing", _DummyUserContext("user-1"))
     except PermissionError:
         pass
 
@@ -364,7 +364,7 @@ async def test_get_directory_does_not_record_on_miss() -> None:
 #         ]
 #     )
 
-#     await service.get_directories(_UserContext("user-1"))
+#     await service.get_directories(_DummyUserContext("user-1"))
 
 #     assert activity_logger.calls == [
 #         ("directory_viewed", "dir-1", "user-1", {}),
@@ -378,7 +378,7 @@ async def test_create_directory_records_directory_created() -> None:
 
     created = await service.create_directory(
         DirectoryEntity(slug="root"),
-        _UserContext("user-1"),
+        _DummyUserContext("user-1"),
     )
 
     assert (
@@ -407,7 +407,7 @@ async def test_patch_directory_records_directory_edited() -> None:
 
     await service.patch_directory(
         DirectoryEntity(id="dir-1", slug="renamed"),
-        _UserContext("user-1"),
+        _DummyUserContext("user-1"),
     )
 
     assert (
@@ -434,7 +434,7 @@ async def test_delete_directory_records_directory_deleted() -> None:
         ]
     )
 
-    deleted = await service.delete_directory("dir-1", _UserContext("user-1"))
+    deleted = await service.delete_directory("dir-1", _DummyUserContext("user-1"))
 
     assert deleted is True
     assert (
@@ -453,7 +453,7 @@ async def test_delete_directory_does_not_record_on_permission_denied() -> None:
     )
 
     try:
-        await service.delete_directory("dir-1", _UserContext("user-1"))
+        await service.delete_directory("dir-1", _DummyUserContext("user-1"))
     except PermissionError:
         pass
 

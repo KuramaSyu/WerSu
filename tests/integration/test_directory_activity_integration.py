@@ -12,14 +12,14 @@ import uuid
 
 import pytest
 
-from tests.stubs.user_context import _UserContext as UserContext
-from tests._fixtures_pkg.fakes import (
+from tests.doubles import _DummyUserContext as UserContext
+from tests.doubles import (
     _FakeDirectorySubdirectoryTable,
     _FakeDirectoryNoteTable,
     _FakeDirectoryTable,
-    _FakeTagRepo,
+    _FakeSpyTagRepo,
 )
-from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
+from tests.doubles import _DummyShelfRepo
 from src.api import ObjectRef, Relationship, SubjectRef
 from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.directory.postgres import PostgresDirectoryRepo
@@ -70,9 +70,9 @@ async def test_resolve_files_of_directory_spicedb(
             directory_note_table=note_table,
         ),
         permission_repo=spicedb_permission_repo,
-        tag_repo=_FakeTagRepo(),
+        tag_repo=_FakeSpyTagRepo(),
         log=lambda *_a, **_k: logging.getLogger('test.directory_activity'),
-        shelf_repo=NoopShelfRepo(),
+        shelf_repo=_DummyShelfRepo(),
     )
 
     resolved = await directory_repo.resolve_files_of_directory(

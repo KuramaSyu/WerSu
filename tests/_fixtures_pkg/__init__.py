@@ -6,13 +6,13 @@ visible to pytest (see ``tests/conftest.py``).
 The submodules are split by infrastructure dependency so individual
 tests can opt in to only what they need:
 
-* :mod:`tests.fixtures.spicedb_schema`  -> SpiceDB container + client helpers.
-* :mod:`tests.fixtures.spicedb`         -> SpiceDB-backed ``permission_repo``,
-                                           including the one used by all three
-                                           permission-flavored integration suites.
-* :mod:`tests.fixtures.postgres`        -> Postgres + SpiceDB combined env.
-* :mod:`tests.fixtures.garage`          -> Garage S3 container + client.
-* :mod:`tests.fixtures.fakes`           -> In-memory test doubles for unit tests.
+* :mod:`tests._fixtures_pkg.spicedb_schema` -> SpiceDB container + client helpers.
+* :mod:`tests._fixtures_pkg.spicedb`        -> SpiceDB-backed ``permission_repo``,
+                                              including the one used by all three
+                                              permission-flavored integration suites.
+* :mod:`tests._fixtures_pkg.postgres`       -> Postgres + SpiceDB combined env.
+* :mod:`tests._fixtures_pkg.garage`         -> Garage S3 container + client.
+* :mod:`tests.doubles`                      -> In-memory test doubles for unit tests.
 
 The older ``tests/integration_helpers.py`` module re-exports the names
 that integration tests already import, so the new layout is backwards

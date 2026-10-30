@@ -18,7 +18,7 @@ from src.db.repos.user.user_auth_postgres import PostgresUserAuthRepoImpl
 from src.grpc_mod.converter.postgres_row_converter import (
     PostgresRowConverter,
 )
-from tests.stubs.recording_table import RecordingTable
+from tests.doubles import RecordingTable
 
 
 def _wire() -> tuple[PostgresUserAuthRepoImpl, RecordingTable, RecordingTable,

@@ -4,7 +4,7 @@ from typing import AsyncGenerator, Optional
 from uuid import UUID
 import pytest
 from testcontainers.postgres import PostgresContainer
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.user.user import UserEntity
 from src.api.facades.note_facade import NoteFacadeABC

@@ -27,7 +27,7 @@ from typing import Optional, cast
 import grpc
 from grpc.aio import ServicerContext
 
-from tests.stubs.user_context import _UserContextFactory
+from tests.doubles import _StubUserContextFactory
 from src.api.other.undefined import UNDEFINED
 from src.api.other.user_context import UserContextABC
 from src.api.services.note_service import NoteIncludeOptions, NoteResponse, NoteServiceABC
@@ -42,65 +42,12 @@ from src.grpc_mod.proto.note_pb2 import (
 )
 from src.grpc_mod.note_service import GrpcNoteService
 
-
-class _FakeContext:
-    def __init__(self) -> None:
-        self.code: Optional[grpc.StatusCode] = None
-        self.details: Optional[str] = None
-
-    def set_code(self, code: grpc.StatusCode) -> None:
-        self.code = code
-
-    def set_details(self, details: str) -> None:
-        self.details = details
+from tests.doubles.dummies.fake_context import _DummyContext
+from tests.doubles.fakespys.grpc_note_service import _FakeSpyGrpcNoteService, _FakeSpyCapturingNoteService, _FakeSpyUpdateNoteService
 
 
-class _StubNoteService(NoteServiceABC):
-    """`NoteServiceABC` stub that returns a preset :class:`NoteResponse`."""
 
-    def __init__(self, response: NoteResponse) -> None:
-        self._response = response
-        self.last_note_id: Optional[str] = None
-        self.last_user_ctx: Optional[UserContextABC] = None
 
-    async def get_note(
-        self,
-        note_id: str,
-        user_ctx: UserContextABC,
-        *,
-        include: Optional[NoteIncludeOptions] = None,
-    ) -> NoteResponse:
-        self.last_note_id = note_id
-        self.last_user_ctx = user_ctx
-        self.last_include = include
-        return self._response
-
-    async def insert_note(self, note, user_ctx):  # pragma: no cover - unused
-        raise NotImplementedError
-
-    async def update_note(self, note, user_ctx):  # pragma: no cover - unused
-        raise NotImplementedError
-
-    async def delete_note(self, note_id, user_ctx):  # pragma: no cover - unused
-        raise NotImplementedError
-
-    async def search_notes(
-        self,
-        search_type: str,
-        query: str,
-        user_ctx: UserContextABC,
-        limit: int,
-        offset: int,
-    ):  # pragma: no cover - unused
-        raise NotImplementedError
-
-    async def get_notes(
-        self,
-        note_ids,
-        user_ctx,
-        options=None,
-    ):  # pragma: no cover - unused
-        raise NotImplementedError
 
 
 def _log_provider(*_args, **_kwargs):
@@ -111,13 +58,13 @@ def _to_grpc() -> ConvertToGrpcVisitor:
     return ConvertToGrpcVisitor()
 
 
-def _make_service(response: NoteResponse) -> tuple[GrpcNoteService, _StubNoteService]:
-    note_service = _StubNoteService(response)
+def _make_service(response: NoteResponse) -> tuple[GrpcNoteService, _FakeSpyGrpcNoteService]:
+    note_service = _FakeSpyGrpcNoteService(response)
     service = GrpcNoteService(
         note_service=note_service,
         log=_log_provider,
         to_grpc=_to_grpc(),
-        context_factory=_UserContextFactory(),
+        context_factory=_StubUserContextFactory(),
     )
     return service, note_service
 
@@ -133,7 +80,7 @@ async def test_get_note_returns_note_response_with_resolved_note() -> None:
         permissions=[],
     )
     service, stub = _make_service(NoteResponse(note=entity))
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetNoteRequest(id="note-1", user_id="user-1")
     proto = await service.GetNote(request, cast(ServicerContext, context))
@@ -153,7 +100,7 @@ async def test_get_note_returns_note_response_with_resolved_note() -> None:
 async def test_get_note_returns_not_found_with_empty_response_on_miss() -> None:
     """A `None` note from the service yields `NOT_FOUND` + empty `NoteResponse`."""
     service, stub = _make_service(NoteResponse(note=None))
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetNoteRequest(id="ghost", user_id="user-1")
     proto = await service.GetNote(request, cast(ServicerContext, context))
@@ -183,7 +130,7 @@ async def test_get_note_forwards_temporary_user_jwt_map_to_proto() -> None:
             id_token_map={"att-a": "jwt:user-1:att-a", "att-b": "jwt:user-1:att-b"},
         )
     )
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = GetNoteRequest(id="note-1", user_id="user-1")
     proto = await service.GetNote(request, cast(ServicerContext, context))
@@ -202,47 +149,15 @@ async def test_get_note_forwards_temporary_user_jwt_map_to_proto() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _CapturingNoteService(NoteServiceABC):
-    """Records the entity handed to `insert_note` and echoes a fake id."""
-
-    def __init__(self) -> None:
-        self.last_note = None
-        self.last_user_ctx = None
-
-    async def insert_note(self, note, user_ctx):
-        self.last_note = note
-        self.last_user_ctx = user_ctx
-        # the repo would normally assign an id; fake one so the
-        # grpc visitor can serialize the response without raising.
-        if note.note_id is None or note.note_id is UNDEFINED:
-            note.note_id = "note-fake-id"
-        return note
-
-    async def update_note(self, note, user_ctx):  # pragma: no cover
-        raise NotImplementedError
-
-    async def delete_note(self, note_id, user_ctx):  # pragma: no cover
-        raise NotImplementedError
-
-    async def get_note(self, note_id, user_ctx, *, include=None):  # pragma: no cover
-        raise NotImplementedError
-
-    async def search_notes(  # pragma: no cover
-        self, search_type, query, user_ctx, limit, offset,
-    ):
-        raise NotImplementedError
-
-    async def get_notes(self, note_ids, user_ctx, options=None):  # pragma: no cover
-        raise NotImplementedError
 
 
-def _make_capturing_service() -> tuple[GrpcNoteService, _CapturingNoteService]:
-    note_service = _CapturingNoteService()
+def _make_capturing_service() -> tuple[GrpcNoteService, _FakeSpyCapturingNoteService]:
+    note_service = _FakeSpyCapturingNoteService()
     service = GrpcNoteService(
         note_service=note_service,
         log=_log_provider,
         to_grpc=_to_grpc(),
-        context_factory=_UserContextFactory(),
+        context_factory=_StubUserContextFactory(),
     )
     return service, note_service
 
@@ -250,7 +165,7 @@ def _make_capturing_service() -> tuple[GrpcNoteService, _CapturingNoteService]:
 async def test_post_note_with_directory_ids_forwards_them_and_skips_shelf() -> None:
     """directory_ids takes priority: shelf_id is ignored when set."""
     service, stub = _make_capturing_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = PostNoteRequest(
         title="hello",
@@ -274,7 +189,7 @@ async def test_post_note_with_directory_ids_forwards_them_and_skips_shelf() -> N
 async def test_post_note_with_shelf_id_only_passes_shelf_to_facade() -> None:
     """Only shelf_id: directory_ids stays UNDEFINED, shelf_ids = [shelf_id]."""
     service, stub = _make_capturing_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = PostNoteRequest(
         title="hello",
@@ -294,7 +209,7 @@ async def test_post_note_with_shelf_id_only_passes_shelf_to_facade() -> None:
 async def test_post_note_without_directory_or_shelf_returns_invalid_argument() -> None:
     """Both empty -> INVALID_ARGUMENT, no entity forwarded."""
     service, stub = _make_capturing_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = PostNoteRequest(
         title="hello",
@@ -313,7 +228,7 @@ async def test_post_note_without_directory_or_shelf_returns_invalid_argument() -
 async def test_post_note_with_blank_strings_is_treated_as_unset() -> None:
     """Blank shelf_id + empty directory_ids -> INVALID_ARGUMENT."""
     service, stub = _make_capturing_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = PostNoteRequest(
         title="hello",
@@ -333,43 +248,15 @@ async def test_post_note_with_blank_strings_is_treated_as_unset() -> None:
 # ---------------------------------------------------------------------------
 
 
-class _UpdateNoteStub(NoteServiceABC):
-    """`NoteServiceABC` stub that records the entity handed to `update_note`."""
-
-    def __init__(self) -> None:
-        self.last_note = None
-        self.last_user_ctx = None
-
-    async def update_note(self, note, user_ctx):
-        self.last_note = note
-        self.last_user_ctx = user_ctx
-        return note
-
-    async def insert_note(self, note, user_ctx):  # pragma: no cover
-        raise NotImplementedError
-
-    async def delete_note(self, note_id, user_ctx):  # pragma: no cover
-        raise NotImplementedError
-
-    async def get_note(self, note_id, user_ctx, *, include=None):  # pragma: no cover
-        raise NotImplementedError
-
-    async def search_notes(  # pragma: no cover
-        self, search_type, query, user_ctx, limit, offset,
-    ):
-        raise NotImplementedError
-
-    async def get_notes(self, note_ids, user_ctx, options=None):  # pragma: no cover
-        raise NotImplementedError
 
 
-def _make_update_service() -> tuple[GrpcNoteService, _UpdateNoteStub]:
-    stub = _UpdateNoteStub()
+def _make_update_service() -> tuple[GrpcNoteService, _FakeSpyUpdateNoteService]:
+    stub = _FakeSpyUpdateNoteService()
     service = GrpcNoteService(
         note_service=stub,
         log=_log_provider,
         to_grpc=_to_grpc(),
-        context_factory=_UserContextFactory(),
+        context_factory=_StubUserContextFactory(),
     )
     return service, stub
 
@@ -377,7 +264,7 @@ def _make_update_service() -> tuple[GrpcNoteService, _UpdateNoteStub]:
 async def test_patch_note_directory_ids_change_forwards_to_service() -> None:
     """A set `directory_ids_change` flows verbatim into `update_note`."""
     service, stub = _make_update_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = AlterNoteRequest(
         id="note-1",
@@ -396,7 +283,7 @@ async def test_patch_note_directory_ids_change_forwards_to_service() -> None:
 async def test_patch_note_tag_ids_change_forwards_to_service() -> None:
     """A set `tag_ids_change` flows verbatim into `update_note`."""
     service, stub = _make_update_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = AlterNoteRequest(
         id="note-1",
@@ -414,7 +301,7 @@ async def test_patch_note_tag_ids_change_forwards_to_service() -> None:
 async def test_patch_note_empty_ids_change_replaces_with_empty_list() -> None:
     """An explicit empty list replaces the field with [] (not UNDEFINED)."""
     service, stub = _make_update_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = AlterNoteRequest(
         id="note-1",
@@ -432,7 +319,7 @@ async def test_patch_note_empty_ids_change_replaces_with_empty_list() -> None:
 async def test_patch_note_omitted_ids_change_leaves_field_undefined() -> None:
     """Without the oneof arm, the entity field stays UNDEFINED."""
     service, stub = _make_update_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = AlterNoteRequest(id="note-1", author_id="user-1")
     await service.PatchNote(request, cast(ServicerContext, context))
@@ -446,7 +333,7 @@ async def test_patch_note_omitted_ids_change_leaves_field_undefined() -> None:
 async def test_patch_note_optional_title_forwards_to_service() -> None:
     """A set `title` flows into `update_note`; unset stays UNDEFINED."""
     service, stub = _make_update_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = AlterNoteRequest(
         id="note-1",
@@ -464,7 +351,7 @@ async def test_patch_note_optional_title_forwards_to_service() -> None:
 async def test_patch_note_optional_content_forwards_to_service() -> None:
     """A set `content` flows into `update_note`; unset stays UNDEFINED."""
     service, stub = _make_update_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = AlterNoteRequest(
         id="note-1",
@@ -482,7 +369,7 @@ async def test_patch_note_optional_content_forwards_to_service() -> None:
 async def test_patch_note_missing_author_id_returns_invalid_argument() -> None:
     """`author_id` is required; absent -> INVALID_ARGUMENT, no update."""
     service, stub = _make_update_service()
-    context = _FakeContext()
+    context = _DummyContext()
 
     request = AlterNoteRequest(id="note-1", user_id="user-1")
     proto = await service.PatchNote(request, cast(ServicerContext, context))

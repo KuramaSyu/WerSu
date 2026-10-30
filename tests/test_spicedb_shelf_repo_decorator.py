@@ -17,29 +17,17 @@ from src.api.other.undefined import UNDEFINED, unwrap_undefined
 from src.api.other.user_context import UserContextABC
 from src.db.entities.shelf import ShelfEntity
 from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import InMemoryShelfRepo
 from typing import Optional
 import pytest
+
+from tests.doubles.dummies.user_ctx import _DummyUserCtx
 
 
 # ---- helpers --------------------------------------------------------------
 
 
-class _UserCtx(UserContextABC):
-    def __init__(self, user_id: str) -> None:
-        self._uid = user_id
-
-    @property
-    def user_id(self) -> str:
-        return self._uid
-
-    @property
-    def type(self):  # type: ignore[override]
-        return UNDEFINED
-
-    async def is_temporary_user(self) -> bool:
-        return False
 
 
 def _make_decorated(
@@ -55,7 +43,7 @@ def _make_decorated(
 
 def _shelf_edges(perm: InMemoryPermissionRepo, *, user_id: str):
     return [
-        r for r in perm._store  # noqa: SLF001
+        r for r in perm.relationships
         if r.resource.object_type == ObjectTypeEnum.SHELF
         and r.subject.object_type == ObjectTypeEnum.USER
         and str(r.subject.object_id) == user_id
@@ -64,7 +52,7 @@ def _shelf_edges(perm: InMemoryPermissionRepo, *, user_id: str):
 
 def _directory_parent_edges(perm: InMemoryPermissionRepo, *, shelf_id: str):
     return [
-        r for r in perm._store  # noqa: SLF001
+        r for r in perm.relationships
         if r.resource.object_type == ObjectTypeEnum.DIRECTORY
         and str(r.relation) == DirectoryRelationEnum.PARENT
         and r.subject.object_type == ObjectTypeEnum.SHELF
@@ -77,7 +65,7 @@ def _directory_parent_edges(perm: InMemoryPermissionRepo, *, shelf_id: str):
 
 async def test_insert_shelf_grants_owner_on_the_new_shelf() -> None:
     decorator, storage, perm = _make_decorated()
-    persisted = await decorator.insert_shelf(slug="my shelf", user_ctx=_UserCtx("u-1"))
+    persisted = await decorator.insert_shelf(slug="my shelf", user_ctx=_DummyUserCtx("u-1"))
 
     assert await storage.fetch_shelf(unwrap_undefined(persisted.id)) is not None
     edges = _shelf_edges(perm, user_id="u-1")
@@ -94,8 +82,8 @@ async def test_insert_shelf_without_user_ctx_raises_and_writes_no_edges() -> Non
     decorator, storage, perm = _make_decorated()
     with pytest.raises(ValueError, match="requires user_ctx"):
         await decorator.insert_shelf(slug="my shelf")
-    assert perm._store == []  # noqa: SLF001
-    assert storage._shelves == {}  # noqa: SLF001
+    assert perm.is_empty()
+    assert storage.shelf_ids == []
 
 
 async def test_insert_shelf_without_permission_repo_is_a_type_error() -> None:
@@ -170,7 +158,7 @@ async def test_set_books_of_with_no_op_diff_writes_no_edges() -> None:
     decorator, _, perm = _make_decorated(seeded={"shelf-1": {"book-1", "book-2"}})
     newly_added = await decorator.set_books_of("shelf-1", ["book-1", "book-2"])
     assert newly_added == []
-    assert perm._store == []  # noqa: SLF001
+    assert perm.is_empty()
 
 
 async def test_set_books_of_returns_diff_to_caller() -> None:
@@ -185,7 +173,7 @@ async def test_set_books_of_returns_diff_to_caller() -> None:
 async def test_update_shelf_writes_no_edges() -> None:
     decorator, _, perm = _make_decorated()
     await decorator.update_shelf(id="shelf-1", slug="renamed")
-    assert perm._store == []  # noqa: SLF001
+    assert perm.is_empty()
 
 
 async def test_delete_shelf_revokes_every_shelf_edge() -> None:
@@ -195,16 +183,18 @@ async def test_delete_shelf_revokes_every_shelf_edge() -> None:
     """
     decorator, storage, perm = _make_decorated()
     # Inject a shelf row directly so the id is predictable.
-    storage._shelves["shelf-1"] = ShelfEntity(  # noqa: SLF001
-        id="shelf-1",
-        slug="s1",
-        display_name=None,
-        description=None,
-        image_url=None,
-        readme_note_id=None,
-        book_ids=[],
+    storage.seed_shelf(
+        ShelfEntity(
+            id="shelf-1",
+            slug="s1",
+            display_name=None,
+            description=None,
+            image_url=None,
+            readme_note_id=None,
+            book_ids=[],
+        )
     )
-    perm._store.extend(  # noqa: SLF001
+    await perm.insert(
         [
             Relationship(
                 resource=ObjectRef(ObjectTypeEnum.SHELF, "shelf-1"),
@@ -227,8 +217,8 @@ async def test_delete_shelf_revokes_every_shelf_edge() -> None:
 
     await decorator.delete_shelf("shelf-1")
 
-    assert all(str(r.resource.object_id) != "shelf-1" for r in perm._store)  # noqa: SLF001
-    assert any(str(r.resource.object_id) == "shelf-other" for r in perm._store)  # noqa: SLF001
+    assert all(str(r.resource.object_id) != "shelf-1" for r in perm.relationships)
+    assert any(str(r.resource.object_id) == "shelf-other" for r in perm.relationships)
 
 
 async def test_delete_shelf_does_not_revoke_directory_scoped_edges() -> None:
@@ -249,7 +239,7 @@ async def test_delete_shelf_on_missing_shelf_returns_false_without_touching_repo
     """No storage row -> no revoke attempt -> no repo call."""
     decorator, _, perm = _make_decorated()
     assert await decorator.delete_shelf("does-not-exist") is False
-    assert perm._store == []  # noqa: SLF001
+    assert perm.is_empty()
 
 
 # ---- read methods pass through unchanged ---------------------------------

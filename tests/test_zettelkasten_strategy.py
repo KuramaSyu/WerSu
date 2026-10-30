@@ -17,105 +17,16 @@ from src.services.shelf_bootstrap import (
     ensure_default_fleeting_rule,
 )
 from src.services.shelf_bootstrap.registry import STRATEGIES
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
-from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import InMemoryRuleRepo
+from tests.doubles import InMemoryShelfRepo
+
+from tests.doubles.dummies.user_ctx import _DummyUserCtx
+from tests.doubles.fakes.zettelkasten_strategy import FakeDirectoryFacade
 
 
-class _UserCtx(UserContextABC):
-    def __init__(self, user_id: str) -> None:
-        self._user_id = user_id
-
-    @property
-    def user_id(self) -> str:
-        return self._user_id
-
-    @property
-    def type(self):  # type: ignore[override]
-        return UNDEFINED
-
-    async def is_temporary_user(self) -> bool:
-        return False
 
 
-class FakeDirectoryFacade(DirectoryFacadeABC):
-    def __init__(self) -> None:
-        self._counter = 0
-        self.created: List[DirectoryEntity] = []
-        self._by_id = {}
-
-    def _mint_id(self) -> str:
-        self._counter += 1
-        return f"dir-{self._counter}"
-
-    async def create_directory(
-        self,
-        entity: DirectoryEntity,
-        user_ctx: UserContextABC = None,
-    ) -> DirectoryEntity:
-        new_id = self._mint_id()
-        created = DirectoryEntity(
-            id=new_id,
-            slug=entity.slug,
-            display_name=entity.display_name,
-            description=entity.description,
-        )
-        self.created.append(created)
-        self._by_id[new_id] = created
-        return created
-
-    async def fetch_directories_by_ids(
-        self, ids: List[str],
-    ) -> List[DirectoryEntity]:
-        out: List[DirectoryEntity] = []
-        for did in ids:
-            d = self._by_id.get(str(did))
-            if d is not None:
-                out.append(d)
-        return out
-
-    # Unused abstract stubs - raise loudly if accidentally hit.
-    async def fetch_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def update_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def delete_directory(self, *args, **kwargs) -> bool:
-        raise NotImplementedError
-
-    async def list_user_directory_ids(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def set_parents_of(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    async def get_parents_of(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def get_children_of(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def get_children_for(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def get_parents_for(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def add_child_to(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    async def remove_child_from(self, *args, **kwargs) -> None:
-        raise NotImplementedError
-
-    async def fetch_all_directories(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def resolve_files_of_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    async def resolve_subtree(self, *args, **kwargs):
-        raise NotImplementedError
 
 
 def _make_strategy():
@@ -145,7 +56,7 @@ def _make_strategy():
 async def _make_shelf(shelf_repo: InMemoryShelfRepo) -> ShelfEntity:
     """Insert a real shelf row; the strategy needs a real id to probe."""
     return await shelf_repo.insert_shelf(
-        slug="my shelf", display_name="My Shelf", user_ctx=_UserCtx("user-1"),
+        slug="my shelf", display_name="My Shelf", user_ctx=_DummyUserCtx("user-1"),
     )
 
 
@@ -163,7 +74,7 @@ async def test_apply_creates_three_default_books_and_a_rule() -> None:
     sid = _shelf_id(shelf)
 
     result = await strategy.apply(
-        shelf=shelf, owner_id="user-1", user_ctx=_UserCtx("user-1"),
+        shelf=shelf, owner_id="user-1", user_ctx=_DummyUserCtx("user-1"),
     )
 
     assert len(facade.created) == 3
@@ -193,13 +104,13 @@ async def test_apply_skips_books_that_already_exist_by_slug() -> None:
     sid = _shelf_id(shelf)
 
     await strategy.apply(
-        shelf=shelf, owner_id="user-1", user_ctx=_UserCtx("user-1"),
+        shelf=shelf, owner_id="user-1", user_ctx=_DummyUserCtx("user-1"),
     )
     assert len(facade.created) == 3
     bound_after_first = await shelf_repo.get_books_of(sid)
 
     result = await strategy.apply(
-        shelf=shelf, owner_id="user-1", user_ctx=_UserCtx("user-1"),
+        shelf=shelf, owner_id="user-1", user_ctx=_DummyUserCtx("user-1"),
     )
     assert len(facade.created) == 3, "second apply must not duplicate books"
     assert result.created_directory_ids == []
@@ -223,7 +134,7 @@ async def test_apply_creates_only_missing_default_books() -> None:
     await shelf_repo.add_book(sid, str(fleeting.id))
 
     result = await strategy.apply(
-        shelf=shelf, owner_id="user-1", user_ctx=_UserCtx("user-1"),
+        shelf=shelf, owner_id="user-1", user_ctx=_DummyUserCtx("user-1"),
     )
 
     created_slugs = {d.slug for d in facade.created}
@@ -244,7 +155,7 @@ async def test_apply_does_not_recreate_rule_when_one_exists() -> None:
     sid = _shelf_id(shelf)
 
     first = await strategy.apply(
-        shelf=shelf, owner_id="user-1", user_ctx=_UserCtx("user-1"),
+        shelf=shelf, owner_id="user-1", user_ctx=_DummyUserCtx("user-1"),
     )
     rules_after_first = await rule_repo.list_rules(
         event_type="NoteCreated",
@@ -255,7 +166,7 @@ async def test_apply_does_not_recreate_rule_when_one_exists() -> None:
     assert first.created_rule_id is not None
 
     second = await strategy.apply(
-        shelf=shelf, owner_id="user-1", user_ctx=_UserCtx("user-1"),
+        shelf=shelf, owner_id="user-1", user_ctx=_DummyUserCtx("user-1"),
     )
     rules_after_second = await rule_repo.list_rules(
         event_type="NoteCreated",
@@ -282,7 +193,7 @@ async def test_apply_inserts_rule_when_only_non_default_books_bound() -> None:
     await shelf_repo.add_book(sid, str(custom.id))
 
     result = await strategy.apply(
-        shelf=shelf, owner_id="user-1", user_ctx=_UserCtx("user-1"),
+        shelf=shelf, owner_id="user-1", user_ctx=_DummyUserCtx("user-1"),
     )
 
     created_slugs = {d.slug for d in facade.created}
@@ -308,7 +219,7 @@ async def test_apply_inserts_rule_when_only_non_default_books_bound() -> None:
 
 async def test_ensure_rule_helper_returns_existing_rule_id() -> None:
     _, shelf_repo, rule_repo, _ = _make_strategy()
-    await shelf_repo.insert_shelf(slug="s", user_ctx=_UserCtx("user-1"))
+    await shelf_repo.insert_shelf(slug="s", user_ctx=_DummyUserCtx("user-1"))
 
     await rule_repo.create_rule(
         RuleEntity(

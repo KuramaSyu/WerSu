@@ -1,8 +1,8 @@
 """Tests for the user-action background processes.
 
-Drives :class:`tests.stubs.background_process.ManualClock`-like
+Drives :class:`tests.doubles.fakes.background_process.ManualClock`-like
 fixtures (we use a plain callable for ``get_now`` here since the
-processes do not own a clock) and :class:`_FakeUserActionRepo`
+processes do not own a clock) and :class:`_FakeSpyUserActionRepo`
 to assert which rows the process executes.
 """
 
@@ -19,8 +19,8 @@ from src.services.background_process.processes.user_disable_process import (
 from src.services.background_process.processes.user_enable_process import (
     UserEnableProcessImpl,
 )
-from tests.stubs.logging import silent_logger
-from tests.stubs.user_action_repo import _FakeUserActionRepo
+from tests.doubles import silent_logger
+from tests.doubles import _FakeSpyUserActionRepo
 
 
 def _at(year: int, month: int, day: int, hour: int = 0) -> datetime:
@@ -46,7 +46,7 @@ def _now_at(ts: datetime) -> Callable[[], datetime]:
 
 async def test_disable_process_marks_due_disable_rows_as_executed() -> None:
     now = _at(2026, 1, 1, 12)
-    repo = _FakeUserActionRepo([
+    repo = _FakeSpyUserActionRepo([
         _action("alice", "disable", now - timedelta(hours=1)),  # due
         _action("bob", "disable", now + timedelta(hours=1)),    # not due
         _action("carol", "enable", now - timedelta(hours=1)),   # wrong kind
@@ -69,7 +69,7 @@ async def test_disable_process_skips_already_executed_rows() -> None:
     now = _at(2026, 1, 1, 12)
     already = _action("alice", "disable", now - timedelta(hours=1))
     already.executed_at = now - timedelta(hours=2)
-    repo = _FakeUserActionRepo([already])
+    repo = _FakeSpyUserActionRepo([already])
     process = UserDisableProcessImpl(
         user_action_repo=repo,
         get_now=_now_at(now),
@@ -83,7 +83,7 @@ async def test_disable_process_skips_already_executed_rows() -> None:
 
 async def test_disable_next_wakeup_returns_earliest_due_pending() -> None:
     now = _at(2026, 1, 1, 12)
-    repo = _FakeUserActionRepo([
+    repo = _FakeSpyUserActionRepo([
         _action("alice", "disable", now - timedelta(hours=2)),
         _action("bob", "disable", now - timedelta(hours=1)),
     ])
@@ -99,7 +99,7 @@ async def test_disable_next_wakeup_returns_earliest_due_pending() -> None:
 
 async def test_disable_next_wakeup_returns_none_when_no_pending() -> None:
     now = _at(2026, 1, 1, 12)
-    repo = _FakeUserActionRepo([
+    repo = _FakeSpyUserActionRepo([
         _action("alice", "enable", now - timedelta(hours=1)),  # wrong kind
     ])
     process = UserDisableProcessImpl(
@@ -113,7 +113,7 @@ async def test_disable_next_wakeup_returns_none_when_no_pending() -> None:
 
 async def test_enable_process_only_touches_enable_rows() -> None:
     now = _at(2026, 1, 1, 12)
-    repo = _FakeUserActionRepo([
+    repo = _FakeSpyUserActionRepo([
         _action("alice", "enable", now - timedelta(hours=1)),
         _action("bob", "disable", now - timedelta(hours=1)),
     ])

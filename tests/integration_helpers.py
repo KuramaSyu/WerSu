@@ -1,22 +1,22 @@
 """Backwards-compatible re-export of the integration test fixtures.
 
 The infrastructure-heavy fixtures and helpers previously defined here
-have moved into submodules of :mod:`tests.fixtures`:
+have moved into submodules of :mod:`tests._fixtures_pkg`:
 
-* :mod:`tests.fixtures.spicedb_schema` -> ``SPICEDB_IMAGE``, ``load_spicedb_schema``,
-                                         ``wait_until_spicedb_ready``, ``SPICEDB_SCHEMA_PATH``
-* :mod:`tests.fixtures.spicedb`        -> ``spicedb_client``, ``spicedb_permission_repo``,
-                                         ``idempotent_permission_repo``
-* :mod:`tests.fixtures.postgres`       -> ``IntegrationEnv``, ``spicedb_postgres_env``,
-                                         ``postgres_dsn``, ``POSTGRES_IMAGE``
-* :mod:`tests.fixtures.garage`         -> ``garage_config``, ``s3_client``, garage constants
-* :mod:`tests.fixtures.fakes`          -> in-memory test doubles
+* :mod:`tests._fixtures_pkg.spicedb_schema` -> ``SPICEDB_IMAGE``, ``load_spicedb_schema``,
+                                              ``wait_until_spicedb_ready``, ``SPICEDB_SCHEMA_PATH``
+* :mod:`tests._fixtures_pkg.spicedb`        -> ``spicedb_client``, ``spicedb_permission_repo``,
+                                              ``idempotent_permission_repo``
+* :mod:`tests._fixtures_pkg.postgres`       -> ``IntegrationEnv``, ``spicedb_postgres_env``,
+                                              ``postgres_dsn``, ``POSTGRES_IMAGE``
+* :mod:`tests._fixtures_pkg.garage`         -> ``garage_config``, ``s3_client``, garage constants
+* :mod:`tests.doubles`                      -> in-memory test doubles
 
 This module re-exports those names, plus the integration-specific
 helpers (``wait_until``, ``user_service_env``, ``sharing_service_env``,
 ``IntegrationEnv``, assertion helpers, and entity factories).
 
-New test files should import directly from :mod:`tests.fixtures.*`
+New test files should import directly from :mod:`tests._fixtures_pkg.*`
 when possible; this module exists so existing test files keep working
 after the move.
 """
@@ -43,7 +43,7 @@ from src.db.repos.directory.directory_facade import DirectoryFacadeImpl
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
 from src.db.repos.user import RepoUserContext
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.services.user_service import UserServiceImpl
 
 # Sub-module exports (re-exported for legacy callers).

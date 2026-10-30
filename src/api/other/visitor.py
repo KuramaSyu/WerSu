@@ -78,7 +78,7 @@ class EntityVisitor(ABC):
         * ConvertToGrpcVisitor - render every entity as a gRPC protobuf message
         * PostgresRowConverter - render every entity as a Postgres row dict
         * EventMetadataVisitor - render activity log rows as rule-engine metadata
-        * StubVisitor (tests) - catch-all double that records every dispatched entity
+        * SpyVisitor (tests) - catch-all double that records every dispatched entity
     """
 
     @abstractmethod

@@ -16,7 +16,7 @@ import hashlib
 
 import pytest
 
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.api import (
     NoteRelationEnum,
     ObjectRef,
@@ -33,7 +33,7 @@ from src.db.repos.attachments.attachments import (
 from src.db.table import Table
 from src.services.attachment_facade import AttachmentFacadeImpl
 from src.utils import logging_provider
-from tests._fixtures_pkg.fakes import _FakeJwtProvider
+from tests.doubles import _FakeSpyJwtProvider
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
@@ -48,7 +48,6 @@ async def permission_repo(
     return idempotent_permission_repo
 
 
-@pytest.mark.asyncio
 async def test_attachment_facade_with_postgres_and_garage(
     db, s3_client, garage_config, user_repo, test_user, permission_repo
 ) -> None:
@@ -84,7 +83,7 @@ async def test_attachment_facade_with_postgres_and_garage(
         attachments_note_link_table=attachment_note_link_table,
         attachments_user_link_table=attachment_user_link_table,
         log=logging_provider,
-        jwt_provider=_FakeJwtProvider(),
+        jwt_provider=_FakeSpyJwtProvider(),
     )
 
     # create user for note

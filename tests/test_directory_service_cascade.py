@@ -29,76 +29,22 @@ from src.db.table import TableABC
 from src.services.attachment_facade import AttachmentFacadeImpl
 from src.services.directory import DirectoryServiceImpl
 from src.services.note import NoteServiceImpl
-from tests._fixtures_pkg.fakes import _FakeCombinedNoteRepo, _FakeDatabase, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeNoteRepoFacade, _FakeTagRepo, _FakeVersionRepo, _TestDirectoryRepo
-from tests.stubs.activity_logger_service import _FakeActivityLoggerService
-from tests.stubs.attachments import InMemoryAttachmentMetadataRepo, InMemoryAttachmentRepo
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
-from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
-from tests.stubs.logging import silent_logger
-from tests.stubs.user_context import _UserContext as _UserCtx
+from tests.doubles import _FakeCombinedNoteRepo, _FakeDatabase, _StubEmbeddingRepo, _FakeSpyJwtProvider, _FakeNoteContentRepo, _FakeSpyNoteRepoFacade, _FakeSpyTagRepo, _StubVersionRepo, _FakeSpyDirectoryRepo
+from tests.doubles import _FakeSpyActivityLoggerService
+from tests.doubles import InMemoryAttachmentMetadataRepo, InMemoryAttachmentRepo
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import InMemoryRuleRepo
+from tests.doubles import _DummyShelfRepo
+from tests.doubles import silent_logger
+from tests.doubles import _DummyUserContext as _UserCtx
 from typing import List, Optional, Tuple
 import logging, pytest
 
-
-class _FakeLinkTable(TableABC):
-    """In-memory :class:`TableABC` for the ``note.attachment_note_link`` table."""
-
-    def __init__(self) -> None:
-        self.rows: List[dict] = []
-
-    async def insert(self, record: dict) -> None:
-        key = (record["note_id"], record["attachment_key"])
-        if not any(
-            (r["note_id"], r["attachment_key"]) == key for r in self.rows
-        ):
-            self.rows.append(record)
-
-    async def delete(self, where: dict) -> None:
-        self.rows = [
-            r
-            for r in self.rows
-            if not all(r.get(k) == v for k, v in where.items())
-        ]
-
-    async def select(self, where: Optional[dict] = None) -> List[dict]:
-        if not where:
-            return list(self.rows)
-        return [
-            r
-            for r in self.rows
-            if all(r.get(k) == v for k, v in where.items())
-        ]
+from tests.doubles.fakes.link_tables import _FakeLinkTable, _FakeUserLinkTable
 
 
-class _FakeUserLinkTable(TableABC):
-    """In-memory :class:`TableABC` for the ``note.attachment_user_link`` table."""
 
-    def __init__(self) -> None:
-        self.rows: List[dict] = []
 
-    async def insert(self, record: dict) -> None:
-        key = (record["user_id"], record["attachment_key"])
-        if not any(
-            (r["user_id"], r["attachment_key"]) == key for r in self.rows
-        ):
-            self.rows.append(record)
-
-    async def delete(self, where: dict) -> None:
-        self.rows = [
-            r
-            for r in self.rows
-            if not all(r.get(k) == v for k, v in where.items())
-        ]
-
-    async def select(self, where: Optional[dict] = None) -> List[dict]:
-        if not where:
-            return list(self.rows)
-        return [
-            r
-            for r in self.rows
-            if all(r.get(k) == v for k, v in where.items())
-        ]
 
 
 def _wire_service(
@@ -107,9 +53,9 @@ def _wire_service(
     queue_note_ids: Optional[List[str]] = None,
 ) -> Tuple[
     DirectoryServiceImpl,
-    _TestDirectoryRepo,
+    _FakeSpyDirectoryRepo,
     _FakeNoteContentRepo,
-    _FakeNoteRepoFacade,
+    _FakeSpyNoteRepoFacade,
     InMemoryAttachmentRepo,
     InMemoryAttachmentMetadataRepo,
     InMemoryPermissionRepo,
@@ -122,13 +68,13 @@ def _wire_service(
     for nid in ids:
         fake_db.fetchrow_responses.append({"id": nid})
 
-    fake_facade = _FakeNoteRepoFacade()
-    embedding_repo = _FakeEmbeddingRepo()
+    fake_facade = _FakeSpyNoteRepoFacade()
+    embedding_repo = _StubEmbeddingRepo()
     permission_repo: PermissionRepoABC = InMemoryPermissionRepo()
-    directory_repo = _TestDirectoryRepo(permission_repo=permission_repo)
+    directory_repo = _FakeSpyDirectoryRepo(permission_repo=permission_repo)
     content_repo = _FakeNoteContentRepo(facade=fake_facade)
-    jwt_provider = _FakeJwtProvider()
-    activity_logger = _FakeActivityLoggerService()
+    jwt_provider = _FakeSpyJwtProvider()
+    activity_logger = _FakeSpyActivityLoggerService()
 
 
     real_facade = NoteFacadeImpl(
@@ -141,9 +87,9 @@ def _wire_service(
         ),
         permission_repo=permission_repo,
         directory_repo=directory_repo,
-        tag_repo=_FakeTagRepo(),
-        version_repo=_FakeVersionRepo(),
-        shelf_repo=NoopShelfRepo(),
+        tag_repo=_FakeSpyTagRepo(),
+        version_repo=_StubVersionRepo(),
+        shelf_repo=_DummyShelfRepo(),
         rule_repo=InMemoryRuleRepo(),
     )
 
@@ -305,7 +251,7 @@ async def _build_subtree(
         await perm_repo.insert(rels)
 
 
-def _seed_directory(directory_repo: _TestDirectoryRepo, id_: str, name: str) -> None:
+def _seed_directory(directory_repo: _FakeSpyDirectoryRepo, id_: str, name: str) -> None:
     directory_repo.directories_by_id[id_] = DirectoryEntity(
         id=id_, slug=name, display_name=name
     )
@@ -320,7 +266,6 @@ def _seed_note(content_repo: _FakeNoteContentRepo, id_: str, title: str) -> None
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_dry_delete_returns_empty_list_when_subtree_is_empty() -> None:
     (
         directory_service,
@@ -340,7 +285,6 @@ async def test_dry_delete_returns_empty_list_when_subtree_is_empty() -> None:
     assert result == []
 
 
-@pytest.mark.asyncio
 async def test_dry_delete_returns_subtree_with_kind_and_name() -> None:
     (
         directory_service,
@@ -387,7 +331,6 @@ async def test_dry_delete_returns_subtree_with_kind_and_name() -> None:
     )
 
 
-@pytest.mark.asyncio
 async def test_dry_delete_skips_notes_with_parents_outside_subtree() -> None:
     """A note shared with an outside directory is not in the dry-delete list."""
     (
@@ -436,7 +379,6 @@ async def test_dry_delete_skips_notes_with_parents_outside_subtree() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_delete_directory_cascades_into_subdirectories_notes_and_attachments() -> None:
     (
         directory_service,
@@ -472,15 +414,14 @@ async def test_delete_directory_cascades_into_subdirectories_notes_and_attachmen
     assert deleted is True
     assert "dir-1" not in directory_repo.directories_by_id
     assert "dir-2" not in directory_repo.directories_by_id
-    assert "note-1" not in content_repo._store
-    assert "note-2" not in content_repo._store
-    assert "att-1" not in metadata_repo._metadata
-    assert "att-2" not in metadata_repo._metadata
-    assert "att-1" not in attachment_repo._store
-    assert "att-2" not in attachment_repo._store
+    assert not content_repo.contains("note-1")
+    assert not content_repo.contains("note-2")
+    assert not metadata_repo.contains("att-1")
+    assert not metadata_repo.contains("att-2")
+    assert not attachment_repo.contains("att-1")
+    assert not attachment_repo.contains("att-2")
 
 
-@pytest.mark.asyncio
 async def test_delete_directory_keeps_shared_note_alone() -> None:
     """A note that has another parent outside the subtree survives."""
     (
@@ -515,10 +456,9 @@ async def test_delete_directory_keeps_shared_note_alone() -> None:
 
     assert deleted is True
     assert "dir-1" not in directory_repo.directories_by_id
-    assert "shared" in content_repo._store
+    assert content_repo.contains("shared")
 
 
-@pytest.mark.asyncio
 async def test_delete_directory_does_not_recurse_when_no_children() -> None:
     """Deleting a leaf directory is the simple path."""
     (
@@ -539,7 +479,6 @@ async def test_delete_directory_does_not_recurse_when_no_children() -> None:
     assert "dir-1" not in directory_repo.directories_by_id
 
 
-@pytest.mark.asyncio
 async def test_dry_delete_requires_view_permission() -> None:
     """``dry_delete`` gates on view, not delete, since it does not mutate."""
     (
@@ -557,7 +496,6 @@ async def test_dry_delete_requires_view_permission() -> None:
         await directory_service.dry_delete("dir-1", user_ctx)
 
 
-@pytest.mark.asyncio
 async def test_delete_directory_requires_delete_permission() -> None:
     """``delete_directory`` gates on the delete chain."""
     (

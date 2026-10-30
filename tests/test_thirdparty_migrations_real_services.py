@@ -5,7 +5,7 @@ hand-rolled stubs, this file wires the **real**
 :class:`~src.services.directory.DirectoryServiceImpl`,
 :class:`~src.services.note.NoteServiceImpl` and
 :class:`~src.services.attachment_facade.AttachmentFacadeImpl` against the
-in-memory fakes from :mod:`tests._fixtures_pkg.fakes`.
+in-memory fakes from :mod:`tests.doubles`.
 
 The motivation: the BookStack importer was originally tested with
 stubs that do not exercise :meth:`NoteServiceImpl._resolve_parent_directory_id`,
@@ -43,16 +43,18 @@ from src.services.note import NoteServiceImpl
 from src.services.thirdparty_migrations.bookstack import BookstackBookImport
 from src.services.thirdparty_migrations.html_converter import BookstackHtmlConverter
 from src.services.thirdparty_migrations.bookstack_reader import BookstackBookReader
-from tests._fixtures_pkg.fakes import _FakeCombinedNoteRepo, _FakeDatabase, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeNoteRepoFacade, _FakeTagRepo, _FakeVersionRepo, _TestDirectoryRepo
-from tests.stubs.activity_logger_service import _FakeActivityLoggerService
-from tests.stubs.attachments import InMemoryAttachmentMetadataRepo, InMemoryAttachmentRepo
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
-from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
-from tests.stubs.logging import silent_logger
-from tests.stubs.user_context import _UserContext as _UserCtx
+from tests.doubles import _FakeCombinedNoteRepo, _FakeDatabase, _StubEmbeddingRepo, _FakeSpyJwtProvider, _FakeNoteContentRepo, _FakeSpyNoteRepoFacade, _FakeSpyTagRepo, _StubVersionRepo, _FakeSpyDirectoryRepo
+from tests.doubles import _FakeSpyActivityLoggerService
+from tests.doubles import InMemoryAttachmentMetadataRepo, InMemoryAttachmentRepo
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import InMemoryRuleRepo
+from tests.doubles import _DummyShelfRepo
+from tests.doubles import silent_logger
+from tests.doubles import _DummyUserContext as _UserCtx
 from typing import List, Optional
 import io, json, logging, pytest, zipfile
+
+from tests.doubles.fakes.link_tables import _FakeLinkTable, _FakeUserLinkTable
 
 
 # ---------------------------------------------------------------------------
@@ -60,73 +62,8 @@ import io, json, logging, pytest, zipfile
 # ---------------------------------------------------------------------------
 
 
-class _FakeLinkTable(TableABC):
-    """In-memory :class:`TableABC` for the ``note.attachment_note_link`` table.
-
-    Stores rows as a list of dicts so tests can inspect the linkage
-    that the orchestrator created.
-    """
-
-    def __init__(self) -> None:
-        self.rows: List[dict] = []
-        self.insert_calls: List[dict] = []
-        self.delete_calls: List[dict] = []
-
-    async def insert(self, record: dict) -> None:
-        # Dedup: keep unique (note_id, attachment_key) pairs.
-        key = (record["note_id"], record["attachment_key"])
-        if not any(
-            (r["note_id"], r["attachment_key"]) == key for r in self.rows
-        ):
-            self.rows.append(record)
-            self.insert_calls.append(record)
-
-    async def delete(self, where: dict) -> None:
-        self.delete_calls.append(where)
-        self.rows = [
-            r
-            for r in self.rows
-            if not all(r.get(k) == v for k, v in where.items())
-        ]
-
-    async def select(self, where: Optional[dict] = None) -> List[dict]:
-        if not where:
-            return list(self.rows)
-        return [
-            r
-            for r in self.rows
-            if all(r.get(k) == v for k, v in where.items())
-        ]
 
 
-class _FakeUserLinkTable(TableABC):
-    """In-memory :class:`TableABC` for the ``note.attachment_user_link`` table."""
-
-    def __init__(self) -> None:
-        self.rows: List[dict] = []
-
-    async def insert(self, record: dict) -> None:
-        key = (record["user_id"], record["attachment_key"])
-        if not any(
-            (r["user_id"], r["attachment_key"]) == key for r in self.rows
-        ):
-            self.rows.append(record)
-
-    async def delete(self, where: dict) -> None:
-        self.rows = [
-            r
-            for r in self.rows
-            if not all(r.get(k) == v for k, v in where.items())
-        ]
-
-    async def select(self, where: Optional[dict] = None) -> List[dict]:
-        if not where:
-            return list(self.rows)
-        return [
-            r
-            for r in self.rows
-            if all(r.get(k) == v for k, v in where.items())
-        ]
 
 
 # ---------------------------------------------------------------------------
@@ -159,19 +96,19 @@ def _wire_real_services(
     for nid in ids:
         fake_db.fetchrow_responses.append({"id": nid})
 
-    # ``_FakeNoteRepoFacade`` is the in-memory replacement for the
+    # ``_FakeSpyNoteRepoFacade`` is the in-memory replacement for the
     # real :class:`NoteFacadeImpl` used by the pure unit-test suite.  We
     # build one here and route the real facade at it via a thin
     # wrapper so the orchestrator can both insert and select notes
     # end-to-end.  This keeps :class:`NoteFacadeImpl`'s real
     # ``_resolve_parent_directory_id`` flow in the loop.
-    fake_facade = _FakeNoteRepoFacade()
-    embedding_repo = _FakeEmbeddingRepo()
+    fake_facade = _FakeSpyNoteRepoFacade()
+    embedding_repo = _StubEmbeddingRepo()
     permission_repo: PermissionRepoABC = InMemoryPermissionRepo()
-    directory_repo = _TestDirectoryRepo(permission_repo=permission_repo)
+    directory_repo = _FakeSpyDirectoryRepo(permission_repo=permission_repo)
     content_repo = _FakeNoteContentRepo(facade=fake_facade)
-    jwt_provider = _FakeJwtProvider()
-    activity_logger = _FakeActivityLoggerService()
+    jwt_provider = _FakeSpyJwtProvider()
+    activity_logger = _FakeSpyActivityLoggerService()
 
 
     real_facade = NoteFacadeImpl(
@@ -184,9 +121,9 @@ def _wire_real_services(
         ),
         permission_repo=permission_repo,
         directory_repo=directory_repo,
-        tag_repo=_FakeTagRepo(),
-        version_repo=_FakeVersionRepo(),
-        shelf_repo=NoopShelfRepo(),
+        tag_repo=_FakeSpyTagRepo(),
+        version_repo=_StubVersionRepo(),
+        shelf_repo=_DummyShelfRepo(),
         rule_repo=InMemoryRuleRepo(),
     )
 
@@ -315,7 +252,6 @@ def _small_book_payload() -> dict:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_real_services_import_every_page() -> None:
     """End-to-end against the real NoteServiceImpl / DirectoryServiceImpl."""
     (
@@ -353,7 +289,6 @@ async def test_real_services_import_every_page() -> None:
     assert titles == ["Page A", "Page B", "Top"]
 
 
-@pytest.mark.asyncio
 async def test_real_services_create_book_and_chapter_dirs() -> None:
     """The book + chapter directories exist after the import."""
     (
@@ -385,7 +320,6 @@ async def test_real_services_create_book_and_chapter_dirs() -> None:
     assert result.root_directory_id == str(book_dir.id)
 
 
-@pytest.mark.asyncio
 async def test_pages_land_in_the_right_directory() -> None:
     """Chapter pages go under the chapter dir, direct pages under the book dir."""
     (
@@ -432,7 +366,6 @@ async def test_pages_land_in_the_right_directory() -> None:
     assert _parent_dir_id(top) == str(book_dir.id)
 
 
-@pytest.mark.asyncio
 async def test_real_dev_zip_round_trip() -> None:
     """Import the real ``dev.zip`` reference export end-to-end.
 

@@ -207,12 +207,19 @@ def test_attachment_with_only_link_is_kept() -> None:
 
 # ---- Optional integration test against the real dev.zip ---------------
 
-DEV_ZIP_PATH = Path("C:/Users/paulz/Downloads/dev.zip")
+# Override with BOOKSTACK_DEV_ZIP to point at a different copy of the
+# reference archive; the default keeps the original developer's path working.
+DEV_ZIP_PATH = Path(
+    os.environ.get("BOOKSTACK_DEV_ZIP", "C:/Users/paulz/Downloads/dev.zip")
+)
 
 
 @pytest.mark.skipif(
     not DEV_ZIP_PATH.exists(),
-    reason="dev.zip not present on this machine",
+    reason=(
+        "reference dev.zip not present; set BOOKSTACK_DEV_ZIP to its path "
+        f"(looked at {DEV_ZIP_PATH})"
+    ),
 )
 def test_real_dev_zip_parses() -> None:
     """Round-trip parse against the dev.zip attachment used as reference."""

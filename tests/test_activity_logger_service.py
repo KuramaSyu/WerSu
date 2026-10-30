@@ -22,22 +22,22 @@ from src.db.entities.activity import ActivityEntity
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.services.activity_logger_service import ActivityLoggerServiceImpl
-from tests.stubs.activity_repo import _FakeActivityRepo
-from tests.stubs.user_context import _UserContext as _FakeUserContext
+from tests.doubles import _FakeSpyActivityRepo
+from tests.doubles import _DummyUserContext as _FakeUserContext
 
 
 @pytest.fixture
-def repo() -> _FakeActivityRepo:
-    return _FakeActivityRepo()
+def repo() -> _FakeSpyActivityRepo:
+    return _FakeSpyActivityRepo()
 
 
 @pytest.fixture
-def repo() -> _FakeActivityRepo:
-    return _FakeActivityRepo()
+def repo() -> _FakeSpyActivityRepo:
+    return _FakeSpyActivityRepo()
 
 
 @pytest.fixture
-def logger(repo: _FakeActivityRepo) -> ActivityLoggerServiceImpl:
+def logger(repo: _FakeSpyActivityRepo) -> ActivityLoggerServiceImpl:
     return ActivityLoggerServiceImpl(activity_repo=repo)
 
 
@@ -52,9 +52,8 @@ def alice() -> _FakeUserContext:
 class TestNoteMethods:
     """Every ``note_*`` method records the right action + note_id."""
 
-    @pytest.mark.asyncio
     async def test_note_viewed(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_viewed("n-1", alice)
@@ -67,76 +66,67 @@ class TestNoteMethods:
         assert e.actor_id == "alice"
         assert e.accessed_as == "user"
 
-    @pytest.mark.asyncio
     async def test_note_created(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_created("n-1", alice)
         assert repo.added[0].action == "note_created"
         assert repo.added[0].note_id == "n-1"
 
-    @pytest.mark.asyncio
     async def test_note_edited(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_edited("n-1", alice, metadata={"from": "v1"})
         assert repo.added[0].action == "note_edited"
         assert repo.added[0].metadata == {"from": "v1"}
 
-    @pytest.mark.asyncio
     async def test_note_deleted(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_deleted("n-1", alice)
         assert repo.added[0].action == "note_deleted"
 
-    @pytest.mark.asyncio
     async def test_note_published(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_published("n-1", alice)
         assert repo.added[0].action == "note_published"
 
-    @pytest.mark.asyncio
     async def test_note_shared(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_shared("n-1", alice)
         assert repo.added[0].action == "note_shared"
 
-    @pytest.mark.asyncio
     async def test_note_unshared(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_unshared("n-1", alice)
         assert repo.added[0].action == "note_unshared"
         assert repo.added[0].note_id == "n-1"
 
-    @pytest.mark.asyncio
     async def test_note_restored(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_restored("n-1", alice)
         assert repo.added[0].action == "note_restored"
 
-    @pytest.mark.asyncio
     async def test_note_archived(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_archived("n-1", alice)
         assert repo.added[0].action == "note_archived"
 
-    @pytest.mark.asyncio
     async def test_note_version_restored_carries_version(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_version_restored("n-1", alice, version=7)
@@ -144,9 +134,8 @@ class TestNoteMethods:
         assert e.action == "note_version_restored"
         assert e.metadata == {"version": 7}
 
-    @pytest.mark.asyncio
     async def test_note_version_restored_merges_extra_metadata(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_version_restored(
@@ -154,9 +143,8 @@ class TestNoteMethods:
         )
         assert repo.added[0].metadata == {"version": 7, "reason": "rollback"}
 
-    @pytest.mark.asyncio
     async def test_note_attachment_added_carries_attachment_id(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.note_attachment_added("n-1", alice, attachment_id="a-1")
@@ -171,9 +159,8 @@ class TestNoteMethods:
 class TestDirectoryMethods:
     """Every ``directory_*`` method records the right action + directory_id."""
 
-    @pytest.mark.asyncio
     async def test_directory_created(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.directory_created("d-1", alice)
@@ -183,25 +170,22 @@ class TestDirectoryMethods:
         assert e.note_id is None
         assert e.role_id is None
 
-    @pytest.mark.asyncio
     async def test_directory_viewed(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.directory_viewed("d-1", alice)
         assert repo.added[0].action == "directory_viewed"
 
-    @pytest.mark.asyncio
     async def test_directory_edited(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.directory_edited("d-1", alice)
         assert repo.added[0].action == "directory_edited"
 
-    @pytest.mark.asyncio
     async def test_directory_deleted(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.directory_deleted("d-1", alice)
@@ -261,9 +245,8 @@ class TestMetadataVisitor:
 class TestRoleMethods:
     """Role methods record role_id + serialized metadata dataclass."""
 
-    @pytest.mark.asyncio
     async def test_role_granted_records_dataclass_as_dict(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.role_granted(
@@ -278,9 +261,8 @@ class TestRoleMethods:
         assert e.directory_id is None
         assert e.metadata == {"subject_id": "bob", "role_name": "writer"}
 
-    @pytest.mark.asyncio
     async def test_role_revoked(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.role_revoked(
@@ -293,9 +275,8 @@ class TestRoleMethods:
         assert e.role_id == "r-1"
         assert e.metadata == {"subject_id": "bob", "role_name": "writer"}
 
-    @pytest.mark.asyncio
     async def test_role_changed_records_zanzibar_lists(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.role_changed(
@@ -314,7 +295,6 @@ class TestRoleMethods:
             "removed": ["directory:xyz#writer@user:def"],
         }
 
-    @pytest.mark.asyncio
     async def test_role_changed_rejects_malformed_added(
         self, logger: ActivityLoggerServiceImpl, alice: _FakeUserContext,
     ) -> None:
@@ -328,7 +308,6 @@ class TestRoleMethods:
                 ),
             )
 
-    @pytest.mark.asyncio
     async def test_role_changed_rejects_malformed_removed(
         self, logger: ActivityLoggerServiceImpl, alice: _FakeUserContext,
     ) -> None:
@@ -342,7 +321,6 @@ class TestRoleMethods:
                 ),
             )
 
-    @pytest.mark.asyncio
     async def test_role_granted_requires_role_id(
         self, logger: ActivityLoggerServiceImpl, alice: _FakeUserContext,
     ) -> None:
@@ -353,7 +331,6 @@ class TestRoleMethods:
                 metadata=RoleGrantMetadata(subject_id="bob", role_name="writer"),
             )
 
-    @pytest.mark.asyncio
     async def test_role_revoked_requires_role_id(
         self, logger: ActivityLoggerServiceImpl, alice: _FakeUserContext,
     ) -> None:
@@ -364,7 +341,6 @@ class TestRoleMethods:
                 metadata=RoleRevokeMetadata(subject_id="bob", role_name="writer"),
             )
 
-    @pytest.mark.asyncio
     async def test_role_changed_requires_role_id(
         self, logger: ActivityLoggerServiceImpl, alice: _FakeUserContext,
     ) -> None:
@@ -382,9 +358,8 @@ class TestRoleMethods:
 class TestActorSemantics:
     """Actor id + ``accessed_as`` are read from the context."""
 
-    @pytest.mark.asyncio
     async def test_system_actor_sets_accessed_as_system(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
     ) -> None:
         sys_ctx = _FakeUserContext(user_id="system-bot", accessed_as="system")
         await logger.note_viewed("n-1", sys_ctx)
@@ -392,7 +367,6 @@ class TestActorSemantics:
         assert e.actor_id == "system-bot"
         assert e.accessed_as == "system"
 
-    @pytest.mark.asyncio
     async def test_as_system_returns_decorated_context(self) -> None:
         ctx = _FakeUserContext(user_id="alice", accessed_as="user")
         wrapped = ctx.as_system()
@@ -406,7 +380,6 @@ class TestActorSemantics:
 class TestErrorWrapping:
     """A repo failure surfaces as :class:`ActivityLoggerError`."""
 
-    @pytest.mark.asyncio
     async def test_repo_failure_is_wrapped(
         self, alice: _FakeUserContext,
     ) -> None:
@@ -444,9 +417,8 @@ class TestNoteNameInMetadata:
             author_id="alice",
         )
 
-    @pytest.mark.asyncio
     async def test_note_viewed_carries_note_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, note: NoteEntity,
     ) -> None:
         await logger.note_viewed(
@@ -454,9 +426,8 @@ class TestNoteNameInMetadata:
         )
         assert repo.added[0].metadata == {"note_name": "Daily standup"}
 
-    @pytest.mark.asyncio
     async def test_note_created_carries_note_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, note: NoteEntity,
     ) -> None:
         await logger.note_created(
@@ -464,9 +435,8 @@ class TestNoteNameInMetadata:
         )
         assert repo.added[0].metadata == {"note_name": "Daily standup"}
 
-    @pytest.mark.asyncio
     async def test_note_edited_carries_note_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, note: NoteEntity,
     ) -> None:
         await logger.note_edited(
@@ -474,9 +444,8 @@ class TestNoteNameInMetadata:
         )
         assert repo.added[0].metadata == {"note_name": "Daily standup"}
 
-    @pytest.mark.asyncio
     async def test_note_deleted_carries_note_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, note: NoteEntity,
     ) -> None:
         await logger.note_deleted(
@@ -484,9 +453,8 @@ class TestNoteNameInMetadata:
         )
         assert repo.added[0].metadata == {"note_name": "Daily standup"}
 
-    @pytest.mark.asyncio
     async def test_note_published_carries_note_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, note: NoteEntity,
     ) -> None:
         await logger.note_published(
@@ -494,9 +462,8 @@ class TestNoteNameInMetadata:
         )
         assert repo.added[0].metadata == {"note_name": "Daily standup"}
 
-    @pytest.mark.asyncio
     async def test_note_shared_carries_note_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, note: NoteEntity,
     ) -> None:
         await logger.note_shared(
@@ -504,9 +471,8 @@ class TestNoteNameInMetadata:
         )
         assert repo.added[0].metadata == {"note_name": "Daily standup"}
 
-    @pytest.mark.asyncio
     async def test_note_unshared_carries_note_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, note: NoteEntity,
     ) -> None:
         await logger.note_unshared(
@@ -514,9 +480,8 @@ class TestNoteNameInMetadata:
         )
         assert repo.added[0].metadata == {"note_name": "Daily standup"}
 
-    @pytest.mark.asyncio
     async def test_note_restored_carries_note_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, note: NoteEntity,
     ) -> None:
         await logger.note_restored(
@@ -524,9 +489,8 @@ class TestNoteNameInMetadata:
         )
         assert repo.added[0].metadata == {"note_name": "Daily standup"}
 
-    @pytest.mark.asyncio
     async def test_note_archived_carries_note_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, note: NoteEntity,
     ) -> None:
         await logger.note_archived(
@@ -542,9 +506,8 @@ class TestDirectoryNameInMetadata:
     def directory(self) -> DirectoryEntity:
         return DirectoryEntity(slug="projects", display_name="Projects")
 
-    @pytest.mark.asyncio
     async def test_directory_created_carries_directory_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, directory: DirectoryEntity,
     ) -> None:
         await logger.directory_created(
@@ -555,9 +518,8 @@ class TestDirectoryNameInMetadata:
             "directory_name": "Projects",
         }
 
-    @pytest.mark.asyncio
     async def test_directory_viewed_carries_directory_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, directory: DirectoryEntity,
     ) -> None:
         await logger.directory_viewed(
@@ -568,9 +530,8 @@ class TestDirectoryNameInMetadata:
             "directory_name": "Projects",
         }
 
-    @pytest.mark.asyncio
     async def test_directory_edited_carries_directory_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, directory: DirectoryEntity,
     ) -> None:
         await logger.directory_edited(
@@ -581,9 +542,8 @@ class TestDirectoryNameInMetadata:
             "directory_name": "Projects",
         }
 
-    @pytest.mark.asyncio
     async def test_directory_deleted_carries_directory_name(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext, directory: DirectoryEntity,
     ) -> None:
         await logger.directory_deleted(
@@ -605,9 +565,8 @@ class TestRoleEvents:
     stays queryable.
     """
 
-    @pytest.mark.asyncio
     async def test_role_granted_records_role_name_and_subject(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.role_granted(
@@ -620,9 +579,8 @@ class TestRoleEvents:
         assert e.role_id == "r-1"
         assert e.metadata == {"subject_id": "bob", "role_name": "engineering"}
 
-    @pytest.mark.asyncio
     async def test_role_revoked_records_role_name_and_subject(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.role_revoked(
@@ -635,9 +593,8 @@ class TestRoleEvents:
         assert e.role_id == "r-1"
         assert e.metadata == {"subject_id": "bob", "role_name": "engineering"}
 
-    @pytest.mark.asyncio
     async def test_role_changed_records_added_and_removed_lists(
-        self, logger: ActivityLoggerServiceImpl, repo: _FakeActivityRepo,
+        self, logger: ActivityLoggerServiceImpl, repo: _FakeSpyActivityRepo,
         alice: _FakeUserContext,
     ) -> None:
         await logger.role_changed(

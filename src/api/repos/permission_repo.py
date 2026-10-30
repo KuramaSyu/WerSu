@@ -20,7 +20,7 @@ class PermissionRepoABC(ABC):
 
     Implementations:
     * :class:`src.db.repos.permissions.spicedb_repo.SpicedbPermissionRepo`
-    * :class:`tests.stubs.in_memory_permission_repo.InMemoryPermissionRepo`
+    * :class:`tests.doubles.fakes.in_memory_permission_repo.InMemoryPermissionRepo`
     """
 
     @abstractmethod

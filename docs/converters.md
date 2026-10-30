@@ -10,7 +10,7 @@ to protobuf messages.
   method per entity type.
 * `:class:ConvertToGrpcVisitor` (in
   `src/grpc_mod/converter/grpc_visitor.py`) is the production visitor.
-* `StubVisitor` (in `tests/stubs/visitor.py`) records every
+* `SpyVisitor` (in `tests/doubles/spys/visitor.py`) records every
   dispatched entity for unit tests.
 
 A gRPC service takes the visitor as `to_grpc: ConvertToGrpcVisitor`
@@ -32,11 +32,11 @@ classDiagram
         +visit_attachment_metadata(entity) Any
     }
     class ConvertToGrpcVisitor
-    class StubVisitor
+    class SpyVisitor
     AcceptsVisitor <|-- NoteEntity
     AcceptsVisitor <|-- DirectoryEntity
     EntityVisitor <|-- ConvertToGrpcVisitor
-    EntityVisitor <|-- StubVisitor
+    EntityVisitor <|-- SpyVisitor
 ```
 
 Following a line like this:

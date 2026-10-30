@@ -25,82 +25,22 @@ from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.attachments.attachments import Attachment
 from src.services.attachment_facade import AttachmentFacadeABC
 from src.services.thirdparty_migrations.bookstack import BookstackBookImport
-from tests.stubs.directory_service import _StubDirectoryService
-from tests.stubs.logging import silent_logger
-from tests.stubs.user_context import _UserContext
+from tests.doubles import _FakeSpyDirectoryService
+from tests.doubles import silent_logger
+from tests.doubles import _DummyUserContext
 from typing import List, Optional, Tuple
 import io, json, logging, pytest, zipfile
 
-
-class _StubNoteService(NoteServiceABC):
-    def __init__(self) -> None:
-        self._next_id = 0
-
-    async def insert_note(self, note: NoteEntity, user_ctx: UserContextABC) -> NoteEntity:
-        self._next_id += 1
-        return NoteEntity(
-            note_id=f"note-{self._next_id}",
-            title=note.title,
-            content=note.content,
-            author_id=note.author_id,
-            directory_ids=list(note.directory_ids or []),
-            permissions=[],
-        )
-
-    async def update_note(self, note: NoteEntity, user_ctx: UserContextABC) -> NoteEntity:
-        return note
-
-    async def get_note(self, note_id, user_ctx, *, include=None):
-        raise NotImplementedError
-
-    async def delete_note(self, note_id, user_ctx):
-        raise NotImplementedError
-
-    async def search_notes(self, search_type, query, user_ctx, limit, offset):
-        raise NotImplementedError
-
-    async def get_notes(self, note_ids, user_ctx, options=None):
-        raise NotImplementedError
+from tests.doubles.stubs.bookstack_extra import _StubBookstackExtraNoteService, _StubBookstackExtraAttachmentFacade
 
 
-class _StubAttachmentFacade(AttachmentFacadeABC):
-    async def post_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
-        return Attachment(
-            key=f"att-{attachment.filename}",
-            filename=attachment.filename,
-            content=attachment.content,
-            content_type=attachment.content_type,
-            size=attachment.size,
-        )
-
-    async def update_metadata(self, attachment, user_ctx):
-        raise NotImplementedError
-
-    async def get_attachment(self, key, user_ctx):
-        raise NotImplementedError
-
-    async def get_metadata(self, key, user_ctx):
-        raise NotImplementedError
-
-    async def delete_attachment(self, key, user_ctx):
-        raise NotImplementedError
-
-    async def link_attachment(self, attachment_key, sub_type, sub_id, user_ctx):
-        return None
-
-    async def unlink_attachment(self, attachment_key, sub_type, sub_id, user_ctx):
-        raise NotImplementedError
-
-    async def list_attachments(self, sub_type, sub_id, user_ctx):
-        raise NotImplementedError
-
-    async def get_attachment_token(self, attachment_key, user_ctx):
-        raise NotImplementedError
 
 
-def _build_importer() -> Tuple[BookstackBookImport, _StubDirectoryService]:
+
+
+def _build_importer() -> Tuple[BookstackBookImport, _FakeSpyDirectoryService]:
     """Wire the orchestrator with the project-level stubs."""
-    ds = _StubDirectoryService()
+    ds = _FakeSpyDirectoryService()
     created: List[DirectoryEntity] = []
 
     async def create(entity: DirectoryEntity, user_ctx: UserContextABC) -> DirectoryEntity:
@@ -123,15 +63,15 @@ def _build_importer() -> Tuple[BookstackBookImport, _StubDirectoryService]:
     ds.create_directory = create  # type: ignore[attr-defined]
 
     importer = BookstackBookImport(
-        attachment_facade=_StubAttachmentFacade(),
+        attachment_facade=_StubBookstackExtraAttachmentFacade(),
         directory_service=ds,
-        note_service=_StubNoteService(),
+        note_service=_StubBookstackExtraNoteService(),
         log=silent_logger,
     )
     return importer, ds
 
 
-def _created_dirs(ds: _StubDirectoryService) -> List[DirectoryEntity]:
+def _created_dirs(ds: _FakeSpyDirectoryService) -> List[DirectoryEntity]:
     """Return the directory entities the stub created, in call order."""
     # The stub doesn't expose ``.created`` directly; iterate by
     # ``directories_by_id`` insertion order which preserves the order
@@ -161,11 +101,10 @@ def _build_zip(payload: dict) -> bytes:
     return buf.getvalue()
 
 
-@pytest.mark.asyncio
 async def test_book_directory_has_display_name() -> None:
     """The book directory also carries ``display_name`` equal to its name."""
     importer, ds = _build_importer()
-    user_ctx = _UserContext(user_id="u-1")
+    user_ctx = _DummyUserContext(user_id="u-1")
 
     await importer.migrate(_build_zip(_book_payload()), user_ctx)
 

@@ -47,7 +47,7 @@ from src.db.repos.sharing.share_action_facade import ShareActionFacade
 from src.services.shelf_service import ShelfServiceImpl
 from src.services.user_service import UserServiceImpl
 from src.utils import logging_provider
-from tests._fixtures_pkg.fakes import _FakeEmbeddingRepo
+from tests.doubles import _StubEmbeddingRepo
 from tests._fixtures_pkg.spicedb_schema import (
     SPICEDB_IMAGE,
     create_spicedb_client,
@@ -263,7 +263,7 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
                 )
             ),
             combined_repo=CombinedNotePostgresRepo(db=db),
-            embedding_repo=_FakeEmbeddingRepo(),
+            embedding_repo=_StubEmbeddingRepo(),
             permission_repo=permission_repo,
             directory_repo=directory_facade,
             tag_repo=tag_repo,

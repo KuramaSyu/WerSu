@@ -21,10 +21,9 @@ from src.api.other.relationship import (
     Relationship,
     SubjectRef,
 )
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
+from tests.doubles import InMemoryPermissionRepo
 
 
-@pytest.mark.asyncio
 async def test_resolve_children_walks_subdirectories_recursively() -> None:
     """``directory#parent`` is followed recursively."""
     repo = InMemoryPermissionRepo()
@@ -50,7 +49,6 @@ async def test_resolve_children_walks_subdirectories_recursively() -> None:
     assert result.attachment_ids == []
 
 
-@pytest.mark.asyncio
 async def test_resolve_children_collects_notes_per_directory() -> None:
     """Notes linked via ``note#parent_directory`` are returned."""
     repo = InMemoryPermissionRepo()
@@ -83,7 +81,6 @@ async def test_resolve_children_collects_notes_per_directory() -> None:
     assert sorted(result.note_ids) == ["note-1", "note-2"]
 
 
-@pytest.mark.asyncio
 async def test_resolve_children_collects_attachments_via_notes() -> None:
     """Attachments under any note in the subtree are returned."""
     repo = InMemoryPermissionRepo()
@@ -108,7 +105,6 @@ async def test_resolve_children_collects_attachments_via_notes() -> None:
     assert result.attachment_ids == ["att-1"]
 
 
-@pytest.mark.asyncio
 async def test_resolve_children_exclusive_drops_notes_with_parents_outside() -> None:
     """A note parented under both the subtree and an outside directory
     is dropped because it is not exclusively in this subtree."""
@@ -140,7 +136,6 @@ async def test_resolve_children_exclusive_drops_notes_with_parents_outside() -> 
     assert sorted(nonex.note_ids) == ["exclusive", "shared"]
 
 
-@pytest.mark.asyncio
 async def test_resolve_children_exclusive_drops_attachments_with_parents_outside() -> None:
     """An attachment parented under both an in-subtree note and an
     outside note is dropped."""
@@ -177,7 +172,6 @@ async def test_resolve_children_exclusive_drops_attachments_with_parents_outside
     assert nonex.attachment_ids == ["shared"]
 
 
-@pytest.mark.asyncio
 async def test_resolve_children_max_depth_caps_walk() -> None:
     """``max_depth=0`` returns only the root directory."""
     repo = InMemoryPermissionRepo()
@@ -197,7 +191,6 @@ async def test_resolve_children_max_depth_caps_walk() -> None:
     assert result.attachment_ids == []
 
 
-@pytest.mark.asyncio
 async def test_resolve_children_negative_depth_raises() -> None:
     repo = InMemoryPermissionRepo()
     with pytest.raises(ValueError, match="max_depth"):

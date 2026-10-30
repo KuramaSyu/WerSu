@@ -12,7 +12,7 @@ import pytest
 
 from src.api.repos.tag_repo import TagRepoABC
 from src.services.tag_service import TagServiceImpl
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 
 pytestmark = pytest.mark.integration
 

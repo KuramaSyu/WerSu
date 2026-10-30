@@ -1,8 +1,8 @@
 """Fast unit tests for :class:`src.services.note.NoteServiceImpl`.
 
 These tests use the in-memory fakes from
-:mod:`tests._fixtures_pkg.fakes` and
-:class:`tests.stubs.in_memory_permission_repo.InMemoryPermissionRepo`
+:mod:`tests.doubles` and
+:class:`tests.doubles.fakes.in_memory_permission_repo.InMemoryPermissionRepo`
 so they do not require Postgres or SpiceDB.  They pin the
 service-layer behaviour the gRPC adapters rely on:
 
@@ -35,14 +35,16 @@ from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.rule import RuleEntity
 from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.services.note import NoteServiceImpl
-from tests._fixtures_pkg.fakes import _FakeCombinedNoteRepo, _FakeDatabase, _FakeEmbeddingRepo, _FakeJwtProvider, _FakeNoteContentRepo, _FakeTagRepo, _FakeVersionRepo, _RecordingEmbeddingGenerator, _RecordingEmbeddingRepo, _TestDirectoryRepo
-from tests.stubs.activity_logger_service import _FakeActivityLoggerService
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
-from tests.stubs.in_memory_shelf_repo import InMemoryShelfRepo
-from tests.stubs.user_context import _UserContext as UserContext, _UserContext as _UserCtx
+from tests.doubles import _FakeCombinedNoteRepo, _FakeDatabase, _StubEmbeddingRepo, _FakeSpyJwtProvider, _FakeNoteContentRepo, _FakeSpyTagRepo, _StubVersionRepo, _RecordingEmbeddingGenerator, _RecordingEmbeddingRepo, _FakeSpyDirectoryRepo
+from tests.doubles import _FakeSpyActivityLoggerService
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import InMemoryRuleRepo
+from tests.doubles import InMemoryShelfRepo
+from tests.doubles import _DummyUserContext as UserContext, _DummyUserContext as _UserCtx
 from typing import List, Optional
 import logging, pytest
+
+from tests.doubles.dummies.temporary_user_context import _DummyTemporaryUserContext
 
 
 def _log_provider(*_args, **_kwargs):
@@ -70,15 +72,10 @@ async def _grant_admin(
     )
 
 
-class _TemporaryUserContext(_UserCtx):
-    """`_UserContext` whose `is_temporary_user()` returns True."""
-
-    async def is_temporary_user(self) -> bool:
-        return True
 
 
-def _temporary_ctx(user_id: str = "tmp-user") -> _TemporaryUserContext:
-    return _TemporaryUserContext(user_id=user_id)
+def _temporary_ctx(user_id: str = "tmp-user") -> _DummyTemporaryUserContext:
+    return _DummyTemporaryUserContext(user_id=user_id)
 
 
 def _make_service(
@@ -87,7 +84,7 @@ def _make_service(
     directory_repo: Optional[DirectoryFacadeABC] = None,
     permission_repo: Optional[PermissionRepoABC] = None,
     jwt_provider: Optional[JwtProvider] = None,
-    embedding_repo: Optional[_FakeEmbeddingRepo] = None,
+    embedding_repo: Optional[_StubEmbeddingRepo] = None,
     next_note_id: str = "019f0000-0000-7000-8000-000000000001",
 ) -> tuple[
     NoteServiceImpl,
@@ -95,8 +92,8 @@ def _make_service(
     _FakeNoteContentRepo,
     DirectoryFacadeABC,
     InMemoryPermissionRepo,
-    _FakeJwtProvider,
-    _FakeActivityLoggerService,
+    _FakeSpyJwtProvider,
+    _FakeSpyActivityLoggerService,
 ]:
     """Build a :class:`NoteServiceImpl` wired against the in-memory fakes.
 
@@ -108,12 +105,12 @@ def _make_service(
     fake_db.fetchrow_responses.append({"id": next_note_id})
     fake_content = content_repo or _FakeNoteContentRepo()
     fake_combined = _FakeCombinedNoteRepo(content_repo=fake_content)
-    fake_embedding = embedding_repo or _FakeEmbeddingRepo()
+    fake_embedding = embedding_repo or _StubEmbeddingRepo()
     fake_permission = permission_repo or InMemoryPermissionRepo()
-    fake_directory = directory_repo or _TestDirectoryRepo(permission_repo=fake_permission)
-    fake_jwt = jwt_provider or _FakeJwtProvider()
-    fake_activity_logger = _FakeActivityLoggerService()
-    fake_tags = _FakeTagRepo()
+    fake_directory = directory_repo or _FakeSpyDirectoryRepo(permission_repo=fake_permission)
+    fake_jwt = jwt_provider or _FakeSpyJwtProvider()
+    fake_activity_logger = _FakeSpyActivityLoggerService()
+    fake_tags = _FakeSpyTagRepo()
     facade = NoteFacadeImpl(
         db=fake_db,
         content_repo=fake_content,
@@ -123,7 +120,7 @@ def _make_service(
         permission_repo=fake_permission,
         directory_repo=fake_directory,
         tag_repo=fake_tags,
-        version_repo=_FakeVersionRepo(),
+        version_repo=_StubVersionRepo(),
         shelf_repo=InMemoryShelfRepo(),
         rule_repo=InMemoryRuleRepo(),
     )
@@ -321,7 +318,7 @@ async def test_insert_note_resolves_parent_directory_and_writes_owner_relation()
     # owner relation was written
     owner_rels = [
         rel
-        for rel in permission_repo._store  # type: ignore[attr-defined]
+        for rel in permission_repo.relationships
         if str(rel.relation) == str(NoteRelationEnum.OWNER)
     ]
     assert owner_rels, "no owner relation was written"
@@ -474,7 +471,7 @@ async def test_search_notes_enriches_results_with_directory_ids() -> None:
     # Pick a directory id that the in-memory directory repo will expose.
     user = _human_ctx("user-1")
     directory_ids = await directory_repo.list_user_directory_ids(user)
-    assert directory_ids, "_TestDirectoryRepo should expose at least one directory"
+    assert directory_ids, "_FakeSpyDirectoryRepo should expose at least one directory"
     directory_id = directory_ids[0]
 
     # write the parent-directory relation pointing at note-1
@@ -713,7 +710,7 @@ async def test_insert_note_drives_recording_embedding_generator() -> None:
     # Background task ran the generator through the repo.
     await _wait_for_pending_embedding_tasks(service)
     assert recording_repo.insert_calls == [(note_id, "Recording insert", "Recording body")]
-    assert recording_repo._generator.generate_calls == ["Recording insert\nRecording body"]  # type: ignore[attr-defined]
+    assert recording_repo.generate_calls == ["Recording insert\nRecording body"]
 
 
 async def test_update_note_drives_recording_embedding_generator() -> None:
@@ -747,4 +744,4 @@ async def test_update_note_drives_recording_embedding_generator() -> None:
 
     await _wait_for_pending_embedding_tasks(service)
     assert recording_repo.update_calls == [("note-1", "Recording update", "Recording body v2")]
-    assert recording_repo._generator.generate_calls == ["Recording update\nRecording body v2"]  # type: ignore[attr-defined]
+    assert recording_repo.generate_calls == ["Recording update\nRecording body v2"]

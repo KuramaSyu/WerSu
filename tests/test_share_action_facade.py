@@ -9,7 +9,7 @@ sync around share CRUD:
 
 Service-level tests live in :mod:`tests.test_sharing_service`; this
 file covers the facade in isolation, using the in-memory fakes in
-:mod:`tests.stubs`.
+:mod:`tests.doubles`.
 
 Pinned regressions (one per behaviour):
 
@@ -27,11 +27,11 @@ from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_action import FilterUserAction, UserActionEntity
 from src.db.repos.sharing.share_action_facade import ShareActionFacade
-from tests.stubs.logging import silent_logger
-from tests.stubs.sharing_repo import _FakeSharingRepo
-from tests.stubs.user_action_repo import _FakeUserActionRepo
-from tests.stubs.user_context import _UserContext as UserContext, _UserContext
-from tests.stubs.user_repo import _FakeUserRepo
+from tests.doubles import silent_logger
+from tests.doubles import _FakeSpySharingRepo
+from tests.doubles import _FakeSpyUserActionRepo
+from tests.doubles import _DummyUserContext as UserContext, _DummyUserContext
+from tests.doubles import _FakeSpyUserRepo
 from typing import Optional
 import pytest
 
@@ -42,14 +42,14 @@ import pytest
 
 
 def _build_facade(
-    sharing_repo: Optional[_FakeSharingRepo] = None,
-    user_repo: Optional[_FakeUserRepo] = None,
-    user_action_repo: Optional[_FakeUserActionRepo] = None,
+    sharing_repo: Optional[_FakeSpySharingRepo] = None,
+    user_repo: Optional[_FakeSpyUserRepo] = None,
+    user_action_repo: Optional[_FakeSpyUserActionRepo] = None,
 ) -> ShareActionFacade:
     return ShareActionFacade(
-        sharing_repo=sharing_repo or _FakeSharingRepo(),
-        user_repo=user_repo or _FakeUserRepo(),
-        user_action_repo=user_action_repo or _FakeUserActionRepo(),
+        sharing_repo=sharing_repo or _FakeSpySharingRepo(),
+        user_repo=user_repo or _FakeSpyUserRepo(),
+        user_action_repo=user_action_repo or _FakeSpyUserActionRepo(),
         logging_provider=silent_logger,
     )
 
@@ -75,9 +75,9 @@ def _share(
 async def test_create_share_persists_temp_user_share_row_and_action() -> None:
     """End-to-end: temp user -> share row -> one pending disable action."""
     expires_at = datetime(2026, 7, 1, 12, 0, 0)
-    sharing_repo = _FakeSharingRepo()
-    user_repo = _FakeUserRepo()
-    action_repo = _FakeUserActionRepo()
+    sharing_repo = _FakeSpySharingRepo()
+    user_repo = _FakeSpyUserRepo()
+    action_repo = _FakeSpyUserActionRepo()
     facade = _build_facade(
         sharing_repo=sharing_repo,
         user_repo=user_repo,
@@ -90,7 +90,7 @@ async def test_create_share_persists_temp_user_share_row_and_action() -> None:
             online_until=expires_at,
             permission="read",
         ),
-        _UserContext("creator-1"),
+        _DummyUserContext("creator-1"),
     )
 
     # a fresh temporary user is inserted and stamped onto the share row
@@ -111,13 +111,13 @@ async def test_create_share_persists_temp_user_share_row_and_action() -> None:
 
 async def test_create_share_skips_scheduling_when_online_until_is_none() -> None:
     """``online_until = None`` means "never expires"; nothing to schedule."""
-    user_repo = _FakeUserRepo()
-    action_repo = _FakeUserActionRepo()
+    user_repo = _FakeSpyUserRepo()
+    action_repo = _FakeSpyUserActionRepo()
     facade = _build_facade(user_repo=user_repo, user_action_repo=action_repo)
 
     await facade.create_share(
         NoteShareEntity(note_id="note-1", online_until=None, permission="read"),
-        _UserContext(),
+        _DummyUserContext(),
     )
 
     assert action_repo.add_action_calls == []
@@ -126,12 +126,12 @@ async def test_create_share_skips_scheduling_when_online_until_is_none() -> None
 
 async def test_create_share_skips_scheduling_when_online_until_is_undefined() -> None:
     """``UNDEFINED`` on ``online_until`` is treated as "leave the schedule alone"."""
-    action_repo = _FakeUserActionRepo()
+    action_repo = _FakeSpyUserActionRepo()
     facade = _build_facade(user_action_repo=action_repo)
 
     await facade.create_share(
         NoteShareEntity(note_id="note-1", permission="read"),
-        _UserContext(),
+        _DummyUserContext(),
     )
 
     assert action_repo.get_actions_calls == []
@@ -141,10 +141,10 @@ async def test_create_share_skips_scheduling_when_online_until_is_undefined() ->
 async def test_create_share_requires_note_id() -> None:
     facade = _build_facade()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="share.note_id is required"):
         await facade.create_share(
             NoteShareEntity(note_id=UNDEFINED, permission="read"),
-            _UserContext(),
+            _DummyUserContext(),
         )
 
 
@@ -155,8 +155,8 @@ async def test_create_share_requires_note_id() -> None:
 
 async def test_update_share_passes_through_with_no_reconciliation_when_online_until_unchanged() -> None:
     """``update`` without touching ``online_until`` is a pure pass-through."""
-    sharing_repo = _FakeSharingRepo([_share()])
-    action_repo = _FakeUserActionRepo()
+    sharing_repo = _FakeSpySharingRepo([_share()])
+    action_repo = _FakeSpyUserActionRepo()
     facade = _build_facade(
         sharing_repo=sharing_repo,
         user_action_repo=action_repo,
@@ -164,7 +164,7 @@ async def test_update_share_passes_through_with_no_reconciliation_when_online_un
 
     updated = await facade.update_share(
         NoteShareEntity(id="share-1", description="new"),
-        _UserContext(),
+        _DummyUserContext(),
     )
 
     assert updated.description == "new"
@@ -182,15 +182,15 @@ async def test_update_share_reconciles_actions_when_online_until_changes() -> No
         action="disable",
         execute_at=expires_at - timedelta(days=1),
     )
-    action_repo = _FakeUserActionRepo(initial=[pre_seeded])
+    action_repo = _FakeSpyUserActionRepo(initial=[pre_seeded])
     facade = _build_facade(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         user_action_repo=action_repo,
     )
 
     await facade.update_share(
         NoteShareEntity(id="share-1", online_until=expires_at),
-        _UserContext(),
+        _DummyUserContext(),
     )
 
     assert "old-action" in action_repo.remove_action_calls
@@ -207,15 +207,15 @@ async def test_update_share_clears_actions_when_online_until_set_to_none() -> No
         action="disable",
         execute_at=datetime(2026, 7, 1),
     )
-    action_repo = _FakeUserActionRepo(initial=[pre_seeded])
+    action_repo = _FakeSpyUserActionRepo(initial=[pre_seeded])
     facade = _build_facade(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         user_action_repo=action_repo,
     )
 
     await facade.update_share(
         NoteShareEntity(id="share-1", online_until=None),
-        _UserContext(),
+        _DummyUserContext(),
     )
 
     assert "pending-disable" in action_repo.remove_action_calls
@@ -225,15 +225,15 @@ async def test_update_share_clears_actions_when_online_until_set_to_none() -> No
 async def test_update_share_queries_repo_with_correct_filter() -> None:
     """The pending-disable lookup must pin ``user_id`` and ``action='disable'``."""
     expires_at = datetime(2026, 7, 1)
-    action_repo = _FakeUserActionRepo()
+    action_repo = _FakeSpyUserActionRepo()
     facade = _build_facade(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         user_action_repo=action_repo,
     )
 
     await facade.update_share(
         NoteShareEntity(id="share-1", online_until=expires_at),
-        _UserContext(),
+        _DummyUserContext(),
     )
 
     assert len(action_repo.get_actions_calls) == 1
@@ -247,10 +247,10 @@ async def test_update_share_queries_repo_with_correct_filter() -> None:
 async def test_update_share_requires_id() -> None:
     facade = _build_facade()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="share.id is required"):
         await facade.update_share(
             NoteShareEntity(id=UNDEFINED, description="x"),
-            _UserContext(),
+            _DummyUserContext(),
         )
 
 
@@ -274,16 +274,16 @@ async def test_delete_share_removes_share_row_actions_and_temp_user_in_order() -
         execute_at=datetime(2026, 6, 1),
         executed_at=datetime(2026, 6, 1),
     )
-    action_repo = _FakeUserActionRepo(initial=[pending, already_done])
-    user_repo = _FakeUserRepo(users=[UserEntity(id="access-user")])
-    sharing_repo = _FakeSharingRepo([_share()])
+    action_repo = _FakeSpyUserActionRepo(initial=[pending, already_done])
+    user_repo = _FakeSpyUserRepo(users=[UserEntity(id="access-user")])
+    sharing_repo = _FakeSpySharingRepo([_share()])
     facade = _build_facade(
         sharing_repo=sharing_repo,
         user_repo=user_repo,
         user_action_repo=action_repo,
     )
 
-    await facade.delete_share("share-1", _UserContext())
+    await facade.delete_share("share-1", _DummyUserContext())
 
     # the wrapped sharing_repo got the row delete
     assert sharing_repo.deleted_ids == ["share-1"]
@@ -305,13 +305,13 @@ async def test_delete_share_preserves_actions_for_other_users() -> None:
         action="disable",
         execute_at=datetime(2026, 7, 1),
     )
-    action_repo = _FakeUserActionRepo(initial=[other_action])
+    action_repo = _FakeSpyUserActionRepo(initial=[other_action])
     facade = _build_facade(
-        sharing_repo=_FakeSharingRepo([_share()]),
+        sharing_repo=_FakeSpySharingRepo([_share()]),
         user_action_repo=action_repo,
     )
 
-    await facade.delete_share("share-1", _UserContext())
+    await facade.delete_share("share-1", _DummyUserContext())
 
     assert "other-user-1" not in action_repo.remove_action_calls
     assert action_repo.for_user("somebody-else") == [other_action]
@@ -319,27 +319,27 @@ async def test_delete_share_preserves_actions_for_other_users() -> None:
 
 async def test_delete_share_propagates_missing_share() -> None:
     """A missing share row in the wrapped repo raises ``ValueError``."""
-    facade = _build_facade(sharing_repo=_FakeSharingRepo([]))
+    facade = _build_facade(sharing_repo=_FakeSpySharingRepo([]))
 
-    with pytest.raises(ValueError):
-        await facade.delete_share("missing", _UserContext())
+    with pytest.raises(ValueError, match="Share not found"):
+        await facade.delete_share("missing", _DummyUserContext())
 
 
 async def test_delete_share_rejects_empty_id() -> None:
-    facade = _build_facade(sharing_repo=_FakeSharingRepo([_share()]))
+    facade = _build_facade(sharing_repo=_FakeSpySharingRepo([_share()]))
 
-    with pytest.raises(ValueError):
-        await facade.delete_share("", _UserContext())
+    with pytest.raises(ValueError, match="share_id is required"):
+        await facade.delete_share("", _DummyUserContext())
 
 
 async def test_delete_shares_fans_out_to_delete_share() -> None:
     """``delete_shares`` calls ``delete_share`` once per id, in order."""
-    sharing_repo = _FakeSharingRepo(
+    sharing_repo = _FakeSpySharingRepo(
         [_share(id="a", note_id="note-a"), _share(id="b", note_id="note-b")]
     )
     facade = _build_facade(sharing_repo=sharing_repo)
 
-    await facade.delete_shares(["a", "b"], _UserContext())
+    await facade.delete_shares(["a", "b"], _DummyUserContext())
 
     assert sharing_repo.deleted_ids == ["a", "b"]
 
@@ -347,8 +347,8 @@ async def test_delete_shares_fans_out_to_delete_share() -> None:
 async def test_delete_shares_requires_non_empty_input() -> None:
     facade = _build_facade()
 
-    with pytest.raises(ValueError):
-        await facade.delete_shares([], _UserContext())
+    with pytest.raises(ValueError, match="At least one share_id is required"):
+        await facade.delete_shares([], _DummyUserContext())
 
 
 # ---------------------------------------------------------------------------
@@ -358,9 +358,9 @@ async def test_delete_shares_requires_non_empty_input() -> None:
 
 async def test_read_methods_delegate_to_wrapped_sharing_repo() -> None:
     """The four read methods must pass the call through unchanged."""
-    sharing_repo = _FakeSharingRepo([_share()])
+    sharing_repo = _FakeSpySharingRepo([_share()])
     facade = _build_facade(sharing_repo=sharing_repo)
-    ctx = _UserContext()
+    ctx = _DummyUserContext()
 
     by_id = await facade.get_share_by_id("share-1", ctx)
     by_ids = await facade.get_shares_by_id(["share-1"], ctx)

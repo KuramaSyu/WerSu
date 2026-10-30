@@ -34,62 +34,22 @@ from src.services.thirdparty_migrations import (
     ThirdpartyMigrationsServiceABC,
 )
 from src.services.thirdparty_migrations.bookstack_reader import BookstackZipError
-from tests.stubs.user_context import _UserContextFactory
-from tests.stubs.logging import silent_logger
+from tests.doubles import _StubUserContextFactory
+from tests.doubles import silent_logger
+
+from tests.doubles.dummies.fake_context import _DummyContext
+from tests.doubles.stubs.migrations_service import _StubMigrationsService
 
 
-class _FakeContext:
-    def __init__(self) -> None:
-        self.code: Optional[grpc.StatusCode] = None
-        self.details: Optional[str] = None
-
-    def set_code(self, code: grpc.StatusCode) -> None:
-        self.code = code
-
-    def set_details(self, details: str) -> None:
-        self.details = details
 
 
-class _StubMigrationsService(ThirdpartyMigrationsServiceABC):
-    """Records the call; returns a preset :class:`MigrationResult`."""
-
-    def __init__(self, result: Optional[MigrationResult] = None) -> None:
-        self._result = result or MigrationResult(
-            root_directory_id="root-1",
-            pages_imported=3,
-            attachments_uploaded=5,
-            chapters=[
-                ImportedChapter(
-                    directory_id="chap-1",
-                    chapter_name="Chapter 1",
-                    pages_imported=2,
-                ),
-                ImportedChapter(
-                    directory_id="chap-2",
-                    chapter_name="Chapter 2",
-                    pages_imported=1,
-                ),
-            ],
-        )
-        self.last_content: Optional[bytes] = None
-        self.last_user_id: Optional[str] = None
-        self.migrate_should_raise: Optional[Exception] = None
-
-    async def migrate(
-        self, content: bytes, user_ctx: UserContextABC
-    ) -> MigrationResult:
-        self.last_content = content
-        self.last_user_id = user_ctx.user_id
-        if self.migrate_should_raise is not None:
-            raise self.migrate_should_raise
-        return self._result
 
 
 def _make_grpc(stub: ThirdpartyMigrationsServiceABC) -> GrpcThirdpartyMigrationsService:
     return GrpcThirdpartyMigrationsService(
         migrations_service=stub,
         log=silent_logger,
-        context_factory=_UserContextFactory(),
+        context_factory=_StubUserContextFactory(),
     )
 
 
@@ -108,11 +68,10 @@ def _chunks(
 # -------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_reassembles_chunks_and_delegates() -> None:
     stub = _StubMigrationsService()
     service = _make_grpc(stub)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.BookstackBookImport(
         _chunks(
@@ -134,11 +93,10 @@ async def test_reassembles_chunks_and_delegates() -> None:
     assert response.chapters[1].pages_imported == 1
 
 
-@pytest.mark.asyncio
 async def test_first_chunk_without_user_id_is_invalid() -> None:
     stub = _StubMigrationsService()
     service = _make_grpc(stub)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.BookstackBookImport(
         _chunks(("", b"some bytes")),
@@ -150,11 +108,10 @@ async def test_first_chunk_without_user_id_is_invalid() -> None:
     assert "user_id" in (context.details or "")
 
 
-@pytest.mark.asyncio
 async def test_empty_stream_is_invalid() -> None:
     stub = _StubMigrationsService()
     service = _make_grpc(stub)
-    context = _FakeContext()
+    context = _DummyContext()
 
     async def empty_stream() -> AsyncIterator[BookstackBookImportChunk]:
         if False:
@@ -168,12 +125,11 @@ async def test_empty_stream_is_invalid() -> None:
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
 
 
-@pytest.mark.asyncio
 async def test_only_user_id_chunk_then_empty_content_is_invalid() -> None:
     """A stream with only `user_id` and no bytes must fail loudly."""
     stub = _StubMigrationsService()
     service = _make_grpc(stub)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.BookstackBookImport(
         _chunks(("u-1", b"")),
@@ -184,12 +140,11 @@ async def test_only_user_id_chunk_then_empty_content_is_invalid() -> None:
     assert "content" in (context.details or "")
 
 
-@pytest.mark.asyncio
 async def test_bookstack_zip_error_maps_to_invalid_argument() -> None:
     stub = _StubMigrationsService()
     stub.migrate_should_raise = BookstackZipError("not a valid zip file")
     service = _make_grpc(stub)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.BookstackBookImport(
         _chunks(("u-1", b"junk")),
@@ -201,12 +156,11 @@ async def test_bookstack_zip_error_maps_to_invalid_argument() -> None:
     assert "not a valid zip" in (context.details or "")
 
 
-@pytest.mark.asyncio
 async def test_permission_error_maps_to_permission_denied() -> None:
     stub = _StubMigrationsService()
     stub.migrate_should_raise = PermissionError("not allowed")
     service = _make_grpc(stub)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.BookstackBookImport(
         _chunks(("u-1", b"junk")),
@@ -216,12 +170,11 @@ async def test_permission_error_maps_to_permission_denied() -> None:
     assert context.code == grpc.StatusCode.PERMISSION_DENIED
 
 
-@pytest.mark.asyncio
 async def test_unexpected_error_maps_to_internal() -> None:
     stub = _StubMigrationsService()
     stub.migrate_should_raise = RuntimeError("boom")
     service = _make_grpc(stub)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.BookstackBookImport(
         _chunks(("u-1", b"junk")),
@@ -232,7 +185,6 @@ async def test_unexpected_error_maps_to_internal() -> None:
     assert "Internal server error" in (context.details or "")
 
 
-@pytest.mark.asyncio
 async def test_response_with_no_chapters_yields_empty_list() -> None:
     """A migration with no chapters should still return a clean response."""
     stub = _StubMigrationsService(
@@ -244,7 +196,7 @@ async def test_response_with_no_chapters_yields_empty_list() -> None:
         )
     )
     service = _make_grpc(stub)
-    context = _FakeContext()
+    context = _DummyContext()
 
     response = await service.BookstackBookImport(
         _chunks(("u-1", b"data")),

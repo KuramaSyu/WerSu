@@ -14,7 +14,7 @@ from typing import Any, Optional
 
 import pytest
 
-from tests.stubs.recording_database import _RecordingDatabase
+from tests.doubles import _RecordingDatabase
 from src.api.services.preferences_service import PreferenceScope
 from src.db.repos.preferences.postgres import PostgresPreferencesRepo
 from src.grpc_mod.converter.postgres_row_converter import PostgresRowConverter
@@ -93,13 +93,13 @@ def test_unknown_scope_raises_clear_error() -> None:
 
     import asyncio
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unsupported preference scope"):
         asyncio.run(repo.read("bogus", "x"))  # type: ignore[arg-type]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unsupported preference scope"):
         asyncio.run(repo.upsert("bogus", "x", {}))  # type: ignore[arg-type]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unsupported preference scope"):
         asyncio.run(repo.delete("bogus", "x"))  # type: ignore[arg-type]
 
     assert db.fetchrow_calls == []
@@ -332,7 +332,7 @@ def test_upsert_entity_rejects_entity_with_no_owner_for_scope() -> None:
         updated_at=_TS,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="row missing owner value"):
         asyncio.run(repo.upsert_entity(entity))
 
     assert db.execute_calls == []

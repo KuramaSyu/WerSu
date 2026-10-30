@@ -2,7 +2,7 @@
 
 The real repo is driven against a :class:`RecordingTable` (for the
 ``TableABC`` paths) and the queued-response
-:class:`tests._fixtures_pkg.fakes._FakeDatabase` (for the raw-SQL
+:class:`tests.doubles.fakes.database._FakeDatabase` (for the raw-SQL
 paths), so the SQL generation and entity mapping can be verified
 without booting Postgres.  Association behaviour against a real
 database lives in ``tests/integration/test_notes_repo.py``.
@@ -13,8 +13,8 @@ from __future__ import annotations
 import pytest
 
 from src.db.repos.tag.postgres import PostgresTagRepo
-from tests._fixtures_pkg.fakes import _FakeDatabase
-from tests.stubs.recording_table import RecordingTable
+from tests.doubles import _FakeDatabase
+from tests.doubles import RecordingTable
 
 
 def _make_repo(

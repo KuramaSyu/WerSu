@@ -28,7 +28,7 @@ from src.db.sql_builders import SqlBuilderFactory
 from src.db.sqlite_database import SqliteDatabase
 from src.db.table import Table
 from src.utils.logging import logging_provider
-from tests._fixtures_pkg.fakes import _TestDirectoryRepo
+from tests.doubles import _FakeSpyDirectoryRepo
 from typing import AsyncGenerator, List, Tuple
 import asyncio, json, pytest, uuid
 
@@ -134,7 +134,6 @@ async def _insert(
 class TestAddActivity:
     """``add_activity`` validates and inserts a row."""
 
-    @pytest.mark.asyncio
     async def test_insert_minimal_note_viewed(self, repo: PostgresActivityRepo) -> None:
         """A note-viewed row round-trips and gets an id + at back."""
         entity = await _insert(repo, action="note_viewed", note_id="n-1")
@@ -151,7 +150,6 @@ class TestAddActivity:
         assert len(rows) == 1
         assert rows[0].id == entity.id
 
-    @pytest.mark.asyncio
     async def test_insert_accessed_as_system(self, repo: PostgresActivityRepo) -> None:
         """``accessed_as="system"`` round-trips."""
         entity = await _insert(
@@ -163,7 +161,6 @@ class TestAddActivity:
         )
         assert entity.accessed_as == "system"
 
-    @pytest.mark.asyncio
     async def test_insert_role_grant(self, repo: PostgresActivityRepo) -> None:
         """A ``role_grant`` row carries ``role_id`` and JSON metadata."""
         entity = await _insert(
@@ -186,13 +183,11 @@ class TestAddActivity:
             "role_name": "writer",
         }
 
-    @pytest.mark.asyncio
     async def test_insert_rejects_missing_action(self, repo: PostgresActivityRepo) -> None:
         """``add_activity`` fails fast when ``action`` is not set."""
         with pytest.raises(ValueError, match="action is required"):
             await repo.add_activity(ActivityEntity(note_id="n-1"))
 
-    @pytest.mark.asyncio
     async def test_insert_rejects_both_targets(self, repo: PostgresActivityRepo) -> None:
         """Note action rejects when directory_id is also set."""
         with pytest.raises(ValueError, match="requires note_id"):
@@ -200,13 +195,11 @@ class TestAddActivity:
                 ActivityEntity(action="note_viewed", note_id="n-1", directory_id="d-1")
             )
 
-    @pytest.mark.asyncio
     async def test_insert_rejects_no_target(self, repo: PostgresActivityRepo) -> None:
         """Note action rejects when note_id is missing."""
         with pytest.raises(ValueError, match="requires note_id"):
             await repo.add_activity(ActivityEntity(action="note_viewed"))
 
-    @pytest.mark.asyncio
     async def test_insert_rejects_role_action_with_note_id(
         self, repo: PostgresActivityRepo,
     ) -> None:
@@ -223,14 +216,12 @@ class TestAddActivity:
 class TestGetActivities:
     """``get_activities`` exercises history-mode SQL on SQLite."""
 
-    @pytest.mark.asyncio
     async def test_returns_empty_when_no_rows(self, repo: PostgresActivityRepo) -> None:
         rows = await repo.get_activities(
             ActivityFilterBuilder().use_history().build()
         )
         assert rows == []
 
-    @pytest.mark.asyncio
     async def test_filter_by_note_id(self, repo: PostgresActivityRepo) -> None:
         """Setting ``set_note`` restricts to that note only."""
         await _insert(repo, action="note_viewed", note_id="n-1")
@@ -242,7 +233,6 @@ class TestGetActivities:
         assert len(rows) == 1
         assert rows[0].note_id == "n-1"
 
-    @pytest.mark.asyncio
     async def test_filter_by_user(self, repo: PostgresActivityRepo) -> None:
         """Setting ``set_user`` restricts to that actor only."""
         await _insert(repo, action="note_viewed", note_id="n-1", actor_id="alice")
@@ -254,7 +244,6 @@ class TestGetActivities:
         assert len(rows) == 1
         assert rows[0].actor_id == "alice"
 
-    @pytest.mark.asyncio
     async def test_filter_by_accessed_as(self, repo: PostgresActivityRepo) -> None:
         """``set_accessed_as("system")`` keeps only system rows."""
         await _insert(repo, action="note_viewed", note_id="n-1", accessed_as="user")
@@ -267,7 +256,6 @@ class TestGetActivities:
         assert rows[0].note_id == "n-2"
         assert rows[0].accessed_as == "system"
 
-    @pytest.mark.asyncio
     async def test_filter_by_action_set(self, repo: PostgresActivityRepo) -> None:
         """``set_action_set`` becomes ``action = ANY(...)``."""
         await _insert(repo, action="note_viewed", note_id="n-1")
@@ -284,7 +272,6 @@ class TestGetActivities:
         actions = sorted(r.action for r in rows)
         assert actions == ["note_edited", "note_viewed"]
 
-    @pytest.mark.asyncio
     async def test_filter_by_time_window(self, repo: PostgresActivityRepo) -> None:
         """``set_days`` becomes ``at >= NOW() - INTERVAL 'N days'``."""
         await _insert(repo, action="note_viewed", note_id="n-1")
@@ -297,12 +284,11 @@ class TestGetActivities:
         assert len(rows) == 1
         assert rows[0].note_id == "n-1"
 
-    @pytest.mark.asyncio
     async def test_filter_by_directory_subtree(
         self, activity_table: Table,
     ) -> None:
         """``set_directory`` expands to the subtree via the directory repo."""
-        directory_repo = _TestDirectoryRepo()
+        directory_repo = _FakeSpyDirectoryRepo()
         directory_repo.subtree_by_root["d-root"] = (
             ["n-1", "n-2"],
             ["d-root", "d-2"],
@@ -331,7 +317,6 @@ class TestGetActivities:
         assert "d-root" in directory_ids
         assert "d-2" in directory_ids
 
-    @pytest.mark.asyncio
     async def test_filter_combines_user_and_note(
         self, repo: PostgresActivityRepo,
     ) -> None:
@@ -351,12 +336,11 @@ class TestGetActivities:
         assert rows[0].actor_id == "alice"
         assert rows[0].note_id == "n-1"
 
-    @pytest.mark.asyncio
     async def test_filter_combines_note_and_directory(
         self, activity_table: Table,
     ) -> None:
         """``set_note`` + ``set_directory`` combine freely."""
-        directory_repo = _TestDirectoryRepo()
+        directory_repo = _FakeSpyDirectoryRepo()
         directory_repo.subtree_by_root["d-root"] = (
             ["n-1", "n-99"],  # n-99 in subtree but we'll filter it out
             ["d-root"],
@@ -385,12 +369,11 @@ class TestGetActivities:
         note_ids = [r.note_id for r in rows]
         assert note_ids == ["n-1"]
 
-    @pytest.mark.asyncio
     async def test_multiple_directory_roots_combine(
         self, activity_table: Table,
     ) -> None:
         """Multiple ``set_directory`` calls accumulate into one IN-list."""
-        directory_repo = _TestDirectoryRepo()
+        directory_repo = _FakeSpyDirectoryRepo()
         directory_repo.subtree_by_root["d-a"] = (["n-a"], ["d-a"])
         directory_repo.subtree_by_root["d-b"] = (["n-b"], ["d-b"])
         repo = PostgresActivityRepo(
@@ -415,7 +398,6 @@ class TestGetActivities:
         assert "n-a" in note_ids
         assert "n-b" in note_ids
 
-    @pytest.mark.asyncio
     async def test_limit_and_offset_paginate(
         self, repo: PostgresActivityRepo,
     ) -> None:
@@ -450,7 +432,6 @@ class TestGetActivities:
 class TestGetMostUsed:
     """``get_most_used`` exercises aggregate-mode SQL on SQLite."""
 
-    @pytest.mark.asyncio
     async def test_returns_empty_when_no_rows(
         self, repo: PostgresActivityRepo,
     ) -> None:
@@ -459,7 +440,6 @@ class TestGetMostUsed:
         )
         assert rows == []
 
-    @pytest.mark.asyncio
     async def test_count_strategy_groups_by_note(
         self, repo: PostgresActivityRepo,
     ) -> None:
@@ -477,12 +457,11 @@ class TestGetMostUsed:
         assert rows[1].note_id == "n-1"
         assert rows[1].score == 1
 
-    @pytest.mark.asyncio
     async def test_most_used_respects_directory_filter(
         self, activity_table: Table,
     ) -> None:
         """Directory subtree filtering composes with the aggregate."""
-        directory_repo = _TestDirectoryRepo()
+        directory_repo = _FakeSpyDirectoryRepo()
         directory_repo.subtree_by_root["d-root"] = (
             ["n-1", "n-2"],
             ["d-root"],
@@ -507,7 +486,6 @@ class TestGetMostUsed:
         assert "n-3" not in note_ids
         assert "n-1" in note_ids
 
-    @pytest.mark.asyncio
     async def test_count_strategy_skips_none_note_id_group(
         self, repo: PostgresActivityRepo,
     ) -> None:
@@ -549,7 +527,6 @@ class TestGetMostUsed:
 class TestEditAndRemove:
     """``edit_activity`` and ``remove_activity_by_id`` round-trip."""
 
-    @pytest.mark.asyncio
     async def test_edit_changes_metadata(
         self, repo: PostgresActivityRepo,
     ) -> None:
@@ -569,19 +546,16 @@ class TestEditAndRemove:
         assert len(rows) == 1
         assert rows[0].metadata != entity.metadata
 
-    @pytest.mark.asyncio
     async def test_edit_requires_id(self, repo: PostgresActivityRepo) -> None:
         with pytest.raises(ValueError, match="id is required"):
             await repo.edit_activity(ActivityEntity(action="note_viewed"))
 
-    @pytest.mark.asyncio
     async def test_edit_unknown_id_raises(self, repo: PostgresActivityRepo) -> None:
         with pytest.raises(ValueError, match="activity not found"):
             await repo.edit_activity(
                 ActivityEntity(id="does-not-exist", actor_id="alice")
             )
 
-    @pytest.mark.asyncio
     async def test_remove_deletes_row(self, repo: PostgresActivityRepo) -> None:
         entity = await _insert(repo, action="note_viewed", note_id="n-1")
         await repo.remove_activity_by_id(entity.id)
@@ -590,7 +564,6 @@ class TestEditAndRemove:
         )
         assert rows == []
 
-    @pytest.mark.asyncio
     async def test_remove_unknown_id_raises(self, repo: PostgresActivityRepo) -> None:
         with pytest.raises(ValueError, match="activity not found"):
             await repo.remove_activity_by_id("does-not-exist")

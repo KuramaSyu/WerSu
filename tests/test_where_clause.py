@@ -160,193 +160,149 @@ class TestTotalParams:
 
 
 # --------------------------------------------------------------------------
-# render_where -- Postgres
+# render_where -- both dialects
 # --------------------------------------------------------------------------
 
 
-class TestRenderWherePostgres:
-    """Postgres flavour: numbered ``$N`` placeholders."""
+# (and_pairs, or_pairs, dialect, expected_sql, expected_params)
+_RENDER_CASES = [
+    pytest.param((), (), "postgres", "", (), id="empty-postgres"),
+    pytest.param((), (), "sqlite", "", (), id="empty-sqlite"),
+    pytest.param(
+        (("id", "x"),), (), "postgres", "(id = $1)", ("x",), id="equality-postgres"
+    ),
+    pytest.param(
+        (("id", "x"),), (), "sqlite", "(id = ?)", ("x",), id="equality-sqlite"
+    ),
+    pytest.param(
+        (("a", 1), ("b", 2), ("c", 3)),
+        (),
+        "postgres",
+        "(a = $1 AND b = $2 AND c = $3)",
+        (1, 2, 3),
+        id="multiple-and-pairs-postgres",
+    ),
+    pytest.param(
+        (("actor_id", None),),
+        (),
+        "postgres",
+        "(actor_id IS NULL)",
+        (),
+        id="is-null-postgres",
+    ),
+    pytest.param(
+        (("actor_id", None),),
+        (),
+        "sqlite",
+        "(actor_id IS NULL)",
+        (),
+        id="is-null-sqlite",
+    ),
+    pytest.param(
+        (("note_id", "n-1"), ("actor_id", None), ("role", "writer")),
+        (),
+        "postgres",
+        "(note_id = $1 AND actor_id IS NULL AND role = $2)",
+        ("n-1", "writer"),
+        id="mixed-concrete-and-is-null-postgres",
+    ),
+    pytest.param(
+        (("at >= $N", "2024-01-01"),),
+        (),
+        "postgres",
+        "(at >= $1)",
+        ("2024-01-01",),
+        id="raw-dollar-postgres",
+    ),
+    pytest.param(
+        (("at >= ?", "2024-01-01"),),
+        (),
+        "sqlite",
+        "(at >= ?)",
+        ("2024-01-01",),
+        id="raw-question-sqlite",
+    ),
+    pytest.param(
+        (("at >= $N", "2024-01-01"),),
+        (),
+        "sqlite",
+        "(at >= ?)",
+        ("2024-01-01",),
+        id="raw-dollar-to-question-sqlite",
+    ),
+    pytest.param(
+        (("action", ["a", "b", "c"]),),
+        (),
+        "postgres",
+        "(action IN ($1, $2, $3))",
+        ("a", "b", "c"),
+        id="list-in-postgres",
+    ),
+    pytest.param(
+        (("action", ["a", "b"]),),
+        (),
+        "sqlite",
+        "(action IN (?, ?))",
+        ("a", "b"),
+        id="list-in-sqlite",
+    ),
+    pytest.param(
+        (("action", []),),
+        (),
+        "postgres",
+        "(FALSE)",
+        (),
+        id="empty-list-postgres",
+    ),
+    pytest.param(
+        (("note_id", "n-1"), ("at >= $N", "2024-01-01")),
+        (("actor_id", "alice"), ("actor_id", "bob")),
+        "postgres",
+        "(note_id = $1 AND at >= $2) AND (actor_id = $3 OR actor_id = $4)",
+        ("n-1", "2024-01-01", "alice", "bob"),
+        id="combined-and-or-postgres",
+    ),
+    pytest.param(
+        (("a", 1),),
+        (("b", 2),),
+        "postgres",
+        "(a = $1) AND (b = $2)",
+        (1, 2),
+        id="placeholder-numbering-crosses-groups-postgres",
+    ),
+    pytest.param(
+        (),
+        (("note_id", ["n-1", "n-2"]), ("directory_id", ["d-1"])),
+        "postgres",
+        "(note_id IN ($1, $2) OR directory_id IN ($3))",
+        ("n-1", "n-2", "d-1"),
+        id="list-in-or-group-postgres",
+    ),
+    pytest.param(
+        (),
+        (("note_id", ["n-1", "n-2"]), ("directory_id", ["d-1"])),
+        "sqlite",
+        "(note_id IN (?, ?) OR directory_id IN (?))",
+        ("n-1", "n-2", "d-1"),
+        id="list-in-or-group-sqlite",
+    ),
+]
 
-    def test_empty_clause_renders_empty(self) -> None:
-        sql, params = render_where(WhereClause(), dialect="postgres")
-        assert sql == ""
-        assert params == ()
 
-    def test_single_equality(self) -> None:
-        sql, params = render_where(
-            WhereClause(and_pairs=(("id", "x"),)),
-            dialect="postgres",
-        )
-        assert sql == "(id = $1)"
-        assert params == ("x",)
-
-    def test_multiple_and_pairs(self) -> None:
-        sql, params = render_where(
-            WhereClause(
-                and_pairs=(("a", 1), ("b", 2), ("c", 3)),
-                or_pairs=(),
-            ),
-            dialect="postgres",
-        )
-        assert sql == "(a = $1 AND b = $2 AND c = $3)"
-        assert params == (1, 2, 3)
-
-    def test_is_null_pair_renders_no_placeholder(self) -> None:
-        sql, params = render_where(
-            WhereClause(and_pairs=(("actor_id", None),)),
-            dialect="postgres",
-        )
-        assert sql == "(actor_id IS NULL)"
-        assert params == ()
-
-    def test_mixed_concrete_and_is_null(self) -> None:
-        """IS NULL pairs don't bump the placeholder counter."""
-        sql, params = render_where(
-            WhereClause(
-                and_pairs=(("note_id", "n-1"), ("actor_id", None), ("role", "writer")),
-                or_pairs=(),
-            ),
-            dialect="postgres",
-        )
-        assert sql == "(note_id = $1 AND actor_id IS NULL AND role = $2)"
-        assert params == ("n-1", "writer")
-
-    def test_raw_pair_substitutes_dollar_n(self) -> None:
-        """A raw ``>= $N`` pair binds its value at the placeholder."""
-        sql, params = render_where(
-            WhereClause(and_pairs=(("at >= $N", "2024-01-01"),)),
-            dialect="postgres",
-        )
-        assert sql == "(at >= $1)"
-        assert params == ("2024-01-01",)
-
-    def test_list_value_renders_as_in_clause(self) -> None:
-        """A list value becomes ``column IN ($N, $N+1, ...)`` with each
-        element bound as a separate parameter.
-        """
-        sql, params = render_where(
-            WhereClause(and_pairs=(("action", ["a", "b", "c"]),)),
-            dialect="postgres",
-        )
-        assert sql == "(action IN ($1, $2, $3))"
-        assert params == ("a", "b", "c")
-
-    def test_empty_list_value_renders_false(self) -> None:
-        """An empty list matches no rows (``WHERE FALSE``)."""
-        sql, params = render_where(
-            WhereClause(and_pairs=(("action", []),)),
-            dialect="postgres",
-        )
-        assert sql == "(FALSE)"
-        assert params == ()
-
-    def test_combined_and_or(self) -> None:
-        """AND group + OR group joined with AND."""
-        sql, params = render_where(
-            WhereClause.empty()
-                .add_and(("note_id", "n-1"), ("at >= $N", "2024-01-01"))
-                .add_or(("actor_id", "alice"), ("actor_id", "bob")),
-            dialect="postgres",
-        )
-        assert sql == (
-            "(note_id = $1 AND at >= $2)"
-            " AND "
-            "(actor_id = $3 OR actor_id = $4)"
-        )
-        assert params == ("n-1", "2024-01-01", "alice", "bob")
-
-    def test_placeholder_numbering_crosses_groups(self) -> None:
-        """Placeholder numbers increment across the AND -> OR boundary."""
-        sql, params = render_where(
-            WhereClause(
-                and_pairs=(("a", 1),),
-                or_pairs=(("b", 2),),
-            ),
-            dialect="postgres",
-        )
-        assert sql == "(a = $1) AND (b = $2)"
-        assert params == (1, 2)
-
-    def test_list_in_or_group(self) -> None:
-        """OR groups with list values expand to ``IN`` clauses."""
-        sql, params = render_where(
-            WhereClause(
-                and_pairs=(),
-                or_pairs=(
-                    ("note_id", ["n-1", "n-2"]),
-                    ("directory_id", ["d-1"]),
-                ),
-            ),
-            dialect="postgres",
-        )
-        assert sql == "(note_id IN ($1, $2) OR directory_id IN ($3))"
-        assert params == ("n-1", "n-2", "d-1")
-
-
-# --------------------------------------------------------------------------
-# render_where -- SQLite
-# --------------------------------------------------------------------------
-
-
-class TestRenderWhereSqlite:
-    """SQLite flavour: bare ``?`` placeholders, no start_n."""
-
-    def test_empty_clause_renders_empty(self) -> None:
-        sql, params = render_where(WhereClause(), dialect="sqlite")
-        assert sql == ""
-        assert params == ()
-
-    def test_single_equality(self) -> None:
-        sql, params = render_where(
-            WhereClause(and_pairs=(("id", "x"),)),
-            dialect="sqlite",
-        )
-        assert sql == "(id = ?)"
-        assert params == ("x",)
-
-    def test_is_null_pair(self) -> None:
-        sql, params = render_where(
-            WhereClause(and_pairs=(("actor_id", None),)),
-            dialect="sqlite",
-        )
-        assert sql == "(actor_id IS NULL)"
-        assert params == ()
-
-    def test_raw_pair_with_question_mark(self) -> None:
-        sql, params = render_where(
-            WhereClause(and_pairs=(("at >= ?", "2024-01-01"),)),
-            dialect="sqlite",
-        )
-        assert sql == "(at >= ?)"
-        assert params == ("2024-01-01",)
-
-    def test_raw_pair_with_dollar_n_substitutes_to_question_mark(self) -> None:
-        """``$N`` in user SQL becomes ``?`` in SQLite output."""
-        sql, params = render_where(
-            WhereClause(and_pairs=(("at >= $N", "2024-01-01"),)),
-            dialect="sqlite",
-        )
-        assert sql == "(at >= ?)"
-        assert params == ("2024-01-01",)
-
-    def test_list_value_renders_as_in_clause(self) -> None:
-        sql, params = render_where(
-            WhereClause(and_pairs=(("action", ["a", "b"]),)),
-            dialect="sqlite",
-        )
-        assert sql == "(action IN (?, ?))"
-        assert params == ("a", "b")
-
-    def test_or_group(self) -> None:
-        sql, params = render_where(
-            WhereClause.empty().add_or(
-                ("note_id", ["n-1", "n-2"]),
-                ("directory_id", ["d-1"]),
-            ),
-            dialect="sqlite",
-        )
-        assert sql == "(note_id IN (?, ?) OR directory_id IN (?))"
-        assert params == ("n-1", "n-2", "d-1")
+@pytest.mark.parametrize(
+    ("and_pairs", "or_pairs", "dialect", "expected_sql", "expected_params"),
+    _RENDER_CASES,
+)
+def test_render_where(
+    and_pairs, or_pairs, dialect, expected_sql, expected_params
+) -> None:
+    """``render_where`` renders the same clause shapes on both dialects."""
+    sql, params = render_where(
+        WhereClause(and_pairs=and_pairs, or_pairs=or_pairs),
+        dialect=dialect,
+    )
+    assert sql == expected_sql
+    assert params == expected_params
 
 
 # --------------------------------------------------------------------------

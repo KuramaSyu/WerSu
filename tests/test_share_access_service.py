@@ -20,24 +20,24 @@ from typing import List, Optional
 
 import pytest
 
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.api.other.relationship import ObjectRef, Relationship, SubjectRef
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import UserEntity
 from src.db.entities.user.user_action import UserActionEntity
 from src.services.share_access import ShareAccessServiceImpl
 from src.db.repos.user import RepoContextFactory, UnimplementedUserContext
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.logging import silent_logger
-from tests.stubs.sharing_repo import _FakeSharingRepo
-from tests.stubs.user_action_repo import _FakeUserActionRepo
-from tests.stubs.user_repo import _FakeUserRepo
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import silent_logger
+from tests.doubles import _FakeSpySharingRepo
+from tests.doubles import _FakeSpyUserActionRepo
+from tests.doubles import _FakeSpyUserRepo
 
 
 # ---------------------------------------------------------------------------
 # Local helpers
 #
-# All repos are pulled in from ``tests.stubs.*``.  We just need a small
+# All repos are pulled in from ``tests.doubles.*``.  We just need a small
 # convenience builder that injects everything ``ShareAccessService``
 # expects with sensible defaults.
 # ---------------------------------------------------------------------------
@@ -59,9 +59,9 @@ def _share(
 
 async def _build_service(
     *,
-    sharing_repo: _FakeSharingRepo,
-    user_repo: _FakeUserRepo,
-    user_action_repo: _FakeUserActionRepo,
+    sharing_repo: _FakeSpySharingRepo,
+    user_repo: _FakeSpyUserRepo,
+    user_action_repo: _FakeSpyUserActionRepo,
     permissions: Optional[InMemoryPermissionRepo] = None,
 ) -> ShareAccessServiceImpl:
     repo = permissions or InMemoryPermissionRepo()
@@ -95,10 +95,10 @@ async def _build_service(
 async def test_access_share_returns_share_with_permission() -> None:
     """A share whose access user has read access is returned with ``permission='read'``."""
     share = _share()
-    user_repo = _FakeUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
-    action_repo = _FakeUserActionRepo()
+    user_repo = _FakeSpyUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
+    action_repo = _FakeSpyUserActionRepo()
     service = await _build_service(
-        sharing_repo=_FakeSharingRepo([share]),
+        sharing_repo=_FakeSpySharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=action_repo,
     )
@@ -112,9 +112,9 @@ async def test_access_share_returns_share_with_permission() -> None:
 async def test_access_share_rejects_disabled_user() -> None:
     """``access_share`` raises PermissionError when the access user is disabled."""
     share = _share()
-    user_repo = _FakeUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
+    user_repo = _FakeSpyUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
     disabled_at = datetime(2026, 6, 1, 12, 0, 0)
-    action_repo = _FakeUserActionRepo(
+    action_repo = _FakeSpyUserActionRepo(
         initial=[
             UserActionEntity(
                 id="disable-1",
@@ -126,7 +126,7 @@ async def test_access_share_rejects_disabled_user() -> None:
         ]
     )
     service = await _build_service(
-        sharing_repo=_FakeSharingRepo([share]),
+        sharing_repo=_FakeSpySharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=action_repo,
     )
@@ -151,11 +151,11 @@ async def test_get_share_user_returns_access_as_and_online_until() -> None:
         access_as="access-user",
         online_until=expires_at,
     )
-    user_repo = _FakeUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
+    user_repo = _FakeSpyUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
     service = await _build_service(
-        sharing_repo=_FakeSharingRepo([share]),
+        sharing_repo=_FakeSpySharingRepo([share]),
         user_repo=user_repo,
-        user_action_repo=_FakeUserActionRepo(),
+        user_action_repo=_FakeSpyUserActionRepo(),
     )
 
     access_as, online_until = await service.get_share_user("share-1")
@@ -174,11 +174,11 @@ async def test_get_share_user_returns_none_when_share_never_expires() -> None:
         access_as="access-user",
         online_until=None,
     )
-    user_repo = _FakeUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
+    user_repo = _FakeSpyUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
     service = await _build_service(
-        sharing_repo=_FakeSharingRepo([share]),
+        sharing_repo=_FakeSpySharingRepo([share]),
         user_repo=user_repo,
-        user_action_repo=_FakeUserActionRepo(),
+        user_action_repo=_FakeSpyUserActionRepo(),
     )
 
     access_as, online_until = await service.get_share_user("share-1")
@@ -189,9 +189,9 @@ async def test_get_share_user_returns_none_when_share_never_expires() -> None:
 
 async def test_get_share_user_raises_when_share_not_found() -> None:
     service = await _build_service(
-        sharing_repo=_FakeSharingRepo([]),
-        user_repo=_FakeUserRepo(),
-        user_action_repo=_FakeUserActionRepo(),
+        sharing_repo=_FakeSpySharingRepo([]),
+        user_repo=_FakeSpyUserRepo(),
+        user_action_repo=_FakeSpyUserActionRepo(),
     )
 
     with pytest.raises(ValueError, match="Share not found"):
@@ -202,9 +202,9 @@ async def test_get_share_user_raises_when_access_user_missing() -> None:
     """A dangling ``access_as`` (user removed) must surface as ValueError."""
     share = _share(access_as="ghost")
     service = await _build_service(
-        sharing_repo=_FakeSharingRepo([share]),
-        user_repo=_FakeUserRepo([]),  # no users
-        user_action_repo=_FakeUserActionRepo(),
+        sharing_repo=_FakeSpySharingRepo([share]),
+        user_repo=_FakeSpyUserRepo([]),  # no users
+        user_action_repo=_FakeSpyUserActionRepo(),
     )
 
     with pytest.raises(ValueError, match="no longer exists"):
@@ -214,9 +214,9 @@ async def test_get_share_user_raises_when_access_user_missing() -> None:
 async def test_get_share_user_raises_when_access_user_disabled() -> None:
     """A disabled access user must not be handed out to anonymous callers."""
     share = _share(access_as="access-user")
-    user_repo = _FakeUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
+    user_repo = _FakeSpyUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
     disabled_at = datetime(2026, 6, 1)
-    action_repo = _FakeUserActionRepo(
+    action_repo = _FakeSpyUserActionRepo(
         initial=[
             UserActionEntity(
                 id="disable-1",
@@ -228,7 +228,7 @@ async def test_get_share_user_raises_when_access_user_disabled() -> None:
         ]
     )
     service = await _build_service(
-        sharing_repo=_FakeSharingRepo([share]),
+        sharing_repo=_FakeSpySharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=action_repo,
     )
@@ -240,8 +240,8 @@ async def test_get_share_user_raises_when_access_user_disabled() -> None:
 async def test_get_share_user_treats_reenabled_user_as_enabled() -> None:
     """The most recent executed action wins; an ``enable`` after ``disable`` clears the flag."""
     share = _share(access_as="access-user")
-    user_repo = _FakeUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
-    action_repo = _FakeUserActionRepo(
+    user_repo = _FakeSpyUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
+    action_repo = _FakeSpyUserActionRepo(
         initial=[
             UserActionEntity(
                 id="disable-old",
@@ -260,7 +260,7 @@ async def test_get_share_user_treats_reenabled_user_as_enabled() -> None:
         ]
     )
     service = await _build_service(
-        sharing_repo=_FakeSharingRepo([share]),
+        sharing_repo=_FakeSpySharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=action_repo,
     )
@@ -273,8 +273,8 @@ async def test_get_share_user_treats_reenabled_user_as_enabled() -> None:
 async def test_get_share_user_ignores_pending_disable() -> None:
     """A *pending* disable (not yet executed) does NOT mark the user disabled."""
     share = _share(access_as="access-user")
-    user_repo = _FakeUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
-    action_repo = _FakeUserActionRepo(
+    user_repo = _FakeSpyUserRepo([UserEntity(id="access-user", username="x", type="temporary")])
+    action_repo = _FakeSpyUserActionRepo(
         initial=[
             UserActionEntity(
                 id="pending-disable",
@@ -286,7 +286,7 @@ async def test_get_share_user_ignores_pending_disable() -> None:
         ]
     )
     service = await _build_service(
-        sharing_repo=_FakeSharingRepo([share]),
+        sharing_repo=_FakeSpySharingRepo([share]),
         user_repo=user_repo,
         user_action_repo=action_repo,
     )

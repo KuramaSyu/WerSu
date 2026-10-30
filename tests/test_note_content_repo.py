@@ -136,7 +136,6 @@ def _executed_columns(table: Table) -> List[str]:
 # ---- insert ------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_insert_emits_only_known_columns(
     repo: NoteContentPostgresRepo,
     content_table: Table,
@@ -167,7 +166,6 @@ async def test_insert_emits_only_known_columns(
     assert "permissions" not in columns
 
 
-@pytest.mark.asyncio
 async def test_insert_drops_undefined_values(
     repo: NoteContentPostgresRepo,
     content_table: Table,
@@ -193,7 +191,6 @@ async def test_insert_drops_undefined_values(
     assert set(columns) == {"id", "title", "content", "author_id"}
 
 
-@pytest.mark.asyncio
 async def test_insert_round_trips_row(
     repo: NoteContentPostgresRepo,
     content_table: Table,
@@ -216,7 +213,6 @@ async def test_insert_round_trips_row(
 # ---- update ------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_update_emits_only_known_columns(
     repo: NoteContentPostgresRepo,
     content_table: Table,
@@ -254,7 +250,7 @@ async def test_update_emits_only_known_columns(
     )
     where = NoteEntity(note_id="n-1")
 
-    with pytest.raises((AssertionError, Exception)):
+    with pytest.raises(AssertionError):
         await repo.update(set=note, where=where)
 
     raw_sql = content_table._executed_sql
@@ -273,7 +269,6 @@ async def test_update_emits_only_known_columns(
         )
 
 
-@pytest.mark.asyncio
 async def test_update_with_undefined_fields_drops_them(
     repo: NoteContentPostgresRepo,
     content_table: Table,
@@ -304,7 +299,7 @@ async def test_update_with_undefined_fields_drops_them(
     )
     where = NoteEntity(note_id="n-1")
 
-    with pytest.raises((AssertionError, Exception)):
+    with pytest.raises(AssertionError):
         await repo.update(set=note, where=where)
 
     raw_sql = content_table._executed_sql
@@ -319,7 +314,6 @@ async def test_update_with_undefined_fields_drops_them(
 # ---- delete ------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_delete_where_clause_only_uses_id(
     repo: NoteContentPostgresRepo,
     content_table: Table,

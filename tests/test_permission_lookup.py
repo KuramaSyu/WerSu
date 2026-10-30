@@ -6,7 +6,7 @@ Pins the dispatch contract: exactly one of
 and the result must be the corresponding ids.  Other shapes raise
 :exc:`ValueError`.
 
-Backed by :class:`tests.stubs.in_memory_permission_repo.InMemoryPermissionRepo`;
+Backed by :class:`tests.doubles.fakes.in_memory_permission_repo.InMemoryPermissionRepo`;
 the SpiceDB path is exercised end-to-end by the integration suite.
 """
 
@@ -14,8 +14,8 @@ import pytest
 
 from src.api import ObjectRef, Relationship, SubjectRef
 from src.api.other.undefined import UNDEFINED
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import _DummyUserContext as UserContext
 
 
 async def test_lookup_resources_returns_resource_ids_when_resource_id_undefined() -> None:

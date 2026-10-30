@@ -1,0 +1,196 @@
+from __future__ import annotations
+
+from typing import Any, List
+from src.api import Relationship
+from src.api.services.note_service import NoteResponse
+from src.api.other.relationship import ObjectRef, SubjectRef
+from src.db.entities.activity import ActivityEntity, ActivityScore
+from src.db.entities.directory.directory import DirectoryEntity
+from src.db.entities.note.metadata import NoteEntity
+from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.shelf import ShelfEntity
+from src.db.entities.user.passkey import PasskeyEntity
+from src.db.entities.user.password import PasswordEntity
+from src.db.entities.user.role import (
+    RoleEntity,
+    UserRoleMembershipEntity,
+)
+from src.db.entities.user.third_party import ThirdPartyEntity
+from src.db.entities.user.user import UserEntity
+from src.db.entities.user.user_auth import UserAuthEntity
+from src.api.other.visitor import EntityVisitor
+from src.db.repos.attachments.attachments import Attachment
+
+
+class SpyVisitor(EntityVisitor):
+    """Catch-all :class:`EntityVisitor` for tests.
+
+    Each `visit_*` method appends the entity to the matching list and
+    returns it unchanged.  Pass `record_*=False` to mute a handler so
+    it becomes a pass-through that returns the entity without storing
+    it.
+
+    Attributes:
+        notes: entities that went through :meth:`visit_note`.
+        note_minimals: entities that went through :meth:`visit_note_minimal`.
+        directories: entities that went through :meth:`visit_directory`.
+        users: entities that went through :meth:`visit_user`.
+        note_shares: entities that went through :meth:`visit_note_share`.
+        attachments: entities that went through :meth:`visit_attachment`.
+        attachment_metadatas: entities that went through
+            :meth:`visit_attachment_metadata`.
+        share_users: ``(access_as, online_until)`` pairs that went
+            through :meth:`visit_share_user`.
+    """
+
+    def __init__(
+        self,
+        *,
+        record_note: bool = True,
+        record_note_minimal: bool = True,
+        record_directory: bool = True,
+        record_user: bool = True,
+        record_note_share: bool = True,
+        record_attachment: bool = True,
+        record_attachment_metadata: bool = True,
+        record_note_response: bool = True,
+        record_activity: bool = True,
+        record_activity_score: bool = True,
+        record_shelf: bool = True,
+    ) -> None:
+        """Initialize empty record lists and the per-handler `record_*` flags.
+
+        Args:
+            record_note: record entities in :meth:`visit_note`.
+            record_note_minimal: record entities in :meth:`visit_note_minimal`.
+            record_directory: record entities in :meth:`visit_directory`.
+            record_user: record entities in :meth:`visit_user`.
+            record_note_share: record entities in :meth:`visit_note_share`.
+            record_attachment: record entities in :meth:`visit_attachment`.
+            record_attachment_metadata: record entities in
+                :meth:`visit_attachment_metadata`.
+            record_note_response: record responses in
+                :meth:`visit_note_response`.
+            record_activity: record entities in :meth:`visit_activity`.
+            record_activity_score: record scores in
+                :meth:`visit_activity_score`.
+            record_shelf: record entities in :meth:`visit_shelf`.
+        """
+        self.notes: List[NoteEntity] = []
+        self.note_minimals: List[NoteEntity] = []
+        self.directories: List[DirectoryEntity] = []
+        self.shelves: List[ShelfEntity] = []
+        self.users: List[UserEntity] = []
+        self.note_shares: List[NoteShareEntity] = []
+        self.attachments: List[Attachment] = []
+        self.attachment_metadatas: List[Attachment] = []
+        self.note_responses: List[NoteResponse] = []
+        self.activities: List[ActivityEntity] = []
+        self.activity_scores: List[ActivityScore] = []
+        self.share_users: List[tuple[str, Any]] = []
+        self._record_note = record_note
+        self._record_note_minimal = record_note_minimal
+        self._record_directory = record_directory
+        self._record_user = record_user
+        self._record_note_share = record_note_share
+        self._record_attachment = record_attachment
+        self._record_attachment_metadata = record_attachment_metadata
+        self._record_note_response = record_note_response
+        self._record_activity = record_activity
+        self._record_activity_score = record_activity_score
+        self._record_shelf = record_shelf
+
+    def visit_note(self, entity: NoteEntity) -> NoteEntity:
+        if self._record_note:
+            self.notes.append(entity)
+        return entity
+
+    def visit_note_minimal(self, entity: NoteEntity) -> NoteEntity:
+        if self._record_note_minimal:
+            self.note_minimals.append(entity)
+        return entity
+
+    def visit_directory(self, entity: DirectoryEntity) -> DirectoryEntity:
+        if self._record_directory:
+            self.directories.append(entity)
+        return entity
+
+    def visit_shelf(self, entity: ShelfEntity) -> ShelfEntity:
+        if self._record_shelf:
+            self.shelves.append(entity)
+        return entity
+
+    def visit_user(self, entity: UserEntity) -> UserEntity:
+        if self._record_user:
+            self.users.append(entity)
+        return entity
+
+    def visit_note_share(self, entity: NoteShareEntity) -> NoteShareEntity:
+        if self._record_note_share:
+            self.note_shares.append(entity)
+        return entity
+
+    def visit_attachment(self, entity: Attachment) -> Attachment:
+        if self._record_attachment:
+            self.attachments.append(entity)
+        return entity
+
+    def visit_attachment_metadata(self, entity: Attachment) -> Attachment:
+        if self._record_attachment_metadata:
+            self.attachment_metadatas.append(entity)
+        return entity
+
+    def visit_note_response(self, response: NoteResponse) -> NoteResponse:
+        if self._record_note_response:
+            self.note_responses.append(response)
+        return response
+
+    def visit_activity(self, entity: ActivityEntity) -> ActivityEntity:
+        if self._record_activity:
+            self.activities.append(entity)
+        return entity
+
+    def visit_activity_score(self, score: ActivityScore) -> ActivityScore:
+        if self._record_activity_score:
+            self.activity_scores.append(score)
+        return score
+
+    def visit_user_auth(self, entity: UserAuthEntity) -> UserAuthEntity:
+        return entity
+
+    def visit_passkey(self, entity: PasskeyEntity) -> PasskeyEntity:
+        return entity
+
+    def visit_third_party(self, entity: ThirdPartyEntity) -> None:
+        return None
+
+    def visit_password(self, entity: PasswordEntity) -> None:
+        return None
+
+    def visit_role(self, entity: RoleEntity) -> RoleEntity:
+        return entity
+
+    def visit_user_role_membership(self, entity: UserRoleMembershipEntity) -> UserRoleMembershipEntity:
+        return entity
+
+    def visit_preferences(self, entity: Any) -> None:
+        return None
+
+    def visit_share_user(self, access_as: str, online_until: Any) -> Any:
+        self.share_users.append((access_as, online_until))
+        return None
+
+
+def make_relationship(resource_id: str, subject_id: str) -> Relationship:
+    """Build a minimal :class:`Relationship` used in converter tests."""
+    return Relationship(
+        resource=ObjectRef(object_type="note", object_id=resource_id),
+        relation="writer",
+        subject=SubjectRef(object_type="user", object_id=subject_id),
+    )
+
+
+__all__ = [
+    'SpyVisitor',
+    'make_relationship',
+]

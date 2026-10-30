@@ -14,10 +14,10 @@ from typing import Dict, Optional, Tuple
 
 import pytest
 
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.logging import silent_logger
-from tests.stubs.preferences_repo import _FakePreferencesRepo
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import silent_logger
+from tests.doubles import _FakeSpyPreferencesRepo
+from tests.doubles import _DummyUserContext as UserContext
 from src.api.other.relationship import (
     ObjectRef,
     Relationship,
@@ -38,9 +38,9 @@ def _build_service(
     *,
     initial: Optional[Dict[Tuple[PreferenceScope, str], Dict]] = None,
     permissions: Optional[InMemoryPermissionRepo] = None,
-) -> tuple[PreferencesServiceImpl, _FakePreferencesRepo, InMemoryPermissionRepo]:
+) -> tuple[PreferencesServiceImpl, _FakeSpyPreferencesRepo, InMemoryPermissionRepo]:
     perms = permissions or InMemoryPermissionRepo()
-    repo = _FakePreferencesRepo(initial=initial)
+    repo = _FakeSpyPreferencesRepo(initial=initial)
     pinned = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
     service = PreferencesServiceImpl(

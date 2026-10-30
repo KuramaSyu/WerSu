@@ -3,7 +3,7 @@ import pytest
 pytestmark = pytest.mark.integration
 from datetime import datetime
 
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.api.facades.note_facade import NoteFacadeABC
 from src.db.entities.note.metadata import NoteEntity
 from src.api import (

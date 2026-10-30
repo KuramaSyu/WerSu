@@ -53,9 +53,11 @@ from tests._fixtures_pkg.bookstack_emergency_backup import (
     EMERGENCY_BACKUP_BOOK_PAYLOAD,
     EMERGENCY_BACKUP_PAGE_HTML,
 )
-from tests.stubs.directory_service import _StubDirectoryService
-from tests.stubs.logging import silent_logger
-from tests.stubs.user_context import _UserContext
+from tests.doubles import _FakeSpyDirectoryService
+from tests.doubles import silent_logger
+from tests.doubles import _DummyUserContext
+
+from tests.doubles.stubs.bookstack_emergency import _StubBookstackEmergencyNoteService, _StubBookstackEmergencyAttachmentFacade
 
 
 def _builder(key: str) -> str:
@@ -179,77 +181,8 @@ def test_convert_details_false_via_options_disables_default() -> None:
 # `test_thirdparty_migrations_bookstack.py`).
 
 
-class _StubNoteService(NoteServiceABC):
-    def __init__(self) -> None:
-        self.inserted: List[NoteEntity] = []
-        self._next_id = 0
-
-    async def insert_note(self, note: NoteEntity, user_ctx: UserContextABC) -> NoteEntity:
-        self._next_id += 1
-        inserted = NoteEntity(
-            note_id=f"note-{self._next_id}",
-            title=note.title,
-            content=note.content,
-            author_id=note.author_id,
-            directory_ids=list(note.directory_ids or []),
-            permissions=[],
-        )
-        self.inserted.append(inserted)
-        return inserted
-
-    async def update_note(self, note: NoteEntity, user_ctx: UserContextABC) -> NoteEntity:
-        return note
-
-    async def get_note(self, note_id, user_ctx, *, include=None):
-        raise NotImplementedError
-
-    async def delete_note(self, note_id, user_ctx):
-        raise NotImplementedError
-
-    async def search_notes(self, search_type, query, user_ctx, limit, offset):
-        raise NotImplementedError
-
-    async def get_notes(self, note_ids, user_ctx, options=None):
-        raise NotImplementedError
 
 
-class _StubAttachmentFacade(AttachmentFacadeABC):
-    def __init__(self) -> None:
-        self.posted: List[Attachment] = []
-
-    async def post_attachment(self, attachment: Attachment, user_ctx: UserContextABC) -> Attachment:
-        self.posted.append(attachment)
-        return Attachment(
-            key=f"att-{attachment.filename}",
-            filename=attachment.filename,
-            filepath=attachment.filepath,
-            content_type=attachment.content_type,
-            size=attachment.size,
-        )
-
-    async def update_metadata(self, attachment, user_ctx):
-        raise NotImplementedError
-
-    async def get_attachment(self, key, user_ctx):
-        raise NotImplementedError
-
-    async def get_metadata(self, key, user_ctx):
-        raise NotImplementedError
-
-    async def delete_attachment(self, key, user_ctx):
-        raise NotImplementedError
-
-    async def link_attachment(self, attachment_key, sub_type, sub_id, user_ctx):
-        return None
-
-    async def unlink_attachment(self, attachment_key, sub_type, sub_id, user_ctx):
-        raise NotImplementedError
-
-    async def list_attachments(self, sub_type, sub_id, user_ctx):
-        raise NotImplementedError
-
-    async def get_attachment_token(self, attachment_key, user_ctx):
-        raise NotImplementedError
 
 
 def _build_zip(payload: dict) -> bytes:
@@ -265,11 +198,11 @@ def _build_importer(
     attachment_facade: AttachmentFacadeABC | None = None,
     convert_options: ConvertOptions | None = None,
 ) -> Tuple[
-    BookstackBookImport, _StubDirectoryService, _StubNoteService, _StubAttachmentFacade
+    BookstackBookImport, _FakeSpyDirectoryService, _StubBookstackEmergencyNoteService, _StubBookstackEmergencyAttachmentFacade
 ]:
-    ds = _StubDirectoryService()
-    ns = note_service or _StubNoteService()
-    af = attachment_facade or _StubAttachmentFacade()
+    ds = _FakeSpyDirectoryService()
+    ns = note_service or _StubBookstackEmergencyNoteService()
+    af = attachment_facade or _StubBookstackEmergencyAttachmentFacade()
 
     # Wire the directory stub to auto-increment ids so the
     # orchestrator's chapter / book branch resolves cleanly.
@@ -300,7 +233,6 @@ def _build_importer(
     return importer, ds, ns, af
 
 
-@pytest.mark.asyncio
 async def test_full_orchestrator_emits_fenced_code_block_by_default() -> None:
     """End-to-end pin: even without `convert_details`, every code
     block in the anonymised page lands as a fenced ```` ```X ````
@@ -309,7 +241,7 @@ async def test_full_orchestrator_emits_fenced_code_block_by_default() -> None:
     importer, _ds, ns, _af = _build_importer()
     await importer.migrate(
         _build_zip(EMERGENCY_BACKUP_BOOK_PAYLOAD),
-        _UserContext(user_id="u1"),
+        _DummyUserContext(user_id="u1"),
     )
     # Find the page we care about (the other stub note is the
     # trivial "Quick reference" direct-child page).
@@ -324,7 +256,6 @@ async def test_full_orchestrator_emits_fenced_code_block_by_default() -> None:
     assert "\n    duply zoldyck restore" not in content
 
 
-@pytest.mark.asyncio
 async def test_full_orchestrator_with_convert_details_preserves_details() -> None:
     """When the importer is constructed with
     ``convert_options={"convert_details": True}``, every details
@@ -334,7 +265,7 @@ async def test_full_orchestrator_with_convert_details_preserves_details() -> Non
     )
     await importer.migrate(
         _build_zip(EMERGENCY_BACKUP_BOOK_PAYLOAD),
-        _UserContext(user_id="u1"),
+        _DummyUserContext(user_id="u1"),
     )
     inserted = next(n for n in ns.inserted if n.title.startswith("Emergency List"))
     content = inserted.content or ""

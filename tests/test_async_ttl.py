@@ -7,21 +7,12 @@ from typing import Callable
 
 import pytest
 
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.utils.async_ttl import AsyncTtlCacheInfo, async_ttl
 
+from tests.doubles.fakes.async_ttl import FakeClock
 
-class FakeClock:
-    """Manually advanced clock for deterministic TTL tests."""
 
-    def __init__(self, start: float = 0.0) -> None:
-        self.now = start
-
-    def __call__(self) -> float:
-        return self.now
-
-    def advance(self, seconds: float) -> None:
-        self.now += seconds
 
 
 async def test_caches_result_and_counts_hits_and_misses() -> None:

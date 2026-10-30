@@ -67,7 +67,6 @@ def users_table(sqlite_db: SqliteDatabase) -> Table:
 # insert ----------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_insert_round_trips_a_row(users_table: Table) -> None:
     """``insert()`` persists a row and returns the inserted record."""
     rows = await users_table.insert(
@@ -90,7 +89,6 @@ async def test_insert_round_trips_a_row(users_table: Table) -> None:
 # select -----------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_select_returns_empty_list_when_no_match(users_table: Table) -> None:
     """``select()`` with a mismatch returns ``[]`` (mirrors asyncpg)."""
     rows = await users_table.select(where={"id": "missing"})
@@ -98,7 +96,6 @@ async def test_select_returns_empty_list_when_no_match(users_table: Table) -> No
     assert rows == []
 
 
-@pytest.mark.asyncio
 async def test_select_row_returns_first_match(users_table: Table) -> None:
     """``select_row()`` returns one dict, not a list."""
     await users_table.insert(where={"id": "u-1", "username": "kurama"})
@@ -112,7 +109,6 @@ async def test_select_row_returns_first_match(users_table: Table) -> None:
 # update -----------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_update_changes_a_column(users_table: Table) -> None:
     """``update()`` mutates one column and leaves the others alone."""
     await users_table.insert(
@@ -126,7 +122,6 @@ async def test_update_changes_a_column(users_table: Table) -> None:
     assert row["email"] == "new@example"
 
 
-@pytest.mark.asyncio
 async def test_update_drops_undefined_where_values(
     users_table: Table,
 ) -> None:
@@ -153,7 +148,6 @@ async def test_update_drops_undefined_where_values(
 # delete -----------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_delete_by_id_removes_row(users_table: Table) -> None:
     """``delete_by_id()`` removes a single row by the id_fields."""
     await users_table.insert(
@@ -175,7 +169,6 @@ async def test_delete_by_id_removes_row(users_table: Table) -> None:
 # fetch_by_id ------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_fetch_by_id_returns_row(users_table: Table) -> None:
     await users_table.insert(where={"id": "u-1", "username": "kurama"})
 
@@ -186,7 +179,6 @@ async def test_fetch_by_id_returns_row(users_table: Table) -> None:
     assert row["username"] == "kurama"
 
 
-@pytest.mark.asyncio
 async def test_fetch_by_id_missing_returns_none(users_table: Table) -> None:
     """``fetch_by_id()`` returns ``None`` when the row isn't found."""
     row = await users_table.fetch_by_id("nope")
@@ -197,7 +189,6 @@ async def test_fetch_by_id_missing_returns_none(users_table: Table) -> None:
 # upsert -----------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_upsert_inserts_when_missing(users_table: Table) -> None:
     """``upsert()`` on a brand new id acts like an INSERT."""
     await users_table.upsert(
@@ -208,7 +199,6 @@ async def test_upsert_inserts_when_missing(users_table: Table) -> None:
     assert row["username"] == "kurama"
 
 
-@pytest.mark.asyncio
 async def test_upsert_updates_when_existing(users_table: Table) -> None:
     """``upsert()`` on an existing id updates the non-conflict columns."""
     await users_table.upsert(
@@ -229,7 +219,6 @@ async def test_upsert_updates_when_existing(users_table: Table) -> None:
 # fetch (raw SQL) --------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_fetch_passes_through_custom_sql(
     users_table: Table,
 ) -> None:

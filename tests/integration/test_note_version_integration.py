@@ -9,11 +9,11 @@ from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.tag.postgres import PostgresTagRepo
 from src.db.table import Table
 from src.utils import logging_provider
-from tests.fixtures import _FakeEmbeddingRepo, _TestDirectoryRepo, db, dsn, test_user, user_repo
-from tests.stubs.in_memory_permission_repo import InMemoryPermissionRepo
-from tests.stubs.in_memory_rule_repo import InMemoryRuleRepo
-from tests.stubs.in_memory_shelf_repo import NoopShelfRepo
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.fixtures import _StubEmbeddingRepo, _FakeSpyDirectoryRepo, db, dsn, test_user, user_repo
+from tests.doubles import InMemoryPermissionRepo
+from tests.doubles import InMemoryRuleRepo
+from tests.doubles import _DummyShelfRepo
+from tests.doubles import _DummyUserContext as UserContext
 from typing import List
 import pytest
 
@@ -74,24 +74,24 @@ async def test_note_versioning_records_snapshots_and_deltas(db, user_repo, test_
         db=db,
     )
 
-    directory_repo = _TestDirectoryRepo()
+    directory_repo = _FakeSpyDirectoryRepo()
     note_repo = NoteFacadeImpl(
         db=db,
         content_repo=NoteContentPostgresRepo(content_table),
         combined_repo=CombinedNotePostgresRepo(db=db),
-        embedding_repo=_FakeEmbeddingRepo(),
+        embedding_repo=_StubEmbeddingRepo(),
         permission_repo=InMemoryPermissionRepo(),
         directory_repo=directory_repo,
         tag_repo=tag_repo,
         logging_provider=logging_provider,
         version_repo=version_repo,
-        shelf_repo=NoopShelfRepo(),
+        shelf_repo=_DummyShelfRepo(),
         rule_repo=InMemoryRuleRepo(),
     )
 
     # Seed a default directory the user owns so the note facade's
     # ``_resolve_directory_ids`` finds a parent.  The
-    # :class:`_TestDirectoryRepo` matches via
+    # :class:`_FakeSpyDirectoryRepo` matches via
     # ``user_to_directory_ids``; we register an explicit
     # ``directory#admin@user`` relation so the lookup returns the
     # id we put on the note.

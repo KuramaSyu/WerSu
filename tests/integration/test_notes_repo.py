@@ -6,7 +6,7 @@ import asyncio
 import pytest
 from testcontainers.postgres import PostgresContainer
 from src.db.repos.note import note_facade
-from tests.stubs.user_context import _UserContext as UserContext
+from tests.doubles import _DummyUserContext as UserContext
 from src.api.other.types import Pagination
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
@@ -25,7 +25,7 @@ from src.db.repos import UserPostgresRepo, Database
 from src.utils import logging_provider
 from tests.fixtures import (
     db, note_repo_facade, tag_repo, user_repo, dsn, test_user,
-    _TestDirectoryRepo,
+    _FakeSpyDirectoryRepo,
 )
 
 pytestmark = pytest.mark.integration
