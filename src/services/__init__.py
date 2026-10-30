@@ -12,3 +12,4 @@ from .thirdparty_migrations import *
 from .background_process import *
 from .background_process.processes import *
 from .preferences import *
+from .tag_service import *
