@@ -133,6 +133,10 @@ from src.api.services.preferences_service import (
     PreferenceScope,
     PreferencesServiceABC,
 )
+from src.api.services.tag_service import (
+    TagServiceABC,
+    TagServiceError,
+)
 from src.api.errors import (
     DatabaseError
 )
@@ -226,6 +230,8 @@ __all__ = [
     "PreferencePayload",
     "PreferenceScope",
     "PreferencesServiceABC",
+    "TagServiceABC",
+    "TagServiceError",
     # relationship vocabulary
     "AttachmentRelationEnum",
     "DirectoryRelationEnum",
