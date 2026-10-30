@@ -36,7 +36,7 @@ from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.converter.postgres_row_converter import (
     PostgresRowConverter,
 )
-from src.services import PermissionServiceImpl, UserServiceImpl, DirectoryActivityServiceImpl, AttachmentFacadeImpl, share_access, PreferencesServiceImpl
+from src.services import PermissionServiceImpl, UserServiceImpl, DirectoryActivityServiceImpl, AttachmentFacadeImpl, share_access, PreferencesServiceImpl, TagServiceImpl
 from src.services.user_auth_service import UserAuthServiceImpl
 from src.services.background_process import (
     AsyncClockAsyncio,
@@ -55,6 +55,7 @@ from src.services.role_service import RoleServiceImpl
 from src.services.note import NoteServiceImpl
 from src.services.directory import DirectoryServiceImpl
 from src.api.services.shelf_service import ShelfServiceABC
+from src.api.services.tag_service import TagServiceABC
 from src.services.thirdparty_migrations import (
     ThirdpartyMigrationsServiceABC,
 )
@@ -90,6 +91,7 @@ from src.grpc_mod.proto.thirdparty_migrations_pb2_grpc import (
     add_ThirdpartyMigrationsServiceServicer_to_server,  # type: ignore[attr-defined]
 )
 from src.grpc_mod.proto.shelf_pb2_grpc import add_ShelfServiceServicer_to_server  # type: ignore[attr-defined]
+from src.grpc_mod.proto.tag_pb2_grpc import add_TagServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.user_pb2_grpc import add_UserServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.auth_pb2_grpc import add_AuthServiceServicer_to_server  # type: ignore[attr-defined]
 from src.db.repos.note.combined import CombinedNotePostgresRepo
@@ -103,6 +105,7 @@ from src.grpc_mod.preferences_service import GrpcPreferencesService
 from src.grpc_mod.directory_service import GrpcDirectoryService
 from src.grpc_mod.note_service import GrpcNoteService
 from src.grpc_mod.shelf_service import GrpcShelfService
+from src.grpc_mod.tag_service import GrpcTagService
 from src.grpc_mod.note_version_service import GrpcNoteVersionService
 from src.grpc_mod.permission_service import GrpcPermissionService
 from src.grpc_mod.rule_service import GrpcRuleService
@@ -428,6 +431,11 @@ async def serve():
         logging_provider=logging_provider,
     )
 
+    tag_service: TagServiceABC = TagServiceImpl(
+        tag_repo=tag_repo,
+        logging_provider=logging_provider,
+    )
+
     permission_service = PermissionServiceImpl(
         permission_repo=permission_repo,
         note_repo=note_facade,
@@ -673,6 +681,15 @@ async def serve():
         context_factory=user_context_factory,
     )
     add_PreferencesServiceServicer_to_server(grpc_preferences_service, server)
+
+    # setup gRPC tag service (global tag taxonomy CRUD)
+    grpc_tag_service = GrpcTagService(
+        tag_service=tag_service,
+        log=logging_provider,
+        to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
+    )
+    add_TagServiceServicer_to_server(grpc_tag_service, server)
 
     # setup gRPC activity statistics service
     grpc_activity_statistics_service = GrpcActivityStatisticsService(

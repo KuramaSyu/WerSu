@@ -26,6 +26,7 @@ from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.note.tag import TagEntity
 from src.db.entities.preferences import PreferencesEntity
 from src.db.entities.rule import RuleEntity
 from src.db.entities.user.passkey import PasskeyEntity
@@ -352,6 +353,24 @@ class ConvertToGrpcVisitor(EntityVisitor):
             id=str(tag_id),
             slug=str(slug or ""),
             display_name=str(display_name or ""),
+        )
+
+    def visit_tag(self, entity: TagEntity) -> MinimalTag:
+        """Convert a :class:`~src.db.entities.note.tag.TagEntity` to a ``MinimalTag`` message.
+
+        The entity fields are tri-state (``UNDEFINED`` / ``None`` /
+        value); every non-value maps to the proto empty string.
+
+        Args:
+            entity: tag entity to convert.
+
+        Returns:
+            MinimalTag: the equivalent proto message.
+        """
+        return self.minimal_tag(
+            str(entity.id) if entity.id else "",
+            str(entity.slug) if entity.slug else "",
+            str(entity.display_name) if entity.display_name else "",
         )
 
     # ---- directory -----------------------------------------------------
