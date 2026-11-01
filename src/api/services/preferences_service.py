@@ -24,8 +24,9 @@ class PreferencesServiceABC(ABC):
         scope: PreferenceScope,
         target_id: str,
         ctx: UserContextABC,
+        key: str = "",
     ) -> dict[str, Any]:
-        """Read the current preference blob for target_id."""
+        """Read the preference blob for (target_id, key)."""
         ...
 
     @abstractmethod
@@ -35,6 +36,7 @@ class PreferencesServiceABC(ABC):
         target_id: str,
         preferences: PreferencePayload,
         ctx: UserContextABC,
+        key: str = "",
     ) -> dict[str, Any]:
         """Replace the entire preference blob.  Returns the post-replace state."""
         ...
@@ -46,6 +48,7 @@ class PreferencesServiceABC(ABC):
         target_id: str,
         preferences: PreferencePayload,
         ctx: UserContextABC,
+        key: str = "",
     ) -> dict[str, Any]:
         """Shallow-merge into the stored blob.  Returns the merged state."""
         ...
@@ -56,6 +59,7 @@ class PreferencesServiceABC(ABC):
         scope: PreferenceScope,
         target_id: str,
         ctx: UserContextABC,
+        key: str = "",
     ) -> bool:
         """Drop the stored blob.  Returns whether a row was removed."""
         ...

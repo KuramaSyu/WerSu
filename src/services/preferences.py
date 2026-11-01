@@ -60,6 +60,7 @@ class PreferencesServiceImpl(PreferencesServiceABC):
         scope: PreferenceScope,
         target_id: str,
         ctx: UserContextABC,
+        key: str = "",
     ) -> dict[str, Any]:
         """Read the blob, gated on the scope-appropriate read chain."""
         if not target_id:
@@ -84,7 +85,7 @@ class PreferencesServiceImpl(PreferencesServiceABC):
         if not result:
             raise result.error  # type: ignore[misc]
 
-        return await self._repo.read(scope, target_id)
+        return await self._repo.read(scope, target_id, key)
 
     async def update_preferences(
         self,
@@ -92,15 +93,18 @@ class PreferencesServiceImpl(PreferencesServiceABC):
         target_id: str,
         preferences: PreferencePayload,
         ctx: UserContextABC,
+        key: str = "",
     ) -> dict[str, Any]:
-        """Replace the blob.  Returns the post-replace state."""
+        """Replace the blob for (target_id, key).  Returns the post-replace state."""
         # TODO: gate writes on the scope-appropriate permission chain.
         # Reads already enforce per-scope permission; writes currently
         # rely on the gRPC layer. Revisit once the chain is decided.
         if not target_id:
             raise ValueError("target_id is required")
         parsed = _coerce_payload(preferences)
-        await self._repo.upsert(scope, target_id, parsed, self.get_now())
+        await self._repo.upsert(
+            scope, target_id, parsed, self.get_now(), key
+        )
         return parsed
 
     async def patch_preferences(
@@ -109,13 +113,17 @@ class PreferencesServiceImpl(PreferencesServiceABC):
         target_id: str,
         preferences: PreferencePayload,
         ctx: UserContextABC,
+        key: str = "",
     ) -> dict[str, Any]:
-        """Shallow-merge into the existing blob, then upsert."""
+        """Shallow-merge into the existing blob for (target_id, key), then upsert."""
         if not target_id:
             raise ValueError("target_id is required")
         parsed = _coerce_payload(preferences)
-        merged = {**await self._repo.read(scope, target_id), **parsed}
-        await self._repo.upsert(scope, target_id, merged, self.get_now())
+        existing = await self._repo.read(scope, target_id, key)
+        merged = {**existing, **parsed}
+        await self._repo.upsert(
+            scope, target_id, merged, self.get_now(), key
+        )
         return merged
 
     async def delete_preferences(
@@ -123,8 +131,9 @@ class PreferencesServiceImpl(PreferencesServiceABC):
         scope: PreferenceScope,
         target_id: str,
         ctx: UserContextABC,
+        key: str = "",
     ) -> bool:
-        """Drop the row.  Returns whether a row was actually removed."""
+        """Drop the row for (target_id, key).  Returns whether a row was removed."""
         if not target_id:
             raise ValueError("target_id is required")
-        return await self._repo.delete(scope, target_id)
+        return await self._repo.delete(scope, target_id, key)

@@ -23,6 +23,9 @@ class PreferencesEntity(AcceptsVisitor):
     scope: UndefinedOr[PreferenceScope] = UNDEFINED
     """Which column owns this row."""
 
+    key: UndefinedOr[str] = UNDEFINED
+    """Optional caller-chosen key; UNDEFINED/None means the default "" key."""
+
     user_id: UndefinedOr[str] = UNDEFINED
     """Owner id when scope is user."""
 
@@ -37,6 +40,12 @@ class PreferencesEntity(AcceptsVisitor):
 
     updated_at: UndefinedOr[datetime] = UNDEFINED
     """Last write timestamp."""
+
+    def preference_key(self) -> str:
+        """Return the row key, normalising UNDEFINED/None to the default ""."""
+        if self.key is UNDEFINED or self.key is None:
+            return ""
+        return str(self.key)
 
     def owner_id(self) -> str:
         """Return the non-NULL owner id for this row.

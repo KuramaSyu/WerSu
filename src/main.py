@@ -427,7 +427,7 @@ async def serve():
     )
 
     preferences_repo = PostgresPreferencesRepo(
-        db=db,
+        table=preferences_table,
         to_postgres_row=postgres_visitor,
     )
 
@@ -683,6 +683,7 @@ async def serve():
     grpc_preferences_service = GrpcPreferencesService(
         preferences_service=preferences_service,
         log=logging_provider,
+        to_grpc=grpc_visitor,
         context_factory=user_context_factory,
     )
     add_PreferencesServiceServicer_to_server(grpc_preferences_service, server)

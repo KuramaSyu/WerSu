@@ -62,7 +62,10 @@ from src.api.repos.permission_repo import (
 )
 from src.api.repos.activity_repo import ActivityRepoABC, ActivityFilterBuilder
 from src.api.repos.user_action_repo import UserActionRepoABC
-from src.api.repos.preferences_repo import PreferencesRepoABC
+from src.api.repos.preferences_repo import (
+    PreferencesLimitExceeded,
+    PreferencesRepoABC,
+)
 from src.api.repos.combined_note_repo import CombinedNoteRepoABC
 from src.api.repos.note_content_repo import NoteContentRepo
 from src.api.repos.directory_repo import (
@@ -183,6 +186,7 @@ __all__ = [
     "ActivityRepoABC",
     "ActivityFilterBuilder",
     "UserActionRepoABC",
+    "PreferencesLimitExceeded",
     "PreferencesRepoABC",
     "CombinedNoteRepoABC",
     "DirectoryHelperMixin",
