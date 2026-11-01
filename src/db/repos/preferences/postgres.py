@@ -171,11 +171,16 @@ class PostgresPreferencesRepo(PreferencesRepoABC):
             )
         payload = row.get("payload", "{}")
         ts = row.get("updated_at") or self._now()
+        # The per-owner unique indexes (preferences_*_uidx) are
+        # partial (``WHERE <owner> IS NOT NULL``).  Postgres can
+        # only infer a partial index from ON CONFLICT when the
+        # clause repeats its predicate, so mirror it here.
         await self._db.execute(
             f"""
             INSERT INTO preferences ({owner_col}, payload, updated_at)
             VALUES ($1, $2::jsonb, $3)
-            ON CONFLICT ({owner_col}) DO UPDATE
+            ON CONFLICT ({owner_col}) WHERE {owner_col} IS NOT NULL
+            DO UPDATE
                 SET payload = EXCLUDED.payload,
                     updated_at = EXCLUDED.updated_at
             """,

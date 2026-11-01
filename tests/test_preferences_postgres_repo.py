@@ -79,7 +79,10 @@ def test_upsert_targets_correct_owner_column(
     delete_sql, delete_args = db.execute_calls[1]
 
     assert f"INSERT INTO preferences ({expected_column}" in insert_sql
-    assert "ON CONFLICT" in insert_sql
+    assert (
+        f"ON CONFLICT ({expected_column}) "
+        f"WHERE {expected_column} IS NOT NULL" in insert_sql
+    )
     assert insert_args == ("the-id", json.dumps({"k": "v"}), ts)
 
     assert delete_sql == f"DELETE FROM preferences WHERE {expected_column} = $1"
@@ -189,7 +192,7 @@ def test_upsert_uses_injected_timestamp() -> None:
     sql, args = db.execute_calls[-1]
     assert "INSERT INTO preferences (role_id, payload, updated_at)" in sql
     assert "VALUES ($1, $2::jsonb, $3)" in sql
-    assert "ON CONFLICT (role_id) DO UPDATE" in sql
+    assert "ON CONFLICT (role_id) WHERE role_id IS NOT NULL" in sql
     assert args == ("r1", json.dumps({"x": 1}), pinned)
 
 
