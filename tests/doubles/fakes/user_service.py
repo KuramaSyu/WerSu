@@ -8,7 +8,7 @@ from src.api.other.user_context import ContextFactory, UserContextABC
 from tests.doubles.dummies.user_context import _DummyUserContext
 from src.api.repos.directory_repo import DirectoryChildType, DirectoryHierarchyType, DirectoryParentType
 from src.db.entities.directory.directory import DirectoryEntity
-from src.db.entities.user.user import UserEntity
+from src.db.entities.user.user import FilterUser, UserEntity
 from src.api.other.relationship import DirectoryRelationEnum, ObjectTypeEnum
 from src.db.repos.user.user import UserRepoABC
 from typing import Dict, List, Optional, Tuple
@@ -42,8 +42,22 @@ class _InMemoryUserRepo(UserRepoABC):
         updated = replace(user, id=existing.id)
         return await self.update(updated)
 
-    async def select(self, user_id: str) -> Optional[UserEntity]:
-        return self._by_id.get(user_id)
+    async def select(self, filter: FilterUser) -> Optional[UserEntity]:
+        if filter.is_empty():
+            return None
+        for user in self._by_id.values():
+            if (
+                filter.user_id is not UNDEFINED
+                and str(user.id) != str(filter.user_id)
+            ):
+                continue
+            if (
+                filter.username is not UNDEFINED
+                and user.username != filter.username
+            ):
+                continue
+            return user
+        return None
 
     async def select_by_discord_id(self, discord_id: int) -> Optional[UserEntity]:
         user_id = self._by_discord_id.get(discord_id)

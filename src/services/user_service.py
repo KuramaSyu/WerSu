@@ -12,7 +12,7 @@ from src.api.services.shelf_service import (
 )
 from src.api.services.user_service import UserServiceABC
 from src.db.entities.shelf import ShelfEntity
-from src.db.entities.user.user import UserEntity
+from src.db.entities.user.user import FilterUser, UserEntity
 from src.db.repos.directory.directory_facade import DirectoryFacadeABC
 from src.db.repos.user.user import UserRepoABC
 
@@ -69,7 +69,7 @@ class UserServiceImpl(UserServiceABC):
         discord_id: Optional[int] = None,
     ) -> Optional[UserEntity]:
         if user_id is not None:
-            return await self._user_repo.select(user_id=user_id)
+            return await self._user_repo.select(FilterUser(user_id=user_id))
         if discord_id is not None:
             return await self._user_repo.select_by_discord_id(discord_id=discord_id)
         return None

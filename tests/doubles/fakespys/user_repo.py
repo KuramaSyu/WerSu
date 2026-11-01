@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from typing import List, Optional
-from src.db.entities.user.user import UserEntity
+from src.api.other.undefined import UNDEFINED
+from src.db.entities.user.user import FilterUser, UserEntity
 
 
 class _FakeSpyUserRepo:
@@ -24,8 +25,22 @@ class _FakeSpyUserRepo:
             self._store[str(user.id)] = user
         return user
 
-    async def select(self, user_id: str) -> Optional[UserEntity]:
-        return self._store.get(user_id)
+    async def select(self, filter: FilterUser) -> Optional[UserEntity]:
+        if filter.is_empty():
+            return None
+        for user in self._store.values():
+            if (
+                filter.user_id is not UNDEFINED
+                and str(user.id) != str(filter.user_id)
+            ):
+                continue
+            if (
+                filter.username is not UNDEFINED
+                and user.username != filter.username
+            ):
+                continue
+            return user
+        return None
 
     async def delete(self, user_id: str) -> bool:
         self.deleted.append(user_id)

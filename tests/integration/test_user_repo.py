@@ -6,7 +6,7 @@ import pytest
 from testcontainers.postgres import PostgresContainer
 from tests.doubles import _DummyUserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
-from src.db.entities.user.user import UserEntity
+from src.db.entities.user.user import FilterUser, UserEntity
 from src.api.facades.note_facade import NoteFacadeABC
 from src.db.repos.user.user import UserRepoABC
 import src.api
@@ -23,16 +23,23 @@ pytestmark = pytest.mark.integration
 async def test_create_user(user_repo: UserRepoABC, test_user: UserEntity):
     """Creates a test user and retrieves it by id."""
     inserted = await user_repo.insert(test_user)
-    ret_user = await user_repo.select(inserted.id)
+    ret_user = await user_repo.select(FilterUser(user_id=inserted.id))
     assert ret_user
     assert ret_user.avatar == test_user.avatar
+
+async def test_select_user_by_username(user_repo: UserRepoABC, test_user: UserEntity):
+    """A user can be looked up by the unique username."""
+    inserted = await user_repo.insert(test_user)
+    ret_user = await user_repo.select(FilterUser(username="KuramaSyu"))
+    assert ret_user is not None
+    assert ret_user.id == inserted.id
 
 async def test_update_user(db: Database, user_repo: UserRepoABC, test_user: UserEntity):
     """Creates a test user, updates it, and retrieves it twice by id."""
     inserted = await user_repo.insert(test_user)
     updated_user = replace(inserted, avatar="http://somewere")
     ret_user_update = await user_repo.update(updated_user)
-    ret_user_by_id = await user_repo.select(ret_user_update.id)
+    ret_user_by_id = await user_repo.select(FilterUser(user_id=ret_user_update.id))
     assert ret_user_by_id and ret_user_by_id.id
     assert ret_user_by_id == ret_user_update  # assert that update returns same as select
     assert ret_user_by_id.avatar == "http://somewere"
@@ -66,7 +73,7 @@ async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_rep
     assert UUID(note.note_id).version == 7
 
     await user_repo.delete(test_user.id)
-    ret_user = await user_repo.select(test_user.id)
+    ret_user = await user_repo.select(FilterUser(user_id=test_user.id))
     assert ret_user is None
 
     # Deleting the user cascades the FK to note.content; the note

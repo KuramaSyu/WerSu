@@ -23,7 +23,8 @@ from typing import List, Optional
 from asyncpg import Record
 
 from src.api.other.types import LoggingProvider
-from src.db.entities import UserEntity
+from src.api.other.undefined import UNDEFINED
+from src.db.entities import FilterUser, UserEntity
 from src.db.table import TableABC
 from src.grpc_mod.converter.postgres_row_converter import (
     PostgresRowConverter,
@@ -55,8 +56,15 @@ class UserRepoABC(ABC):
         """Insert or update a user based on discord_id."""
 
     @abstractmethod
-    async def select(self, user_id: str) -> Optional[UserEntity]:
-        """Select a user by ID."""
+    async def select(self, filter: FilterUser) -> Optional[UserEntity]:
+        """Fetch the first user matching every set field of ``filter``.
+
+        Set fields are AND-ed; an empty filter matches no user
+        (``None`` is returned).  A single-field filter (``user_id``,
+        ``username``) covers the lookup-by-id / lookup-by-username
+        cases too.  Usernames are unique among non-null values
+        (``auth_user_username_uidx``).
+        """
 
     @abstractmethod
     async def select_by_discord_id(self, discord_id: int) -> Optional[UserEntity]:
@@ -153,10 +161,17 @@ class UserPostgresRepo(UserRepoABC):
             "migration; use PostgresUserAuthRepoImpl instead."
         )
 
-    async def select(self, user_id: str) -> Optional[UserEntity]:
-        """Select a user by ID."""
+    async def select(self, filter: FilterUser) -> Optional[UserEntity]:
+        """Fetch the first user matching every set field of ``filter``."""
+        if filter.is_empty():
+            return None
+        where: dict[str, object] = {}
+        if filter.user_id is not UNDEFINED:
+            where["id"] = filter.user_id
+        if filter.username is not UNDEFINED:
+            where["username"] = filter.username
         record = await self._table.select_row(
-            where={"id": user_id},
+            where=where,
             select=self._returning,
         )
         if record is None:

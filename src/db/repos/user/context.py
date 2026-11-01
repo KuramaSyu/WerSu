@@ -14,7 +14,7 @@ from typing import Optional
 
 from src.api.other.undefined import UNDEFINED, UndefinedOr
 from src.api.other.user_context import ActorAs, ContextFactory, UserContextABC, UserTypeT
-from src.db.entities.user.user import UserEntity
+from src.db.entities.user.user import FilterUser, UserEntity
 from src.utils.async_ttl import AsyncTtlCacheInfo, async_ttl
 
 from .user import UserRepoABC
@@ -53,7 +53,9 @@ class RepoUserContext(UserContextABC):
         :attr:`type` stays :obj:`~src.api.undefined.UNDEFINED`.
         """
         if self._user is None:
-            self._user = await self._user_repo.select(self._user_id)
+            self._user = await self._user_repo.select(
+                FilterUser(user_id=self._user_id)
+            )
         return self._user
 
     async def is_temporary_user(self) -> bool:

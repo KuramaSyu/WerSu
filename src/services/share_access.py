@@ -9,6 +9,7 @@ from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, unwrap_undefined
 from src.api.repos.user_action_repo import UserActionRepoABC
 from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.user.user import FilterUser
 from src.db.repos.user import UnimplementedUserContext
 from src.db.repos.user.user import UserRepoABC
 
@@ -85,7 +86,7 @@ class ShareAccessServiceImpl(ShareAccessServiceABC):
         share = shares[0]
 
         access_as = unwrap_undefined(share.access_as)
-        access_user = await self._user_repo.select(access_as)
+        access_user = await self._user_repo.select(FilterUser(user_id=access_as))
         if access_user is None:
             raise ValueError(
                 f"Share {share_id} references access user {access_as!r}, "

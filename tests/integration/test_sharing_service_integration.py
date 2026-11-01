@@ -26,6 +26,7 @@ from src.api import ObjectRef, ObjectTypeEnum
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.user.user import FilterUser
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.services.sharing import SharingServiceImpl
 from tests.integration_helpers import (
@@ -120,7 +121,7 @@ async def test_create_share_persists_row_and_grants_access(
     assert fetched.description == "first share"
 
     # 2. Access user is a real user in Postgres.
-    access_user = await env.user_repo.select(access_as)
+    access_user = await env.user_repo.select(FilterUser(user_id=access_as))
     if access_user is None:
         pytest.fail(f"access user {access_as!r} was not persisted in users table")
     assert access_user.username, "access user must have a generated username"
@@ -264,7 +265,7 @@ async def test_delete_share_removes_row_user_and_relations(
         await env.sharing_repo.get_share_by_id(share_id, UserContext(user_id))
 
     # 2. Temp access user is deleted.
-    deleted_user = await env.user_repo.select(access_as)
+    deleted_user = await env.user_repo.select(FilterUser(user_id=access_as))
     if deleted_user is not None:
         pytest.fail(
             f"temp access user {access_as!r} was not deleted; still present: {deleted_user!r}"
