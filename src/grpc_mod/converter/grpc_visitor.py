@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
-from typing import Any, Dict
+from typing import Any
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
@@ -51,6 +51,9 @@ from src.grpc_mod.proto.activity_pb2 import (
 )
 from src.grpc_mod.proto.attachments_pb2 import Attachment as GrpcAttachment
 from src.grpc_mod.proto.attachments_pb2 import AttachmentMetadata
+from src.grpc_mod.proto.preferences_pb2 import (
+    GetPreferencesResponse as GrpcGetPreferencesResponse,
+)
 from src.grpc_mod.proto.note_pb2 import (
     Directory,
     MinimalDirectory,
@@ -670,36 +673,27 @@ class ConvertToGrpcVisitor(EntityVisitor):
 
     # ---- preferences ----------------------------------------------------
 
-    def visit_preferences(self, entity: PreferencesEntity) -> Dict[str, Any]:
-        """Convert a PreferencesEntity to a row-shaped dict.
+    def visit_preferences(
+        self, entity: PreferencesEntity
+    ) -> GrpcGetPreferencesResponse:
+        """Convert a PreferencesEntity to a ``GetPreferencesResponse``.
 
-        Returns the same dict shape as :class:`PostgresRowConverter`
-        -- {user_id|shelf_id|role_id, payload, updated_at, id}.  The
-        proto surface currently models preferences as a JSON-encoded
-        string on GetPreferencesResponse, so callers serialise the
-        payload to a JSON string before sending it on the wire.
-        A dedicated ``Preferences`` proto message would be a future
-        iteration that fits the rest of this visitor surface.
+        The payload is serialised to the compact JSON object string the
+        proto models (``{}`` when the entity carries no payload), and the
+        row key is carried through verbatim (``""`` for the default
+        scope+target-only row).
         """
-        row: Dict[str, Any] = {}
-        row["id"] = (
-            entity.id
-            if not is_undefined(entity.id)
-            else UNDEFINED
+        payload = entity.payload
+        if is_undefined(payload) or payload is None:
+            payload_json = "{}"
+        elif isinstance(payload, str):
+            payload_json = payload
+        else:
+            payload_json = json.dumps(payload, separators=(",", ":"))
+        return GrpcGetPreferencesResponse(
+            preferences_json=payload_json,
+            key=entity.preference_key(),
         )
-        # Pick the column that matches the entity's scope.  Exactly one
-        # of user_id, shelf_id, role_id is set on a well-formed row.
-        if not is_undefined(entity.user_id) and entity.user_id is not None:
-            row["user_id"] = entity.user_id
-        elif not is_undefined(entity.shelf_id) and entity.shelf_id is not None:
-            row["shelf_id"] = entity.shelf_id
-        elif not is_undefined(entity.role_id) and entity.role_id is not None:
-            row["role_id"] = entity.role_id
-        if not is_undefined(entity.payload):
-            row["payload"] = entity.payload
-        if not is_undefined(entity.updated_at):
-            row["updated_at"] = entity.updated_at
-        return row
 
     # ---- attachment ----------------------------------------------------
 

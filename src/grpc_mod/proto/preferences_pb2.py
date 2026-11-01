@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n$src/grpc_mod/proto/preferences.proto\x12\x05proto\"b\n\x15GetPreferencesRequest\x12%\n\x05scope\x18\x01 \x01(\x0e\x32\x16.proto.PreferenceScope\x12\x11\n\ttarget_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\"}\n\x16PostPreferencesRequest\x12%\n\x05scope\x18\x01 \x01(\x0e\x32\x16.proto.PreferenceScope\x12\x11\n\ttarget_id\x18\x02 \x01(\t\x12\x18\n\x10preferences_json\x18\x03 \x01(\t\x12\x0f\n\x07user_id\x18\x04 \x01(\t\"~\n\x17PatchPreferencesRequest\x12%\n\x05scope\x18\x01 \x01(\x0e\x32\x16.proto.PreferenceScope\x12\x11\n\ttarget_id\x18\x02 \x01(\t\x12\x18\n\x10preferences_json\x18\x03 \x01(\t\x12\x0f\n\x07user_id\x18\x04 \x01(\t\"e\n\x18\x44\x65letePreferencesRequest\x12%\n\x05scope\x18\x01 \x01(\x0e\x32\x16.proto.PreferenceScope\x12\x11\n\ttarget_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\"2\n\x16GetPreferencesResponse\x12\x18\n\x10preferences_json\x18\x01 \x01(\t\",\n\x19\x44\x65letePreferencesResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08*\x85\x01\n\x0fPreferenceScope\x12 \n\x1cPREFERENCE_SCOPE_UNSPECIFIED\x10\x00\x12\x19\n\x15PREFERENCE_SCOPE_USER\x10\x01\x12\x1a\n\x16PREFERENCE_SCOPE_SHELF\x10\x02\x12\x19\n\x15PREFERENCE_SCOPE_ROLE\x10\x03\x32\xdf\x02\n\x12PreferencesService\x12M\n\x0eGetPreferences\x12\x1c.proto.GetPreferencesRequest\x1a\x1d.proto.GetPreferencesResponse\x12O\n\x0fPostPreferences\x12\x1d.proto.PostPreferencesRequest\x1a\x1d.proto.GetPreferencesResponse\x12Q\n\x10PatchPreferences\x12\x1e.proto.PatchPreferencesRequest\x1a\x1d.proto.GetPreferencesResponse\x12V\n\x11\x44\x65letePreferences\x12\x1f.proto.DeletePreferencesRequest\x1a .proto.DeletePreferencesResponseB1Z/github.com/KuramaSyu/WerSu-Rest/src/proto;protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n$src/grpc_mod/proto/preferences.proto\x12\x05proto\"o\n\x15GetPreferencesRequest\x12%\n\x05scope\x18\x01 \x01(\x0e\x32\x16.proto.PreferenceScope\x12\x11\n\ttarget_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\x12\x0b\n\x03key\x18\x04 \x01(\t\"\x8a\x01\n\x16PostPreferencesRequest\x12%\n\x05scope\x18\x01 \x01(\x0e\x32\x16.proto.PreferenceScope\x12\x11\n\ttarget_id\x18\x02 \x01(\t\x12\x18\n\x10preferences_json\x18\x03 \x01(\t\x12\x0f\n\x07user_id\x18\x04 \x01(\t\x12\x0b\n\x03key\x18\x05 \x01(\t\"\x8b\x01\n\x17PatchPreferencesRequest\x12%\n\x05scope\x18\x01 \x01(\x0e\x32\x16.proto.PreferenceScope\x12\x11\n\ttarget_id\x18\x02 \x01(\t\x12\x18\n\x10preferences_json\x18\x03 \x01(\t\x12\x0f\n\x07user_id\x18\x04 \x01(\t\x12\x0b\n\x03key\x18\x05 \x01(\t\"r\n\x18\x44\x65letePreferencesRequest\x12%\n\x05scope\x18\x01 \x01(\x0e\x32\x16.proto.PreferenceScope\x12\x11\n\ttarget_id\x18\x02 \x01(\t\x12\x0f\n\x07user_id\x18\x03 \x01(\t\x12\x0b\n\x03key\x18\x04 \x01(\t\"?\n\x16GetPreferencesResponse\x12\x18\n\x10preferences_json\x18\x01 \x01(\t\x12\x0b\n\x03key\x18\x02 \x01(\t\",\n\x19\x44\x65letePreferencesResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08*\x85\x01\n\x0fPreferenceScope\x12 \n\x1cPREFERENCE_SCOPE_UNSPECIFIED\x10\x00\x12\x19\n\x15PREFERENCE_SCOPE_USER\x10\x01\x12\x1a\n\x16PREFERENCE_SCOPE_SHELF\x10\x02\x12\x19\n\x15PREFERENCE_SCOPE_ROLE\x10\x03\x32\xdf\x02\n\x12PreferencesService\x12M\n\x0eGetPreferences\x12\x1c.proto.GetPreferencesRequest\x1a\x1d.proto.GetPreferencesResponse\x12O\n\x0fPostPreferences\x12\x1d.proto.PostPreferencesRequest\x1a\x1d.proto.GetPreferencesResponse\x12Q\n\x10PatchPreferences\x12\x1e.proto.PatchPreferencesRequest\x1a\x1d.proto.GetPreferencesResponse\x12V\n\x11\x44\x65letePreferences\x12\x1f.proto.DeletePreferencesRequest\x1a .proto.DeletePreferencesResponseB1Z/github.com/KuramaSyu/WerSu-Rest/src/proto;protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,20 +32,20 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'src.grpc_mod.proto.preferen
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z/github.com/KuramaSyu/WerSu-Rest/src/proto;proto'
-  _globals['_PREFERENCESCOPE']._serialized_start=604
-  _globals['_PREFERENCESCOPE']._serialized_end=737
+  _globals['_PREFERENCESCOPE']._serialized_start=671
+  _globals['_PREFERENCESCOPE']._serialized_end=804
   _globals['_GETPREFERENCESREQUEST']._serialized_start=47
-  _globals['_GETPREFERENCESREQUEST']._serialized_end=145
-  _globals['_POSTPREFERENCESREQUEST']._serialized_start=147
-  _globals['_POSTPREFERENCESREQUEST']._serialized_end=272
-  _globals['_PATCHPREFERENCESREQUEST']._serialized_start=274
-  _globals['_PATCHPREFERENCESREQUEST']._serialized_end=400
-  _globals['_DELETEPREFERENCESREQUEST']._serialized_start=402
-  _globals['_DELETEPREFERENCESREQUEST']._serialized_end=503
-  _globals['_GETPREFERENCESRESPONSE']._serialized_start=505
-  _globals['_GETPREFERENCESRESPONSE']._serialized_end=555
-  _globals['_DELETEPREFERENCESRESPONSE']._serialized_start=557
-  _globals['_DELETEPREFERENCESRESPONSE']._serialized_end=601
-  _globals['_PREFERENCESSERVICE']._serialized_start=740
-  _globals['_PREFERENCESSERVICE']._serialized_end=1091
+  _globals['_GETPREFERENCESREQUEST']._serialized_end=158
+  _globals['_POSTPREFERENCESREQUEST']._serialized_start=161
+  _globals['_POSTPREFERENCESREQUEST']._serialized_end=299
+  _globals['_PATCHPREFERENCESREQUEST']._serialized_start=302
+  _globals['_PATCHPREFERENCESREQUEST']._serialized_end=441
+  _globals['_DELETEPREFERENCESREQUEST']._serialized_start=443
+  _globals['_DELETEPREFERENCESREQUEST']._serialized_end=557
+  _globals['_GETPREFERENCESRESPONSE']._serialized_start=559
+  _globals['_GETPREFERENCESRESPONSE']._serialized_end=622
+  _globals['_DELETEPREFERENCESRESPONSE']._serialized_start=624
+  _globals['_DELETEPREFERENCESRESPONSE']._serialized_end=668
+  _globals['_PREFERENCESSERVICE']._serialized_start=807
+  _globals['_PREFERENCESSERVICE']._serialized_end=1158
 # @@protoc_insertion_point(module_scope)

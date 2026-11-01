@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import traceback
 
 import grpc
@@ -11,7 +10,9 @@ from grpc.aio import ServicerContext
 from src.api import LoggingProvider, PreferencesServiceABC
 from src.api.other.user_context import ContextFactory, UserContextABC
 from src.api.services.preferences_service import PreferenceScope
+from src.db.entities.preferences import PreferencesEntity
 from src.grpc_mod._log_decorator import log_service_call
+from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.proto.preferences_pb2 import (
     DeletePreferencesRequest,
     DeletePreferencesResponse,
@@ -31,6 +32,13 @@ _SCOPE_TO_GRPC = {
 }
 _GRPC_TO_SCOPE = {v: k for k, v in _SCOPE_TO_GRPC.items()}
 
+#: Maps a scope literal to the PreferencesEntity owner attribute.
+_SCOPE_TO_OWNER_FIELD = {
+    "user": "user_id",
+    "shelf": "shelf_id",
+    "role": "role_id",
+}
+
 
 class GrpcPreferencesService(PreferencesServiceServicer):
     """Implements the gRPC service defined in preferences.proto."""
@@ -39,11 +47,29 @@ class GrpcPreferencesService(PreferencesServiceServicer):
         self,
         preferences_service: PreferencesServiceABC,
         log: LoggingProvider,
+        to_grpc: ConvertToGrpcVisitor,
         context_factory: ContextFactory[UserContextABC],
     ):
         self._service = preferences_service
         self.log = log(__name__, self)
+        self._to_grpc = to_grpc
         self._context = context_factory
+
+    def _to_response(
+        self,
+        scope: PreferenceScope,
+        target_id: str,
+        key: str,
+        payload: dict,
+    ) -> GetPreferencesResponse:
+        """Project the service-layer payload through the gRPC visitor."""
+        entity = PreferencesEntity(
+            scope=scope,
+            key=key,
+            payload=payload,
+            **{_SCOPE_TO_OWNER_FIELD[scope]: target_id},
+        )
+        return entity.convert(self._to_grpc)
 
     @log_service_call()
     async def GetPreferences(
@@ -55,8 +81,11 @@ class GrpcPreferencesService(PreferencesServiceServicer):
             blob = await self._service.get_preferences(
                 scope, request.target_id,
                 await self._context.create(request.user_id),
+                request.key,
             )
-            return GetPreferencesResponse(preferences_json=_encode(blob))
+            return self._to_response(
+                scope, request.target_id, request.key, blob
+            )
         except _GrpcError as exc:
             self._set_error(context, exc)
             return GetPreferencesResponse()
@@ -75,8 +104,11 @@ class GrpcPreferencesService(PreferencesServiceServicer):
             blob = await self._service.update_preferences(
                 scope, request.target_id, request.preferences_json,
                 await self._context.create(request.user_id),
+                request.key,
             )
-            return GetPreferencesResponse(preferences_json=_encode(blob))
+            return self._to_response(
+                scope, request.target_id, request.key, blob
+            )
         except _GrpcError as exc:
             self._set_error(context, exc)
             return GetPreferencesResponse()
@@ -98,8 +130,11 @@ class GrpcPreferencesService(PreferencesServiceServicer):
             blob = await self._service.patch_preferences(
                 scope, request.target_id, request.preferences_json,
                 await self._context.create(request.user_id),
+                request.key,
             )
-            return GetPreferencesResponse(preferences_json=_encode(blob))
+            return self._to_response(
+                scope, request.target_id, request.key, blob
+            )
         except _GrpcError as exc:
             self._set_error(context, exc)
             return GetPreferencesResponse()
@@ -121,6 +156,7 @@ class GrpcPreferencesService(PreferencesServiceServicer):
             removed = await self._service.delete_preferences(
                 scope, request.target_id,
                 await self._context.create(request.user_id),
+                request.key,
             )
             return DeletePreferencesResponse(success=removed)
         except _GrpcError as exc:
@@ -161,11 +197,6 @@ class _GrpcError(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
-
-
-def _encode(blob: dict) -> str:
-    """Serialise the dict back to a JSON object string."""
-    return json.dumps(blob, separators=(",", ":"))
 
 
 __all__ = ["GrpcPreferencesService"]

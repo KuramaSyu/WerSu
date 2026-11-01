@@ -44,19 +44,26 @@ class GetPreferencesRequest(_message.Message):
     SCOPE_FIELD_NUMBER: _builtins.int
     TARGET_ID_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
+    KEY_FIELD_NUMBER: _builtins.int
     scope: Global___PreferenceScope.ValueType
     target_id: _builtins.str
     user_id: _builtins.str
+    key: _builtins.str
+    """Optional caller-chosen key.  Empty means the default
+    scope+target-only row, preserving the legacy call shape.
+    scope + target_id are always required, with or without a key.
+    """
     def __init__(
         self,
         *,
         scope: Global___PreferenceScope.ValueType = ...,
         target_id: _builtins.str = ...,
         user_id: _builtins.str = ...,
+        key: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["scope", b"scope", "target_id", b"target_id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "scope", b"scope", "target_id", b"target_id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -70,6 +77,7 @@ class PostPreferencesRequest(_message.Message):
     TARGET_ID_FIELD_NUMBER: _builtins.int
     PREFERENCES_JSON_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
+    KEY_FIELD_NUMBER: _builtins.int
     scope: Global___PreferenceScope.ValueType
     target_id: _builtins.str
     preferences_json: _builtins.str
@@ -77,6 +85,8 @@ class PostPreferencesRequest(_message.Message):
     (not a list or scalar), otherwise the call is rejected.
     """
     user_id: _builtins.str
+    key: _builtins.str
+    """Optional caller-chosen key; see GetPreferencesRequest.key."""
     def __init__(
         self,
         *,
@@ -84,10 +94,11 @@ class PostPreferencesRequest(_message.Message):
         target_id: _builtins.str = ...,
         preferences_json: _builtins.str = ...,
         user_id: _builtins.str = ...,
+        key: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["preferences_json", b"preferences_json", "scope", b"scope", "target_id", b"target_id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "preferences_json", b"preferences_json", "scope", b"scope", "target_id", b"target_id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -101,10 +112,13 @@ class PatchPreferencesRequest(_message.Message):
     TARGET_ID_FIELD_NUMBER: _builtins.int
     PREFERENCES_JSON_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
+    KEY_FIELD_NUMBER: _builtins.int
     scope: Global___PreferenceScope.ValueType
     target_id: _builtins.str
     preferences_json: _builtins.str
     user_id: _builtins.str
+    key: _builtins.str
+    """Optional caller-chosen key; see GetPreferencesRequest.key."""
     def __init__(
         self,
         *,
@@ -112,10 +126,11 @@ class PatchPreferencesRequest(_message.Message):
         target_id: _builtins.str = ...,
         preferences_json: _builtins.str = ...,
         user_id: _builtins.str = ...,
+        key: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["preferences_json", b"preferences_json", "scope", b"scope", "target_id", b"target_id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "preferences_json", b"preferences_json", "scope", b"scope", "target_id", b"target_id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -128,19 +143,23 @@ class DeletePreferencesRequest(_message.Message):
     SCOPE_FIELD_NUMBER: _builtins.int
     TARGET_ID_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
+    KEY_FIELD_NUMBER: _builtins.int
     scope: Global___PreferenceScope.ValueType
     target_id: _builtins.str
     user_id: _builtins.str
+    key: _builtins.str
+    """Optional caller-chosen key; see GetPreferencesRequest.key."""
     def __init__(
         self,
         *,
         scope: Global___PreferenceScope.ValueType = ...,
         target_id: _builtins.str = ...,
         user_id: _builtins.str = ...,
+        key: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["scope", b"scope", "target_id", b"target_id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "scope", b"scope", "target_id", b"target_id", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -151,18 +170,24 @@ class GetPreferencesResponse(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
     PREFERENCES_JSON_FIELD_NUMBER: _builtins.int
+    KEY_FIELD_NUMBER: _builtins.int
     preferences_json: _builtins.str
     """Post-write state, serialised as a JSON object string.
     Empty string means {}.
+    """
+    key: _builtins.str
+    """Echo of the key the request addressed; empty for the
+    default scope+target-only row.
     """
     def __init__(
         self,
         *,
         preferences_json: _builtins.str = ...,
+        key: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["preferences_json", b"preferences_json"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "preferences_json", b"preferences_json"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 

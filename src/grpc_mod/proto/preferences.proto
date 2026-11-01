@@ -38,6 +38,10 @@ message GetPreferencesRequest {
     PreferenceScope scope = 1;
     string target_id = 2;
     string user_id = 3;
+    // Optional caller-chosen key.  Empty means the default
+    // scope+target-only row, preserving the legacy call shape.
+    // scope + target_id are always required, with or without a key.
+    string key = 4;
 }
 
 message PostPreferencesRequest {
@@ -47,6 +51,8 @@ message PostPreferencesRequest {
     // (not a list or scalar), otherwise the call is rejected.
     string preferences_json = 3;
     string user_id = 4;
+    // Optional caller-chosen key; see GetPreferencesRequest.key.
+    string key = 5;
 }
 
 message PatchPreferencesRequest {
@@ -54,18 +60,25 @@ message PatchPreferencesRequest {
     string target_id = 2;
     string preferences_json = 3;
     string user_id = 4;
+    // Optional caller-chosen key; see GetPreferencesRequest.key.
+    string key = 5;
 }
 
 message DeletePreferencesRequest {
     PreferenceScope scope = 1;
     string target_id = 2;
     string user_id = 3;
+    // Optional caller-chosen key; see GetPreferencesRequest.key.
+    string key = 4;
 }
 
 message GetPreferencesResponse {
     // Post-write state, serialised as a JSON object string.
     // Empty string means {}.
     string preferences_json = 1;
+    // Echo of the key the request addressed; empty for the
+    // default scope+target-only row.
+    string key = 2;
 }
 
 message DeletePreferencesResponse {
