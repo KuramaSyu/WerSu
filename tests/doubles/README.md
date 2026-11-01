@@ -36,6 +36,7 @@ follows Gerard Meszaros' *xUnit Test Patterns* (with the addition of
 | `_DummyTemporaryUserContext` | `dummies/temporary_user_context.py` | temporary/shared actor returned by user-service tests. |
 | `_DummyContext` | `dummies/fake_context.py` | gRPC `ServicerContext` – captures status code / details. |
 | `_DummyShelfRepo` | `dummies/noop_shelf_repo.py` | `ShelfRepoABC` – every shelf operation is a no-op. |
+| `_DummyUserActionRepo` | `dummies/user_action_repo.py` | `UserActionRepoABC` – empty reads / no-op writes; contexts always report `is_disabled() == False`. |
 | `_DummyTable` | `dummies/note_version_unit.py` | `TableABC` – placeholder table. |
 | `_DummySpiceDbClient` | `dummies/spicedb_client.py` | SpiceDB client – no-op used during migration setup. |
 

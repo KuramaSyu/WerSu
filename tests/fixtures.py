@@ -43,6 +43,7 @@ from tests.doubles import _FakeDatabase, _StubEmbeddingGenerator, _StubEmbedding
 from tests.doubles import InMemoryPermissionRepo
 from tests.doubles import InMemoryRuleRepo
 from tests.doubles import _DummyShelfRepo
+from tests.doubles import _DummyUserActionRepo
 from typing import Iterator
 import pytest
 
@@ -128,7 +129,10 @@ async def db(dsn):
         ),
         logging_provider=logging_provider,
     )
-    user_context_factory = RepoContextFactory(user_repo=user_repo_for_ctx)
+    user_context_factory = RepoContextFactory(
+        user_repo=user_repo_for_ctx,
+        user_action_repo=_DummyUserActionRepo(),
+    )
     embedding_generator = FastEmbedEmbeddingGenerator(
         model_name=Models.JINA_EMBEDDINGS_V2_BASE_DE,
         logging_provider=logging_provider,
@@ -360,7 +364,10 @@ async def user_service(
         log=logging_provider,
         shelf_repo=shelf_repo,
     )
-    context_factory = RepoContextFactory(user_repo=user_repo)
+    context_factory = RepoContextFactory(
+        user_repo=user_repo,
+        user_action_repo=_DummyUserActionRepo(),
+    )
     shelf_service = ShelfServiceImpl(
         shelf_repo=shelf_repo,
         permission_repo=permission_repo,

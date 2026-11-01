@@ -6,6 +6,10 @@ from tests.doubles.dummies.noop_shelf_repo import (
     _DummyShelfRepo,
 )
 
+from tests.doubles.dummies.user_action_repo import (
+    _DummyUserActionRepo,
+)
+
 from tests.doubles.dummies.user_context import (
     _DummyUserContext,
 )

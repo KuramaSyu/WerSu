@@ -299,9 +299,6 @@ async def serve():
         logging_provider=logging_provider,
     )
 
-    # Factory used by every gRPC service to create user instances
-    user_context_factory = RepoContextFactory(user_repo=user_repo)
-
     tag_repo: PostgresTagRepo = PostgresTagRepo(
         tag_table=tags_table,
         note_tag_table=note_tags_table,
@@ -402,6 +399,15 @@ async def serve():
     ],
         logging_provider=logging_provider,
     )
+
+    # Factory used by every gRPC service to create user instances.
+    # Carries the action repo so ``ctx.is_disabled()`` can resolve the
+    # access user's lifecycle state without extra wiring at call sites.
+    user_context_factory = RepoContextFactory(
+        user_repo=user_repo,
+        user_action_repo=user_action_repo,
+    )
+
     activity_repo = PostgresActivityRepo(
         table=activity_table,
         directory_repo=directory_facade,
@@ -530,7 +536,6 @@ async def serve():
         sharing_repo=sharing_repo,
         permission_repo=permission_repo,
         user_repo=user_repo,
-        user_action_repo=user_action_repo,
         logger=logging_provider,
         context_factory=user_context_factory,
     )

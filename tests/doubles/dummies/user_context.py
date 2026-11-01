@@ -18,9 +18,11 @@ class _DummyUserContext(UserContextABC):
         self,
         user_id: str = "actor",
         accessed_as: ActorAs = "user",
+        disabled: bool = False,
     ) -> None:
         self._user_id = user_id
         self._accessed_as = accessed_as
+        self._disabled = disabled
 
     @property
     def user_id(self) -> str:
@@ -36,6 +38,9 @@ class _DummyUserContext(UserContextABC):
 
     async def is_temporary_user(self) -> bool:
         return False
+
+    async def is_disabled(self) -> bool:
+        return self._disabled
 
 
 __all__ = [

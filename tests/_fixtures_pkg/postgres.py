@@ -48,6 +48,7 @@ from src.services.shelf_service import ShelfServiceImpl
 from src.services.user_service import UserServiceImpl
 from src.utils import logging_provider
 from tests.doubles import _StubEmbeddingRepo
+from tests.doubles import _DummyUserActionRepo
 from tests._fixtures_pkg.spicedb_schema import (
     SPICEDB_IMAGE,
     create_spicedb_client,
@@ -281,7 +282,10 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             ),
             logging_provider=logging_provider,
         )
-        user_context_factory = RepoContextFactory(user_repo=user_repo)
+        user_context_factory = RepoContextFactory(
+            user_repo=user_repo,
+            user_action_repo=_DummyUserActionRepo(),
+        )
         shelf_service = ShelfServiceImpl(
             shelf_repo=shelf_repo,
             permission_repo=permission_repo,

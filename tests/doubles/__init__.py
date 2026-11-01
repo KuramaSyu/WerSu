@@ -12,6 +12,7 @@ from tests.doubles import fakes  # noqa: F401
 from tests.doubles import fakespys  # noqa: F401
 
 from tests.doubles.dummies import _DummyShelfRepo  # noqa: F401
+from tests.doubles.dummies import _DummyUserActionRepo  # noqa: F401
 from tests.doubles.dummies import _DummyUserContext  # noqa: F401
 from tests.doubles.dummies import _DummySpiceDbClient  # noqa: F401
 from tests.doubles.stubs import silent_logger  # noqa: F401

@@ -81,9 +81,10 @@ async def _build_service(
         sharing_repo=sharing_repo,
         permission_repo=repo,
         user_repo=user_repo,
-        user_action_repo=user_action_repo,
         logger=silent_logger,
-        context_factory=RepoContextFactory(user_repo),
+        # The context factory owns the disabled-state lookup, so it is
+        # wired with the action repo the tests seed.
+        context_factory=RepoContextFactory(user_repo, user_action_repo),
     )
 
 

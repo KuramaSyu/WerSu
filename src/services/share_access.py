@@ -6,7 +6,6 @@ from src.api.other.relationship import ObjectRef
 from src.api.services.sharing import ShareAccessServiceABC, SharingRepoABC
 from src.api.other.types import LoggingProvider
 from src.api.other.undefined import UNDEFINED, UndefinedNoneOr, unwrap_undefined
-from src.api.repos.user_action_repo import UserActionRepoABC
 from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import FilterUser
@@ -20,14 +19,12 @@ class ShareAccessServiceImpl(ShareAccessServiceABC):
         sharing_repo: SharingRepoABC,
         permission_repo: PermissionRepoABC,
         user_repo: UserRepoABC,
-        user_action_repo: UserActionRepoABC,
         logger: LoggingProvider,
         context_factory: ContextFactory[UserContextABC],
     ) -> None:
         self._sharing_repo = sharing_repo
         self._permission_repo = permission_repo
         self._user_repo = user_repo
-        self._user_action_repo = user_action_repo
         self._context_factory = context_factory
         self._log = logger(__name__, self)
 
@@ -42,12 +39,13 @@ class ShareAccessServiceImpl(ShareAccessServiceABC):
         # and at the same time check what permissions the share user has
         note_id = unwrap_undefined(share.note_id)
         access_as = unwrap_undefined(share.access_as)
-        if await self._is_user_disabled(access_as):
+        access_ctx = await self._context_factory.create(access_as)
+        if await access_ctx.is_disabled():
             raise PermissionError(
                 f"Share user {access_as!r} is disabled"
             )
         permissions = await self._permission_repo.get_permissions(
-            user=await self._context_factory.create(access_as),
+            user=access_ctx,
             resource=ObjectRef("note", note_id),
         )
         self._log.debug(f"Share access check for share {share_id} on note {note_id} with permissions {permissions}")
@@ -93,29 +91,12 @@ class ShareAccessServiceImpl(ShareAccessServiceABC):
                 f"but that user no longer exists"
             )
 
-        if await self._is_user_disabled(access_as):
+        access_ctx = await self._context_factory.create(access_as)
+        if await access_ctx.is_disabled():
             raise PermissionError(
                 f"Share user {access_as!r} is disabled"
             )
 
         return (access_as, share.online_until)
-
-    async def _is_user_disabled(self, user_id: str) -> bool:
-        """Return True if the most recent executed action for ``user_id`` is ``disable``.
-
-        A user is disabled when the scheduler has executed a ``disable``
-        action since the last ``enable`` (or there is no ``enable`` at
-        all).  ``delete`` actions do not flip the state because the
-        user is gone by then; they're handled separately.
-        """
-        # Fetch every action for the user and pick out the executed ones.
-        actions = await self._user_action_repo.get_actions_by_user(user_id)
-        executed = [a for a in actions if a.executed_at]
-        if not executed:
-            return False
-        # sort by newest first
-        executed.sort(key=lambda a: a.executed_at, reverse=True)  # type: ignore[arg-type,return-value]
-        # is the most recent is disabled, then the user is disabled
-        return str(executed[0].action) == "disable"
 
 

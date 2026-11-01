@@ -14,6 +14,7 @@ from typing import Optional
 
 from src.api.other.undefined import UNDEFINED, UndefinedOr
 from src.api.other.user_context import ActorAs, ContextFactory, UserContextABC, UserTypeT
+from src.api.repos.user_action_repo import UserActionRepoABC
 from src.db.entities.user.user import FilterUser, UserEntity
 from src.utils.async_ttl import AsyncTtlCacheInfo, async_ttl
 
@@ -30,11 +31,20 @@ class RepoUserContext(UserContextABC):
     Args:
         user_repo: repo used to look up the underlying user.
         user_id: id of the user making the current request.
+        user_action_repo: optional repo used by :meth:`is_disabled` to
+            derive the user's disabled state.  When omitted,
+            :meth:`is_disabled` reports ``False``.
     """
 
-    def __init__(self, user_repo: UserRepoABC, user_id: str) -> None:
+    def __init__(
+        self,
+        user_repo: UserRepoABC,
+        user_id: str,
+        user_action_repo: Optional[UserActionRepoABC] = None,
+    ) -> None:
         self._user_repo = user_repo
         self._user_id = user_id
+        self._user_action_repo = user_action_repo
         self._user: Optional[UserEntity] = None
 
     @property
@@ -64,20 +74,55 @@ class RepoUserContext(UserContextABC):
             await self.fetch_user()
         return  self._user.type == "temporary"
 
+    async def is_disabled(self) -> bool:
+        """Return True when the newest executed action is ``disable``.
+
+        A user is disabled once a ``disable`` action has executed and
+        no later action has run.  Pending rows (no ``executed_at``) do
+        not count, and ``delete`` is ignored because the user is gone
+        by then.  Requires a ``user_action_repo``; contexts built
+        without one (legacy/test wiring) report ``False``.
+        """
+        if self._user_action_repo is None:
+            return False
+        actions = await self._user_action_repo.get_actions_by_user(self._user_id)
+        executed = [
+            action
+            for action in actions
+            if action.executed_at is not None
+            and action.executed_at is not UNDEFINED
+        ]
+        if not executed:
+            return False
+        executed.sort(
+            key=lambda action: action.executed_at,  # type: ignore[arg-type,return-value]
+            reverse=True,
+        )
+        return str(executed[0].action) == "disable"
+
 
 class RepoContextFactory(ContextFactory[UserContextABC]):
     """Factory that produces :class:`~src.db.repos.user.context.RepoUserContext` instances.
 
     Args:
         user_repo: repo injected into every context the factory builds.
+        user_action_repo: action repo injected so every context can
+            answer :meth:`UserContextABC.is_disabled`.  Required --
+            production wiring always has one and tests pass
+            :class:`tests.doubles.dummies._DummyUserActionRepo`.
     """
 
-    def __init__(self, user_repo: UserRepoABC) -> None:
+    def __init__(
+        self,
+        user_repo: UserRepoABC,
+        user_action_repo: UserActionRepoABC,
+    ) -> None:
         self._user_repo = user_repo
+        self._user_action_repo = user_action_repo
 
     async def create(self, user_id: str) -> UserContextABC:
         """Build a fresh :class:`~src.db.repos.user.context.RepoUserContext` for `user_id`."""
-        return RepoUserContext(self._user_repo, user_id)
+        return RepoUserContext(self._user_repo, user_id, self._user_action_repo)
 
 
 class UnimplementedUserContext(UserContextABC):
@@ -106,6 +151,9 @@ class UnimplementedUserContext(UserContextABC):
     async def is_temporary_user(self) -> bool:
         return False
 
+    async def is_disabled(self) -> bool:
+        return False
+
 
 class CachedRepoUserContextFactory(RepoContextFactory):
     """Factory that memoizes the :class:`RepoUserContext` it hands out.
@@ -119,14 +167,17 @@ class CachedRepoUserContextFactory(RepoContextFactory):
     def __init__(
         self,
         user_repo: UserRepoABC,
+        user_action_repo: UserActionRepoABC,
         ttl_seconds: float = 15 * 60,
     ) -> None:
-        super().__init__(user_repo)
+        super().__init__(user_repo, user_action_repo)
         self._ttl_seconds = ttl_seconds
 
         @async_ttl(ttl=ttl_seconds)
         async def _cached_create(user_id: str) -> RepoUserContext:
-            return RepoUserContext(self._user_repo, user_id)
+            return RepoUserContext(
+                self._user_repo, user_id, self._user_action_repo
+            )
 
         self._cached_create = _cached_create
 

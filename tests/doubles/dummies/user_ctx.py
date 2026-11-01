@@ -22,6 +22,9 @@ class _DummyUserCtx(UserContextABC):
     async def is_temporary_user(self) -> bool:
         return False
 
+    async def is_disabled(self) -> bool:
+        return False
+
 
 __all__ = [
     '_DummyUserCtx',

@@ -60,6 +60,16 @@ class UserContextABC(ABC):
         """
         ...
 
+    @abstractmethod
+    async def is_disabled(self) -> bool:
+        """Return True when the user's access has been disabled.
+
+        A user is disabled once a ``disable`` action has been executed
+        and no later ``enable`` has run.  Contexts without a backing
+        action store report ``False``.
+        """
+        ...
+
     def as_system(self) -> "UserContextABC":
         """Return a new context with the same identity but ``accessed_as == "system"``.
 
@@ -91,6 +101,9 @@ class _SystemUserContext(UserContextABC):
 
     async def is_temporary_user(self) -> bool:
         return await self._inner.is_temporary_user()
+
+    async def is_disabled(self) -> bool:
+        return await self._inner.is_disabled()
 
 
 T = TypeVar("T", bound=UserContextABC)
