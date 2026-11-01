@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.api.other.undefined import UNDEFINED
 from src.db.entities.preferences import PreferencesEntity
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
 from src.grpc_mod.converter.postgres_row_converter import PostgresRowConverter
@@ -115,26 +114,37 @@ def test_postgres_visitor_projects_only_the_scoped_owner(
 # ---------------------------------------------------------------------------
 
 
-def test_grpc_visitor_returns_owner_column_value() -> None:
-    """The gRPC visitor surfaces the same owner column the entity carries."""
+def test_grpc_visitor_serialises_payload_as_compact_json() -> None:
+    """The gRPC visitor renders the payload as a JSON object string."""
     visitor = ConvertToGrpcVisitor()
     result = _entity("shelf", shelf_id="s-9").visit(visitor)
-    assert result["shelf_id"] == "s-9"
-    assert "user_id" not in result
-    assert "role_id" not in result
+    assert result.preferences_json == '{"theme":"dark","page_size":25}'
+    assert result.key == ""
 
 
-def test_grpc_visitor_carries_payload_through_unchanged() -> None:
-    """The gRPC layer hands the payload dict to the caller verbatim."""
+def test_grpc_visitor_carries_key_through() -> None:
+    """A keyed entity surfaces its key on the response."""
     visitor = ConvertToGrpcVisitor()
     entity = _entity("role", role_id="r-2")
+    entity.key = "ui"
     result = entity.visit(visitor)
-    assert result["payload"] == {"theme": "dark", "page_size": 25}
+    assert result.key == "ui"
 
 
-def test_grpc_visitor_omits_undefined_id() -> None:
-    """An entity without an id should produce an UNDEFINED id marker."""
+def test_grpc_visitor_defaults_missing_payload_to_empty_object() -> None:
+    """No payload serialises to {} rather than erroring."""
     visitor = ConvertToGrpcVisitor()
-    entity = _entity("user", user_id="u-3")
+    entity = PreferencesEntity(scope="user", user_id="u-3")
     result = entity.visit(visitor)
-    assert result["id"] is UNDEFINED
+    assert result.preferences_json == "{}"
+    assert result.key == ""
+
+
+def test_grpc_visitor_accepts_preencoded_json_string() -> None:
+    """A payload that is already a JSON string passes through verbatim."""
+    visitor = ConvertToGrpcVisitor()
+    entity = PreferencesEntity(
+        scope="user", user_id="u-1", payload='{"a":1}'
+    )
+    result = entity.visit(visitor)
+    assert result.preferences_json == '{"a":1}'

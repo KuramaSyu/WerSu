@@ -293,4 +293,80 @@ async def test_repo_is_called_with_correct_scope_target_pairs() -> None:
         "shelf", "shelf-9", ctx=UserContext(user_id="u1")
     )
 
-    assert repo.read_calls == [("shelf", "shelf-9")]
+    assert repo.read_calls == [("shelf", "shelf-9", "")]
+
+
+# ---------------------------------------------------------------------------
+# keyed preferences
+# ---------------------------------------------------------------------------
+
+
+async def test_update_with_key_stores_under_the_key() -> None:
+    """A keyed write lands in its own row and leaves the default row alone."""
+    service, repo, _ = _build_service()
+
+    await service.update_preferences(
+        "user", "u1", {"layout": 1}, ctx=UserContext("u1"), key="ui"
+    )
+
+    assert repo.stored("user", "u1", "ui") == {"layout": 1}
+    assert repo.stored("user", "u1") == {}
+    assert repo.upsert_calls[-1][4] == "ui"
+    assert repo.upsert_calls[-1][1] == "u1"
+
+
+async def test_get_with_key_reads_only_that_key() -> None:
+    service, _, _ = _build_service(
+        initial={
+            ("user", "u1", "ui"): {"theme": "dark"},
+            ("user", "u1", ""): {"theme": "light"},
+        }
+    )
+
+    assert await service.get_preferences(
+        "user", "u1", ctx=UserContext("u1"), key="ui"
+    ) == {"theme": "dark"}
+    assert await service.get_preferences(
+        "user", "u1", ctx=UserContext("u1")
+    ) == {"theme": "light"}
+
+
+async def test_patch_with_key_merges_into_that_key() -> None:
+    service, repo, _ = _build_service(
+        initial={("user", "u1", "ui"): {"a": 1}, ("user", "u1", ""): {"z": 9}}
+    )
+
+    result = await service.patch_preferences(
+        "user", "u1", {"b": 2}, ctx=UserContext("u1"), key="ui"
+    )
+
+    assert result == {"a": 1, "b": 2}
+    assert repo.stored("user", "u1", "ui") == {"a": 1, "b": 2}
+    assert repo.stored("user", "u1") == {"z": 9}
+
+
+async def test_delete_with_key_only_removes_that_key() -> None:
+    service, repo, _ = _build_service(
+        initial={("user", "u1", "ui"): {"a": 1}, ("user", "u1", ""): {"z": 9}}
+    )
+
+    assert await service.delete_preferences(
+        "user", "u1", ctx=UserContext("u1"), key="ui"
+    ) is True
+    assert repo.stored("user", "u1", "ui") == {}
+    assert repo.stored("user", "u1") == {"z": 9}
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    ["get_preferences", "update_preferences", "patch_preferences", "delete_preferences"],
+)
+async def test_keyed_calls_still_require_target_id(method_name: str) -> None:
+    """A key never replaces the scope+target requirement."""
+    service, _, _ = _build_service()
+    method = getattr(service, method_name)
+    kwargs = {"ctx": UserContext("actor"), "key": "ui"}
+    if method_name in ("update_preferences", "patch_preferences"):
+        kwargs["preferences"] = {"a": 1}
+    with pytest.raises(ValueError, match="target_id is required"):
+        await method("user", "", **kwargs)
