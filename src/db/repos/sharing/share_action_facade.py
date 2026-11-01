@@ -32,7 +32,7 @@ they encode policy decisions, not persistence mechanics.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, cast
+from typing import Callable, List, Optional, cast
 from uuid import uuid7
 
 from src.api.services.sharing import SharingRepoABC
@@ -45,12 +45,13 @@ from src.api.other.undefined import (
 from src.api.repos.user_action_repo import UserActionRepoABC
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
-from src.db.entities.user.user import UserEntity
+from src.db.entities.user.user import FilterUser, UserEntity
 from src.db.entities.user.user_action import (
     FilterUserAction,
     UserActionEntity,
     UserActionKind,
 )
+from src.db.repos.user.context import RepoUserContext
 from src.db.repos.user.user import UserRepoABC
 
 
@@ -75,10 +76,14 @@ class ShareActionFacade(SharingRepoABC):
         user_repo: UserRepoABC,
         user_action_repo: UserActionRepoABC,
         logging_provider: LoggingProvider,
+        get_now: Optional[Callable[[], datetime]] = None,
     ) -> None:
         self._sharing_repo = sharing_repo
         self._user_repo = user_repo
         self._user_action_repo = user_action_repo
+        # Injectable clock so expiry comparisons and the queued
+        # ``enable`` timestamp are deterministic in tests.
+        self._get_now = get_now or datetime.now
         self.log = logging_provider(__name__, self, prefix="sharing facade")
 
     async def create_share(
@@ -289,17 +294,40 @@ class ShareActionFacade(SharingRepoABC):
             ``id`` populated by the underlying user repo.
         """
         note_id = unwrap_undefined(share.note_id)
+        username = await self._next_available_username(
+            f"share-{ctx.user_id}-{note_id}"
+        )
         access_user = UserEntity(
             id=uuid7().hex,
-            username=f"share-{ctx.user_id}-{note_id}",
+            username=username,
             type="temporary",
         )
         inserted = await self._user_repo.insert(access_user)
         self.log.debug(
-            f"_create_access_user: inserted temporary user {inserted.id} for "
-            f"share on note {note_id}"
+            f"_create_access_user: inserted temporary user {inserted.id} "
+            f"(username={username}) for share on note {note_id}"
         )
         return inserted
+
+    async def _next_available_username(self, base: str) -> str:
+        """Return ``base``, or ``base-{n}`` once the base name is taken.
+
+        Share usernames are unique per ``(creator, note)`` and the
+        ``auth.user`` table enforces a global unique index on non-null
+        usernames.  Re-sharing a note that still has a live share would
+        otherwise trip ``auth_user_username_uidx``, so probe the user
+        repo and append an incrementing numeric suffix until a free
+        name is found (``share-<user>-<note>`` -> ``...-2`` -> ``...-3``).
+        """
+        candidate = base
+        suffix = 1
+        while (
+            await self._user_repo.select(FilterUser(username=candidate))
+            is not None
+        ):
+            suffix += 1
+            candidate = f"{base}-{suffix}"
+        return candidate
 
     async def _update_future_actions(
         self,
@@ -319,6 +347,11 @@ class ShareActionFacade(SharingRepoABC):
         * concrete ``datetime`` -> ensure exactly one pending ``disable``
           action exists at that timestamp; create it or reschedule it,
           dropping any other pending ``disable`` rows for the user.
+
+        Additionally, when the new expiry is ``None`` or in the future,
+        a currently-disabled access user is re-enabled by queueing an
+        immediate ``enable`` action, so extending an expired share brings
+        the user back online.
         """
         if online_until is UNDEFINED:
             # online_until not touched -> don't touch pending actions either
@@ -347,6 +380,13 @@ class ShareActionFacade(SharingRepoABC):
                 f"row(s) for access_as={access_as}"
             )
 
+        # Extending a share that had already expired must flip the
+        # access user back on.  A share that stays/returns to a past
+        # due date keeps the user disabled, so only re-enable when the
+        # new expiry is ``None`` or still in the future.
+        if online_until is None or online_until > self._get_now():
+            await self._reenable_access_user_if_disabled(access_as)
+
         if online_until is None:
             # no new due date? -> ok; return
             self.log.debug(
@@ -366,6 +406,34 @@ class ShareActionFacade(SharingRepoABC):
         self.log.debug(
             f"_update_future_actions: scheduled disable at "
             f"{online_until.isoformat()} for access_as={access_as}"
+        )
+
+    async def _reenable_access_user_if_disabled(self, access_as: str) -> None:
+        """Queue an immediate ``enable`` when the access user is disabled.
+
+        The disabled state is derived from the newest *executed*
+        action, so re-enabling is expressed the same way as disabling: a
+        scheduled ``enable`` row.  Its ``execute_at`` is ``now`` so the
+        enable background process picks it up on its next tick and the
+        user is usable again.
+        """
+        access_ctx = RepoUserContext(
+            self._user_repo,
+            access_as,
+            self._user_action_repo,
+        )
+        if not await access_ctx.is_disabled():
+            return
+
+        await self._user_action_repo.add_action(
+            UserActionEntity(
+                user_id=access_as,
+                action="enable",
+                execute_at=self._get_now(),
+            )
+        )
+        self.log.debug(
+            f"_update_future_actions: queued enable for access_as={access_as}"
         )
 
 
