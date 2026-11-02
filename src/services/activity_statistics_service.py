@@ -115,7 +115,7 @@ class ActivityStatisticsServiceImpl(ActivityStatisticsServiceABC):
         builder: ActivityFilterBuilder,
         *,
         note_id: Optional[str],
-        directory_id: Optional[str],
+        directory_ids: Optional[Sequence[str]] = None,
         actor_id: Optional[str] = None,
         actions: Optional[Sequence[str]] = None,
         role_id: Optional[str] = None,
@@ -124,8 +124,10 @@ class ActivityStatisticsServiceImpl(ActivityStatisticsServiceABC):
     ) -> None:
         if note_id is not None:
             builder.set_note(note_id)
-        if directory_id is not None:
-            builder.set_directory(directory_id)
+        if directory_ids:
+            for directory in directory_ids:
+                if directory:
+                    builder.set_directory(directory)
         if actor_id is not None:
             builder.set_user(actor_id)
         if actions:
@@ -142,7 +144,7 @@ class ActivityStatisticsServiceImpl(ActivityStatisticsServiceABC):
         actor: UserContextABC,
         *,
         note_id: Optional[str] = None,
-        directory_id: Optional[str] = None,
+        directory_ids: Optional[Sequence[str]] = None,
         actor_id: Optional[str] = None,
         actions: Optional[Sequence[str]] = None,
         role_id: Optional[str] = None,
@@ -154,14 +156,16 @@ class ActivityStatisticsServiceImpl(ActivityStatisticsServiceABC):
         """See :meth:`api.ActivityStatisticsServiceABC.get_history`."""
         if note_id is not None:
             await self._assert_view_on_note(actor, note_id)
-        if directory_id is not None:
-            await self._assert_view_on_directory(actor, directory_id)
+        if directory_ids:
+            for directory in directory_ids:
+                if directory:
+                    await self._assert_view_on_directory(actor, directory)
 
         builder = ActivityFilterBuilder().use_history()
         self._apply_kwargs_to_builder(
             builder,
             note_id=note_id,
-            directory_id=directory_id,
+            directory_ids=directory_ids,
             actor_id=actor_id,
             actions=actions,
             role_id=role_id,
@@ -173,7 +177,7 @@ class ActivityStatisticsServiceImpl(ActivityStatisticsServiceABC):
         if offset is not None:
             builder.set_offset(offset)
 
-        if note_id is None and directory_id is None:
+        if note_id is None and not directory_ids:
             # everything visible to actor -> expand visible dirs.
             for d_id in await self._resolve_visible_directory_ids(actor):
                 builder.set_directory(d_id)
@@ -249,7 +253,7 @@ class ActivityStatisticsServiceImpl(ActivityStatisticsServiceABC):
         actor: UserContextABC,
         *,
         note_id: Optional[str] = None,
-        directory_id: Optional[str] = None,
+        directory_ids: Optional[Sequence[str]] = None,
         actions: Optional[Sequence[str]] = None,
         role_id: Optional[str] = None,
         accessed_as: Optional[str] = None,
@@ -261,14 +265,16 @@ class ActivityStatisticsServiceImpl(ActivityStatisticsServiceABC):
         """See :meth:`ActivityStatisticsServiceABC.get_most_used`."""
         if note_id is not None:
             await self._assert_view_on_note(actor, note_id)
-        if directory_id is not None:
-            await self._assert_view_on_directory(actor, directory_id)
+        if directory_ids:
+            for directory in directory_ids:
+                if directory:
+                    await self._assert_view_on_directory(actor, directory)
 
         builder = ActivityFilterBuilder().show_most_used()
         self._apply_kwargs_to_builder(
             builder,
             note_id=note_id,
-            directory_id=directory_id,
+            directory_ids=directory_ids,
             actions=actions,
             role_id=role_id,
             accessed_as=accessed_as,
@@ -281,7 +287,7 @@ class ActivityStatisticsServiceImpl(ActivityStatisticsServiceABC):
         if limit is not None:
             builder.set_limit(limit)
 
-        if note_id is None and directory_id is None:
+        if note_id is None and not directory_ids:
             for d_id in await self._resolve_visible_directory_ids(actor):
                 builder.set_directory(d_id)
 

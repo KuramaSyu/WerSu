@@ -180,7 +180,6 @@ class GrpcActivityStatisticsService(ActivityStatisticsServiceServicer):
         """
         kwargs = {
             "note_id": _present(filter.note_id),
-            "directory_id": _present(filter.directory_id),
             "actor_id": _present(filter.actor_id),
             "role_id": _present(filter.role_id),
             "accessed_as": _proto_accessed_as_to_str(filter.accessed_as),
@@ -191,6 +190,9 @@ class GrpcActivityStatisticsService(ActivityStatisticsServiceServicer):
         actions: List[str] = [a for a in filter.actions if a]
         if actions:
             kwargs["actions"] = actions
+        directory_ids: List[str] = [d for d in filter.directory_ids if d]
+        if directory_ids:
+            kwargs["directory_ids"] = directory_ids
         if filter.HasField("unique_per_day"):
             kwargs["unique_per_day"] = bool(filter.unique_per_day)
         return {k: v for k, v in kwargs.items() if v is not None or _is_zero(v)}

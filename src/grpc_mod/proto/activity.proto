@@ -42,8 +42,10 @@ message ActivityScore {
 
 // History filter for both RPCs.
 message ActivityFilter {
+    // Field 2 was the deprecated singular directory filter; use directory_ids.
+    reserved 2;
+    reserved "directory_id";
     string note_id = 1;
-    string directory_id = 2;
     string actor_id = 3;
     string role_id = 4;
     AccessedAs accessed_as = 5;
@@ -52,6 +54,9 @@ message ActivityFilter {
     optional int32 limit = 8;
     optional int32 offset = 9;
     optional bool unique_per_day = 10;
+    // Restrict to notes in any of these directories (OR, subtree-expanded
+    // per id by the service).
+    repeated string directory_ids = 11;
 }
 
 // Request for GetActivityHistory.

@@ -188,7 +188,7 @@ class TestPermissionGating:
             note_content_repo=note_content_repo,
         )
         with pytest.raises(PermissionError, match="cannot view directory"):
-            await svc.get_history(alice, directory_id="d-1")
+            await svc.get_history(alice, directory_ids=["d-1"])
 
     async def test_get_most_used_rejects_note_actor_cannot_view(
         self, activity_repo: PostgresActivityRepo,
