@@ -147,8 +147,8 @@ class Migration(MigrationABC):
     ) -> None:
         """Bind the user's unassigned books to <shelf>.
 
-        Walks `directory#admin@user:<user_id>` to discover
-        every book the user owns, filters out the ones already
+        Walks ``directory#owner`` and ``directory#admin`` for the
+        user to discover every book they own, filters out the ones already
         sitting on a shelf via `shelf_repo.get_shelves_of_book`,
         and binds the remainder via `shelf_repo.add_book`.
         The shelf repo's spicedb decorator writes
@@ -171,19 +171,27 @@ class Migration(MigrationABC):
                 "user book binding migration"
             )
 
-        owned_ids = await permission_repo.lookup(
-            Relationship(
-                resource=ObjectRef(
-                    object_type=ObjectTypeEnum.DIRECTORY,
-                    object_id=UNDEFINED,
-                ),
-                relation=DirectoryRelationEnum.ADMIN,
-                subject=SubjectRef(
-                    object_type=ObjectTypeEnum.USER,
-                    object_id=str(user_id),
-                ),
+        owned_ids: list[str] = []
+        for relation in (
+            DirectoryRelationEnum.OWNER,
+            DirectoryRelationEnum.ADMIN,
+        ):
+            found = await permission_repo.lookup(
+                Relationship(
+                    resource=ObjectRef(
+                        object_type=ObjectTypeEnum.DIRECTORY,
+                        object_id=UNDEFINED,
+                    ),
+                    relation=relation,
+                    subject=SubjectRef(
+                        object_type=ObjectTypeEnum.USER,
+                        object_id=str(user_id),
+                    ),
+                )
             )
-        )
+            owned_ids.extend(str(book_id) for book_id in found)
+        # De-duplicate while preserving order.
+        owned_ids = list(dict.fromkeys(owned_ids))
 
         # If Postgres and SpiceDB are inconsistent, then we will fail
         # with a FK violation when trying to modify books, which ID only
