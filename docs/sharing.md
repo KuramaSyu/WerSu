@@ -6,6 +6,9 @@ Short reference:
 - **Postgres**: the database where users and notes are stored (their names, contents etc)
 - **SpiceDB**: a service to check which permission a user has
 
+> **Scope note:** this document covers *public-link* sharing (`shared` rows and
+> temporary users). Managing permissions is something different
+
 More to that here: [KuramaSyu/WerSu/docs/project-structure.md](https://github.com/KuramaSyu/WerSu/blob/main/docs/project-structure.md)
 ### Creating a share
 ```mermaid
