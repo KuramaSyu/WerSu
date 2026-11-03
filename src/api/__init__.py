@@ -60,6 +60,7 @@ from src.api.repos.permission_repo import (
     ResolvedChildren,
     DirectoryChild,
 )
+from src.api.repos.permission_audit_repo import PermissionAuditRepoABC
 from src.api.repos.activity_repo import ActivityRepoABC, ActivityFilterBuilder
 from src.api.repos.user_action_repo import UserActionRepoABC
 from src.api.repos.preferences_repo import (
@@ -181,6 +182,7 @@ __all__ = [
     "EntityVisitor",
     # repos
     "PermissionRepoABC",
+    "PermissionAuditRepoABC",
     "ResolvedChildren",
     "DirectoryChild",
     "ActivityRepoABC",

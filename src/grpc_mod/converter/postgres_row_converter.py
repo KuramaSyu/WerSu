@@ -14,6 +14,7 @@ from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.permission_audit import PermissionAuditEntity
 from src.db.entities.rule import RuleEntity
 from src.db.entities.shelf import ShelfEntity
 from src.db.entities.user.passkey import PasskeyEntity
@@ -288,6 +289,15 @@ class PostgresRowConverter(EntityVisitor):
         # Strip enrichment fields; they live on the joined note and are never persisted on activity.
         row.pop("note_title", None)
         row.pop("note_stripped_content", None)
+        row = self._apply_json_fields(entity, row)
+        row = self._apply_timestamp_fields(entity, row)
+        return row
+
+    def visit_permission_audit(
+        self, entity: PermissionAuditEntity
+    ) -> Dict[str, Any]:
+        """Convert a PermissionAuditEntity to a Postgres row dict."""
+        row = self._collect_fields(entity)
         row = self._apply_json_fields(entity, row)
         row = self._apply_timestamp_fields(entity, row)
         return row

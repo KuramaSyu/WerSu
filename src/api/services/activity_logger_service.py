@@ -241,6 +241,9 @@ class EventMetadataVisitor(EntityVisitor):
     def visit_user_role_membership(self, entity: typing.Any) -> Dict[str, object]:
         raise NotImplementedError
 
+    def visit_permission_audit(self, entity: typing.Any) -> Dict[str, object]:
+        raise NotImplementedError
+
     def visit_preferences(self, entity: typing.Any) -> Dict[str, object]:
         raise NotImplementedError
 

@@ -26,6 +26,7 @@ from src.db.entities.activity import ActivityEntity, ActivityScore
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.sharing import NoteShareEntity
+from src.db.entities.permission_audit import PermissionAuditEntity
 from src.db.entities.note.tag import TagEntity
 from src.db.entities.preferences import PreferencesEntity
 from src.db.entities.rule import RuleEntity
@@ -62,6 +63,8 @@ from src.grpc_mod.proto.note_pb2 import (
     Note,
     NotesReply,
     NoteResponse as GrpcNoteResponse,
+    PermissionAuditAction,
+    PermissionAuditEntry,
     PermissionObjectType,
     PermissionRelationship,
     PermissionResource,
@@ -802,6 +805,43 @@ class ConvertToGrpcVisitor(EntityVisitor):
             role_id=basic_args.pop("role_id", "") or "",
             at=at_ts,
             metadata_json=self._build_activity_metadata_json(entity),
+        )
+
+    def visit_permission_audit(self, entity: PermissionAuditEntity) -> PermissionAuditEntry:
+        """Convert a :class:`PermissionAuditEntity` to its gRPC read shape."""
+        assert isinstance(entity, PermissionAuditEntity)
+
+        at_ts = Timestamp()
+        if isinstance(entity.at, _dt.datetime):
+            at_ts.FromDatetime(entity.at)
+
+        action = PermissionAuditAction.PERMISSION_AUDIT_ACTION_UNSPECIFIED
+        if str(entity.action) == "grant":
+            action = PermissionAuditAction.PERMISSION_AUDIT_ACTION_GRANT
+        elif str(entity.action) == "revoke":
+            action = PermissionAuditAction.PERMISSION_AUDIT_ACTION_REVOKE
+
+        metadata = entity.metadata
+        if is_undefined(metadata) or metadata is None:
+            metadata = {}
+        metadata_json = json.dumps(metadata, default=str)
+
+        return PermissionAuditEntry(
+            id="" if is_undefined(entity.id) else str(entity.id),
+            at=at_ts,
+            actor_id="" if entity.actor_id in (UNDEFINED, None) else str(entity.actor_id),
+            accessed_as="" if is_undefined(entity.accessed_as) else str(entity.accessed_as),
+            action=action,
+            resource_type="" if is_undefined(entity.resource_type) else str(entity.resource_type),
+            resource_id="" if is_undefined(entity.resource_id) else str(entity.resource_id),
+            relation="" if is_undefined(entity.relation) else str(entity.relation),
+            subject_type="" if is_undefined(entity.subject_type) else str(entity.subject_type),
+            subject_id="" if is_undefined(entity.subject_id) else str(entity.subject_id),
+            subject_relation=(
+                "" if entity.subject_relation in (UNDEFINED, None)
+                else str(entity.subject_relation)
+            ),
+            metadata_json=metadata_json,
         )
 
     def visit_activity_score(self, score: ActivityScore) -> GrpcActivityScore:
