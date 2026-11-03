@@ -231,7 +231,7 @@ async def test_delete_directory_requires_delete_permission() -> None:
     assert directory_repo.deleted == []
 
 
-async def test_create_directory_grants_caller_admin_relation() -> None:
+async def test_create_directory_grants_caller_owner_relation() -> None:
     service, directory_repo, _, _, _ = _make_service()
 
     await service.create_directory(
@@ -242,9 +242,9 @@ async def test_create_directory_grants_caller_admin_relation() -> None:
     assert len(directory_repo.created) == 1
     created = directory_repo.created[0]
     assert isinstance(created.relations, list)
-    admin_rel = created.relations[0]
-    assert admin_rel.relation == DirectoryRelationEnum.ADMIN
-    assert admin_rel.subject.object_id == "user-1"
+    owner_rel = created.relations[0]
+    assert owner_rel.relation == DirectoryRelationEnum.OWNER
+    assert owner_rel.subject.object_id == "user-1"
 
 
 async def test_create_directory_binds_readme_note_when_not_supplied() -> None:

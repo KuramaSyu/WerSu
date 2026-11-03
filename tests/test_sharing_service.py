@@ -3,7 +3,7 @@
 Pins the policy the service applies on top of the
 :class:`ShareActionFacade`: it owns the permission-relation writes
 (insert on create, swap on update, delete on teardown), enforces
-``edit_permissions``, and routes reads through the facade so the
+``has_admin``, and routes reads through the facade so the
 repo / user-repo / action-repo details never leak.
 
 The fakes (``_FakeSpySharingRepo``, ``InMemoryPermissionRepo``,
@@ -42,11 +42,11 @@ import pytest
 async def _perms_with_edit(
     *, user_id: str, editable_note_ids: set[str]
 ) -> InMemoryPermissionRepo:
-    """Build an :class:`InMemoryPermissionRepo` with ``edit_permissions`` granted.
+    """Build an :class:`InMemoryPermissionRepo` with ``has_admin`` granted.
 
     Inserts a ``note#admin@user`` relation per note id; the
     in-memory impl's implication map expands ``admin`` to
-    ``{admin, delete, write, view, edit_permissions}``.
+    ``{admin, delete, write, view, has_admin}``.
     """
     repo = InMemoryPermissionRepo()
     await repo.insert([
@@ -172,7 +172,7 @@ async def test_create_share_inserts_reader_or_writer_relation(permission: str) -
 
 
 async def test_create_share_denies_without_edit_permission() -> None:
-    """No ``edit_permissions`` -> :exc:`PermissionError`, no shares / actions / relations written."""
+    """No ``has_admin`` -> :exc:`PermissionError`, no shares / actions / relations written."""
     user_action_repo = _FakeSpyUserActionRepo()
     user_repo = _FakeSpyUserRepo()
     sharing_repo = _FakeSpySharingRepo()
@@ -335,7 +335,7 @@ async def test_update_share_without_permission_field_does_not_call_permission_se
 
 
 async def test_update_share_denies_without_edit_permission() -> None:
-    """No ``edit_permissions`` -> :exc:`PermissionError`, no permission swap."""
+    """No ``has_admin`` -> :exc:`PermissionError`, no permission swap."""
     service, _activity_logger = await _build_service(
         sharing_repo=_FakeSpySharingRepo([_share(note_id="note-denied")]),
         permissions=InMemoryPermissionRepo(),
@@ -401,7 +401,7 @@ async def test_get_share_by_id_delegates_to_facade() -> None:
 async def test_get_shares_resolves_share_permission_from_spicedb() -> None:
     """``get_shares`` populates ``share.permission`` from the read-side permission lookup."""
     permissions = InMemoryPermissionRepo()
-    # Seed: creator-1 has edit_permissions on note-1; access-user is a reader.
+    # Seed: creator-1 has has_admin on note-1; access-user is a reader.
     await permissions.insert([
         Relationship(
             resource=ObjectRef("note", "note-1"),
@@ -503,7 +503,7 @@ async def test_delete_shares_requires_non_empty_input() -> None:
 
 
 async def test_delete_shares_checks_all_note_ids_before_any_teardown() -> None:
-    """If any note fails the ``edit_permissions`` check, no share is deleted."""
+    """If any note fails the ``has_admin`` check, no share is deleted."""
     sharing_repo = _FakeSpySharingRepo(
         [
             _share(id="share-ok", note_id="note-ok"),
@@ -595,7 +595,7 @@ async def test_delete_shares_records_note_unshared_per_share() -> None:
 
 
 async def test_delete_shares_does_not_record_when_denied() -> None:
-    """`delete_shares` records nothing when an `edit_permissions` check fails."""
+    """`delete_shares` records nothing when an `has_admin` check fails."""
     service, activity_logger = await _build_service(
         sharing_repo=_FakeSpySharingRepo([_share(note_id="note-denied")]),
         permissions=InMemoryPermissionRepo(),
@@ -605,3 +605,61 @@ async def test_delete_shares_does_not_record_when_denied() -> None:
         await service.delete_shares(["share-1"], _DummyUserContext("creator-1"))
 
     assert activity_logger.calls == []
+
+
+# ---------------------------------------------------------------------------
+# capability-level gates (Stage 7)
+# ---------------------------------------------------------------------------
+
+
+async def _perms_with_relation(
+    *, user_id: str, note_id: str, relation: NoteRelationEnum
+) -> InMemoryPermissionRepo:
+    repo = InMemoryPermissionRepo()
+    await repo.insert([
+        Relationship(
+            resource=ObjectRef("note", note_id),
+            relation=relation,
+            subject=SubjectRef("user", user_id),
+        )
+    ])
+    return repo
+
+
+async def test_grant_read_can_create_read_link_but_not_write_link() -> None:
+    service, _ = await _build_service(
+        permissions=await _perms_with_relation(
+            user_id="granter",
+            note_id="note-1",
+            relation=NoteRelationEnum.GRANT_READ,
+        ),
+    )
+
+    created = await service.create_share(
+        NoteShareEntity(note_id="note-1", permission="read"),
+        _DummyUserContext("granter"),
+    )
+    assert created.note_id == "note-1"
+
+    with pytest.raises(PermissionError):
+        await service.create_share(
+            NoteShareEntity(note_id="note-1", permission="write"),
+            _DummyUserContext("granter"),
+        )
+
+
+async def test_listing_shares_requires_has_admin_not_just_grant() -> None:
+    service, _ = await _build_service(
+        sharing_repo=_FakeSpySharingRepo([_share(id="share-1")]),
+        permissions=await _perms_with_relation(
+            user_id="granter",
+            note_id="note-1",
+            relation=NoteRelationEnum.GRANT_READ,
+        ),
+    )
+
+    shares = await service.get_shares(
+        FilterShareNote(note_id="note-1"),
+        _DummyUserContext("granter"),
+    )
+    assert shares == []

@@ -44,3 +44,6 @@ from tests.doubles.fakes.directory_tables import (
 from tests.doubles.fakes.combined_note_repo import (
     _FakeCombinedNoteRepo,
 )
+from tests.doubles.fakes.permission_audit_repo import (
+    FakePermissionAuditRepo,
+)

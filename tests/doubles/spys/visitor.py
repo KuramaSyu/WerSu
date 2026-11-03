@@ -57,6 +57,7 @@ class SpyVisitor(EntityVisitor):
         record_activity: bool = True,
         record_activity_score: bool = True,
         record_shelf: bool = True,
+        record_permission_audit: bool = True,
     ) -> None:
         """Initialize empty record lists and the per-handler `record_*` flags.
 
@@ -87,6 +88,7 @@ class SpyVisitor(EntityVisitor):
         self.note_responses: List[NoteResponse] = []
         self.activities: List[ActivityEntity] = []
         self.activity_scores: List[ActivityScore] = []
+        self.permission_audits: List[Any] = []
         self.share_users: List[tuple[str, Any]] = []
         self._record_note = record_note
         self._record_note_minimal = record_note_minimal
@@ -98,6 +100,7 @@ class SpyVisitor(EntityVisitor):
         self._record_note_response = record_note_response
         self._record_activity = record_activity
         self._record_activity_score = record_activity_score
+        self._record_permission_audit = record_permission_audit
         self._record_shelf = record_shelf
 
     def visit_note(self, entity: NoteEntity) -> NoteEntity:
@@ -175,6 +178,11 @@ class SpyVisitor(EntityVisitor):
 
     def visit_preferences(self, entity: Any) -> None:
         return None
+
+    def visit_permission_audit(self, entity: Any) -> Any:
+        if self._record_permission_audit:
+            self.permission_audits.append(entity)
+        return entity
 
     def visit_share_user(self, access_as: str, online_until: Any) -> Any:
         self.share_users.append((access_as, online_until))
