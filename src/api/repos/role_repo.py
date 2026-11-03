@@ -4,7 +4,7 @@ Roles are split across two stores:
 
 * the Postgres ``roles`` table holds role metadata (id, name,
   description, created_at);
-* the SpiceDB ``user#member_of@role`` tuples hold role membership.
+* the SpiceDB ``role:<id>#member@user:<id>`` tuples hold role membership.
 
 :class:`RoleRepoABC` abstracts both sides behind one contract.  The
 service layer is responsible for permission enforcement; this repo
@@ -135,7 +135,7 @@ class RoleRepoABC(ABC):
         role_id: str,
         ctx: UserContextABC,
     ) -> UserRoleMembershipEntity:
-        """Insert the ``user#member_of@role`` tuple.
+        """Insert the ``role:<id>#member@user:<id>`` tuple.
 
         Args:
             user_id: id of the user to add.
@@ -156,7 +156,7 @@ class RoleRepoABC(ABC):
         role_id: str,
         ctx: UserContextABC,
     ) -> None:
-        """Delete the ``user#member_of@role`` tuple.
+        """Delete the ``role:<id>#member@user:<id>`` tuple.
 
         No-op if the tuple does not exist.
 

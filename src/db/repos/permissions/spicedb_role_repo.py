@@ -2,7 +2,7 @@
 
 * The ``roles`` Postgres table holds metadata (id, name, description,
   created_at).
-* SpiceDB holds ``user#member_of@role`` tuples.
+* SpiceDB holds ``role:<id>#member@user:<id>`` tuples.
 
 The repo stitches both sides so callers see a single
 :class:`RoleRepoABC` surface.  Permission checks live in the service
