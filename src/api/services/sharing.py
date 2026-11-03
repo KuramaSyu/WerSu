@@ -5,8 +5,10 @@ Three ABCs live here:
 * :class:`SharingRepoABC` - thin DB wrapper, no permission checks.
 * :class:`ShareAccessServiceABC` - public-link access path, used by
   unauthenticated callers.
-* :class:`SharingServiceABC` - authenticated CRUD path; every method
-  enforces ``edit_permissions`` on the underlying note.
+* :class:`SharingServiceABC` - authenticated CRUD path; management
+  methods enforce ``has_admin`` on the underlying note, while creating
+  or changing a link requires ``can_grant_read`` / ``can_grant_write``
+  for the link's level.
 """
 
 from abc import ABC, abstractmethod
@@ -231,7 +233,7 @@ class ShareAccessServiceABC(ABC):
 class SharingServiceABC(ABC):
     """Authenticated CRUD path for note shares.
 
-    Every method enforces the ``edit_permissions`` permission on the
+    Every method enforces the ``has_admin`` permission on the
     underlying note on behalf of ``ctx``.
 
     Implementations:
@@ -246,7 +248,7 @@ class SharingServiceABC(ABC):
         sensible default when one exists; otherwise the call fails.
 
         Permissions:
-            Requires ``edit_permissions`` on the note being shared.
+            Requires ``has_admin`` on the note being shared.
 
         Args:
             share: share entity to create.
@@ -255,7 +257,7 @@ class SharingServiceABC(ABC):
         Raises:
             ValueError: if ``share`` is missing required fields or has
                 invalid values.
-            PermissionError: if ``ctx`` lacks ``edit_permissions`` on
+            PermissionError: if ``ctx`` lacks ``has_admin`` on
                 the underlying note.
 
         Returns:
@@ -272,7 +274,7 @@ class SharingServiceABC(ABC):
         Use :obj:`None` to explicitly clear a column.
 
         Permissions:
-            Requires ``edit_permissions`` on the note being shared.
+            Requires ``has_admin`` on the note being shared.
 
         Args:
             share: share entity to update.  Updatable fields:
@@ -289,7 +291,7 @@ class SharingServiceABC(ABC):
         Raises:
             ValueError: if ``share`` is missing required fields or has
                 invalid values.
-            PermissionError: if ``ctx`` lacks ``edit_permissions`` on
+            PermissionError: if ``ctx`` lacks ``has_admin`` on
                 the underlying note.
 
         Returns:
@@ -301,7 +303,7 @@ class SharingServiceABC(ABC):
         """Fetch a single share by id.
 
         Permissions:
-            Requires ``edit_permissions`` on the shared note.
+            Requires ``has_admin`` on the shared note.
 
         Args:
             share_id: id of the share to fetch.
@@ -310,7 +312,7 @@ class SharingServiceABC(ABC):
         Raises:
             ValueError: if ``share_id`` is invalid or the share does
                 not exist.
-            PermissionError: if ``ctx`` lacks ``edit_permissions`` on
+            PermissionError: if ``ctx`` lacks ``has_admin`` on
                 the underlying note.
         """
         shares = await self.get_shares_by_id([share_id], ctx)
@@ -323,7 +325,7 @@ class SharingServiceABC(ABC):
         """Fetch several shares by id in a single call.
 
         Permissions:
-            Shares for notes where ``ctx`` lacks ``edit_permissions``
+            Shares for notes where ``ctx`` lacks ``has_admin``
             are filtered out before returning.
 
         Args:
@@ -342,7 +344,7 @@ class SharingServiceABC(ABC):
         """Return the first share matching ``filter``.
 
         Permissions:
-            Shares for notes where ``ctx`` lacks ``edit_permissions``
+            Shares for notes where ``ctx`` lacks ``has_admin``
             are filtered out before the first match is taken.
 
         Args:
@@ -365,7 +367,7 @@ class SharingServiceABC(ABC):
         """Return every editable share matching ``filter``.
 
         Permissions:
-            Shares for notes where ``ctx`` lacks ``edit_permissions``
+            Shares for notes where ``ctx`` lacks ``has_admin``
             are filtered out.
 
         Args:
@@ -381,7 +383,7 @@ class SharingServiceABC(ABC):
         """Delete the share with the given id.
 
         Permissions:
-            Requires ``edit_permissions`` on the underlying note.
+            Requires ``has_admin`` on the underlying note.
 
         Args:
             share_id: id of the share to delete.
@@ -390,7 +392,7 @@ class SharingServiceABC(ABC):
         Raises:
             ValueError: if ``share_id`` is invalid or the share does
                 not exist.
-            PermissionError: if ``ctx`` lacks ``edit_permissions`` on
+            PermissionError: if ``ctx`` lacks ``has_admin`` on
                 the underlying note.
         """
         return await self.delete_shares([share_id], ctx)
@@ -400,7 +402,7 @@ class SharingServiceABC(ABC):
         """Delete every share whose id is in ``share_ids``.
 
         Permissions:
-            Each underlying note must have ``edit_permissions`` for
+            Each underlying note must have ``has_admin`` for
             ``ctx``; otherwise the call raises :exc:`PermissionError`.
 
         Args:
@@ -409,7 +411,7 @@ class SharingServiceABC(ABC):
 
         Raises:
             ValueError: if any id is invalid.
-            PermissionError: if ``ctx`` lacks ``edit_permissions`` on
+            PermissionError: if ``ctx`` lacks ``has_admin`` on
                 any of the underlying notes.
         """
         ...

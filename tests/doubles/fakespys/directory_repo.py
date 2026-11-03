@@ -134,27 +134,27 @@ class _FakeSpyDirectoryRepo(DirectoryFacadeABC):
             await self._permission_repo.insert(resolved)
 
         # Mirror the production :class:`DirectoryFacadeImpl` behaviour
-        # of always attaching a ``dir#admin@user`` relation for the
-        # caller.  Production writes it to the permission repo and
+        # of always attaching a ``dir#owner@user`` relation for the
+        # creator.  Production writes it to the permission repo and
         # returns it on ``created.relations``; do the same here so
         # callers can inspect the relation without poking the
         # permission repo themselves.
         if self._permission_repo is not None and user_ctx is not None:
-            admin_relation = Relationship(
+            owner_relation = Relationship(
                 resource=ObjectRef(
                     object_type=ObjectTypeEnum.DIRECTORY,
                     object_id=str(new_id),
                 ),
-                relation=DirectoryRelationEnum.ADMIN,
+                relation=DirectoryRelationEnum.OWNER,
                 subject=SubjectRef(
                     object_type=ObjectTypeEnum.USER,
                     object_id=str(user_ctx.user_id),
                 ),
             )
-            await self._permission_repo.insert([admin_relation])
+            await self._permission_repo.insert([owner_relation])
             if not isinstance(created.relations, list):
                 created.relations = []
-            created.relations.append(admin_relation)
+            created.relations.append(owner_relation)
 
         # Mirror the parent relations written when
         # ``entity.parent_directory_ids`` is set, matching the

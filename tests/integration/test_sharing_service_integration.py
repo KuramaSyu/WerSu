@@ -48,9 +48,9 @@ EnvT = Tuple[SharingServiceImpl, SharingPostgresRepo]
 async def _bootstrap_owner_with_note(env) -> Tuple[str, str]:
     """Create an owner user and a note, return ``(user_id, note_id)``.
 
-    The owner becomes admin on all default directories and on the new
-    note, so they have the ``edit_permissions`` capability required by
-    the share service to mutate shares.
+    The owner becomes owner/admin on all default directories and on the new
+    note, so they hold ``has_admin`` and ``can_grant_read`` /
+    ``can_grant_write`` for the share service.
     """
     created_user = await env.user_service.create_user(
         make_user_entity(

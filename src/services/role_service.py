@@ -1,8 +1,8 @@
 """Concrete implementation of :class:`RoleServiceABC`.
 
-Wires the Postgres + SpiceDB role repo to permission checks.  Every
-write path that mutates an *existing* role is gated on
-``manage`` permission on that role.  ``create_role`` has no role to
+Wires the Postgres + SpiceDB role repo to permission checks.
+Membership writes are gated on ``can_grant_member``; role metadata
+writes are gated on the ``administrator`` relation.  ``create_role`` has no role to
 gate on yet, so it falls back to a super-admin concept: a caller-
 supplied callable that returns the set of user ids allowed to
 bootstrap new roles.
@@ -59,7 +59,7 @@ def default_super_admin_lookup(_: UserContextABC) -> set[str]:
 
 
 class RoleServiceImpl(RoleServiceABC):
-    """Role service with ``manage`` permission gating."""
+    """Role service with capability-based gating."""
 
     def __init__(
         self,
@@ -93,13 +93,13 @@ class RoleServiceImpl(RoleServiceABC):
     async def update_role(self, role: RoleEntity, ctx: UserContextABC) -> RoleEntity:
         if is_undefined(role.id) or role.id is None:
             raise ValueError("role.id is required")
-        await self._assert_can_manage(str(role.id), ctx)
+        await self._assert_administrator(str(role.id), ctx)
         return await self._role_repo.update_role(role, ctx)
 
     async def delete_role(self, role_id: str, ctx: UserContextABC) -> None:
         if not role_id:
             raise ValueError("role_id is required")
-        await self._assert_can_manage(role_id, ctx)
+        await self._assert_administrator(role_id, ctx)
         await self._role_repo.delete_role(role_id, ctx)
 
     async def add_user_to_role(
@@ -112,7 +112,7 @@ class RoleServiceImpl(RoleServiceABC):
             raise ValueError("user_id is required")
         if not role_id:
             raise ValueError("role_id is required")
-        await self._assert_can_manage(role_id, ctx)
+        await self._assert_can_grant_member(role_id, ctx)
         return await self._role_repo.add_user_to_role(user_id, role_id, ctx)
 
     async def remove_user_from_role(
@@ -125,7 +125,7 @@ class RoleServiceImpl(RoleServiceABC):
             raise ValueError("user_id is required")
         if not role_id:
             raise ValueError("role_id is required")
-        await self._assert_can_manage(role_id, ctx)
+        await self._assert_can_grant_member(role_id, ctx)
         await self._role_repo.remove_user_from_role(user_id, role_id, ctx)
 
     # ---- read paths ------------------------------------------------------
@@ -166,15 +166,24 @@ class RoleServiceImpl(RoleServiceABC):
 
     # ---- internals -------------------------------------------------------
 
-    async def _assert_can_manage(self, role_id: str, ctx: UserContextABC) -> None:
-        """Ensure the caller holds ``manage`` on the role.
+    async def _assert_administrator(self, role_id: str, ctx: UserContextABC) -> None:
+        """Ensure the caller holds the role's ``administrator`` relation."""
+        from src.domain.permission_chain import HasRoleAdministratorPerm
 
-        Raises:
-            PermissionError: caller lacks ``manage`` on the role.
-        """
-        from src.domain.permission_chain import HasRoleManagePerm
+        chain = HasRoleAdministratorPerm(role_id).set_permission_repo(
+            self._permission_repo
+        )
+        result = await chain.check(ctx)
+        if not result:
+            raise PermissionError(chain.error)
 
-        chain = HasRoleManagePerm(role_id).set_permission_repo(self._permission_repo)
+    async def _assert_can_grant_member(self, role_id: str, ctx: UserContextABC) -> None:
+        """Ensure the caller may write/remove ``role#member``."""
+        from src.domain.permission_chain import HasRoleGrantMemberPerm
+
+        chain = HasRoleGrantMemberPerm(role_id).set_permission_repo(
+            self._permission_repo
+        )
         result = await chain.check(ctx)
         if not result:
             raise PermissionError(chain.error)

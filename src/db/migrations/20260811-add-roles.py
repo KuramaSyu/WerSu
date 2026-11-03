@@ -5,7 +5,7 @@ This single migration sets up both halves of the role system:
 * a Postgres ``roles`` table that holds role metadata (id, name,
   description, created_at);
 * a SpiceDB schema update that introduces the ``role`` definition,
-  the ``user#member_of@role`` edge, ``role#administrator`` /
+  the ``role:<id>#member@user:<id>`` edge, ``role#administrator`` /
   ``role#manage``, and ``note#manage`` (cascades from
   ``directory#admin`` via ``parent_directory->admin``).
 

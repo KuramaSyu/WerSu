@@ -134,6 +134,7 @@ class GrpcPermissionService(PermissionServiceServicer):
                     subject=PermissionSubject(
                         object_type=to_permission_object_type(ObjectTypeEnum(str(rel.subject.object_type))),
                         object_id=str(rel.subject.object_id),
+                        optional_relation=str(rel.subject.optional_relation or ""),
                     ),
                     resource=to_permission_resource(rel.resource),
                 )

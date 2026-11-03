@@ -252,81 +252,69 @@ class HasNoteWritePerm(PermissionCheckChain):
         return f"user has no permission to write to note {self._note_id}"
 
 
-class HasNoteEditPermissionsPerm(PermissionCheckChain):
-    """Permission check for managing a note's sharing and permission settings."""
-    OBJECT_TYPE: ObjectType = "note"
-    RELATION_TYPE: NoteRelationName = NoteRelationEnum.EDIT_PERMISSIONS
-    SUBJECT_TYPE: SubjectType = "user"
+class HasCapabilityPerm(PermissionCheckChain):
+    """Check that the caller holds ``capability`` on a resource.
 
-    def __init__(self, note_id: str):
-        super().__init__()
-        self._note_id = note_id
-
-    async def _check(self, user_ctx: UserContextABC) -> bool:
-        # `edit_permissions` is a computed permission in SpiceDB, so check the
-        # effective permission instead of expecting a direct relationship tuple.
-        return await self._get_permission_repo().has_permission(
-            user_ctx,
-            permission=self.RELATION_TYPE,
-            resource=ObjectRef(self.OBJECT_TYPE, self._note_id),
-        )
-
-    def _get_error_message(self) -> str:
-        return f"user has no permission to edit permissions for note {self._note_id}"
-
-
-class HasNoteManagePerm(PermissionCheckChain):
-    """Permission check for attaching/detaching roles on a note.
-
-    ``note#manage`` is granted to direct note admins and to admins of
-    the parent directory.  See ``schema.zed`` for the cascade rule.
+    ``capability`` is a computed SpiceDB permission (``can_grant_read``,
+    ``can_delegate_admin``, ...), never a writable relation.
     """
-    OBJECT_TYPE: ObjectType = "note"
-    RELATION_TYPE: NoteRelationName = NoteRelationEnum.MANAGE
-    SUBJECT_TYPE: SubjectType = "user"
 
-    def __init__(self, note_id: str) -> None:
+    def __init__(self, resource_type: ObjectType | ObjectTypeEnum, resource_id: str, capability: str):
         super().__init__()
-        self._note_id = note_id
-
-    async def _check(self, user_ctx: UserContextABC) -> bool:
-        # `manage` is a computed permission in SpiceDB; check the
-        # effective permission rather than expecting a direct tuple.
-        return await self._get_permission_repo().has_permission(
-            user_ctx,
-            permission=self.RELATION_TYPE,
-            resource=ObjectRef(self.OBJECT_TYPE, self._note_id),
-        )
-
-    def _get_error_message(self) -> str:
-        return f"user has no 'manage' permission on note {self._note_id}"
-
-
-class HasRoleManagePerm(PermissionCheckChain):
-    """Permission check for changing a role's membership.
-
-    ``role#manage`` is granted to direct role administrators.  Note
-    admins and directory admins do *not* inherit it -- attaching a
-    role to a resource is a separate capability from changing who
-    belongs to the role.
-    """
-    OBJECT_TYPE: ObjectType = "role"
-    RELATION_TYPE: RoleRelationName = RoleRelationEnum.MANAGE
-    SUBJECT_TYPE: SubjectType = "user"
-
-    def __init__(self, role_id: str) -> None:
-        super().__init__()
-        self._role_id = role_id
+        self._resource_type = resource_type
+        self._resource_id = resource_id
+        self._capability = capability
 
     async def _check(self, user_ctx: UserContextABC) -> bool:
         return await self._get_permission_repo().has_permission(
             user_ctx,
-            permission=self.RELATION_TYPE,
-            resource=ObjectRef(self.OBJECT_TYPE, self._role_id),
+            permission=self._capability,
+            resource=ObjectRef(self._resource_type, self._resource_id),
         )
 
     def _get_error_message(self) -> str:
-        return f"user has no 'manage' permission on role {self._role_id}"
+        return (
+            f"user has no {self._capability} permission on "
+            f"{self._resource_type} {self._resource_id}"
+        )
+
+
+class HasResourceAdminPerm(HasCapabilityPerm):
+    """Check ``has_admin`` (admin or owner) on a resource."""
+
+    def __init__(self, resource_type: ObjectType | ObjectTypeEnum, resource_id: str):
+        super().__init__(resource_type, resource_id, "has_admin")
+
+
+class HasRoleAdministratorPerm(HasCapabilityPerm):
+    """Check the role's ``administrator`` relation."""
+
+    def __init__(self, role_id: str):
+        super().__init__(ObjectTypeEnum.ROLE, role_id, "administrator")
+
+    def _get_error_message(self) -> str:
+        return f"user has no administrator relation on role {self._resource_id}"
+
+
+class HasRoleGrantMemberPerm(HasCapabilityPerm):
+    """Check ``can_grant_member`` on a role."""
+
+    def __init__(self, role_id: str):
+        super().__init__(ObjectTypeEnum.ROLE, role_id, "can_grant_member")
+
+
+class HasRoleDelegateMemberPerm(HasCapabilityPerm):
+    """Check ``can_delegate_member`` on a role."""
+
+    def __init__(self, role_id: str):
+        super().__init__(ObjectTypeEnum.ROLE, role_id, "can_delegate_member")
+
+
+class HasRoleAssignDelegateMemberPerm(HasCapabilityPerm):
+    """Check ``can_assign_delegate_member`` on a role."""
+
+    def __init__(self, role_id: str):
+        super().__init__(ObjectTypeEnum.ROLE, role_id, "can_assign_delegate_member")
 
 
 class HasDirectoryViewPerm(PermissionCheckChain):
@@ -392,52 +380,6 @@ class HasDirectoryDeletePerm(PermissionCheckChain):
         return f"user has no permission to delete directory {self._directory_id}"
 
 
-class HasDirectoryEditPermissionsPerm(PermissionCheckChain):
-    """Permission check for managing a directory's sharing and permission settings."""
-    OBJECT_TYPE: ObjectType = "directory"
-    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.EDIT_PERMISSIONS
-    SUBJECT_TYPE: SubjectType = "user"
-
-    def __init__(self, directory_id: str) -> None:
-        super().__init__()
-        self._directory_id = directory_id
-
-    async def _check(self, user_ctx: UserContextABC) -> bool:
-        return await self._get_permission_repo().has_permission(
-            user_ctx,
-            permission=self.RELATION_TYPE,
-            resource=ObjectRef(self.OBJECT_TYPE, self._directory_id),
-        )
-
-    def _get_error_message(self) -> str:
-        return f"user has no permission to edit permissions for directory {self._directory_id}"
-
-
-class HasShelfEditPermissionsPerm(PermissionCheckChain):
-    """Permission check for managing a shelf's sharing and permission settings.
-
-    Shelves use the same role set as directories, so the gate
-    is identical -- only the resource type differs.
-    """
-    OBJECT_TYPE: ObjectType = "shelf"
-    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.EDIT_PERMISSIONS
-    SUBJECT_TYPE: SubjectType = "user"
-
-    def __init__(self, shelf_id: str) -> None:
-        super().__init__()
-        self._shelf_id = shelf_id
-
-    async def _check(self, user_ctx: UserContextABC) -> bool:
-        return await self._get_permission_repo().has_permission(
-            user_ctx,
-            permission=self.RELATION_TYPE,
-            resource=ObjectRef(self.OBJECT_TYPE, self._shelf_id),
-        )
-
-    def _get_error_message(self) -> str:
-        return f"user has no permission to edit permissions for shelf {self._shelf_id}"
-
-
 class HasShelfViewPerm(PermissionCheckChain):
     """Permission check for viewing a shelf and its book bindings."""
     OBJECT_TYPE: ObjectType = "shelf"
@@ -501,24 +443,12 @@ class HasShelfDeletePerm(PermissionCheckChain):
         return f"user has no permission to delete shelf {self._shelf_id}"
 
 
-class HasAnyDirectoryEditPermissionPerms(PermissionCheckChain):
-    """Permission check: user has ``directory#edit_permissions`` on at least one directory.
+class HasAnyDirectoryAdminPerm(PermissionCheckChain):
+    """Permission check: user has ``directory#has_admin`` on at least one directory.
 
-    Used by the rules subsystem to gate creation of *global* rules
-    (rules with no attached entity).  The user has to be able to
-    manage at least one directory, otherwise they are effectively
-    a pure viewer and the rules subsystem should not let them
-    create rules that affect every event of a kind.
-
-    Args:
-        directory_facade: the directory facade used to enumerate
-            the user's viewable directories. 
-        max_candidates: cap on the number of directories to
-            probe; defaults to 25. 
+    Used to gate actions that need admin-equivalent rights on some
+    directory the user can see (e.g. global rule creation).
     """
-    OBJECT_TYPE: ObjectType = "directory"
-    RELATION_TYPE: DirectoryRelationName = DirectoryRelationEnum.EDIT_PERMISSIONS
-    SUBJECT_TYPE: SubjectType = "user"
 
     def __init__(
         self,
@@ -534,31 +464,19 @@ class HasAnyDirectoryEditPermissionPerms(PermissionCheckChain):
             user_ctx,
         )
         for directory_id in directory_ids[: self._max_candidates]:
-            probe = (
-                HasDirectoryEditPermissionsPerm(str(directory_id))
-                .set_permission_repo(self._get_permission_repo())
-            )
-            ok = await probe._check(user_ctx)  # noqa: SLF001 -- intentional delegation
-            if ok:
+            probe = HasResourceAdminPerm(
+                ObjectTypeEnum.DIRECTORY, str(directory_id)
+            ).set_permission_repo(self._get_permission_repo())
+            if await probe._check(user_ctx):  # noqa: SLF001 -- intentional delegation
                 return True
         return False
 
     def _get_error_message(self) -> str:
-        return (
-            "user has no 'edit_permissions' on any directory they can view"
-        )
+        return "user has no 'has_admin' permission on any directory they can view"
 
 
-class HasAnyNoteManagePerm(PermissionCheckChain):
-    """Permission check: user has ``note#manage`` on at least one note.
-
-    Counterpart to :class:`HasAnyDirectoryEditPermissionsPerm` for
-    the note side.  Probes the user's viewable notes and checks 
-    ``note#manage`` on each.  Bounded by ``max_candidates`` (default 25)
-    """
-    OBJECT_TYPE: ObjectType = "note"
-    RELATION_TYPE: NoteRelationName = NoteRelationEnum.MANAGE
-    SUBJECT_TYPE: SubjectType = "user"
+class HasAnyNoteAdminPerm(PermissionCheckChain):
+    """Permission check: user has ``note#has_admin`` on at least one note."""
 
     def __init__(
         self,
@@ -570,14 +488,6 @@ class HasAnyNoteManagePerm(PermissionCheckChain):
         self._max_candidates = max_candidates
 
     async def _check(self, user_ctx: UserContextABC) -> bool:
-        # Enumerate the user's viewable directories, then pull
-        # the direct child notes under them, and probe ``manage``
-        # on each.  This is intentionally less precise than a
-        # dedicated ``list_user_note_ids`` would be, but the
-        # project does not have that on the directory facade
-        # yet and adding it would balloon the surface area of
-        # this change.  The candidate cap still bounds the
-        # worst case.
         directory_ids = await self._directory_facade.list_user_directory_ids(
             user_ctx,
         )
@@ -590,17 +500,15 @@ class HasAnyNoteManagePerm(PermissionCheckChain):
             if len(candidate_note_ids) >= self._max_candidates:
                 break
         for note_id in candidate_note_ids[: self._max_candidates]:
-            probe = (
-                HasNoteManagePerm(str(note_id))
-                .set_permission_repo(self._get_permission_repo())
-            )
-            ok = await probe._check(user_ctx)  # noqa: SLF001
-            if ok:
+            probe = HasResourceAdminPerm(
+                ObjectTypeEnum.NOTE, str(note_id)
+            ).set_permission_repo(self._get_permission_repo())
+            if await probe._check(user_ctx):  # noqa: SLF001
                 return True
         return False
 
     def _get_error_message(self) -> str:
-        return "user has no 'manage' on any note they can view"
+        return "user has no 'has_admin' permission on any note they can view"
 
 
 class HasShelfAdminPerm(PermissionCheckChain):

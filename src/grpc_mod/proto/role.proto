@@ -31,7 +31,7 @@ message RoleFilter {
 }
 
 // Create a role. Actor's user_id is used for permission checks
-// (currently: must hold manage on the bootstrap role).
+// (currently: must hold the administrator relation on the bootstrap role).
 message CreateRoleRequest {
     string user_id = 1;
     string name = 2;
@@ -65,14 +65,14 @@ message GetRolesRequest {
     RoleFilter filter = 2;
 }
 
-// Add a user to a role's membership. Gated by manage permission on the role.
+// Add a user to a role's membership. Gated by can_grant_member on the role.
 message AddUserToRoleRequest {
     string user_id = 1;
     string role_id = 2;
     string subject_user_id = 3;
 }
 
-// Remove a user from a role's membership. Gated by manage permission on the role.
+// Remove a user from a role's membership. Gated by can_grant_member on the role.
 message RemoveUserFromRoleRequest {
     string user_id = 1;
     string role_id = 2;

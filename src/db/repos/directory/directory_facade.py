@@ -93,11 +93,11 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
                     sid, dir_id, user_ctx=user_ctx,
                 )
 
-        # add note#admin@user relation for consistency and permission checks
-        admin_relation = await self._create_user_admin_relation(dir_id, user_ctx)
+        # add directory#owner@user relation for consistency and permission checks
+        owner_relation = await self._create_user_owner_relation(dir_id, user_ctx)
         if created_entity.relations:
             self._log.warning(
-                f"Unwanted behaviour: create_directory() was called with non-empty relations: {created_entity.relations}. Only the admin relation will be persisted."
+                f"Unwanted behaviour: create_directory() was called with non-empty relations: {created_entity.relations}. Only the owner relation will be persisted."
             )
         created_entity.relations = created_entity.relations or []
         # created_entity.relations.append(admin_relation)
@@ -692,23 +692,23 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             "directory", directory_id, "directory", sorted(desired)
         )
 
-    async def _create_user_admin_relation(
+    async def _create_user_owner_relation(
         self,
         directory_id: str,
         user_ctx: UserContextABC,
     ) -> Relationship:
-        """Insert the user-supplied ``relations`` against this directory."""
+        """Grant ``owner`` on the newly created directory to its creator."""
 
-        admin_relation = Relationship(
+        owner_relation = Relationship(
             resource=ObjectRef(
                 object_type=ObjectTypeEnum.DIRECTORY, object_id=directory_id
             ),
-            relation=DirectoryRelationEnum.ADMIN,
+            relation=DirectoryRelationEnum.OWNER,
             subject=SubjectRef(
                 object_type=ObjectTypeEnum.USER, object_id=user_ctx.user_id
             ),
         )
-        await self._perm_repo.insert([admin_relation])
-        return admin_relation  # speed tradeoff to not call the permission repo a second time
+        await self._perm_repo.insert([owner_relation])
+        return owner_relation  # speed tradeoff to not call the permission repo a second time
 
 __all__ = ["DirectoryFacadeImpl"]

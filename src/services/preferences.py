@@ -16,7 +16,7 @@ from src.api import (
 )
 from src.api.other.user_context import UserContextABC
 from src.domain.permission_chain import (
-    HasRoleManagePerm,
+    HasRoleAdministratorPerm,
     HasShelfViewPerm,
     IsSelfOrSystem,
 )
@@ -75,7 +75,7 @@ class PreferencesServiceImpl(PreferencesServiceABC):
                 self._permission_repo
             )
         elif scope == "role":
-            chain = HasRoleManagePerm(target_id).set_permission_repo(
+            chain = HasRoleAdministratorPerm(target_id).set_permission_repo(
                 self._permission_repo
             )
         else:

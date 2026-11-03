@@ -1,20 +1,19 @@
 """Application service for role CRUD and membership management.
 
-The service enforces the ``manage`` permission on every role write
-path:
+The service enforces capability-based gates on every role write path:
 
 * ``add_user_to_role`` and ``remove_user_from_role`` -- the caller
-  must hold ``manage`` on the *role* being modified, not on the
-  resource that grants the role.  Note admins can attach a role to
+  must hold ``can_grant_member`` on the *role* being modified, not on
+  the resource that grants the role.  Note admins can attach a role to
   a note without being able to edit the role's membership.
-* ``update_role`` and ``delete_role`` -- gated on ``manage`` on the
-  role itself.
+* ``update_role`` and ``delete_role`` -- gated on the role's
+  ``administrator`` relation.
 
 ``create_role`` is the only write that has no resource to gate on,
 because there is no role yet.  Implementations are expected to gate
 ``create_role`` on a bootstrap concept (e.g. an env-var list of
 super-admin user ids, or a sentinel ``role:[global]super-admin``
-whose ``manage`` permission the caller holds).
+whose ``administrator`` relation the caller holds).
 
 Implementations:
 * :class:`src.services.role_service.RoleServiceImpl`
@@ -43,7 +42,7 @@ class RoleServiceABC(ABC):
                 ``created_at`` are assigned by the repo.
             ctx: caller context.  Implementations gate ``create_role``
                 on a bootstrap concept -- callers cannot rely on a
-                ``manage`` permission on a non-existent role.
+                ``administrator`` relation on a non-existent role.
 
         Returns:
             RoleEntity: the persisted role.
@@ -60,7 +59,7 @@ class RoleServiceABC(ABC):
 
         Args:
             role: role carrying ``id`` and the fields to update.
-            ctx: caller context.  Must hold ``manage`` on the role.
+            ctx: caller context.  Must hold ``administrator`` on the role.
 
         Returns:
             RoleEntity: the updated role.
@@ -68,7 +67,7 @@ class RoleServiceABC(ABC):
         Raises:
             ValueError: ``role.id`` is missing.
             LookupError: the role no longer exists.
-            PermissionError: caller lacks ``manage`` on the role.
+            PermissionError: caller lacks ``administrator`` on the role.
         """
         ...
 
@@ -84,12 +83,12 @@ class RoleServiceABC(ABC):
 
         Args:
             role_id: id of the role to delete.
-            ctx: caller context.  Must hold ``manage`` on the role.
+            ctx: caller context.  Must hold ``administrator`` on the role.
 
         Raises:
             ValueError: ``role_id`` is missing.
             LookupError: the role no longer exists.
-            PermissionError: caller lacks ``manage`` on the role.
+            PermissionError: caller lacks ``administrator`` on the role.
         """
         ...
 
@@ -140,7 +139,7 @@ class RoleServiceABC(ABC):
         Args:
             user_id: id of the user to add.
             role_id: id of the role to add the user to.
-            ctx: caller context.  Must hold ``manage`` on the role.
+            ctx: caller context.  Must hold ``can_grant_member`` on the role.
 
         Returns:
             UserRoleMembershipEntity: the freshly created
@@ -149,7 +148,7 @@ class RoleServiceABC(ABC):
         Raises:
             ValueError: ``user_id`` or ``role_id`` is missing.
             LookupError: the role no longer exists.
-            PermissionError: caller lacks ``manage`` on the role.
+            PermissionError: caller lacks ``can_grant_member`` on the role.
         """
         ...
 
@@ -165,11 +164,11 @@ class RoleServiceABC(ABC):
         Args:
             user_id: id of the user to remove.
             role_id: id of the role to remove the user from.
-            ctx: caller context.  Must hold ``manage`` on the role.
+            ctx: caller context.  Must hold ``can_grant_member`` on the role.
 
         Raises:
             ValueError: ``user_id`` or ``role_id`` is missing.
-            PermissionError: caller lacks ``manage`` on the role.
+            PermissionError: caller lacks ``can_grant_member`` on the role.
         """
         ...
 

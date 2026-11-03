@@ -22,3 +22,7 @@ from tests.doubles.stubs.embedding import (
 from tests.doubles.stubs.version_repo import (
     _StubVersionRepo,
 )
+from tests.doubles.stubs.permission_targets import (
+    _StubPermissionRoleRepo,
+    _StubPermissionShelfRepo,
+)

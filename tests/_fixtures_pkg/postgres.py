@@ -299,10 +299,24 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             context_factory=user_context_factory,
             shelf_service=shelf_service,
         )
+        # Roles: metadata in Postgres (``roles`` table), membership
+        # edges in SpiceDB (``role:<id>#member@user:<id>``).
+        role_repo = SpicedbRoleRepo(
+            table=Table(
+                db=db,
+                table_name="roles",
+                id_fields=["id"],
+                logging_provider=logging_provider,
+            ),
+            permission_repo=permission_repo,
+            logging_provider=logging_provider,
+        )
         permission_service = PermissionServiceImpl(
             permission_repo=permission_repo,
             note_repo=note_repo,
             directory_repo=directory_facade,
+            shelf_repo=shelf_repo,
+            role_repo=role_repo,
         )
         sharing_repo = SharingPostgresRepo(
             table=Table(
@@ -349,21 +363,6 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
             ),
         )
 
-        # Roles: metadata in Postgres (``roles`` table), membership
-        # edges in SpiceDB (``user#member_of@role``).  Reuses the
-        # existing ``SpicedbPermissionRepo`` for the membership
-        # writes so we share the same SpiceDB client + consistency
-        # model as the rest of the permission system.
-        role_repo = SpicedbRoleRepo(
-            table=Table(
-                db=db,
-                table_name="roles",
-                id_fields=["id"],
-                logging_provider=logging_provider,
-            ),
-            permission_repo=permission_repo,
-            logging_provider=logging_provider,
-        )
         role_service = RoleServiceImpl(
             role_repo=role_repo,
             permission_repo=permission_repo,

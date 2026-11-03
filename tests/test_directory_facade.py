@@ -138,22 +138,22 @@ async def test_create_directory_writes_to_dir_repo() -> None:
     assert call.description == "notes that need a home"
 
 
-async def test_create_directory_inserts_admin_relation_in_perm_repo() -> None:
-    """`create_directory` writes a `dir#admin@user` relation for the creator."""
+async def test_create_directory_inserts_owner_relation_in_perm_repo() -> None:
+    """`create_directory` writes a `dir#owner@user` relation for the creator."""
     facade, dir_repo, perm_repo, _tags = _build_facade()
 
     entity = DirectoryEntity(slug="inbox", display_name="Inbox")
     created = await facade.create_directory(entity, _DummyUserContext("alice"))
 
-    admins = _relations_of(
+    owners = _relations_of(
         perm_repo,
         resource_type=ObjectTypeEnum.DIRECTORY,
-        relation=str(DirectoryRelationEnum.ADMIN),
+        relation=str(DirectoryRelationEnum.OWNER),
         subject_type=ObjectTypeEnum.USER,
         subject_id="alice",
     )
-    assert len(admins) == 1
-    assert str(admins[0].resource.object_id) == str(created.id)
+    assert len(owners) == 1
+    assert str(owners[0].resource.object_id) == str(created.id)
 
 
 async def test_create_directory_with_parents_writes_to_both_repos() -> None:

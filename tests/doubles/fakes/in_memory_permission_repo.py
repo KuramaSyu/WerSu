@@ -27,36 +27,64 @@ class InMemoryPermissionRepo(PermissionRepoABC):
 
     _relation_implied_permissions = {
         "note": {
-            "admin": {"admin", "delete", "write", "view", "edit_permissions", "manage"},
+            "admin": {"admin", "delete", "write", "view", "has_admin", "can_grant_read", "can_grant_write", "can_delegate_read", "can_delegate_write", "can_assign_delegate_read", "can_assign_delegate_write"},
             "writer": {"writer", "write", "view"},
             "reader": {"reader", "view"},
-            "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions", "manage"},
+            "owner": {"owner", "admin", "delete", "write", "view", "has_admin", "can_grant_read", "can_grant_write", "can_grant_admin", "can_delegate_read", "can_delegate_write", "can_delegate_admin", "can_assign_delegate_read", "can_assign_delegate_write", "can_assign_delegate_admin"},
+            "grant_read": {"grant_read", "can_grant_read"},
+            "grant_write": {"grant_write", "can_grant_write"},
+            "grant_admin": {"grant_admin", "can_grant_admin"},
+            "delegate_read": {"delegate_read", "can_grant_read", "can_delegate_read"},
+            "delegate_write": {"delegate_write", "can_grant_write", "can_delegate_write"},
+            "delegate_admin": {"delegate_admin", "can_grant_admin", "can_delegate_admin"},
         },
         "directory": {
-            "admin": {"admin", "delete", "write", "view", "edit_permissions"},
+            "admin": {"admin", "delete", "write", "view", "has_admin", "can_grant_read", "can_grant_write", "can_delegate_read", "can_delegate_write", "can_assign_delegate_read", "can_assign_delegate_write"},
             "writer": {"writer", "write", "view"},
             "reader": {"reader", "view"},
-            "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions"},
+            "owner": {"owner", "admin", "delete", "write", "view", "has_admin", "can_grant_read", "can_grant_write", "can_grant_admin", "can_delegate_read", "can_delegate_write", "can_delegate_admin", "can_assign_delegate_read", "can_assign_delegate_write", "can_assign_delegate_admin"},
+            "grant_read": {"grant_read", "can_grant_read"},
+            "grant_write": {"grant_write", "can_grant_write"},
+            "grant_admin": {"grant_admin", "can_grant_admin"},
+            "delegate_read": {"delegate_read", "can_grant_read", "can_delegate_read"},
+            "delegate_write": {"delegate_write", "can_grant_write", "can_delegate_write"},
+            "delegate_admin": {"delegate_admin", "can_grant_admin", "can_delegate_admin"},
+        },
+        "shelf": {
+            "admin": {"admin", "delete", "write", "view", "has_admin", "can_grant_read", "can_grant_write", "can_delegate_read", "can_delegate_write", "can_assign_delegate_read", "can_assign_delegate_write"},
+            "writer": {"writer", "write", "view"},
+            "reader": {"reader", "view"},
+            "owner": {"owner", "admin", "delete", "write", "view", "has_admin", "can_grant_read", "can_grant_write", "can_grant_admin", "can_delegate_read", "can_delegate_write", "can_delegate_admin", "can_assign_delegate_read", "can_assign_delegate_write", "can_assign_delegate_admin"},
+            "grant_read": {"grant_read", "can_grant_read"},
+            "grant_write": {"grant_write", "can_grant_write"},
+            "grant_admin": {"grant_admin", "can_grant_admin"},
+            "delegate_read": {"delegate_read", "can_grant_read", "can_delegate_read"},
+            "delegate_write": {"delegate_write", "can_grant_write", "can_delegate_write"},
+            "delegate_admin": {"delegate_admin", "can_grant_admin", "can_delegate_admin"},
         },
         "attachment": {
-            "admin": {"admin", "delete", "write", "view", "edit_permissions"},
+            "admin": {"admin", "delete", "write", "view"},
             "writer": {"writer", "write", "view"},
             "reader": {"reader", "view"},
-            "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions"},
+            "owner": {"owner", "admin", "delete", "write", "view"},
             # Production relation: ``attachment#parent_user@user:<id>``
             # grants the uploader full CRUD (schema.zed).
             "parent_user": {"delete", "write", "view"},
         },
         "role": {
-            "administrator": {"administrator", "manage"},
-        },
-        "shelf": {
-            "admin": {"admin", "delete", "write", "view", "edit_permissions"},
-            "writer": {"writer", "write", "view"},
-            "reader": {"reader", "view"},
-            "owner": {"owner", "admin", "delete", "write", "view", "edit_permissions"},
+            "administrator": {"administrator", "can_grant_member", "can_delegate_member", "can_assign_delegate_member"},
+            "member": {"member"},
+            "grant_member": {"grant_member", "can_grant_member"},
+            "delegate_member": {"delegate_member", "can_grant_member", "can_delegate_member"},
         },
     }
+
+    @staticmethod
+    def _optional_relation_matches(pattern: object, stored: object) -> bool:
+        """``None`` on the pattern is a wildcard; otherwise exact match."""
+        if pattern is None:
+            return True
+        return str(pattern) == str(stored or "")
 
     def __init__(self) -> None:
         self._store: List[Relationship] = []
@@ -102,6 +130,10 @@ class InMemoryPermissionRepo(PermissionRepoABC):
                     and (
                         relationship.subject.object_id is UNDEFINED
                         or stored.subject.object_id == relationship.subject.object_id
+                    )
+                    and self._optional_relation_matches(
+                        relationship.subject.optional_relation,
+                        stored.subject.optional_relation,
                     )
                 )
             )
@@ -158,6 +190,11 @@ class InMemoryPermissionRepo(PermissionRepoABC):
                 continue
             if subject_id is not UNDEFINED and stored.subject.object_id != subject_id:
                 continue
+            if not self._optional_relation_matches(
+                relationship.subject.optional_relation,
+                stored.subject.optional_relation,
+            ):
+                continue
             if requested_relation is not UNDEFINED:
                 implied = implied_map.get(stored.relation, {stored.relation})
                 if str(requested_relation) not in implied:
@@ -196,6 +233,11 @@ class InMemoryPermissionRepo(PermissionRepoABC):
                 continue
             if stored.subject.object_type != subject_type:
                 continue
+            if not self._optional_relation_matches(
+                relationship.subject.optional_relation,
+                stored.subject.optional_relation,
+            ):
+                continue
             if requested_relation is not UNDEFINED:
                 implied = implied_map.get(stored.relation, {stored.relation})
                 if str(requested_relation) not in implied:
@@ -225,6 +267,10 @@ class InMemoryPermissionRepo(PermissionRepoABC):
                 and (
                     relationship.subject.object_id is UNDEFINED
                     or stored.subject.object_id == relationship.subject.object_id
+                )
+                and self._optional_relation_matches(
+                    relationship.subject.optional_relation,
+                    stored.subject.optional_relation,
                 )
             )
             if obj_match and rel_match and subj_match:

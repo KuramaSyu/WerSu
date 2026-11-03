@@ -34,12 +34,18 @@ class NoteRelationEnum(StrEnum):
     PARENT_DIRECTORY = "parent_directory"
     OWNER = "owner"
 
+    # grant / delegate capabilities (relations, not permissions)
+    GRANT_READ = "grant_read"
+    GRANT_WRITE = "grant_write"
+    GRANT_ADMIN = "grant_admin"
+    DELEGATE_READ = "delegate_read"
+    DELEGATE_WRITE = "delegate_write"
+    DELEGATE_ADMIN = "delegate_admin"
+
     # permissions
     VIEW = "view"
     WRITE = "write"
     DELETE = "delete"
-    EDIT_PERMISSIONS = "edit_permissions"
-    MANAGE = "manage"
 
 
 class AttachmentRelationEnum(StrEnum):
@@ -65,11 +71,18 @@ class DirectoryRelationEnum(StrEnum):
     WRITER = "writer"
     READER = "reader"
 
+    # grant / delegate capabilities (relations, not permissions)
+    GRANT_READ = "grant_read"
+    GRANT_WRITE = "grant_write"
+    GRANT_ADMIN = "grant_admin"
+    DELEGATE_READ = "delegate_read"
+    DELEGATE_WRITE = "delegate_write"
+    DELEGATE_ADMIN = "delegate_admin"
+
     # permissions
     VIEW = "view"
     WRITE = "write"
     DELETE = "delete"
-    EDIT_PERMISSIONS = "edit_permissions"
 
 
 class ShelfRelationEnum(StrEnum):
@@ -88,11 +101,18 @@ class ShelfRelationEnum(StrEnum):
     READER = "reader"
     OWNER = "owner"
 
+    # grant / delegate capabilities (relations, not permissions)
+    GRANT_READ = "grant_read"
+    GRANT_WRITE = "grant_write"
+    GRANT_ADMIN = "grant_admin"
+    DELEGATE_READ = "delegate_read"
+    DELEGATE_WRITE = "delegate_write"
+    DELEGATE_ADMIN = "delegate_admin"
+
     # permissions
     VIEW = "view"
     WRITE = "write"
     DELETE = "delete"
-    EDIT_PERMISSIONS = "edit_permissions"
 
 
 class UserRelationEnum(StrEnum):
@@ -107,12 +127,11 @@ class RoleRelationEnum(StrEnum):
     # relations
     ADMINISTRATOR = "administrator"
     MEMBER = "member"
+    GRANT_MEMBER = "grant_member"
+    DELEGATE_MEMBER = "delegate_member"
 
-    # permissions
-    MANAGE = "manage"
 
-
-ObjectType: TypeAlias = Literal["note", "directory", "user", "attachment", "role"]
+ObjectType: TypeAlias = Literal["note", "directory", "user", "attachment", "role", "shelf"]
 """String-literal union of every :class:`ObjectTypeEnum` value."""
 
 SubjectType: TypeAlias = Literal["user", "directory", "role"]
@@ -122,25 +141,51 @@ NoteRelationName: TypeAlias = Literal[
     "admin",
     "writer",
     "reader",
+    "grant_read",
+    "grant_write",
+    "grant_admin",
+    "delegate_read",
+    "delegate_write",
+    "delegate_admin",
     "view",
     "write",
     "delete",
-    "edit_permissions",
     "parent_directory",
     "owner",
-    "manage",
 ]
 """String-literal union of every :class:`NoteRelationEnum` value."""
 
 DirectoryRelationName: TypeAlias = Literal[
     "parent",
+    "owner",
     "admin",
     "writer",
     "reader",
+    "grant_read",
+    "grant_write",
+    "grant_admin",
+    "delegate_read",
+    "delegate_write",
+    "delegate_admin",
     "view",
     "write",
     "delete",
-    "edit_permissions",
+]
+
+ShelfRelationName: TypeAlias = Literal[
+    "owner",
+    "admin",
+    "writer",
+    "reader",
+    "grant_read",
+    "grant_write",
+    "grant_admin",
+    "delegate_read",
+    "delegate_write",
+    "delegate_admin",
+    "view",
+    "write",
+    "delete",
 ]
 """String-literal union of every :class:`DirectoryRelationEnum` value."""
 
@@ -154,12 +199,13 @@ AttachmentRelationName: TypeAlias = Literal[
 UserRelationName: TypeAlias = Literal["member_of"]
 """String-literal union of every :class:`UserRelationEnum` value."""
 
-RoleRelationName: TypeAlias = Literal["administrator", "member", "manage"]
+RoleRelationName: TypeAlias = Literal["administrator", "member", "grant_member", "delegate_member"]
 """String-literal union of every :class:`RoleRelationEnum` value."""
 
 RelationName: TypeAlias = (
     NoteRelationName
     | DirectoryRelationName
+    | ShelfRelationName
     | AttachmentRelationName
     | UserRelationName
     | RoleRelationName
@@ -169,6 +215,7 @@ RelationName: TypeAlias = (
 RelationEnum: TypeAlias = (
     NoteRelationEnum
     | DirectoryRelationEnum
+    | ShelfRelationEnum
     | AttachmentRelationEnum
     | UserRelationEnum
     | RoleRelationEnum

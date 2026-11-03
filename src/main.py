@@ -24,6 +24,8 @@ from src.db.migrations.runner import MigrationRunner
 from src.services.shelf_bootstrap import build_strategy
 from src.db.repos import SpicedbPermissionRepo
 from src.db.repos.permissions.spicedb_role_repo import SpicedbRoleRepo
+from src.db.repos.permissions.postgres_audit import PostgresPermissionAuditRepo
+from src.domain.share_policy import GrantPermissionFactory
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.grpc_mod.activity_statistics_service import GrpcActivityStatisticsService
 from src.grpc_mod.proto.activity_pb2_grpc import add_ActivityStatisticsServiceServicer_to_server  # type: ignore[attr-defined]
@@ -205,6 +207,7 @@ async def serve():
         ("auth.passkey", ["id"]),
         ("auth.third_party", ["id"]),
         ("activity", ["id"]),
+        ("permission_audit", ["id"]),
         ("rules", ["id"]),
         ("note.directory", ["id"]),
         ("note.directory_subdirectory", ["id"]),
@@ -235,6 +238,7 @@ async def serve():
     auth_passkey_table = tables["auth.passkey"]
     auth_third_party_table = tables["auth.third_party"]
     activity_table = tables["activity"]
+    permission_audit_table = tables["permission_audit"]
     rules_table = tables["rules"]
     directory_table = tables["note.directory"]
     directory_subdirectory_table = tables["note.directory_subdirectory"]
@@ -415,6 +419,12 @@ async def serve():
         logging_provider=logging_provider,
     )
 
+    permission_audit_repo = PostgresPermissionAuditRepo(
+        table=permission_audit_table,
+        to_postgres_row=postgres_visitor,
+        logging_provider=logging_provider,
+    )
+
     ### Setup services and inject repos ###
     attachment_service = AttachmentFacadeImpl(
         attachment_repo=attachments_repo,
@@ -446,6 +456,11 @@ async def serve():
         permission_repo=permission_repo,
         note_repo=note_facade,
         directory_repo=directory_facade,
+        shelf_repo=shelf_repo,
+        role_repo=role_repo,
+        grant_factory=GrantPermissionFactory(),
+        audit_repo=permission_audit_repo,
+        logging_provider=logging_provider,
     )
 
     directory_activity_service = DirectoryActivityServiceImpl(

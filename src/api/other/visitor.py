@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from src.db.entities.directory.directory import DirectoryEntity
     from src.db.entities.note.metadata import NoteEntity
     from src.db.entities.note.sharing import NoteShareEntity
+    from src.db.entities.permission_audit import PermissionAuditEntity
     from src.db.entities.preferences import PreferencesEntity
     from src.db.entities.shelf import ShelfEntity
     from src.db.entities.user.passkey import PasskeyEntity
@@ -181,6 +182,18 @@ class EntityVisitor(ABC):
 
         Raises:
             NotImplementedError: If the visitor does not support activity rows.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def visit_permission_audit(self, entity: "PermissionAuditEntity") -> Any:
+        """Handle a :class:`~src.db.entities.permission_audit.PermissionAuditEntity`.
+
+        Implementations render the row as a gRPC message, a Postgres
+        row dict, or whatever shape the caller needs.
+
+        Raises:
+            NotImplementedError: If the visitor does not support audit rows.
         """
         raise NotImplementedError
 

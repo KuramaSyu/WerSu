@@ -21,6 +21,8 @@ from tests.doubles.stubs import _StubViewPermissionRepo  # noqa: F401
 from tests.doubles.stubs import _StubEmbeddingGenerator  # noqa: F401
 from tests.doubles.stubs import _StubEmbeddingRepo  # noqa: F401
 from tests.doubles.stubs import _StubVersionRepo  # noqa: F401
+from tests.doubles.stubs import _StubPermissionShelfRepo  # noqa: F401
+from tests.doubles.stubs import _StubPermissionRoleRepo  # noqa: F401
 from tests.doubles.spys import _RecordingDatabase  # noqa: F401
 from tests.doubles.spys import _Call  # noqa: F401
 from tests.doubles.spys import RecordingTable  # noqa: F401
@@ -34,6 +36,7 @@ from tests.doubles.fakes import ManualClock  # noqa: F401
 from tests.doubles.fakes import InMemoryTaskHandle  # noqa: F401
 from tests.doubles.fakes import InMemoryTaskSpawner  # noqa: F401
 from tests.doubles.fakes import InMemoryPermissionRepo  # noqa: F401
+from tests.doubles.fakes import FakePermissionAuditRepo  # noqa: F401
 from tests.doubles.fakes import InMemoryRuleRepo  # noqa: F401
 from tests.doubles.fakes import InMemoryShelfRepo  # noqa: F401
 from tests.doubles.fakes import _FakeDatabase  # noqa: F401

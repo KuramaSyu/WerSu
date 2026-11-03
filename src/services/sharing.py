@@ -7,6 +7,7 @@ from src.api.other.relationship import (
     DirectoryRelationEnum,
     NoteRelationEnum,
     ObjectRef,
+    ObjectTypeEnum,
     Relationship,
     SubjectRef,
 )
@@ -17,7 +18,7 @@ from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.repos.user import RepoUserContext
 from src.db.repos.user.user import UserRepoABC
-from src.domain.permission_chain import HasNoteEditPermissionsPerm
+from src.domain.permission_chain import HasCapabilityPerm, HasResourceAdminPerm
 from src.services.permissions import PermissionServiceABC
 from src.db.repos.sharing.share_action_facade import ShareActionFacade
 
@@ -45,8 +46,6 @@ class SharingServiceImpl(SharingServiceABC):
         if share.note_id in (UNDEFINED, None):
             raise ValueError("share.note_id is required")
 
-        await self._assert_can_edit_permissions(str(share.note_id), ctx)
-
         # map the share's ``permission`` string to the SpiceDB relation enum
         if not share.permission:
             raise ValueError("share.permission is required")
@@ -56,6 +55,8 @@ class SharingServiceImpl(SharingServiceABC):
             relation = NoteRelationEnum.WRITER
         else:
             raise ValueError(f"Invalid permission for a share: {share.permission}")
+
+        await self._assert_can_grant(str(share.note_id), share.permission, ctx)
 
         # apply sane defaults; repos should not invent values
         normalized = replace(
@@ -91,21 +92,31 @@ class SharingServiceImpl(SharingServiceABC):
         if current.note_id in (UNDEFINED, None):
             raise ValueError(f"Share has no note_id: {share.id}")
 
-        await self._assert_can_edit_permissions(str(current.note_id), ctx)
+        await self._assert_can_manage_shares(str(current.note_id), ctx)
 
         # swap the access user's reader/writer relation when the permission changes
         if share.permission is not UNDEFINED and share.permission is not None:
+            existing_permission = await self._get_share_permission(
+                str(current.note_id), str(current.access_as)
+            )
+            if existing_permission is not UNDEFINED:
+                await self._assert_can_grant(
+                    str(current.note_id), str(existing_permission), ctx
+                )
+            await self._assert_can_grant(
+                str(current.note_id), share.permission, ctx
+            )
             await self._replace_share_permission(current, share.permission, ctx)
 
         return await self._share_facade.update_share(share, ctx)
 
     async def get_shares_by_id(self, share_ids: List[str], ctx: UserContextABC) -> List[NoteShareEntity]:
         shares = await self._share_facade.get_shares_by_id(share_ids, ctx)
-        return await self._filter_editable_shares(shares, ctx)
+        return await self._filter_manageable_shares(shares, ctx)
 
     async def get_shares(self, filter: FilterShareNote, ctx: UserContextABC) -> List[NoteShareEntity]:
         shares = await self._share_facade.get_shares(filter, ctx)
-        shares = await self._filter_editable_shares(shares, ctx)
+        shares = await self._filter_manageable_shares(shares, ctx)
         # permissions live in SpiceDB, not on the share row, so resolve them per-share
         for share in shares:
             await self._resolve_share_permission(share)
@@ -118,9 +129,18 @@ class SharingServiceImpl(SharingServiceABC):
 
         # test permissions for all shares before deleting any
         shares = await self._share_facade.get_shares_by_id(share_ids, ctx)
-        note_ids = self._collect_note_ids(shares)
-        for note_id in note_ids:
-            await self._assert_can_edit_permissions(note_id, ctx)
+        for share in shares:
+            if share.note_id in (UNDEFINED, None):
+                raise ValueError(f"Share has no note_id: {share.id}")
+            permission = await self._get_share_permission(
+                str(share.note_id), str(share.access_as)
+            )
+            if permission is UNDEFINED:
+                await self._assert_can_manage_shares(str(share.note_id), ctx)
+            else:
+                await self._assert_can_grant(
+                    str(share.note_id), str(permission), ctx
+                )
 
         # delete all shares separately to prevent partial deletes caused by failures
         # as good as possible.
@@ -164,25 +184,48 @@ class SharingServiceImpl(SharingServiceABC):
             note_ids.add(str(share.note_id))
         return note_ids
 
-    async def _assert_can_edit_permissions(self, note_id: str, ctx: UserContextABC) -> None:
-        """Raise when the actor cannot manage sharing for the note."""
-        if await self._can_edit_permissions(note_id, ctx):
+    async def _assert_can_manage_shares(self, note_id: str, ctx: UserContextABC) -> None:
+        """Raise when the actor cannot administer shares for the note."""
+        if await self._can_manage_shares(note_id, ctx):
             return
 
-        raise PermissionError(f"user has no permission to edit permissions for note {note_id}")
+        raise PermissionError(
+            f"user has no permission to manage sharing for note {note_id}"
+        )
 
-    async def _can_edit_permissions(self, note_id: str, ctx: UserContextABC) -> bool:
-        """Return whether the actor can manage sharing for the note."""
-        check = HasNoteEditPermissionsPerm(note_id).set_permission_repo(self._permission_repo)
+    async def _can_manage_shares(self, note_id: str, ctx: UserContextABC) -> bool:
+        """Return whether the actor holds ``has_admin`` on the note."""
+        check = HasResourceAdminPerm(
+            ObjectTypeEnum.NOTE, note_id
+        ).set_permission_repo(self._permission_repo)
         result = await check.check(ctx)
         return bool(result)
 
-    async def _filter_editable_shares(
+    async def _assert_can_grant(
+        self,
+        note_id: str,
+        level: str,
+        ctx: UserContextABC,
+    ) -> None:
+        """Raise when the actor cannot grant ``level`` on the note."""
+        capability = (
+            "can_grant_read" if level == "read" else "can_grant_write"
+        )
+        check = HasCapabilityPerm(
+            ObjectTypeEnum.NOTE, note_id, capability
+        ).set_permission_repo(self._permission_repo)
+        result = await check.check(ctx)
+        if not result:
+            raise PermissionError(
+                f"user has no {capability} permission on note {note_id}"
+            )
+
+    async def _filter_manageable_shares(
         self,
         shares: List[NoteShareEntity],
         ctx: UserContextABC,
     ) -> List[NoteShareEntity]:
-        """Keep only shares for notes where the actor can edit permissions."""
+        """Keep only shares for notes where the actor can administer sharing."""
         editable_note_ids = set()
         denied_note_ids = set()
         filtered = []
@@ -195,7 +238,7 @@ class SharingServiceImpl(SharingServiceABC):
             if note_id in denied_note_ids:
                 continue
             if note_id not in editable_note_ids:
-                if await self._can_edit_permissions(note_id, ctx):
+                if await self._can_manage_shares(note_id, ctx):
                     editable_note_ids.add(note_id)
                 else:
                     denied_note_ids.add(note_id)
