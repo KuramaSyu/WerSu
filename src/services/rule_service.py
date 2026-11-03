@@ -8,13 +8,8 @@ machinery -- no bespoke permission logic in this file.
 Permission policy (rules are entity-attached only; global rules
 were removed when shelves landed):
 
-* ``attached_entity_type == "directory"`` -- the caller must
-  hold ``directory#edit_permissions`` (admin or owner).
-* ``attached_entity_type == "note"`` -- the caller must hold
-  ``note#manage`` (owner, admin, or admin-on-parent-directory).
-* ``attached_entity_type == "shelf"`` -- the caller must hold
-  ``shelf#edit_permissions`` (admin or owner).  Shelves share
-  the directory role set.
+* every attached entity type (directory / note / shelf) requires
+  ``has_admin`` (admin or owner) on that entity.
 
 Payload validation runs here, not in the repo, so the repo
 stays a thin wrapper.  The service re-uses the
@@ -47,9 +42,7 @@ from src.api.services.rule_service import (
 )
 from src.db.entities.rule import AttachedEntityType, RuleEntity
 from src.domain.permission_chain import (
-    HasDirectoryEditPermissionsPerm,
-    HasNoteManagePerm,
-    HasShelfEditPermissionsPerm,
+    HasResourceAdminPerm,
     PermissionCheckChainStart,
 )
 from src.utils import logging_provider as default_logging_provider
@@ -315,24 +308,14 @@ class RuleServiceImpl(RuleServiceABC):
         entity_type: AttachedEntityType,
         entity_id: str,
     ) -> Any:
-        """Build the single-element chain for an attached-entity rule.
-
-        * ``directory`` -> ``HasDirectoryEditPermissionsPerm``
-        * ``note``      -> ``HasNoteManagePerm``
-        * ``shelf``     -> ``HasShelfEditPermissionsPerm``
-        """
-        if entity_type == "directory":
-            head: Any = HasDirectoryEditPermissionsPerm(entity_id)
-        elif entity_type == "note":
-            head = HasNoteManagePerm(entity_id)
-        elif entity_type == "shelf":
-            head = HasShelfEditPermissionsPerm(entity_id)
-        else:
+        """Build the single-element ``has_admin`` chain for an attached rule."""
+        if entity_type not in {"directory", "note", "shelf"}:
             # ``_require_attached`` already filtered unknown
             # entity types, but keep the type checker honest.
             raise ValueError(
                 f"unsupported attached entity type: {entity_type!r}"
             )
+        head = HasResourceAdminPerm(entity_type, entity_id)
         return PermissionCheckChainStart(self._permission_repo).set_next(head)
 
 

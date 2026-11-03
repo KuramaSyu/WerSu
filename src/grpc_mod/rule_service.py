@@ -4,7 +4,7 @@ Implements the ``RuleService`` from ``src/grpc_mod/proto/rule.proto``
 (``RuleServiceImpl``).  Every method requires ``request.user_id``
 so the service can build a :class:`UserContextABC` for permission
 checks; permission enforcement itself lives in the service layer
-(every mutation is gated on ``manage`` on the attached entity,
+(every mutation is gated on ``has_admin`` on the attached entity,
 or on global admin for a global rule).
 
 The adapter is intentionally thin: it converts proto messages to

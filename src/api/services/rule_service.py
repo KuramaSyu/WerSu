@@ -6,7 +6,7 @@ responsibilities:
 
 * CRUD for :class:`RuleEntity` rows.
 * Permission gating on every write -- entity-attached rules
-  require ``manage`` on the attached entity; global rules
+  require ``has_admin`` on the attached entity; global rules
   require the caller to be a system-level admin (gated via the
   :class:`PermissionServiceABC` for now).
 * Payload validation -- the ``condition`` and
@@ -47,7 +47,7 @@ class RuleServiceABC(ABC):
     The service accepts the caller as a
     :class:`~src.api.other.user_context.UserContextABC` and uses
     the injected :class:`~src.api.repos.permission_repo.PermissionRepoABC`
-    to enforce the manage-on-attached-entity policy.
+    to enforce the has_admin-on-attached-entity policy.
 
     Implementations:
     * :class:`src.services.rule_service.RuleServiceImpl`
