@@ -366,13 +366,20 @@ class SpicedbPermissionRepo(PermissionRepoABC):
             )
 
         consistency = self._consistency() or Consistency(fully_consistent=True)
+        request_kwargs: dict[str, Any] = {
+            "resource": self.converter.convert_object_ref(relationship.resource),
+            "permission": relation,
+            "subject_object_type": unwrap_undefined(
+                relationship.subject.object_type
+            ),
+            "consistency": consistency,
+        }
+        optional_relation = getattr(relationship.subject, "optional_relation", None)
+        if optional_relation:
+            request_kwargs["optional_subject_relation"] = str(optional_relation)
+
         result = self.client.LookupSubjects(
-            LookupSubjectsRequest(
-                resource=self.converter.convert_object_ref(relationship.resource),
-                permission=relation,
-                subject_object_type=unwrap_undefined(relationship.subject.object_type),
-                consistency=consistency,
-            )
+            LookupSubjectsRequest(**request_kwargs)
         )
         objects: List[ObjectRef] = []
         async for resp in result:
@@ -392,6 +399,11 @@ class SpicedbPermissionRepo(PermissionRepoABC):
         # maybe add resource:id#permission@subject:XXX 
         if relationship.subject.object_id != UNDEFINED:
             subject_filter.optional_subject_id = str(relationship.subject.object_id)
+
+        # preserve a userset qualifier (``role:eng#member``) on read filters
+        optional_relation = getattr(relationship.subject, "optional_relation", None)
+        if optional_relation:
+            subject_filter.optional_relation = str(optional_relation)
 
         # enforece XXX:id#permission@subject:id
         filter = RelationshipFilter(
@@ -434,6 +446,7 @@ class SpicedbPermissionRepo(PermissionRepoABC):
                         subject=SubjectRef(
                             object_type=ObjectTypeEnum(stored.subject.object.object_type),
                             object_id=stored.subject.object.object_id,
+                            optional_relation=stored.subject.optional_relation or None,
                         ),
                     )
                 )
@@ -472,6 +485,7 @@ class SpicedbPermissionRepo(PermissionRepoABC):
                         subject=SubjectRef(
                             object_type=ObjectTypeEnum(relationship.subject.object.object_type),
                             object_id=relationship.subject.object.object_id,
+                            optional_relation=relationship.subject.optional_relation or None,
                         ),
                     )
                 )

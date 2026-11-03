@@ -1,128 +1,61 @@
-from abc import ABC, abstractmethod
-from typing import List, Sequence
+from __future__ import annotations
 
-from src.api.other.undefined import UNDEFINED
-from src.api.other.user_context import UserContextABC
-from src.db.repos.directory.directory_facade import DirectoryFacadeABC
-from src.api.facades.note_facade import NoteFacadeABC
+from abc import ABC, abstractmethod
+from typing import List, Optional, Sequence
+
 from src.api import (
     DirectoryRelationEnum,
-    PermissionRepoABC,
     NoteRelationEnum,
     ObjectRef,
     ObjectTypeEnum,
+    PermissionRepoABC,
     Relationship,
     SubjectRef,
+    UserContextABC,
 )
-from src.domain.permission_chain import *
+from src.api.facades.note_facade import NoteFacadeABC
+from src.api.other.relationship import RelationName
+from src.api.other.types import LoggingProvider
+from src.api.other.undefined import UNDEFINED
+from src.api.repos.permission_audit_repo import PermissionAuditRepoABC
+from src.api.repos.role_repo import RoleRepoABC
+from src.api.repos.shelf_repo import ShelfRepoABC
+from src.db.entities.permission_audit import PermissionAuditEntity
+from src.db.repos.directory.directory_facade import DirectoryFacadeABC
+from src.domain.permission_chain import HasResourceAdminPerm
+from src.domain.share_policy import GrantPermissionFactory
+from src.utils import logging_provider as default_logging_provider
 
 
 class PermissionServiceABC(ABC):
-    """Application service for managing note and directory relationships.
+    """Application service for managing resource sharing relationships.
 
-    Notes
-    -----
-    Implementations are expected to validate resource shape and enforce
-    authorization based on the provided actor context.
+    Supported resources are notes, directories, shelves and roles.  The
+    share API writes access relations (``reader`` / ``writer`` / ``admin``)
+    and capability relations (``grant_*`` / ``delegate_*``); the internal
+    ``owner`` relation is never writable through this service.
     """
 
     @abstractmethod
     async def list_relationships(self, resource: ObjectRef, actor: UserContextABC) -> List[Relationship]:
-        """List all relationships for a resource.
+        """List all direct relationships for a resource.
 
-        Parameters
-        ----------
-        resource : ObjectRef
-            Resource to read relationships for.
-        actor : UserContextABC
-            Current user context.
-
-        Returns
-        -------
-        List[Relationship]
-            Relationships directly stored for the resource.
-
-        Raises
-        ------
-        ValueError
-            If resource data is invalid.
-        LookupError
-            If the resource does not exist.
-        PermissionError
-            If the actor is not allowed to manage permissions.
+        Requires ``has_admin`` on the resource.
         """
         ...
-        # impl at: ./src/services/permissions.py:180
 
     @abstractmethod
     async def create_relationship(self, relationship: Relationship, actor: UserContextABC) -> List[Relationship]:
         """Create one relationship and return the updated relationship set.
-        This has to be a resource: note or resource: directory. Handle others directly with the repo.
 
-        Structural hierarchy tuples
-        (``note#parent_directory@directory:<id>`` and
-        ``directory#parent@directory:<id>``) are rejected: they are
-        managed by the note / directory patch endpoints so the
-        Postgres hierarchy row stays in sync with the SpiceDB
-        relation.
-
-        Parameters
-        ----------
-        relationship : Relationship
-            Relationship to create.
-        actor : UserContextABC
-            Current user context.
-
-        Returns
-        -------
-        List[Relationship]
-            Relationships stored for the same resource after creation.
-
-        Raises
-        ------
-        ValueError
-            If relationship data is invalid, including any structural
-            (hierarchy) tuple.
-        LookupError
-            If the resource does not exist.
-        PermissionError
-            If the actor is not allowed to manage permissions.
+        Structural hierarchy tuples (``note#parent_directory`` and
+        ``directory#parent``) and ``owner`` are rejected.
         """
         ...
 
     @abstractmethod
     async def delete_relationship(self, relationship: Relationship, actor: UserContextABC) -> List[Relationship]:
-        """Delete one relationship and return the updated relationship set.
-
-        Structural hierarchy tuples
-        (``note#parent_directory@directory:<id>`` and
-        ``directory#parent@directory:<id>``) are rejected: they are
-        managed by the note / directory patch endpoints so the
-        Postgres hierarchy row stays in sync with the SpiceDB
-        relation.
-
-        Parameters
-        ----------
-        relationship : Relationship
-            Relationship to delete.
-        actor : UserContextABC
-            Current user context.
-
-        Returns
-        -------
-        List[Relationship]
-            Relationships stored for the same resource after deletion.
-
-        Raises
-        ------
-        ValueError
-            If relationship data is invalid, including any structural
-            (hierarchy) tuple.
-        LookupError
-            If the resource does not exist.
-        PermissionError
-            If the actor is not allowed to manage permissions.
-        """
+        """Delete one relationship and return the updated relationship set."""
         ...
 
     @abstractmethod
@@ -132,86 +65,42 @@ class PermissionServiceABC(ABC):
         relationships: Sequence[Relationship],
         actor: UserContextABC,
     ) -> List[Relationship]:
-        """Replace all resource relationships with the provided list.
+        """Replace all *shareable* relationships with the provided list.
 
-        Structural hierarchy tuples
-        (``note#parent_directory@directory`` and
-        ``directory#parent@directory``) are rejected: the call fails
-        if either the desired set or the resource's existing
-        relations contain such a tuple.  Hierarchy writes go through
-        the note / directory patch endpoints so the Postgres
-        hierarchy row stays in sync with the SpiceDB relation.
-
-        Parameters
-        ----------
-        resource : ObjectRef
-            Resource whose direct relationships should be replaced.
-        relationships : Sequence[Relationship]
-            Full relationship set that should remain after replacement.
-        actor : UserContextABC
-            Current user context.
-
-        Returns
-        -------
-        List[Relationship]
-            Relationships stored for `resource` after replacement.
-
-        Raises
-        ------
-        ValueError
-            If resource or relationship data is invalid, including
-            any structural (hierarchy) tuple in either the desired
-            set or the resource's existing storage.
-        LookupError
-            If the resource does not exist.
-        PermissionError
-            If the actor is not allowed to manage permissions.
+        Owner tuples are protected: they are never accepted in the desired
+        set and are never removed by this operation.
         """
         ...
 
 
 class PermissionServiceImpl(PermissionServiceABC):
-    """Repository-backed permission service with authorization checks."""
-
-    _note_user_relations = {
-        NoteRelationEnum.OWNER,
-        NoteRelationEnum.ADMIN,
-        NoteRelationEnum.WRITER,
-        NoteRelationEnum.READER,
-    }
-    _note_directory_relations = {NoteRelationEnum.PARENT_DIRECTORY}
-
-    _directory_user_relations = {
-        DirectoryRelationEnum.ADMIN,
-        DirectoryRelationEnum.WRITER,
-        DirectoryRelationEnum.READER,
-    }
-    _directory_directory_relations = {DirectoryRelationEnum.PARENT}
+    """Repository-backed permission service with capability checks."""
 
     _structural_message = (
         "parent relations must be changed via directory or note patch, "
         "not the permission service"
     )
 
+    _role_relations = {"grant_member", "delegate_member"}
+
     @classmethod
     def _is_structural_relation(cls, relationship: Relationship) -> bool:
-        """Return True when ``relationship`` is a structural (hierarchy) tuple.
-
-        Structural tuples pin a note or directory into the resource
-        tree (``note#parent_directory@directory`` and
-        ``directory#parent@directory``).  They are managed by the
-        note / directory patch endpoints, not by the permission
-        service.
-        """
-        subject_type = str(relationship.subject.object_type)
-        if subject_type != str(ObjectTypeEnum.DIRECTORY):
-            return False
+        """Return True when ``relationship`` is a structural (hierarchy) tuple."""
         resource_type = str(relationship.resource.object_type)
+        subject_type = str(relationship.subject.object_type)
         relation = str(relationship.relation)
+
         if resource_type == str(ObjectTypeEnum.NOTE):
-            return relation in {str(r) for r in cls._note_directory_relations}
+            return (
+                relation == str(NoteRelationEnum.PARENT_DIRECTORY)
+                and subject_type == str(ObjectTypeEnum.DIRECTORY)
+            )
         if resource_type == str(ObjectTypeEnum.DIRECTORY):
-            return relation in {str(r) for r in cls._directory_directory_relations}
+            return (
+                relation == str(DirectoryRelationEnum.PARENT)
+                and subject_type
+                in {str(ObjectTypeEnum.DIRECTORY), str(ObjectTypeEnum.SHELF)}
+            )
         return False
 
     def __init__(
@@ -219,33 +108,45 @@ class PermissionServiceImpl(PermissionServiceABC):
         permission_repo: PermissionRepoABC,
         note_repo: NoteFacadeABC,
         directory_repo: DirectoryFacadeABC,
+        shelf_repo: Optional[ShelfRepoABC] = None,
+        role_repo: Optional[RoleRepoABC] = None,
+        grant_factory: Optional[GrantPermissionFactory] = None,
+        audit_repo: Optional[PermissionAuditRepoABC] = None,
+        logging_provider: Optional[LoggingProvider] = None,
     ) -> None:
         self._permission_repo = permission_repo
         self._note_repo = note_repo
         self._directory_repo = directory_repo
+        self._shelf_repo = shelf_repo
+        self._role_repo = role_repo
+        self._grant_factory = grant_factory or GrantPermissionFactory()
+        self._audit_repo = audit_repo
+        self.log = (logging_provider or default_logging_provider)(__name__, self)
 
     async def list_relationships(self, resource: ObjectRef, actor: UserContextABC) -> List[Relationship]:
         resource = self._validate_resource(resource)
         await self._assert_resource_exists(resource, actor)
-        await self._assert_can_manage_permissions(resource, actor)
+        await self._assert_admin(resource, actor)
         return self._sort_relationships(await self._permission_repo.list_relationships(resource))
 
     async def create_relationship(self, relationship: Relationship, actor: UserContextABC) -> List[Relationship]:
         resource = self._validate_resource(relationship.resource)
         await self._assert_resource_exists(resource, actor)
-        await self._assert_can_manage_permissions(resource, actor)
 
         normalized = self._normalize_relationship(relationship, expected_resource=resource)
+        await self._assert_can_write_relation(resource, actor, normalized.relation)
         await self._permission_repo.insert([normalized])
+        await self._audit(actor, "grant", [normalized])
         return self._sort_relationships(await self._permission_repo.list_relationships(resource))
 
     async def delete_relationship(self, relationship: Relationship, actor: UserContextABC) -> List[Relationship]:
         resource = self._validate_resource(relationship.resource)
         await self._assert_resource_exists(resource, actor)
-        await self._assert_can_manage_permissions(resource, actor)
 
         normalized = self._normalize_relationship(relationship, expected_resource=resource)
+        await self._assert_can_write_relation(resource, actor, normalized.relation)
         await self._permission_repo.delete(normalized)
+        await self._audit(actor, "revoke", [normalized])
         return self._sort_relationships(await self._permission_repo.list_relationships(resource))
 
     async def replace_relationships(
@@ -256,117 +157,137 @@ class PermissionServiceImpl(PermissionServiceABC):
     ) -> List[Relationship]:
         resource = self._validate_resource(resource)
         await self._assert_resource_exists(resource, actor)
-        await self._assert_can_manage_permissions(resource, actor)
 
         normalized_desired = [
             self._normalize_relationship(rel, expected_resource=resource) for rel in relationships
         ]
 
         current = await self._permission_repo.list_relationships(resource)
-        # Structural tuples live next to the resource row in Postgres
-        # and are managed by note/directory patch.  Even when they're
-        # already stored on the resource, treat their presence here
-        # as a usage error so callers cannot accidentally rewrite or
-        # drop them via the permission service.
         for rel in (*current, *normalized_desired):
             if self._is_structural_relation(rel):
                 raise ValueError(self._structural_message)
-        # Use stable tuple keys to diff relationships without nested comparisons.
+
+        # Owner tuples are never part of the replacement set and are never
+        # removed by it.  The normalization above already rejects a desired
+        # tuple whose relation is ``owner``.
+        current_diffable = [
+            rel for rel in current if str(rel.relation) != "owner"
+        ]
+
         desired_keys = {self._relationship_key(rel) for rel in normalized_desired}
-        current_keys = {self._relationship_key(rel) for rel in current}
+        current_keys = {self._relationship_key(rel) for rel in current_diffable}
 
-        # Remove relationships that should no longer exist.
-        for rel in current:
-            if self._relationship_key(rel) not in desired_keys:
-                await self._permission_repo.delete(rel)
+        to_remove = [
+            rel for rel in current_diffable
+            if self._relationship_key(rel) not in desired_keys
+        ]
+        to_create = [
+            rel for rel in normalized_desired
+            if self._relationship_key(rel) not in current_keys
+        ]
 
-        # Insert only missing relationships; existing entries are left untouched.
-        to_create = [rel for rel in normalized_desired if self._relationship_key(rel) not in current_keys]
+        # Authorize the whole diff before touching storage so a failure
+        # later in the list cannot leave a partial replacement behind.
+        for rel in to_remove:
+            await self._assert_can_write_relation(resource, actor, rel.relation)
+        for rel in to_create:
+            await self._assert_can_write_relation(resource, actor, rel.relation)
+
+        for rel in to_remove:
+            await self._permission_repo.delete(rel)
         if to_create:
             await self._permission_repo.insert(to_create)
+
+        if to_remove:
+            await self._audit(actor, "revoke", to_remove)
+        if to_create:
+            await self._audit(actor, "grant", to_create)
 
         return self._sort_relationships(await self._permission_repo.list_relationships(resource))
 
     def _validate_resource(self, resource: ObjectRef) -> ObjectRef:
-        """Validate and normalize a managed resource reference.
+        """Validate and normalize a managed resource reference."""
+        try:
+            object_type = ObjectTypeEnum(str(resource.object_type))
+        except ValueError as exc:
+            raise ValueError(f"Unsupported resource type: {resource.object_type}") from exc
 
-        Raises
-        ------
-        ValueError
-            If object type is unsupported or object ID is missing.
-        """
-        object_type = ObjectTypeEnum(str(resource.object_type))
         object_id = resource.object_id
         if object_id in (UNDEFINED, None):
             raise ValueError("resource.object_id is required")
 
-        if object_type not in {ObjectTypeEnum.NOTE, ObjectTypeEnum.DIRECTORY}:
+        if object_type not in {
+            ObjectTypeEnum.NOTE,
+            ObjectTypeEnum.DIRECTORY,
+            ObjectTypeEnum.SHELF,
+            ObjectTypeEnum.ROLE,
+        }:
             raise ValueError(f"Unsupported resource type: {object_type}")
 
         return ObjectRef(object_type=object_type, object_id=str(object_id))
 
     async def _assert_resource_exists(self, resource: ObjectRef, actor: UserContextABC) -> None:
-        """Ensure the target resource exists before mutating relations.
-
-        Raises
-        ------
-        LookupError
-            If the target note or directory cannot be found.
-        """
+        """Ensure the target resource exists before mutating relations."""
         object_id = str(resource.object_id)
+
         if resource.object_type == ObjectTypeEnum.NOTE:
             note = await self._note_repo.select_by_id(object_id, actor)
             if note is None:
                 raise LookupError(f"Note not found: {object_id}")
             return
 
-        directory = await self._directory_repo.fetch_directory(object_id)
-        if directory is None:
-            raise LookupError(f"Directory not found: {object_id}")
-
-    async def _assert_can_manage_permissions(self, resource: ObjectRef, actor: UserContextABC) -> None:
-        """Ensure the actor can manage permissions on the resource.
-
-        Raises
-        ------
-        PermissionError
-            If the actor lacks permission management rights.
-        """
-        # Prefer checking effective permission first.
-        if await self._permission_repo.has_permission(actor, "write", resource):
+        if resource.object_type == ObjectTypeEnum.DIRECTORY:
+            directory = await self._directory_repo.fetch_directory(object_id)
+            if directory is None:
+                raise LookupError(f"Directory not found: {object_id}")
             return
 
-        # Fallback to direct elevated relations (owner/admin/writer).
-        relationships = await self._permission_repo.list_relationships(resource)
-        for rel in relationships:
-            if str(rel.subject.object_type) != ObjectTypeEnum.USER:
-                continue
-            if str(rel.subject.object_id) != actor.user_id:
-                continue
+        if resource.object_type == ObjectTypeEnum.SHELF:
+            if self._shelf_repo is None:
+                raise RuntimeError("shelf_repo is required to manage shelf permissions")
+            shelf = await self._shelf_repo.fetch_shelf(object_id)
+            if shelf is None:
+                raise LookupError(f"Shelf not found: {object_id}")
+            return
 
-            if str(rel.relation) in {
-                str(NoteRelationEnum.OWNER),
-                str(NoteRelationEnum.ADMIN),
-                str(NoteRelationEnum.WRITER),
-                str(DirectoryRelationEnum.ADMIN),
-                str(DirectoryRelationEnum.WRITER),
-            }:
-                return
+        if resource.object_type == ObjectTypeEnum.ROLE:
+            if self._role_repo is None:
+                raise RuntimeError("role_repo is required to manage role permissions")
+            role = await self._role_repo.get_role(object_id, actor)
+            if role is None:
+                raise LookupError(f"Role not found: {object_id}")
+            return
 
-        raise PermissionError("User is not allowed to manage permissions for this resource")
+        raise ValueError(f"Unsupported resource type: {resource.object_type}")
+
+    async def _assert_admin(self, resource: ObjectRef, actor: UserContextABC) -> None:
+        chain = HasResourceAdminPerm(
+            resource.object_type, str(resource.object_id)
+        ).set_permission_repo(self._permission_repo)
+        result = await chain.check(actor)
+        if not result:
+            raise PermissionError(chain.error)
+
+    async def _assert_can_write_relation(
+        self,
+        resource: ObjectRef,
+        actor: UserContextABC,
+        relation: RelationName | str,
+    ) -> None:
+        """Authorize writing ``relation`` using the explicit capability policy."""
+        chain = self._grant_factory.for_relation(
+            resource.object_type, str(resource.object_id), relation
+        ).set_permission_repo(self._permission_repo)
+        result = await chain.check(actor)
+        if not result:
+            raise PermissionError(chain.error)
 
     def _normalize_relationship(
         self,
         relationship: Relationship,
         expected_resource: ObjectRef | None = None,
     ) -> Relationship:
-        """Validate and normalize one relationship payload.
-
-        Raises
-        ------
-        ValueError
-            If relation, resource, or subject values are invalid.
-        """
+        """Validate and normalize one relationship payload."""
         if self._is_structural_relation(relationship):
             raise ValueError(self._structural_message)
 
@@ -377,52 +298,99 @@ class PermissionServiceImpl(PermissionServiceABC):
         ):
             raise ValueError("Relationship resource does not match target resource")
 
-        subject_type = ObjectTypeEnum(str(relationship.subject.object_type))
+        try:
+            subject_type = ObjectTypeEnum(str(relationship.subject.object_type))
+        except ValueError as exc:
+            raise ValueError(
+                f"Unsupported subject type: {relationship.subject.object_type}"
+            ) from exc
+        if subject_type not in {ObjectTypeEnum.USER, ObjectTypeEnum.ROLE}:
+            raise ValueError(
+                "Invalid subject: expected user or role"
+            )
+
         subject_id = relationship.subject.object_id
         if subject_id in (UNDEFINED, None):
             raise ValueError("relationship.subject.object_id is required")
 
+        optional_relation = relationship.subject.optional_relation
+        if subject_type == ObjectTypeEnum.USER:
+            if optional_relation not in (None, UNDEFINED):
+                raise ValueError("user subjects must not carry an optional_relation")
+            normalized_optional = None
+        else:
+            if optional_relation in (None, UNDEFINED):
+                normalized_optional = "member"
+            elif str(optional_relation) == "member":
+                normalized_optional = "member"
+            else:
+                raise ValueError(
+                    "role subjects only support optional_relation='member'"
+                )
+
         relation_name = str(relationship.relation)
-
-        if resource.object_type == ObjectTypeEnum.NOTE:
-            # Notes allow user roles and one directory-link relation.
-            relation_enum = NoteRelationEnum(relation_name)
-            if relation_enum in self._note_user_relations and subject_type == ObjectTypeEnum.USER:
-                return Relationship(
-                    resource=resource,
-                    relation=relation_enum,
-                    subject=SubjectRef(object_type=subject_type, object_id=str(subject_id)),
-                )
-            if relation_enum in self._note_directory_relations and subject_type == ObjectTypeEnum.DIRECTORY:
-                return Relationship(
-                    resource=resource,
-                    relation=relation_enum,
-                    subject=SubjectRef(object_type=subject_type, object_id=str(subject_id)),
-                )
-
+        policy = self._grant_factory.policy_for(resource.object_type)
+        if relation_name not in policy.capability_by_relation:
+            if relation_name == "owner":
+                raise ValueError("owner is not writable through the share API")
             raise ValueError(
-                "Invalid note relationship: relation/subject combination is not allowed"
+                f"relation {relation_name!r} is not supported for "
+                f"{resource.object_type}"
             )
 
-        # Directories allow user roles plus an optional parent directory relation.
-        relation_enum = DirectoryRelationEnum(relation_name)
-        if relation_enum in self._directory_user_relations and subject_type == ObjectTypeEnum.USER:
-            return Relationship(
-                resource=resource,
-                relation=relation_enum,
-                subject=SubjectRef(object_type=subject_type, object_id=str(subject_id)),
-            )
-        if relation_enum in self._directory_directory_relations and subject_type == ObjectTypeEnum.DIRECTORY:
-            return Relationship(
-                resource=resource,
-                relation=relation_enum,
-                subject=SubjectRef(object_type=subject_type, object_id=str(subject_id)),
-            )
+        return Relationship(
+            resource=resource,
+            relation=relation_name,  # type: ignore[arg-type]
+            subject=SubjectRef(
+                object_type=subject_type,
+                object_id=str(subject_id),
+                optional_relation=(
+                    normalized_optional  # type: ignore[arg-type]
+                ),
+            ),
+        )
 
-        raise ValueError("Invalid directory relationship: relation/subject combination is not allowed")
+    async def _audit(
+        self,
+        actor: UserContextABC,
+        action: str,
+        relationships: Sequence[Relationship],
+    ) -> None:
+        """Best-effort audit sidecar; never fails an already-committed mutation."""
+        if self._audit_repo is None:
+            return
+
+        actor_id = getattr(actor, "user_id", None)
+        accessed_as = str(getattr(actor, "accessed_as", "user") or "user")
+        entries = [
+            PermissionAuditEntity(
+                actor_id=actor_id,
+                accessed_as=accessed_as,  # type: ignore[arg-type]
+                action=action,  # type: ignore[arg-type]
+                resource_type=str(rel.resource.object_type),
+                resource_id=str(rel.resource.object_id),
+                relation=str(rel.relation),
+                subject_type=str(rel.subject.object_type),
+                subject_id=str(rel.subject.object_id),
+                subject_relation=(
+                    str(rel.subject.optional_relation)
+                    if rel.subject.optional_relation
+                    else None
+                ),
+                metadata={},
+            )
+            for rel in relationships
+        ]
+
+        try:
+            await self._audit_repo.record_many(entries)
+        except Exception as exc:  # noqa: BLE001 - audit is best-effort
+            self.log.warning(
+                f"Failed to record permission audit for {action}: {exc}"
+            )
 
     @staticmethod
-    def _relationship_key(rel: Relationship) -> tuple[str, str, str, str, str]:
+    def _relationship_key(rel: Relationship) -> tuple[str, str, str, str, str, str]:
         """Build a stable tuple key for relationship comparisons."""
         return (
             str(rel.resource.object_type),
@@ -430,6 +398,7 @@ class PermissionServiceImpl(PermissionServiceABC):
             str(rel.relation),
             str(rel.subject.object_type),
             str(rel.subject.object_id),
+            str(rel.subject.optional_relation or ""),
         )
 
     def _sort_relationships(self, relationships: Sequence[Relationship]) -> List[Relationship]:

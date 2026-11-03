@@ -32,6 +32,7 @@ class _PermissionObjectTypeEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_
     PERMISSION_OBJECT_TYPE_USER: _PermissionObjectType.ValueType  # 3
     PERMISSION_OBJECT_TYPE_ATTACHMENT: _PermissionObjectType.ValueType  # 4
     PERMISSION_OBJECT_TYPE_ROLE: _PermissionObjectType.ValueType  # 5
+    PERMISSION_OBJECT_TYPE_SHELF: _PermissionObjectType.ValueType  # 6
 
 class PermissionObjectType(_PermissionObjectType, metaclass=_PermissionObjectTypeEnumTypeWrapper): ...
 
@@ -41,7 +42,25 @@ PERMISSION_OBJECT_TYPE_DIRECTORY: PermissionObjectType.ValueType  # 2
 PERMISSION_OBJECT_TYPE_USER: PermissionObjectType.ValueType  # 3
 PERMISSION_OBJECT_TYPE_ATTACHMENT: PermissionObjectType.ValueType  # 4
 PERMISSION_OBJECT_TYPE_ROLE: PermissionObjectType.ValueType  # 5
+PERMISSION_OBJECT_TYPE_SHELF: PermissionObjectType.ValueType  # 6
 Global___PermissionObjectType: _TypeAlias = PermissionObjectType  # noqa: Y015
+
+class _PermissionAuditAction:
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
+
+class _PermissionAuditActionEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_PermissionAuditAction.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
+    PERMISSION_AUDIT_ACTION_UNSPECIFIED: _PermissionAuditAction.ValueType  # 0
+    PERMISSION_AUDIT_ACTION_GRANT: _PermissionAuditAction.ValueType  # 1
+    PERMISSION_AUDIT_ACTION_REVOKE: _PermissionAuditAction.ValueType  # 2
+
+class PermissionAuditAction(_PermissionAuditAction, metaclass=_PermissionAuditActionEnumTypeWrapper): ...
+
+PERMISSION_AUDIT_ACTION_UNSPECIFIED: PermissionAuditAction.ValueType  # 0
+PERMISSION_AUDIT_ACTION_GRANT: PermissionAuditAction.ValueType  # 1
+PERMISSION_AUDIT_ACTION_REVOKE: PermissionAuditAction.ValueType  # 2
+Global___PermissionAuditAction: _TypeAlias = PermissionAuditAction  # noqa: Y015
 
 @_typing.final
 class GetNoteRequest(_message.Message):
@@ -925,17 +944,23 @@ class PermissionSubject(_message.Message):
 
     OBJECT_TYPE_FIELD_NUMBER: _builtins.int
     OBJECT_ID_FIELD_NUMBER: _builtins.int
+    OPTIONAL_RELATION_FIELD_NUMBER: _builtins.int
     object_type: Global___PermissionObjectType.ValueType
     object_id: _builtins.str
+    optional_relation: _builtins.str
+    """Userset qualifier.  Role subjects use "member" (role:<id>#member);
+    user subjects must leave it empty.
+    """
     def __init__(
         self,
         *,
         object_type: Global___PermissionObjectType.ValueType = ...,
         object_id: _builtins.str = ...,
+        optional_relation: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["object_id", b"object_id", "object_type", b"object_type", "optional_relation", b"optional_relation"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
@@ -1127,6 +1152,65 @@ class PermissionsResponse(_message.Message):
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___PermissionsResponse: _TypeAlias = PermissionsResponse  # noqa: Y015
+
+@_typing.final
+class PermissionAuditEntry(_message.Message):
+    """Read shape for the dedicated permission audit trail.  There is no
+    audit RPC yet; the message exists so PermissionAuditEntity can go
+    through the same visitor-based entity -> gRPC conversion as every
+    other entity.
+    """
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    ID_FIELD_NUMBER: _builtins.int
+    AT_FIELD_NUMBER: _builtins.int
+    ACTOR_ID_FIELD_NUMBER: _builtins.int
+    ACCESSED_AS_FIELD_NUMBER: _builtins.int
+    ACTION_FIELD_NUMBER: _builtins.int
+    RESOURCE_TYPE_FIELD_NUMBER: _builtins.int
+    RESOURCE_ID_FIELD_NUMBER: _builtins.int
+    RELATION_FIELD_NUMBER: _builtins.int
+    SUBJECT_TYPE_FIELD_NUMBER: _builtins.int
+    SUBJECT_ID_FIELD_NUMBER: _builtins.int
+    SUBJECT_RELATION_FIELD_NUMBER: _builtins.int
+    METADATA_JSON_FIELD_NUMBER: _builtins.int
+    id: _builtins.str
+    actor_id: _builtins.str
+    accessed_as: _builtins.str
+    action: Global___PermissionAuditAction.ValueType
+    resource_type: _builtins.str
+    resource_id: _builtins.str
+    relation: _builtins.str
+    subject_type: _builtins.str
+    subject_id: _builtins.str
+    subject_relation: _builtins.str
+    metadata_json: _builtins.str
+    @_builtins.property
+    def at(self) -> _timestamp_pb2.Timestamp: ...
+    def __init__(
+        self,
+        *,
+        id: _builtins.str = ...,
+        at: _timestamp_pb2.Timestamp | None = ...,
+        actor_id: _builtins.str = ...,
+        accessed_as: _builtins.str = ...,
+        action: Global___PermissionAuditAction.ValueType = ...,
+        resource_type: _builtins.str = ...,
+        resource_id: _builtins.str = ...,
+        relation: _builtins.str = ...,
+        subject_type: _builtins.str = ...,
+        subject_id: _builtins.str = ...,
+        subject_relation: _builtins.str = ...,
+        metadata_json: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["at", b"at"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["accessed_as", b"accessed_as", "action", b"action", "actor_id", b"actor_id", "at", b"at", "id", b"id", "metadata_json", b"metadata_json", "relation", b"relation", "resource_id", b"resource_id", "resource_type", b"resource_type", "subject_id", b"subject_id", "subject_relation", b"subject_relation", "subject_type", b"subject_type"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___PermissionAuditEntry: _TypeAlias = PermissionAuditEntry  # noqa: Y015
 
 @_typing.final
 class NoteVersionSummary(_message.Message):

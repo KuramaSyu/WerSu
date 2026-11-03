@@ -54,6 +54,12 @@ def to_object_type(object_type: int) -> ObjectTypeEnum:
         return ObjectTypeEnum.DIRECTORY
     if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_USER:
         return ObjectTypeEnum.USER
+    if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_ATTACHMENT:
+        return ObjectTypeEnum.ATTACHMENT
+    if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_ROLE:
+        return ObjectTypeEnum.ROLE
+    if object_type == PermissionObjectType.PERMISSION_OBJECT_TYPE_SHELF:
+        return ObjectTypeEnum.SHELF
 
     raise ValueError("Unsupported object_type")
 
@@ -81,12 +87,29 @@ def to_relationship(fallback_resource: ObjectRef, relationship: PermissionRelati
         ):
             raise ValueError("relationship.resource must match object_type/object_id request fields")
 
+    subject_type = to_object_type(relationship.subject.object_type)
+    optional_relation = relationship.subject.optional_relation
+
+    if subject_type == ObjectTypeEnum.ROLE:
+        normalized_optional = optional_relation or "member"
+        if normalized_optional != "member":
+            raise ValueError(
+                "role subjects only support optional_relation='member'"
+            )
+    elif optional_relation:
+        raise ValueError(
+            "optional_relation is only valid for role subjects"
+        )
+    else:
+        normalized_optional = None
+
     return Relationship(
         resource=resource,
         relation=cast(RelationEnum, relationship.relation),
         subject=SubjectRef(
-            object_type=to_object_type(relationship.subject.object_type),
+            object_type=subject_type,
             object_id=relationship.subject.object_id,
+            optional_relation=normalized_optional,
         ),
     )
 
@@ -99,6 +122,12 @@ def to_permission_object_type(object_type: ObjectTypeEnum) -> PermissionObjectTy
         return PermissionObjectType.PERMISSION_OBJECT_TYPE_DIRECTORY
     if object_type == ObjectTypeEnum.USER:
         return PermissionObjectType.PERMISSION_OBJECT_TYPE_USER
+    if object_type == ObjectTypeEnum.ATTACHMENT:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_ATTACHMENT
+    if object_type == ObjectTypeEnum.ROLE:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_ROLE
+    if object_type == ObjectTypeEnum.SHELF:
+        return PermissionObjectType.PERMISSION_OBJECT_TYPE_SHELF
     return PermissionObjectType.PERMISSION_OBJECT_TYPE_UNSPECIFIED
 
 

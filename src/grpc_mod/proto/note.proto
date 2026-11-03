@@ -256,11 +256,16 @@ enum PermissionObjectType {
     PERMISSION_OBJECT_TYPE_USER = 3;
     PERMISSION_OBJECT_TYPE_ATTACHMENT = 4;
     PERMISSION_OBJECT_TYPE_ROLE = 5;
+    PERMISSION_OBJECT_TYPE_SHELF = 6;
 }
 
 message PermissionSubject {
     PermissionObjectType object_type = 1;
     string object_id = 2;
+
+    // Userset qualifier.  Role subjects use "member" (role:<id>#member);
+    // user subjects must leave it empty.
+    string optional_relation = 3;
 }
 
 message PermissionResource {
@@ -305,6 +310,31 @@ message PermissionsResponse {
     PermissionObjectType object_type = 1;
     string object_id = 2;
     repeated PermissionRelationship relationships = 3;
+}
+
+enum PermissionAuditAction {
+    PERMISSION_AUDIT_ACTION_UNSPECIFIED = 0;
+    PERMISSION_AUDIT_ACTION_GRANT = 1;
+    PERMISSION_AUDIT_ACTION_REVOKE = 2;
+}
+
+// Read shape for the dedicated permission audit trail.  There is no
+// audit RPC yet; the message exists so PermissionAuditEntity can go
+// through the same visitor-based entity -> gRPC conversion as every
+// other entity.
+message PermissionAuditEntry {
+    string id = 1;
+    google.protobuf.Timestamp at = 2;
+    string actor_id = 3;
+    string accessed_as = 4;
+    PermissionAuditAction action = 5;
+    string resource_type = 6;
+    string resource_id = 7;
+    string relation = 8;
+    string subject_type = 9;
+    string subject_id = 10;
+    string subject_relation = 11;
+    string metadata_json = 12;
 }
 
 // Versioning messages.
