@@ -26,6 +26,8 @@ from src.grpc_mod.proto.user_pb2 import (
     DeleteUserRequest,
     DeleteUserResponse,
     GetUserRequest,
+    GetUsersRequest,
+    GetUsersResponse,
     PostUserRequest,
     SearchUserRequest,
     SearchUserResponse,
@@ -113,6 +115,29 @@ class GrpcUserService(UserServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details("Internal server error while searching users")
             return SearchUserResponse()
+
+    @log_service_call()
+    async def GetUsers(
+        self,
+        request: GetUsersRequest,
+        context: ServicerContext[GetUsersRequest, GetUsersResponse],
+    ) -> GetUsersResponse:
+        try:
+            user_ctx = await self._context.create(request.user_id)
+            users = await self.user_service.get_users(
+                list(request.ids),
+                user_ctx,
+            )
+            return self._to_grpc.visit_get_users_reply(users)
+        except ValueError as e:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(e))
+            return GetUsersResponse()
+        except Exception:
+            self.log.error(f"Error fetching users: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while fetching users")
+            return GetUsersResponse()
 
     @log_service_call()
     async def PostUser(self, request: PostUserRequest, context: ServicerContext[PostUserRequest, User]) -> User:

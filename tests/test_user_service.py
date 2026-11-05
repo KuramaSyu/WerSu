@@ -383,3 +383,45 @@ async def test_search_users_blank_query_returns_nothing() -> None:
 
     assert await service.search_users("", UserContext(user_id="u-0")) == []
     assert await service.search_users("   ", UserContext(user_id="u-0")) == []
+
+
+# ---------------------------------------------------------------------------
+# Batch read (get_users) tests
+# ---------------------------------------------------------------------------
+
+
+async def test_get_users_returns_users_in_input_order() -> None:
+    """The batch read keeps the caller's id order, not the insert order."""
+    user_repo, users = _seed_users()
+    inserted = [await user_repo.insert(user) for user in users]
+    service = _make_service(user_repo, _InMemoryDirectoryRepo())
+
+    results = await service.get_users(
+        [str(inserted[2].id), str(inserted[0].id)],
+        UserContext(user_id="u-0"),
+    )
+
+    assert [user.username for user in results] == ["bob", "paul"]
+
+
+async def test_get_users_drops_unknown_and_duplicate_ids() -> None:
+    """Unknown ids are skipped and repeated ids are returned once."""
+    user_repo, users = _seed_users()
+    inserted = [await user_repo.insert(user) for user in users]
+    service = _make_service(user_repo, _InMemoryDirectoryRepo())
+
+    user_id = str(inserted[1].id)
+    results = await service.get_users(
+        [user_id, "does-not-exist", user_id],
+        UserContext(user_id="u-0"),
+    )
+
+    assert [user.id for user in results] == [inserted[1].id]
+
+
+async def test_get_users_empty_input_returns_immediately() -> None:
+    """An empty id list short-circuits without touching the repo."""
+    user_repo, _ = _seed_users()
+    service = _make_service(user_repo, _InMemoryDirectoryRepo())
+
+    assert await service.get_users([], UserContext(user_id="u-0")) == []

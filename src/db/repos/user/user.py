@@ -155,6 +155,35 @@ class UserPostgresRepo(UserRepoABC):
             "auth-schema migration; use PostgresUserAuthRepoImpl instead."
         )
 
+    async def fetch_users_by_ids(self, ids: List[str]) -> List[UserEntity]:
+        """Fetch many users by id in one query.
+
+        Uses ``id = ANY($1)`` so the whole batch is a single round
+        trip (no N+1).  Unknown ids are skipped and the result is
+        re-ordered to the input order; duplicated input ids are
+        collapsed.
+        """
+        if not ids:
+            return []
+        wanted: List[str] = []
+        seen: set[str] = set()
+        for raw in ids:
+            user_id = str(raw)
+            if user_id in seen:
+                continue
+            seen.add(user_id)
+            wanted.append(user_id)
+
+        sql = (
+            f"SELECT {self._returning} FROM {self._table.name} "
+            "WHERE id = ANY($1)"
+        )
+        records = await self._table.fetch(sql, wanted) or []
+        by_id = {
+            str(record["id"]): self._from_record(record) for record in records
+        }
+        return [by_id[user_id] for user_id in wanted if user_id in by_id]
+
     async def search(self, query: str, limit: int = 10) -> List[UserEntity]:
         """Search ``auth.user`` by partial id, fuzzy username or exact email.
 

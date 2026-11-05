@@ -60,6 +60,11 @@ class UserServiceStub:
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserResponse.FromString,
                 _registered_method=True)
+        self.GetUsers = channel.unary_unary(
+                '/proto.UserService/GetUsers',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.GetUsersRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.GetUsersResponse.FromString,
+                _registered_method=True)
 
 
 class UserServiceServicer:
@@ -96,6 +101,12 @@ class UserServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetUsers(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_UserServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -123,6 +134,11 @@ def add_UserServiceServicer_to_server(servicer, server):
                     servicer.SearchUser,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserRequest.FromString,
                     response_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserResponse.SerializeToString,
+            ),
+            'GetUsers': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetUsers,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.GetUsersRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.GetUsersResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -261,6 +277,33 @@ class UserService:
             '/proto.UserService/SearchUser',
             src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetUsers(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.UserService/GetUsers',
+            src_dot_grpc__mod_dot_proto_dot_user__pb2.GetUsersRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_user__pb2.GetUsersResponse.FromString,
             options,
             channel_credentials,
             insecure,

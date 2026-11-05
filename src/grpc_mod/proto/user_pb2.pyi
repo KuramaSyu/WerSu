@@ -255,3 +255,53 @@ class SearchUserResponse(_message.Message):
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___SearchUserResponse: _TypeAlias = SearchUserResponse  # noqa: Y015
+
+@_typing.final
+class GetUsersRequest(_message.Message):
+    """Fetch many users by id in one round-trip."""
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    USER_ID_FIELD_NUMBER: _builtins.int
+    IDS_FIELD_NUMBER: _builtins.int
+    user_id: _builtins.str
+    """id of the user performing the lookup (the caller's user context)"""
+    @_builtins.property
+    def ids(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]:
+        """ids of the users to load; unknown ids are omitted from the reply"""
+
+    def __init__(
+        self,
+        *,
+        user_id: _builtins.str = ...,
+        ids: _abc.Iterable[_builtins.str] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["ids", b"ids", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___GetUsersRequest: _TypeAlias = GetUsersRequest  # noqa: Y015
+
+@_typing.final
+class GetUsersResponse(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    USERS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def users(self) -> _containers.RepeatedCompositeFieldContainer[Global___User]:
+        """the users that exist, in the order of GetUsersRequest.ids"""
+
+    def __init__(
+        self,
+        *,
+        users: _abc.Iterable[Global___User] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["users", b"users"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___GetUsersResponse: _TypeAlias = GetUsersResponse  # noqa: Y015

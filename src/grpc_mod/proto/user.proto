@@ -60,6 +60,20 @@ message SearchUserResponse {
     repeated User users = 1;
 }
 
+// Fetch many users by id in one round-trip.
+message GetUsersRequest {
+    // id of the user performing the lookup (the caller's user context)
+    string user_id = 1;
+
+    // ids of the users to load; unknown ids are omitted from the reply
+    repeated string ids = 2;
+}
+
+message GetUsersResponse {
+    // the users that exist, in the order of GetUsersRequest.ids
+    repeated User users = 1;
+}
+
 // User Service
 service UserService {
     rpc GetUser(GetUserRequest) returns (User);
@@ -67,4 +81,5 @@ service UserService {
     rpc AlterUser(AlterUserRequest) returns (User);
     rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
     rpc SearchUser(SearchUserRequest) returns (SearchUserResponse);
+    rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
 }

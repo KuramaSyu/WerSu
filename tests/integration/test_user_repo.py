@@ -147,3 +147,28 @@ async def test_search_users_blank_query_returns_nothing(
 
     assert await user_repo.search("") == []
     assert await user_repo.search("   ") == []
+
+
+async def test_fetch_users_by_ids_returns_input_order(
+    user_repo: UserRepoABC, test_user: UserEntity
+):
+    """A batch read returns each existing user once, in the input order."""
+    first = await user_repo.insert(test_user)
+    second = await user_repo.insert(
+        replace(test_user, username="KuramaSyu2", email="other@example.com")
+    )
+
+    fetched = await user_repo.fetch_users_by_ids(
+        [str(second.id), "does-not-exist", str(first.id), str(second.id)]
+    )
+
+    assert [str(user.id) for user in fetched] == [str(second.id), str(first.id)]
+
+
+async def test_fetch_users_by_ids_empty_input(
+    user_repo: UserRepoABC, test_user: UserEntity
+):
+    """An empty id list short-circuits to an empty result."""
+    await user_repo.insert(test_user)
+
+    assert await user_repo.fetch_users_by_ids([]) == []

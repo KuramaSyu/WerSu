@@ -13,7 +13,7 @@ from grpc.aio import ServicerContext
 from src.api.services.user_service import USER_SEARCH_LIMIT
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
-from src.grpc_mod.proto.user_pb2 import SearchUserRequest
+from src.grpc_mod.proto.user_pb2 import GetUsersRequest, SearchUserRequest
 from src.grpc_mod.user_service import GrpcUserService
 from tests.doubles import _StubUserContextFactory, _StubUserService, silent_logger
 from tests.doubles.dummies.fake_context import _DummyContext
@@ -110,3 +110,55 @@ async def test_search_user_returns_empty_reply_for_no_matches() -> None:
     )
 
     assert list(reply.users) == []
+
+# ---------------------------------------------------------------------------
+# GetUsers (batch read)
+# ---------------------------------------------------------------------------
+
+
+async def test_get_users_returns_converted_users() -> None:
+    """The batch read comes back as proto ``User`` messages."""
+    users = [
+        UserEntity(
+            id="u-1",
+            discord_id=1,
+            avatar="avatar.png",
+            username="paul",
+            email="paul@example.com",
+        ),
+        UserEntity(id="u-2", discord_id=2, username="paula"),
+    ]
+    adapter, _ = _service(users)
+
+    reply = await adapter.GetUsers(
+        GetUsersRequest(user_id="caller-1", ids=["u-1", "u-2"]),
+        cast(ServicerContext, _ctx()),
+    )
+
+    assert [user.id for user in reply.users] == ["u-1", "u-2"]
+    assert [user.username for user in reply.users] == ["paul", "paula"]
+
+
+async def test_get_users_forwards_ids_and_user_context() -> None:
+    """The requested ids and the caller id reach the service layer."""
+    adapter, stub = _service([])
+
+    await adapter.GetUsers(
+        GetUsersRequest(user_id="caller-1", ids=["u-1", "u-2"]),
+        cast(ServicerContext, _ctx()),
+    )
+
+    assert stub.batch_calls == [(["u-1", "u-2"], "caller-1")]
+
+
+async def test_get_users_empty_ids_returns_empty_reply() -> None:
+    """No ids in the request means an empty reply and empty service input."""
+    adapter, stub = _service([])
+
+    reply = await adapter.GetUsers(
+        GetUsersRequest(user_id="caller-1"),
+        cast(ServicerContext, _ctx()),
+    )
+
+    assert list(reply.users) == []
+    assert stub.batch_calls == [([], "caller-1")]

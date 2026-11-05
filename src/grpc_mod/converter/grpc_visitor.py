@@ -91,6 +91,7 @@ from src.grpc_mod.proto.role_pb2 import (
     UserRoleMembership as GrpcUserRoleMembership,
 )
 from src.grpc_mod.proto.user_pb2 import (
+    GetUsersResponse,
     SearchUserResponse,
     User,
 )
@@ -506,6 +507,18 @@ class ConvertToGrpcVisitor(EntityVisitor):
             populated in the same order as the input.
         """
         return SearchUserResponse(users=[self.visit_user(user) for user in users])
+
+    def visit_get_users_reply(self, users: list[UserEntity]) -> GetUsersResponse:
+        """Build a :class:`GetUsersResponse` for the ``GetUsers`` RPC.
+
+        Args:
+            users: user entities returned by the batch read.
+
+        Returns:
+            GetUsersResponse: the proto message with ``users``
+            populated in the same order as the input.
+        """
+        return GetUsersResponse(users=[self.visit_user(user) for user in users])
 
     # ---- user auth ---------------------------------------------------
 

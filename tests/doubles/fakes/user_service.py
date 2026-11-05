@@ -65,6 +65,24 @@ class _InMemoryUserRepo(UserRepoABC):
             return None
         return self._by_id[user_id]
 
+    async def fetch_users_by_ids(self, ids: List[str]) -> List[UserEntity]:
+        """In-memory mirror of :meth:`UserRepoABC.fetch_users_by_ids`.
+
+        Unknown ids are skipped and duplicates collapsed; the
+        result keeps the input order.
+        """
+        out: List[UserEntity] = []
+        seen: set[str] = set()
+        for raw in ids:
+            user_id = str(raw)
+            if user_id in seen:
+                continue
+            seen.add(user_id)
+            user = self._by_id.get(user_id)
+            if user is not None:
+                out.append(user)
+        return out
+
     async def search(self, query: str, limit: int = 10) -> List[UserEntity]:
         """In-memory mirror of :meth:`UserRepoABC.search`.
 

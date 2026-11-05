@@ -43,6 +43,24 @@ class UserRepoABC(ABC):
         """Select a user by discord_id."""
 
     @abstractmethod
+    async def fetch_users_by_ids(self, ids: List[str]) -> List[UserEntity]:
+        """Fetch many users by id in a single query.
+
+        Unknown ids are silently skipped -- the result is the
+        intersection of ``ids`` and the rows that exist.  The
+        returned entities keep the input order of ``ids`` (after
+        de-duplication); this is stable so the service layer can
+        rely on it when building batch responses.
+
+        Args:
+            ids: user ids to load.  An empty list returns ``[]``
+                without issuing a query.
+
+        Returns:
+            List[UserEntity]: the matching users, in input order.
+        """
+
+    @abstractmethod
     async def search(self, query: str, limit: int = 10) -> List[UserEntity]:
         """Search users by partial id, fuzzy username or exact email.
 

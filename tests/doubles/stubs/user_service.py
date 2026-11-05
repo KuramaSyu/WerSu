@@ -20,6 +20,7 @@ class _StubUserService(UserServiceABC):
     def __init__(self, results: Optional[List[UserEntity]] = None) -> None:
         self.results = results or []
         self.calls: List[tuple[str, str, int]] = []
+        self.batch_calls: List[tuple[List[str], str]] = []
 
     async def get_user(
         self,
@@ -27,6 +28,14 @@ class _StubUserService(UserServiceABC):
         discord_id: Optional[int] = None,
     ) -> Optional[UserEntity]:
         return None
+
+    async def get_users(
+        self,
+        user_ids: List[str],
+        user_ctx: UserContextABC,
+    ) -> List[UserEntity]:
+        self.batch_calls.append((list(user_ids), user_ctx.user_id))
+        return self.results
 
     async def create_user(self, user: UserEntity) -> UserEntity:
         return user

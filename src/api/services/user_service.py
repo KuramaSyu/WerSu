@@ -98,6 +98,31 @@ class UserServiceABC(ABC):
         """
 
     @abstractmethod
+    async def get_users(
+        self,
+        user_ids: List[str],
+        user_ctx: UserContextABC,
+    ) -> List[UserEntity]:
+        """Load many users at once.
+
+        Batch counterpart of :meth:`get_user`: one repo query for
+        the whole id list instead of N single lookups.
+
+        Args:
+            user_ids: ids of the users to load.  Empty input
+                returns ``[]``.
+            user_ctx: identity of the caller.  Reserved for future
+                relationship-based filtering (the read is global
+                for now because there is no user-view permission
+                to enforce yet).
+
+        Returns:
+            List[UserEntity]: the users that exist, in the order of
+            ``user_ids``.  Unknown ids and duplicates are dropped.
+        """
+        ...
+
+    @abstractmethod
     async def create_user(self, user: UserEntity) -> UserEntity:
         """Create a user and bootstrap their default zettelkasten directories.
 

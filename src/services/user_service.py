@@ -77,6 +77,26 @@ class UserServiceImpl(UserServiceABC):
             return await self._user_repo.select_by_discord_id(discord_id=discord_id)
         return None
 
+    async def get_users(
+        self,
+        user_ids: List[str],
+        user_ctx: UserContextABC,
+    ) -> List[UserEntity]:
+        """Load many users at once (one repo query).
+
+        ``user_ctx`` is accepted so callers already pass the caller
+        identity; it is unused until user-view permissions exist.
+        Empty input short-circuits without a query; ids that do not
+        exist are dropped.
+        """
+        # no user-view permission to enforce yet -> unfiltered batch read
+        _ = user_ctx
+        if not user_ids:
+            return []
+        return await self._user_repo.fetch_users_by_ids(
+            [str(user_id) for user_id in user_ids],
+        )
+
     async def create_user(self, user: UserEntity) -> UserEntity:
         """Create the user, then bootstrap their shelf + books + rule."""
         created_user = await self._user_repo.insert(user)
