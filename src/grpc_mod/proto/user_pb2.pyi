@@ -3,8 +3,10 @@
 isort:skip_file
 """
 
+from collections import abc as _abc
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
+from google.protobuf.internal import containers as _containers
 import builtins as _builtins
 import sys
 import typing as _typing
@@ -202,3 +204,54 @@ class DeleteUserResponse(_message.Message):
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___DeleteUserResponse: _TypeAlias = DeleteUserResponse  # noqa: Y015
+
+@_typing.final
+class SearchUserRequest(_message.Message):
+    """Search users by id / username / email."""
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    QUERY_FIELD_NUMBER: _builtins.int
+    USER_ID_FIELD_NUMBER: _builtins.int
+    query: _builtins.str
+    """Free-form query, interpreted by shape:
+      * contains "@" -> exact email match
+      * otherwise     -> fuzzy username match, or partial id match
+    """
+    user_id: _builtins.str
+    """id of the user performing the search (the caller's user context)"""
+    def __init__(
+        self,
+        *,
+        query: _builtins.str = ...,
+        user_id: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["query", b"query", "user_id", b"user_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___SearchUserRequest: _TypeAlias = SearchUserRequest  # noqa: Y015
+
+@_typing.final
+class SearchUserResponse(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    USERS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def users(self) -> _containers.RepeatedCompositeFieldContainer[Global___User]:
+        """at most the first 10 matching users"""
+
+    def __init__(
+        self,
+        *,
+        users: _abc.Iterable[Global___User] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["users", b"users"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___SearchUserResponse: _TypeAlias = SearchUserResponse  # noqa: Y015

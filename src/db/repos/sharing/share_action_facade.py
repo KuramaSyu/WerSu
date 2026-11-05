@@ -20,7 +20,7 @@ itself an ABC, so tests can swap the underlying repos in
 Collaborators composed by this facade:
 
 * :class:`src.api.sharing.SharingRepoABC`
-* :class:`src.db.repos.user.user.UserRepoABC`
+* :class:`src.api.repos.user_repo.UserRepoABC`
 * :class:`src.api.user_action.UserActionRepoABC`
 * :class:`src.api.types.LoggingProvider`
 
@@ -52,7 +52,7 @@ from src.db.entities.user.user_action import (
     UserActionKind,
 )
 from src.db.repos.user.context import RepoUserContext
-from src.db.repos.user.user import UserRepoABC
+from src.api.repos.user_repo import UserRepoABC
 
 
 class ShareActionFacade(SharingRepoABC):
@@ -64,7 +64,7 @@ class ShareActionFacade(SharingRepoABC):
 
     Following (abstract) repos are combined here:
     * :class:`src.api.sharing.SharingRepoABC`
-    * :class:`src.db.repos.user.user.UserRepoABC`
+    * :class:`src.api.repos.user_repo.UserRepoABC`
     * :class:`src.api.user_action.UserActionRepoABC`
 
     and logs them.

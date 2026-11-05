@@ -17,7 +17,7 @@ from src.api.other.undefined import UNDEFINED, UndefinedOr, unwrap_undefined, un
 from src.api.other.user_context import UserContextABC
 from src.db.entities.note.sharing import FilterShareNote, NoteShareEntity
 from src.db.repos.user import RepoUserContext
-from src.db.repos.user.user import UserRepoABC
+from src.api.repos.user_repo import UserRepoABC
 from src.domain.permission_chain import HasCapabilityPerm, HasResourceAdminPerm
 from src.services.permissions import PermissionServiceABC
 from src.db.repos.sharing.share_action_facade import ShareActionFacade

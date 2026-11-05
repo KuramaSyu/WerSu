@@ -33,7 +33,7 @@ from src.db.repos.shelf.postgres import PostgresShelfRepo
 from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
 from src.db.repos.tag.postgres import PostgresTagRepo
 from src.db.repos.user import RepoContextFactory
-from src.db.repos.user.user import UserRepoABC
+from src.api.repos.user_repo import UserRepoABC
 from src.db.table import Table
 from src.services.shelf_service import ShelfServiceImpl
 from src.services.user_service import UserServiceImpl

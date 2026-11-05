@@ -10,7 +10,7 @@ from src.api.repos.directory_repo import DirectoryChildType, DirectoryHierarchyT
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.user.user import FilterUser, UserEntity
 from src.api.other.relationship import DirectoryRelationEnum, ObjectTypeEnum
-from src.db.repos.user.user import UserRepoABC
+from src.api.repos.user_repo import UserRepoABC
 from typing import Dict, List, Optional, Tuple
 
 
@@ -64,6 +64,38 @@ class _InMemoryUserRepo(UserRepoABC):
         if user_id is None:
             return None
         return self._by_id[user_id]
+
+    async def search(self, query: str, limit: int = 10) -> List[UserEntity]:
+        """In-memory mirror of :meth:`UserRepoABC.search`.
+
+        Email-shaped queries match exactly; everything else matches
+        id / username / display_name case-insensitively and sorts by
+        username.  Trigram ranking is not modelled here: the
+        Postgres repo owns the real fuzzy scoring.
+        """
+        term = (query or "").strip()
+        if not term or limit <= 0:
+            return []
+        if "@" in term:
+            return [
+                user for user in self._by_id.values() if user.email == term
+            ][:limit]
+
+        lowered = term.lower()
+        matches = [
+            user
+            for user in self._by_id.values()
+            if (
+                (user.username and lowered in user.username.lower())
+                or (user.display_name and lowered in user.display_name.lower())
+                or (
+                    user.id is not UNDEFINED
+                    and lowered in str(user.id).lower()
+                )
+            )
+        ]
+        matches.sort(key=lambda user: (user.username or "").lower())
+        return matches[:limit]
 
     async def delete(self, user_id: str) -> bool:
         user = self._by_id.pop(user_id, None)

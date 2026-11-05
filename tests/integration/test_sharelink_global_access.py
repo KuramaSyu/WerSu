@@ -11,7 +11,7 @@ from src.api import (
     Relationship,
     SubjectRef,
 )
-from src.db.repos.user.user import UserRepoABC
+from src.api.repos.user_repo import UserRepoABC
 from src.db.entities.user.user import UserEntity
 
 

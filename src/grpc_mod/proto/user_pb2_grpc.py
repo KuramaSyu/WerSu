@@ -55,6 +55,11 @@ class UserServiceStub:
                 request_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.DeleteUserRequest.SerializeToString,
                 response_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.DeleteUserResponse.FromString,
                 _registered_method=True)
+        self.SearchUser = channel.unary_unary(
+                '/proto.UserService/SearchUser',
+                request_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserRequest.SerializeToString,
+                response_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserResponse.FromString,
+                _registered_method=True)
 
 
 class UserServiceServicer:
@@ -85,6 +90,12 @@ class UserServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SearchUser(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_UserServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -107,6 +118,11 @@ def add_UserServiceServicer_to_server(servicer, server):
                     servicer.DeleteUser,
                     request_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.DeleteUserRequest.FromString,
                     response_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.DeleteUserResponse.SerializeToString,
+            ),
+            'SearchUser': grpc.unary_unary_rpc_method_handler(
+                    servicer.SearchUser,
+                    request_deserializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserRequest.FromString,
+                    response_serializer=src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -218,6 +234,33 @@ class UserService:
             '/proto.UserService/DeleteUser',
             src_dot_grpc__mod_dot_proto_dot_user__pb2.DeleteUserRequest.SerializeToString,
             src_dot_grpc__mod_dot_proto_dot_user__pb2.DeleteUserResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SearchUser(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/proto.UserService/SearchUser',
+            src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserRequest.SerializeToString,
+            src_dot_grpc__mod_dot_proto_dot_user__pb2.SearchUserResponse.FromString,
             options,
             channel_credentials,
             insecure,

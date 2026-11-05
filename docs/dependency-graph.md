@@ -175,8 +175,8 @@ to the S3 repo (`AttRepo`) and the Postgres-backed metadata repo
 
 ## `GrpcUserService`
 
-Creates and looks up users.  Built by the Construction Root with
-`user_service`, `log`, `to_grpc`.
+Creates, looks up, and searches users.  Built by the Construction
+Root with `user_service`, `log`, `to_grpc`, `context_factory`.
 
 ```mermaid
 flowchart TD
@@ -190,10 +190,12 @@ flowchart TD
     UserSvc --> DirRepo
 ```
 
-`GrpcUserService` is the only gRPC adapter that does not depend on
-`RepoContextFactory` - `UserService` reads the user directly from
-`UserRepoABC` and bootstraps the default zettelkasten directories via
-`DirectoryRepo`.
+`UserService` reads the user directly from `UserRepoABC` and
+bootstraps the default zettelkasten directories via `DirectoryRepo`.
+`SearchUser` materialises the caller's `UserContextABC` through
+`RepoContextFactory` and forwards it to the service, which currently
+performs a global search (relationship-based scoping is not
+implemented yet).
 
 ---
 

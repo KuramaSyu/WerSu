@@ -17,6 +17,7 @@ from tests.doubles.dummies import _DummyUserContext  # noqa: F401
 from tests.doubles.dummies import _DummySpiceDbClient  # noqa: F401
 from tests.doubles.stubs import silent_logger  # noqa: F401
 from tests.doubles.stubs import _StubUserContextFactory  # noqa: F401
+from tests.doubles.stubs import _StubUserService  # noqa: F401
 from tests.doubles.stubs import _StubViewPermissionRepo  # noqa: F401
 from tests.doubles.stubs import _StubEmbeddingGenerator  # noqa: F401
 from tests.doubles.stubs import _StubEmbeddingRepo  # noqa: F401

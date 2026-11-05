@@ -44,10 +44,27 @@ message DeleteUserResponse {
     bool success = 1;
 }
 
+// Search users by id / username / email.
+message SearchUserRequest {
+    // Free-form query, interpreted by shape:
+    //   * contains "@" -> exact email match
+    //   * otherwise     -> fuzzy username match, or partial id match
+    string query = 1;
+
+    // id of the user performing the search (the caller's user context)
+    string user_id = 2;
+}
+
+message SearchUserResponse {
+    // at most the first 10 matching users
+    repeated User users = 1;
+}
+
 // User Service
 service UserService {
     rpc GetUser(GetUserRequest) returns (User);
     rpc PostUser(PostUserRequest) returns (User);
     rpc AlterUser(AlterUserRequest) returns (User);
     rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+    rpc SearchUser(SearchUserRequest) returns (SearchUserResponse);
 }

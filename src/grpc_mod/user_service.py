@@ -1,9 +1,10 @@
 """gRPC adapter for :class:`src.services.user_service.UserServiceABC`.
 
 Implements ``UserServiceImpl`` from ``grpc/proto/user.proto``: get /
-create / alter / delete users.  Only ``GetUser`` and ``PostUser``
-are wired up to the service layer so far; ``AlterUser`` and
-``DeleteUser`` are stubs reserved for future work.
+create / alter / delete / search users.  Only ``GetUser``,
+``PostUser`` and ``SearchUser`` are wired up to the service layer so
+far; ``AlterUser`` and ``DeleteUser`` are stubs reserved for future
+work.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from grpc.aio import ServicerContext
 
 from src.api import LoggingProvider
 from src.api.other.undefined import UNDEFINED
+from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities.user.user import UserEntity
 from src.grpc_mod._log_decorator import log_service_call
 from src.grpc_mod.converter.grpc_visitor import ConvertToGrpcVisitor
@@ -25,10 +27,12 @@ from src.grpc_mod.proto.user_pb2 import (
     DeleteUserResponse,
     GetUserRequest,
     PostUserRequest,
+    SearchUserRequest,
+    SearchUserResponse,
     User,
 )
 from src.grpc_mod.proto.user_pb2_grpc import UserServiceServicer
-from src.services.user_service import UserServiceABC
+from src.services.user_service import USER_SEARCH_LIMIT, UserServiceABC
 
 
 class GrpcUserService(UserServiceServicer):
@@ -41,10 +45,12 @@ class GrpcUserService(UserServiceServicer):
         user_service: UserServiceABC,
         log: LoggingProvider,
         to_grpc: ConvertToGrpcVisitor,
+        context_factory: ContextFactory[UserContextABC],
     ):
         self.user_service = user_service
         self.log = log(__name__, self)
         self._to_grpc = to_grpc
+        self._context = context_factory
 
     @log_service_call()
     async def GetUser(self, request: GetUserRequest, context: ServicerContext[GetUserRequest, User]) -> User:
@@ -83,6 +89,30 @@ class GrpcUserService(UserServiceServicer):
     @log_service_call()
     async def DeleteUser(self, request: DeleteUserRequest, context: ServicerContext[DeleteUserRequest, DeleteUserResponse]) -> DeleteUserResponse:
         ...
+
+    @log_service_call()
+    async def SearchUser(
+        self,
+        request: SearchUserRequest,
+        context: ServicerContext[SearchUserRequest, SearchUserResponse],
+    ) -> SearchUserResponse:
+        try:
+            user_ctx = await self._context.create(request.user_id)
+            users = await self.user_service.search_users(
+                request.query,
+                user_ctx,
+                limit=USER_SEARCH_LIMIT,
+            )
+            return self._to_grpc.visit_users_reply(users)
+        except ValueError as e:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(e))
+            return SearchUserResponse()
+        except Exception:
+            self.log.error(f"Error searching users: {traceback.format_exc()}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details("Internal server error while searching users")
+            return SearchUserResponse()
 
     @log_service_call()
     async def PostUser(self, request: PostUserRequest, context: ServicerContext[PostUserRequest, User]) -> User:

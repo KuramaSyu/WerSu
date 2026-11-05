@@ -19,7 +19,7 @@ from src.api.facades.note_facade import NoteFacadeABC, SearchType
 from src.api.repos.tag_repo import TagRepoABC
 from src.db.table import Table
 from src.db.entities.user.user import UserEntity
-from src.db.repos.user.user import UserRepoABC
+from src.api.repos.user_repo import UserRepoABC
 import src.api
 from src.db.repos import UserPostgresRepo, Database
 from src.utils import logging_provider

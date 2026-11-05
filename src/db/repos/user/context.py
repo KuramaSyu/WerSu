@@ -18,11 +18,11 @@ from src.api.repos.user_action_repo import UserActionRepoABC
 from src.db.entities.user.user import FilterUser, UserEntity
 from src.utils.async_ttl import AsyncTtlCacheInfo, async_ttl
 
-from .user import UserRepoABC
+from src.api.repos.user_repo import UserRepoABC
 
 
 class RepoUserContext(UserContextABC):
-    """User context backed by a :class:`~src.db.repos.user.user.UserRepoABC`.
+    """User context backed by a :class:`~src.api.repos.user_repo.UserRepoABC`.
 
     The user entity is fetched on the first call to
     :meth:`fetch_user` (or :meth:`is_temporary_user`); subsequent calls

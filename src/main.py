@@ -659,7 +659,12 @@ async def serve():
         context_factory=user_context_factory,
         shelf_service=shelf_service,
     )
-    grpc_user_service = GrpcUserService(user_service=app_user_service, log=logging_provider, to_grpc=grpc_visitor)
+    grpc_user_service = GrpcUserService(
+        user_service=app_user_service,
+        log=logging_provider,
+        to_grpc=grpc_visitor,
+        context_factory=user_context_factory,
+    )
     add_UserServiceServicer_to_server(grpc_user_service, server)
 
     # gRPC shelf service shares the same ShelfServiceImpl as the user-bootstrap path.

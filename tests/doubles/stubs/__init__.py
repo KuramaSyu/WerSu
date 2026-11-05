@@ -10,6 +10,10 @@ from tests.doubles.stubs.user_context_factory import (
     _StubUserContextFactory,
 )
 
+from tests.doubles.stubs.user_service import (
+    _StubUserService,
+)
+
 from tests.doubles.stubs.view_permission_repo import (
     _StubViewPermissionRepo,
 )

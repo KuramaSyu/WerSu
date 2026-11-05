@@ -90,7 +90,10 @@ from src.grpc_mod.proto.role_pb2 import (
     Role,
     UserRoleMembership as GrpcUserRoleMembership,
 )
-from src.grpc_mod.proto.user_pb2 import User
+from src.grpc_mod.proto.user_pb2 import (
+    SearchUserResponse,
+    User,
+)
 from src.grpc_mod.proto.shelf_pb2 import Shelf as GrpcShelf
 from src.utils import asdict
 from src.utils.dict_helper import drop_except_keys, drop_undefined
@@ -471,26 +474,38 @@ class ConvertToGrpcVisitor(EntityVisitor):
     def visit_user(self, entity: UserEntity) -> User:
         """Convert a :class:`~src.db.entities.user.user.UserEntity` to a ``User`` message.
 
+        Missing / nullable columns (email, avatar, discord id, ...)
+        fall back to proto defaults so search results: which can
+        include users that never linked an email: convert cleanly.
+
         Args:
             entity: The user entity to convert.
 
         Returns:
             The equivalent gRPC ``User`` message.
         """
-        assert entity.id
-        assert entity.discord_id
-        assert entity.avatar
-        assert entity.username
-        assert entity.email
+        user_id = "" if is_undefined(entity.id) or not entity.id else str(entity.id)
 
         return User(
-            id=entity.id,
-            discord_id=entity.discord_id,
-            avatar=entity.avatar,
-            username=entity.username,
+            id=user_id,
+            discord_id=entity.discord_id or 0,
+            avatar=entity.avatar or "",
+            username=entity.username or "",
             discriminator=entity.discriminator or "",
-            email=entity.email,
+            email=entity.email or "",
         )
+
+    def visit_users_reply(self, users: list[UserEntity]) -> SearchUserResponse:
+        """Build a :class:`SearchUserResponse` for the ``SearchUser`` RPC.
+
+        Args:
+            users: user entities returned by the search.
+
+        Returns:
+            SearchUserResponse: the proto message with ``users``
+            populated in the same order as the input.
+        """
+        return SearchUserResponse(users=[self.visit_user(user) for user in users])
 
     # ---- user auth ---------------------------------------------------
 

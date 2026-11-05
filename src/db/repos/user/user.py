@@ -1,4 +1,4 @@
-"""Postgres-backed implementation of :class:`UserRepoABC`.
+"""Postgres-backed implementation of :class:`~src.api.repos.user_repo.UserRepoABC`.
 
 The repo is a thin wrapper over ``auth.user`` (renamed from
 ``public.users`` by the ``20260807-auth-schema`` migration).  It
@@ -17,13 +17,13 @@ callers that need Discord lookups should switch to
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from asyncpg import Record
 
 from src.api.other.types import LoggingProvider
 from src.api.other.undefined import UNDEFINED
+from src.api.repos.user_repo import UserRepoABC
 from src.db.entities import FilterUser, UserEntity
 from src.db.table import TableABC
 from src.grpc_mod.converter.postgres_row_converter import (
@@ -38,41 +38,6 @@ from src.utils.logging import logging_provider as default_logging_provider
 # payload so the SQL doesn't reference columns that no longer exist
 # on ``auth.user``.
 _FIELDS_NOT_ON_AUTH_USER = frozenset({"discord_id", "discriminator"})
-
-
-class UserRepoABC(ABC):
-    """Abstract user storage contract."""
-
-    @abstractmethod
-    async def insert(self, user: UserEntity) -> UserEntity:
-        """Insert a new user and return the created entity with ID."""
-
-    @abstractmethod
-    async def update(self, user: UserEntity) -> UserEntity:
-        """Update an existing user."""
-
-    @abstractmethod
-    async def upsert(self, user: UserEntity) -> UserEntity:
-        """Insert or update a user based on discord_id."""
-
-    @abstractmethod
-    async def select(self, filter: FilterUser) -> Optional[UserEntity]:
-        """Fetch the first user matching every set field of ``filter``.
-
-        Set fields are AND-ed; an empty filter matches no user
-        (``None`` is returned).  A single-field filter (``user_id``,
-        ``username``) covers the lookup-by-id / lookup-by-username
-        cases too.  Usernames are unique among non-null values
-        (``auth_user_username_uidx``).
-        """
-
-    @abstractmethod
-    async def select_by_discord_id(self, discord_id: int) -> Optional[UserEntity]:
-        """Select a user by discord_id."""
-
-    @abstractmethod
-    async def delete(self, user_id: str) -> bool:
-        """Delete a user by ID."""
 
 
 class UserPostgresRepo(UserRepoABC):
@@ -190,6 +155,53 @@ class UserPostgresRepo(UserRepoABC):
             "auth-schema migration; use PostgresUserAuthRepoImpl instead."
         )
 
+    async def search(self, query: str, limit: int = 10) -> List[UserEntity]:
+        """Search ``auth.user`` by partial id, fuzzy username or exact email.
+
+        Email-shaped queries (containing ``@``) are matched exactly;
+        everything else matches the id as a substring and ranks the
+        username / display name by trigram similarity.  The queries
+        use ``pg_trgm`` (``similarity``), which the initial schema
+        enables.
+        """
+        term = (query or "").strip()
+        if not term or limit <= 0:
+            return []
+
+        if "@" in term:
+            # Exact match only: an email lookup must not fuzzily
+            # return unrelated addresses.
+            sql = (
+                f"SELECT {self._returning} FROM {self._table.name} "
+                "WHERE email = $1 LIMIT $2"
+            )
+            records = await self._table.fetch(sql, term, limit) or []
+            return [self._from_record(record) for record in records]
+
+        # Escape LIKE wildcards in the user-supplied term so a
+        # literal ``%`` or ``_`` doesn't widen the match.
+        escaped = (
+            term.replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        )
+        pattern = f"%{escaped}%"
+        sql = (
+            f"SELECT {self._returning} "
+            f"FROM {self._table.name} "
+            "WHERE id ILIKE $2 ESCAPE '\\' "
+            "OR username ILIKE $2 ESCAPE '\\' "
+            "OR display_name ILIKE $2 ESCAPE '\\' "
+            "OR similarity(username, $1) > 0.1 "
+            "OR similarity(display_name, $1) > 0.1 "
+            "ORDER BY COALESCE("
+            "GREATEST(similarity(username, $1), similarity(display_name, $1)), 0"
+            ") DESC, username ASC NULLS LAST "
+            "LIMIT $3"
+        )
+        records = await self._table.fetch(sql, term, pattern, limit) or []
+        return [self._from_record(record) for record in records]
+
     async def delete(self, user_id: str) -> bool:
         """Delete a user by ID."""
         deleted = await self._table.delete(
@@ -215,4 +227,4 @@ class UserPostgresRepo(UserRepoABC):
         return UserEntity(**data)
 
 
-__all__ = ["UserRepoABC", "UserPostgresRepo"]
+__all__ = ["UserPostgresRepo"]

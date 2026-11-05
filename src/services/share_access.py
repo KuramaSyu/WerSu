@@ -10,7 +10,7 @@ from src.api.other.user_context import ContextFactory, UserContextABC
 from src.db.entities.note.sharing import NoteShareEntity
 from src.db.entities.user.user import FilterUser
 from src.db.repos.user import UnimplementedUserContext
-from src.db.repos.user.user import UserRepoABC
+from src.api.repos.user_repo import UserRepoABC
 
 
 class ShareAccessServiceImpl(ShareAccessServiceABC):

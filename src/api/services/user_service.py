@@ -11,7 +11,12 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from src.api.other.undefined import UNDEFINED, UndefinedOr, is_undefined
+from src.api.other.user_context import UserContextABC
 from src.db.entities.user.user import UserEntity
+
+
+USER_SEARCH_LIMIT = 10
+"""Default (and maximum) number of users returned by :meth:`UserServiceABC.search_users`."""
 
 
 @dataclass(eq=True, frozen=True)
@@ -138,5 +143,33 @@ class UserServiceABC(ABC):
         """
         ...
 
+    @abstractmethod
+    async def search_users(
+        self,
+        query: str,
+        user_ctx: UserContextABC,
+        limit: int = USER_SEARCH_LIMIT,
+    ) -> List[UserEntity]:
+        """Search users by partial id, fuzzy username or exact email.
 
-__all__ = ["UserFilter", "UserServiceABC"]
+        The query shape decides the strategy:
+
+        * contains ``@``: exact email match, nothing else.
+        * otherwise: partial id match and fuzzy username match.
+
+        Args:
+            query: free-form search term.
+            user_ctx: identity of the caller.  Reserved for future
+                relationship-based filtering; the search is global
+                for now because friendship lookups are not
+                implemented yet.
+            limit: maximum number of results.  Defaults to
+                :data:`USER_SEARCH_LIMIT` (10).
+
+        Returns:
+            List[UserEntity]: the first ``limit`` matching users.
+        """
+        ...
+
+
+__all__ = ["UserFilter", "UserServiceABC", "USER_SEARCH_LIMIT"]

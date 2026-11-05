@@ -10,11 +10,14 @@ from src.api.services.shelf_service import (
     BootstrapStrategy,
     ShelfServiceABC,
 )
-from src.api.services.user_service import UserServiceABC
+from src.api.services.user_service import (
+    USER_SEARCH_LIMIT,
+    UserServiceABC,
+)
 from src.db.entities.shelf import ShelfEntity
 from src.db.entities.user.user import FilterUser, UserEntity
 from src.db.repos.directory.directory_facade import DirectoryFacadeABC
-from src.db.repos.user.user import UserRepoABC
+from src.api.repos.user_repo import UserRepoABC
 
 
 def users_shelf_slug_for(username: object) -> str:
@@ -93,6 +96,23 @@ class UserServiceImpl(UserServiceABC):
         """Forward directly to the repo; no directory side effects."""
         return await self._user_repo.update(user)
 
+    async def search_users(
+        self,
+        query: str,
+        user_ctx: UserContextABC,
+        limit: int = USER_SEARCH_LIMIT,
+    ) -> List[UserEntity]:
+        """Search users globally (relationship filtering is not implemented yet).
+
+        ``user_ctx`` is accepted so callers already pass the caller
+        identity; it is unused until friendship checks exist.  The
+        query shape (email-shaped vs not) is interpreted by the
+        repo.
+        """
+        # friendship-based scoping is not available yet -> global search
+        _ = user_ctx
+        return await self._user_repo.search(query, limit=limit)
+
     async def _bootstrap_user_zettelkasten(
         self,
         *,
@@ -124,6 +144,7 @@ class UserServiceImpl(UserServiceABC):
 
 __all__ = [
     "UserServiceImpl",
+    "USER_SEARCH_LIMIT",
     "USERS_SHELF_SLUG",
     "USERS_SHELF_DESCRIPTION",
     "users_shelf_slug_for",

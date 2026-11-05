@@ -8,7 +8,7 @@ from tests.doubles import _DummyUserContext as UserContext
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.user.user import FilterUser, UserEntity
 from src.api.facades.note_facade import NoteFacadeABC
-from src.db.repos.user.user import UserRepoABC
+from src.api.repos.user_repo import UserRepoABC
 import src.api
 from src.db.repos import UserPostgresRepo, Database
 from src.utils import logging_provider
@@ -80,3 +80,70 @@ async def test_create_user_with_note_and_delete(user_repo: UserRepoABC, note_rep
     # is therefore gone after the user is gone.
     ret_note = await note_repo_facade.select_by_id(note.note_id, ctx=ctx)
     assert ret_note is None
+
+# ---------------------------------------------------------------------------
+# search
+# ---------------------------------------------------------------------------
+
+
+async def test_search_users_by_username_fuzzy(
+    user_repo: UserRepoABC, test_user: UserEntity
+):
+    """A partial username matches via ``pg_trgm`` similarity / ILIKE."""
+    inserted = await user_repo.insert(test_user)
+
+    results = await user_repo.search("Kurama")
+
+    assert [user.id for user in results] == [inserted.id]
+
+
+async def test_search_users_by_partial_id(
+    user_repo: UserRepoABC, test_user: UserEntity
+):
+    """A fragment of the (uuid) id returns every user whose id contains it."""
+    inserted = await user_repo.insert(test_user)
+
+    results = await user_repo.search(str(inserted.id)[:8])
+
+    assert inserted.id in [user.id for user in results]
+
+
+async def test_search_users_by_email_is_exact(
+    user_repo: UserRepoABC, test_user: UserEntity
+):
+    """Email queries match exactly and never fall back to partial matches."""
+    inserted = await user_repo.insert(test_user)
+
+    exact = await user_repo.search(test_user.email or "")
+    partial = await user_repo.search("kuramaSyu@")
+
+    assert [user.id for user in exact] == [inserted.id]
+    assert partial == []
+
+
+async def test_search_users_caps_results_at_limit(
+    user_repo: UserRepoABC, test_user: UserEntity
+):
+    """The ``limit`` argument caps the result set."""
+    for index in range(12):
+        await user_repo.insert(
+            replace(
+                test_user,
+                username=f"searcher{index:02d}",
+                email=f"searcher{index:02d}@example.com",
+            )
+        )
+
+    results = await user_repo.search("searcher", limit=10)
+
+    assert len(results) == 10
+
+
+async def test_search_users_blank_query_returns_nothing(
+    user_repo: UserRepoABC, test_user: UserEntity
+):
+    """A blank query short-circuits to an empty list."""
+    await user_repo.insert(test_user)
+
+    assert await user_repo.search("") == []
+    assert await user_repo.search("   ") == []
