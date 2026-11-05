@@ -22,6 +22,7 @@ class ObjectTypeEnum(StrEnum):
     ATTACHMENT = "attachment"
     ROLE = "role"
     SHELF = "shelf"
+    PAGE = "page"
 
 
 class NoteRelationEnum(StrEnum):
@@ -125,13 +126,45 @@ class RoleRelationEnum(StrEnum):
     """SpiceDB relations and permissions on role objects."""
 
     # relations
-    ADMINISTRATOR = "administrator"
+    ADMIN = "admin"
     MEMBER = "member"
     GRANT_MEMBER = "grant_member"
     DELEGATE_MEMBER = "delegate_member"
 
+    # Deprecated alias; the relation itself is now simply ``admin``.
+    ADMINISTRATOR = "admin"
 
-ObjectType: TypeAlias = Literal["note", "directory", "user", "attachment", "role", "shelf"]
+
+class PageRelationEnum(StrEnum):
+    """SpiceDB relations and permissions on the global page object.
+
+    Page administrators are site-wide administrators.  The ``admin``
+    relation is intentionally mappable to ``user`` and ``role#member``
+    subjects so the permission can be held directly or through any role
+    (in particular the seeded ``Page Administrator`` role).
+    """
+
+    # relations
+    ADMIN = "admin"
+    GRANT_PAGE_ADMIN = "grant_page_admin"
+    DELEGATE_PAGE_ADMIN = "delegate_page_admin"
+
+    # Deprecated alias; the relation itself is now simply ``admin``.
+    PAGE_ADMIN = "admin"
+
+    # permissions
+    CAN_GRANT_PAGE_ADMIN = "can_grant_page_admin"
+    CAN_DELEGATE_PAGE_ADMIN = "can_delegate_page_admin"
+    CAN_ASSIGN_DELEGATE_PAGE_ADMIN = "can_assign_delegate_page_admin"
+
+
+#: The single SpiceDB ``page`` object carries site-wide permissions.
+PAGE_ROOT_ID = "global"
+
+
+ObjectType: TypeAlias = Literal[
+    "note", "directory", "user", "attachment", "role", "shelf", "page"
+]
 """String-literal union of every :class:`ObjectTypeEnum` value."""
 
 SubjectType: TypeAlias = Literal["user", "directory", "role"]
@@ -199,8 +232,18 @@ AttachmentRelationName: TypeAlias = Literal[
 UserRelationName: TypeAlias = Literal["member_of"]
 """String-literal union of every :class:`UserRelationEnum` value."""
 
-RoleRelationName: TypeAlias = Literal["administrator", "member", "grant_member", "delegate_member"]
+RoleRelationName: TypeAlias = Literal["admin", "member", "grant_member", "delegate_member"]
 """String-literal union of every :class:`RoleRelationEnum` value."""
+
+PageRelationName: TypeAlias = Literal[
+    "admin",
+    "grant_page_admin",
+    "delegate_page_admin",
+    "can_grant_page_admin",
+    "can_delegate_page_admin",
+    "can_assign_delegate_page_admin",
+]
+"""String-literal union of every :class:`PageRelationEnum` value."""
 
 RelationName: TypeAlias = (
     NoteRelationName
@@ -209,6 +252,7 @@ RelationName: TypeAlias = (
     | AttachmentRelationName
     | UserRelationName
     | RoleRelationName
+    | PageRelationName
 )
 """Union of every relation-name literal across all resource types."""
 
@@ -219,6 +263,7 @@ RelationEnum: TypeAlias = (
     | AttachmentRelationEnum
     | UserRelationEnum
     | RoleRelationEnum
+    | PageRelationEnum
 )
 """Union of every relation :class:`enum.StrEnum` across all resource types."""
 
@@ -274,6 +319,17 @@ class SubjectRef(ObjectRef):
     ``note#reader: user | role#member`` style relations are written:
     the subject is a role, qualified by the relation that resolves
     "members of this role".
+
+    ``optional_relation`` is therefore the role's ``member`` relation
+    when we mean "every member of this role", e.g.::
+
+        SubjectRef(
+            ObjectTypeEnum.ROLE,
+            role_id,
+            optional_relation=RoleRelationEnum.MEMBER,
+        )  # role:<role_id>#member
+
+    For a bare user subject (``user:alice``) it stays ``None``.
 
     Args:
         object_type: subject's SpiceDB object type, e.g. ``"user"`` or

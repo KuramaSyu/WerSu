@@ -40,7 +40,8 @@ class PermissionServiceABC(ABC):
     async def list_relationships(self, resource: ObjectRef, actor: UserContextABC) -> List[Relationship]:
         """List all direct relationships for a resource.
 
-        Requires ``has_admin`` on the resource.
+        Requires ``has_admin`` on the resource (notes, directories,
+        shelves and roles all define it).
         """
         ...
 
@@ -261,6 +262,7 @@ class PermissionServiceImpl(PermissionServiceABC):
         raise ValueError(f"Unsupported resource type: {resource.object_type}")
 
     async def _assert_admin(self, resource: ObjectRef, actor: UserContextABC) -> None:
+        """Authorize reading a resource's full relationship set."""
         chain = HasResourceAdminPerm(
             resource.object_type, str(resource.object_id)
         ).set_permission_repo(self._permission_repo)

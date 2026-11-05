@@ -1,19 +1,38 @@
 definition user {}
 
 definition role {
-    relation administrator: user | role#member
+    relation admin: user | role#member
     relation member: user
 
     // Delegable membership capabilities.
     relation grant_member: user | role#member
     relation delegate_member: user | role#member
 
+    // Synthetic permission: callers that need "admin or owner"
+    // semantics can use the same name across every resource type.
+    permission has_admin = admin
+
     // May write/remove #member
-    permission can_grant_member = administrator + grant_member + delegate_member
+    permission can_grant_member = admin + grant_member + delegate_member
     // May write/remove #grant_member
-    permission can_delegate_member = administrator + delegate_member
+    permission can_delegate_member = admin + delegate_member
     // May write/remove #delegate_member
-    permission can_assign_delegate_member = administrator
+    permission can_assign_delegate_member = admin
+}
+
+definition page {
+    relation admin: user | role#member
+    relation grant_page_admin: user | role#member
+    relation delegate_page_admin: user | role#member
+
+    permission has_admin = admin
+
+    // May write/remove #admin
+    permission can_grant_page_admin = admin + grant_page_admin + delegate_page_admin
+    // May write/remove #grant_page_admin
+    permission can_delegate_page_admin = admin + delegate_page_admin
+    // May write/remove #delegate_page_admin
+    permission can_assign_delegate_page_admin = admin
 }
 
 definition shelf {

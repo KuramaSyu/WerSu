@@ -286,14 +286,18 @@ class HasResourceAdminPerm(HasCapabilityPerm):
         super().__init__(resource_type, resource_id, "has_admin")
 
 
-class HasRoleAdministratorPerm(HasCapabilityPerm):
-    """Check the role's ``administrator`` relation."""
+class HasRoleAdminPerm(HasCapabilityPerm):
+    """Check the role's ``admin`` relation."""
 
     def __init__(self, role_id: str):
-        super().__init__(ObjectTypeEnum.ROLE, role_id, "administrator")
+        super().__init__(ObjectTypeEnum.ROLE, role_id, "admin")
 
     def _get_error_message(self) -> str:
-        return f"user has no administrator relation on role {self._resource_id}"
+        return f"user has no admin relation on role {self._resource_id}"
+
+
+# Deprecated alias kept for callers that still use the old name.
+HasRoleAdministratorPerm = HasRoleAdminPerm
 
 
 class HasRoleGrantMemberPerm(HasCapabilityPerm):
@@ -315,6 +319,43 @@ class HasRoleAssignDelegateMemberPerm(HasCapabilityPerm):
 
     def __init__(self, role_id: str):
         super().__init__(ObjectTypeEnum.ROLE, role_id, "can_assign_delegate_member")
+
+
+class HasPageAdminPerm(HasCapabilityPerm):
+    """Check the global ``page#admin`` relation.
+
+    The ``page`` object is a singleton (``page:global``).  Its
+    ``admin`` relation is mappable to ``user`` and ``role#member``
+    subjects, so holding it directly or through the seeded
+    ``Page Administrator`` role both pass this check.
+    """
+
+    def __init__(self, page_id: str = PAGE_ROOT_ID):
+        super().__init__(ObjectTypeEnum.PAGE, page_id, "admin")
+
+    def _get_error_message(self) -> str:
+        return f"user is not a page admin on page {self._resource_id}"
+
+
+class HasPageGrantAdminPerm(HasCapabilityPerm):
+    """Check ``can_grant_page_admin`` on the global page object."""
+
+    def __init__(self, page_id: str = PAGE_ROOT_ID):
+        super().__init__(ObjectTypeEnum.PAGE, page_id, "can_grant_page_admin")
+
+
+class HasPageDelegateAdminPerm(HasCapabilityPerm):
+    """Check ``can_delegate_page_admin`` on the global page object."""
+
+    def __init__(self, page_id: str = PAGE_ROOT_ID):
+        super().__init__(ObjectTypeEnum.PAGE, page_id, "can_delegate_page_admin")
+
+
+class HasPageAssignDelegateAdminPerm(HasCapabilityPerm):
+    """Check ``can_assign_delegate_page_admin`` on the global page object."""
+
+    def __init__(self, page_id: str = PAGE_ROOT_ID):
+        super().__init__(ObjectTypeEnum.PAGE, page_id, "can_assign_delegate_page_admin")
 
 
 class HasDirectoryViewPerm(PermissionCheckChain):

@@ -236,7 +236,7 @@ async def test_get_role_preferences_requires_manage() -> None:
         perms,
         Relationship(
             resource=ObjectRef("role", "r1"),
-            relation=RoleRelationEnum.ADMINISTRATOR,
+            relation=RoleRelationEnum.ADMIN,
             subject=SubjectRef("user", "u1"),
         ),
     )

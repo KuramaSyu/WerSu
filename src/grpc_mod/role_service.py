@@ -4,8 +4,9 @@ Implements the ``RoleService`` from ``src/grpc_mod/proto/role.proto``.
 Every write method requires ``request.user_id`` so the service can
 build a :class:`UserContextABC` for permission checks; permission
 enforcement itself lives in the service layer (every mutation is
-gated on ``administrator`` (metadata) or ``can_grant_member`` (membership) for that role, except ``create_role`` which
-uses the super-admin env-var fallback).
+gated on ``admin`` (metadata) or ``can_grant_member``
+(membership) for that role, except ``create_role`` which checks the
+global ``page:global#admin`` permission).
 """
 
 from __future__ import annotations

@@ -94,7 +94,7 @@ def test_to_relationship_rejects_non_member_role_userset() -> None:
                 relation="reader",
                 subject_type=PermissionObjectType.PERMISSION_OBJECT_TYPE_ROLE,
                 subject_id="role-1",
-                optional_relation="administrator",
+                optional_relation="admin",
             ),
         )
 

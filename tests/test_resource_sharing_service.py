@@ -108,7 +108,7 @@ async def test_role_subject_rejects_non_member_optional_relation() -> None:
                 subject=SubjectRef(
                     ObjectTypeEnum.ROLE,
                     "role-1",
-                    optional_relation="administrator",
+                    optional_relation="admin",
                 ),
             ),
             actor,
@@ -137,12 +137,31 @@ async def test_share_shelf_with_user() -> None:
     )
 
 
+async def test_list_role_relationships_uses_has_admin() -> None:
+    """Role listing is gated on the new role ``has_admin`` permission."""
+    repo = InMemoryPermissionRepo()
+    service = _build_service(permission_repo=repo, role_ids={"role-1"})
+    admin = _DummyUserContext("role-admin")
+    resource = ObjectRef(ObjectTypeEnum.ROLE, "role-1")
+    await _grant(repo, resource, RoleRelationEnum.ADMIN, admin.user_id)
+
+    relationships = await service.list_relationships(resource, admin)
+    assert any(
+        str(rel.relation) == "admin"
+        and str(rel.subject.object_id) == admin.user_id
+        for rel in relationships
+    )
+
+    with pytest.raises(PermissionError):
+        await service.list_relationships(resource, _DummyUserContext("outsider"))
+
+
 async def test_role_membership_capability_can_be_delegated() -> None:
     repo = InMemoryPermissionRepo()
     service = _build_service(permission_repo=repo, role_ids={"role-1"})
     admin = _DummyUserContext("admin")
     resource = ObjectRef(ObjectTypeEnum.ROLE, "role-1")
-    await _grant(repo, resource, "administrator", admin.user_id)
+    await _grant(repo, resource, "admin", admin.user_id)
 
     created = await service.create_relationship(
         Relationship(

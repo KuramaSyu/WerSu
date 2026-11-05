@@ -72,10 +72,15 @@ class InMemoryPermissionRepo(PermissionRepoABC):
             "parent_user": {"delete", "write", "view"},
         },
         "role": {
-            "administrator": {"administrator", "can_grant_member", "can_delegate_member", "can_assign_delegate_member"},
+            "admin": {"admin", "has_admin", "can_grant_member", "can_delegate_member", "can_assign_delegate_member"},
             "member": {"member"},
             "grant_member": {"grant_member", "can_grant_member"},
             "delegate_member": {"delegate_member", "can_grant_member", "can_delegate_member"},
+        },
+        "page": {
+            "admin": {"admin", "has_admin", "can_grant_page_admin", "can_delegate_page_admin", "can_assign_delegate_page_admin"},
+            "grant_page_admin": {"grant_page_admin", "can_grant_page_admin"},
+            "delegate_page_admin": {"delegate_page_admin", "can_grant_page_admin", "can_delegate_page_admin"},
         },
     }
 

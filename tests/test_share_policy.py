@@ -72,7 +72,7 @@ _ACCESS_MATRIX = {
 
 # Role membership has its own two-level capability chain.
 _ROLE_MATRIX = {
-    "administrator": {"grant_member", "delegate_member"},
+    "admin": {"grant_member", "delegate_member"},
     "grant_member": set(),
     "delegate_member": {"grant_member"},
 }
@@ -138,7 +138,7 @@ async def test_role_policy_matrix(
     ).set_permission_repo(repo)
     result = await check.check(actor)
 
-    # Role matrix: administrator can delegate; delegate_member can
+    # Role matrix: admin can delegate; delegate_member can
     # appoint granters; grant_member can only add members.
     expected = target_relation in _ROLE_MATRIX[actor_relation]
     actual = bool(result)
