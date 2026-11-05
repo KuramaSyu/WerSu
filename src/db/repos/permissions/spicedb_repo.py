@@ -266,6 +266,11 @@ class SpicedbPermissionRepo(PermissionRepoABC):
                     relation_filter.optional_subject_filter.optional_subject_id = (
                         str(rel.subject.object_id)
                     )
+                optional_relation = getattr(rel.subject, "optional_relation", None)
+                if optional_relation:
+                    relation_filter.optional_subject_filter.optional_relation.CopyFrom(
+                        SubjectFilter.RelationFilter(relation=str(optional_relation))
+                    )
             return relation_filter
 
 
@@ -394,16 +399,29 @@ class SpicedbPermissionRepo(PermissionRepoABC):
     @handle_error
     async def lookup_relationships(self, relationship: Relationship) -> List[Relationship]:
         # enforce resource:id#permission@XXX:id
-        subject_filter = SubjectFilter(subject_type=relationship.subject.object_type)
-
-        # maybe add resource:id#permission@subject:XXX 
+        optional_subject_id = None
         if relationship.subject.object_id != UNDEFINED:
-            subject_filter.optional_subject_id = str(relationship.subject.object_id)
+            optional_subject_id = str(relationship.subject.object_id)
 
-        # preserve a userset qualifier (``role:eng#member``) on read filters
+        # Preserve a userset qualifier on the subject filter.  The
+        # common case is a role member lookup: a stored tuple like
+        # ``page:global#admin@role:<id>#member`` has subject
+        # ``role:<id>#member``, so ``optional_relation="member"`` tells
+        # SpiceDB to match the role's member userset rather than the
+        # bare role object.
+        #
+        # ``SubjectFilter.optional_relation`` is a nested message
+        # (``SubjectFilter.RelationFilter``), not a plain string.
         optional_relation = getattr(relationship.subject, "optional_relation", None)
-        if optional_relation:
-            subject_filter.optional_relation = str(optional_relation)
+        subject_filter = SubjectFilter(
+            subject_type=relationship.subject.object_type,
+            optional_subject_id=optional_subject_id,
+            optional_relation=(
+                SubjectFilter.RelationFilter(relation=str(optional_relation))
+                if optional_relation
+                else None
+            ),
+        )
 
         # enforece XXX:id#permission@subject:id
         filter = RelationshipFilter(

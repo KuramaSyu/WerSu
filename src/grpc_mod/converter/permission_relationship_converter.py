@@ -90,6 +90,9 @@ def to_relationship(fallback_resource: ObjectRef, relationship: PermissionRelati
     subject_type = to_object_type(relationship.subject.object_type)
     optional_relation = relationship.subject.optional_relation
 
+    # Role subjects are usersets: ``role:<id>#member`` means "the
+    # members of this role", not the role object itself.  This is the
+    # optional relation used by role-member lookups/grants.
     if subject_type == ObjectTypeEnum.ROLE:
         normalized_optional = optional_relation or "member"
         if normalized_optional != "member":
