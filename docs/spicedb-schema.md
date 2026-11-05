@@ -52,27 +52,62 @@ the `#member` qualifier.
 
 ```zed
 definition role {
-    relation administrator: user | role#member
+    relation admin: user | role#member
     relation member: user
 
     relation grant_member: user | role#member
     relation delegate_member: user | role#member
 
-    permission can_grant_member = administrator + grant_member + delegate_member
-    permission can_delegate_member = administrator + delegate_member
-    permission can_assign_delegate_member = administrator
+    permission has_admin = admin
+
+    permission can_grant_member = admin + grant_member + delegate_member
+    permission can_delegate_member = admin + delegate_member
+    permission can_assign_delegate_member = admin
 }
 ```
 
 | Relation | Description |
 |---|---|
-| `administrator` | manages role metadata and holds every membership capability |
+| `admin` | manages role metadata and holds every membership capability |
+| `has_admin` | computed permission equal to `admin` |
 | `member` | role membership (written by `RoleService`, not the share API) |
 | `grant_member` | may add/remove members |
 | `delegate_member` | may appoint `grant_member` holders |
 
 Membership writes are gated on `can_grant_member`; role metadata writes are
-gated on `administrator`.
+gated on `admin`.
+
+Creating a role grants the creator every permission of it:
+`RoleServiceImpl.create_role` writes `role:<id>#admin@user:<creator>`
+(every `role` permission derives from `admin`) and
+`role:<id>#member@user:<creator>` (so resource grants made to the role apply to
+the creator as well). Role creation itself is gated on `page:global#admin`.
+The role repo is Postgres-only; all SpiceDB membership logic lives in the
+service.
+
+## Page
+
+Site-wide permissions live on a single ``page:global`` object:
+
+```zed
+definition page {
+    relation admin: user | role#member
+    relation grant_page_admin: user | role#member
+    relation delegate_page_admin: user | role#member
+
+    permission has_admin = admin
+    permission can_grant_page_admin = admin + grant_page_admin + delegate_page_admin
+    permission can_delegate_page_admin = admin + delegate_page_admin
+    permission can_assign_delegate_page_admin = admin
+}
+```
+
+The ``Page Administrator`` role is seeded by
+``20261120-add-page-administrator``. The migration grants the role
+``admin``, ``grant_page_admin`` and ``delegate_page_admin`` and adds
+the first real (non-system) user as a member. ``create_role`` in
+``RoleService`` is gated on ``page:global#admin``; the old
+``ROLE_SUPER_ADMINS`` environment variable is gone.
 
 ## Shelf / Directory
 
@@ -163,7 +198,7 @@ Role / membership:
 
 | Actor holds | member | grant_member | delegate_member |
 |---|---|---|---|
-| administrator | ✅ | ✅ | ✅ |
+| admin | ✅ | ✅ | ✅ |
 | grant_member | ✅ | – | – |
 | delegate_member | ✅ | ✅ | – |
 
@@ -179,7 +214,7 @@ owner tuple.
 The legacy `edit_permissions` and `manage` permissions have been removed.
 Callers that previously checked `edit_permissions` now use `has_admin`;
 public-link sharing uses `can_grant_read` / `can_grant_write`; role metadata
-uses the `administrator` relation.
+uses the `admin` relation.
 
 ## Sharing examples
 
