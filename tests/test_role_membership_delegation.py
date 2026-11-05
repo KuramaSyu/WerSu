@@ -26,13 +26,13 @@ from tests.doubles.stubs.permission_service import (
 from tests.doubles.stubs.permission_targets import _StubPermissionRoleRepo
 
 
-async def _grant_administrator(
+async def _grant_admin(
     repo: InMemoryPermissionRepo, role_id: str, user_id: str
 ) -> None:
     await repo.insert([
         Relationship(
             resource=ObjectRef(ObjectTypeEnum.ROLE, role_id),
-            relation=RoleRelationEnum.ADMINISTRATOR,
+            relation=RoleRelationEnum.ADMIN,
             subject=SubjectRef(ObjectTypeEnum.USER, user_id),
         )
     ])
@@ -45,7 +45,7 @@ async def test_grant_member_delegation_opens_membership_but_not_meta() -> None:
         RoleEntity(name="eng"), _DummyUserContext("root")
     )
     role_id = str(role.id)
-    await _grant_administrator(repo, role_id, "admin")
+    await _grant_admin(repo, role_id, "admin")
 
     permission_service = PermissionServiceImpl(
         permission_repo=repo,
@@ -56,7 +56,7 @@ async def test_grant_member_delegation_opens_membership_but_not_meta() -> None:
     role_service = RoleServiceImpl(
         role_repo=role_repo,
         permission_repo=repo,
-        is_super_admin=lambda ctx: set(),
+        is_page_admin=lambda ctx: set(),
     )
 
     # Administrator grants bob the membership capability.
@@ -73,7 +73,14 @@ async def test_grant_member_delegation_opens_membership_but_not_meta() -> None:
     await role_service.add_user_to_role(
         "carol", role_id, _DummyUserContext("bob")
     )
-    assert role_repo.add_calls == [("carol", role_id)]
+    member_edges = await repo.lookup_relationships(
+        Relationship(
+            resource=ObjectRef(ObjectTypeEnum.ROLE, role_id),
+            relation=RoleRelationEnum.MEMBER,
+            subject=SubjectRef(ObjectTypeEnum.USER, "carol"),
+        )
+    )
+    assert len(member_edges) == 1
 
     # ...but cannot change role metadata.
     with pytest.raises(PermissionError):
@@ -101,7 +108,7 @@ async def test_delegate_member_can_mint_grant_member_but_not_delegate() -> None:
         RoleEntity(name="ops"), _DummyUserContext("root")
     )
     role_id = str(role.id)
-    await _grant_administrator(repo, role_id, "admin")
+    await _grant_admin(repo, role_id, "admin")
 
     permission_service = PermissionServiceImpl(
         permission_repo=repo,

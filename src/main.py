@@ -23,7 +23,7 @@ from src.db.migrations.context import MigrationContext, MigrationServices
 from src.db.migrations.runner import MigrationRunner
 from src.services.shelf_bootstrap import build_strategy
 from src.db.repos import SpicedbPermissionRepo
-from src.db.repos.permissions.spicedb_role_repo import SpicedbRoleRepo
+from src.db.repos.permissions.postgres_role_repo import PostgresRoleRepo
 from src.db.repos.permissions.postgres_audit import PostgresPermissionAuditRepo
 from src.domain.share_policy import GrantPermissionFactory
 from src.db.repos.sharing.sharing import SharingPostgresRepo
@@ -381,9 +381,8 @@ async def serve():
         logging_provider=logging_provider,
     )
 
-    role_repo: RoleRepoABC = SpicedbRoleRepo(
+    role_repo: RoleRepoABC = PostgresRoleRepo(
         table=roles_table,
-        permission_repo=permission_repo,
         to_postgres_row=postgres_visitor,
         logging_provider=logging_provider,
     )

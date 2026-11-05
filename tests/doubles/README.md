@@ -122,7 +122,7 @@ follows Gerard Meszaros' *xUnit Test Patterns* (with the addition of
 | `_FakeSpyDirectoryActivityService` | `fakespys/grpc_note_version_service.py` | directory activity service. |
 | `_FakeSpyAttachmentService` | `fakespys/grpc_attachment_service.py` | attachment service. |
 | `_FakeSpyAttachmentFacade`, `_FakeSpyNoteService` | `fakespys/attachment_facade.py`, `fakespys/note_service.py` | migration-service ports. |
-| `_FakeSpyRoleRepo` | `fakespys/role_repo.py` | role repo. |
+| `_FakeSpyRoleRepo` | `fakespys/role_repo.py` | Postgres-only role metadata repo. |
 
 ## Conventions
 

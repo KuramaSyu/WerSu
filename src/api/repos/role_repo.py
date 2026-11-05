@@ -1,33 +1,24 @@
-"""Storage contract for the role system.
+"""Storage contract for role metadata.
 
-Roles are split across two stores:
-
-* the Postgres ``roles`` table holds role metadata (id, name,
-  description, created_at);
-* the SpiceDB ``role:<id>#member@user:<id>`` tuples hold role membership.
-
-:class:`RoleRepoABC` abstracts both sides behind one contract.  The
-service layer is responsible for permission enforcement; this repo
-only translates requests into storage operations and surfaces the
-persisted entities back to the caller.
+The Postgres ``roles`` table holds role metadata (id, name,
+description, created_at).  Role membership lives in SpiceDB and is
+managed by :class:`src.services.role_service.RoleServiceImpl` through
+:class:`PermissionRepoABC`; the role repo therefore has no
+membership methods and no permission-repo dependency.
 """
 
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
 from src.api.other.user_context import UserContextABC
-from src.db.entities.user.role import (
-    RoleEntity,
-    RoleFilter,
-    UserRoleMembershipEntity,
-)
+from src.db.entities.user.role import RoleEntity, RoleFilter
 
 
 class RoleRepoABC(ABC):
-    """Persistence contract for roles and role memberships.
+    """Persistence contract for role metadata.
 
     Implementations:
-    * :class:`src.db.repos.permissions.spicedb_role_repo.SpicedbRoleRepo`
+    * :class:`src.db.repos.permissions.postgres_role_repo.PostgresRoleRepo`
     """
 
     @abstractmethod
@@ -76,13 +67,10 @@ class RoleRepoABC(ABC):
     async def delete_role(self, role_id: str, ctx: UserContextABC) -> None:
         """Delete the role row identified by ``role_id``.
 
-        Membership edges (``role:<id>#member@user:<id>``) and resource
-        grants that target this role are **not** cleaned up here --
-        SpiceDB has no "delete a role" operation, and the Postgres
-        row deletion does not cascade into SpiceDB.  The caller's
-        responsibility (or a follow-up sweeper) is to remove every
-        member via :meth:`remove_user_from_role` and every resource
-        grant out of band before calling ``delete_role``.
+        Membership edges and resource grants that target this role are
+        **not** cleaned up here.  SpiceDB has no "delete a role"
+        operation; callers must remove members through
+        :class:`RoleServiceABC` before deleting the row.
 
         Args:
             role_id: id of the role to delete.
@@ -114,94 +102,17 @@ class RoleRepoABC(ABC):
         filter: RoleFilter,
         ctx: UserContextABC,
     ) -> List[RoleEntity]:
-        """Fetch every role matching ``filter``.
+        """Fetch every role matching ``filter.name``.
 
         Args:
-            filter: filter describing the roles to load.
+            filter: filter describing the roles to load.  Callers must
+                not pass ``member_id`` here; the service resolves that
+                through SpiceDB first.
             ctx: caller context, currently unused.
 
         Returns:
             List[RoleEntity]: the matching roles.  Empty when no
-            row matches, including when the filter is empty
-            (consistent with the other repos' empty-filter
-            behaviour).
-        """
-        ...
-
-    @abstractmethod
-    async def add_user_to_role(
-        self,
-        user_id: str,
-        role_id: str,
-        ctx: UserContextABC,
-    ) -> UserRoleMembershipEntity:
-        """Insert the ``role:<id>#member@user:<id>`` tuple.
-
-        Args:
-            user_id: id of the user to add.
-            role_id: id of the role to add the user to.
-            ctx: caller context, currently unused.
-
-        Returns:
-            UserRoleMembershipEntity: the freshly created
-            membership edge, with ``user_id``, ``role_id`` and a
-            ``granted_at`` timestamp populated.
-        """
-        ...
-
-    @abstractmethod
-    async def remove_user_from_role(
-        self,
-        user_id: str,
-        role_id: str,
-        ctx: UserContextABC,
-    ) -> None:
-        """Delete the ``role:<id>#member@user:<id>`` tuple.
-
-        No-op if the tuple does not exist.
-
-        Args:
-            user_id: id of the user to remove.
-            role_id: id of the role to remove the user from.
-            ctx: caller context, currently unused.
-        """
-        ...
-
-    @abstractmethod
-    async def get_roles_for_user(
-        self,
-        user_id: str,
-        ctx: UserContextABC,
-    ) -> List[RoleEntity]:
-        """List every role the given user is a member of.
-
-        Args:
-            user_id: id of the user to look up.
-            ctx: caller context, currently unused.
-
-        Returns:
-            List[RoleEntity]: the roles the user belongs to, with
-            metadata hydrated from Postgres.  Empty when the user is
-            not a member of any role.
-        """
-        ...
-
-    @abstractmethod
-    async def get_users_for_role(
-        self,
-        role_id: str,
-        ctx: UserContextABC,
-    ) -> List[UserRoleMembershipEntity]:
-        """List every user that is a member of the given role.
-
-        Args:
-            role_id: id of the role to look up.
-            ctx: caller context, currently unused.
-
-        Returns:
-            List[UserRoleMembershipEntity]: the membership edges,
-            one per user.  Empty when no user is a member of the
-            role.
+            row matches.
         """
         ...
 

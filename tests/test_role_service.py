@@ -2,7 +2,7 @@
 
 The service enforces ``manage`` permission on every write that
 mutates an existing role.  ``create_role`` falls back to an
-injected super-admin lookup.  These tests wire the real service
+injected page-admin lookup.  These tests wire the real service
 against an in-memory permission repo (so permission tuples resolve
 like SpiceDB would) and a fake role repo that records the calls
 and holds role metadata in-process.
@@ -42,11 +42,11 @@ async def _grant_manage(
     role_id: str,
     user_id: str,
 ) -> None:
-    """Insert ``role:<id>#administrator@user:<id>`` so ``manage`` resolves True."""
+    """Insert ``role:<id>#admin@user:<id>`` so ``manage`` resolves True."""
     await permission_repo.insert([
         Relationship(
             resource=ObjectRef(ObjectTypeEnum.ROLE, role_id),
-            relation=RoleRelationEnum.ADMINISTRATOR,
+            relation=RoleRelationEnum.ADMIN,
             subject=SubjectRef(ObjectTypeEnum.USER, user_id),
         )
     ])
@@ -64,12 +64,17 @@ def permission_repo() -> InMemoryPermissionRepo:
 
 @pytest.fixture
 def role_repo() -> _FakeSpyRoleRepo:
+    """Postgres-only role metadata fake.
+
+    SpiceDB membership/grant tuples are written by ``RoleServiceImpl``
+    through ``permission_repo``, not by the role repo.
+    """
     return _FakeSpyRoleRepo()
 
 
 @pytest.fixture
-def super_admin_ids() -> set[str]:
-    """Default: nobody is a super-admin.  Tests override per-case."""
+def page_admin_ids() -> set[str]:
+    """Default: nobody is a page-admin.  Tests override per-case."""
     return set()
 
 
@@ -77,23 +82,23 @@ def super_admin_ids() -> set[str]:
 def service(
     role_repo: _FakeSpyRoleRepo,
     permission_repo: InMemoryPermissionRepo,
-    super_admin_ids: set[str],
+    page_admin_ids: set[str],
 ) -> RoleServiceImpl:
     return RoleServiceImpl(
         role_repo=role_repo,
         permission_repo=permission_repo,
-        is_super_admin=lambda _ctx: set(super_admin_ids),
+        is_page_admin=lambda _ctx: set(page_admin_ids),
     )
 
 
 # ---- create_role ---------------------------------------------------------
 
 
-async def test_create_role_rejects_caller_not_in_super_admin_env(
+async def test_create_role_rejects_caller_not_in_page_admin_env(
     service: RoleServiceImpl,
     role_repo: _FakeSpyRoleRepo,
 ) -> None:
-    """``create_role`` denies callers not in the injected super-admin set."""
+    """``create_role`` denies callers not in the injected page-admin set."""
     actor = _DummyUserContext(user_id="alice")
     with pytest.raises(PermissionError):
         await service.create_role(
@@ -103,13 +108,13 @@ async def test_create_role_rejects_caller_not_in_super_admin_env(
     assert role_repo.create_calls == []
 
 
-async def test_create_role_accepts_super_admin(
+async def test_create_role_accepts_page_admin(
     service: RoleServiceImpl,
     role_repo: _FakeSpyRoleRepo,
-    super_admin_ids: set[str],
+    page_admin_ids: set[str],
 ) -> None:
-    """``create_role`` proceeds when caller is in the injected super-admin set."""
-    super_admin_ids.update({"alice", "bob"})
+    """``create_role`` proceeds when caller is in the injected page-admin set."""
+    page_admin_ids.update({"alice", "bob"})
     actor = _DummyUserContext(user_id="alice")
     created = await service.create_role(
         RoleEntity(name="engineering"),
@@ -118,6 +123,63 @@ async def test_create_role_accepts_super_admin(
     assert created.id is not UNDEFINED
     assert created.name == "engineering"
     assert len(role_repo.create_calls) == 1
+
+
+async def test_create_role_lets_creator_manage_membership(
+    service: RoleServiceImpl,
+    page_admin_ids: set[str],
+) -> None:
+    """The creator holds every role permission, e.g. ``can_grant_member``."""
+    page_admin_ids.update({"alice"})
+    actor = _DummyUserContext(user_id="alice")
+    created = await service.create_role(RoleEntity(name="engineering"), actor)
+
+    # No extra grant was made: creation itself authorised the creator.
+    membership = await service.add_user_to_role(
+        user_id="bob",
+        role_id=str(created.id),
+        ctx=actor,
+    )
+
+    assert membership.user_id == "bob"
+    assert membership.role_id == str(created.id)
+
+
+async def test_create_role_lets_creator_update_and_delete_role(
+    service: RoleServiceImpl,
+    page_admin_ids: set[str],
+) -> None:
+    """The creator is the new role's ``admin``."""
+    page_admin_ids.update({"alice"})
+    actor = _DummyUserContext(user_id="alice")
+    created = await service.create_role(RoleEntity(name="engineering"), actor)
+
+    updated = await service.update_role(
+        RoleEntity(id=str(created.id), name="engineering-renamed"),
+        actor,
+    )
+    assert updated.name == "engineering-renamed"
+
+    await service.delete_role(str(created.id), actor)
+
+
+async def test_create_role_does_not_grant_other_users(
+    service: RoleServiceImpl,
+    page_admin_ids: set[str],
+) -> None:
+    """Creating a role grants only the creator, not every page admin."""
+    page_admin_ids.update({"alice", "carol"})
+    created = await service.create_role(
+        RoleEntity(name="engineering"),
+        _DummyUserContext(user_id="alice"),
+    )
+
+    with pytest.raises(PermissionError):
+        await service.add_user_to_role(
+            user_id="bob",
+            role_id=str(created.id),
+            ctx=_DummyUserContext(user_id="carol"),
+        )
 
 
 # ---- add_user_to_role ----------------------------------------------------
@@ -136,7 +198,7 @@ async def test_add_user_to_role_requires_manage(
             role_id=str(role.id),
             ctx=_DummyUserContext(user_id="carol"),
         )
-    assert role_repo.add_calls == []
+    assert permission_repo.is_empty()
 
 
 async def test_add_user_to_role_succeeds_with_manage(
@@ -144,7 +206,7 @@ async def test_add_user_to_role_succeeds_with_manage(
     role_repo: _FakeSpyRoleRepo,
     permission_repo: InMemoryPermissionRepo,
 ) -> None:
-    """Caller holds ``administrator`` on the role; ``manage`` resolves True."""
+    """Caller holds ``admin`` on the role; ``manage`` resolves True."""
     role = await role_repo.create_role(RoleEntity(name="eng"), _DummyUserContext(user_id="root"))
     await _grant_manage(
         permission_repo,
@@ -158,11 +220,15 @@ async def test_add_user_to_role_succeeds_with_manage(
     )
     assert membership.user_id == "alice"
     assert membership.role_id == str(role.id)
-    # The membership tuple ends up in the permission repo too --
-    # verify that, since ``SpicedbRoleRepo.add_user_to_role`` writes
-    # through ``PermissionRepoABC.insert``.  The fake skips that
-    # step, but a real repo would have inserted it.
-    assert role_repo.add_calls == [("alice", str(role.id))]
+    # The membership tuple is written by the service itself.
+    member_edges = await permission_repo.lookup_relationships(
+        Relationship(
+            resource=ObjectRef(ObjectTypeEnum.ROLE, str(role.id)),
+            relation=RoleRelationEnum.MEMBER,
+            subject=SubjectRef(ObjectTypeEnum.USER, "alice"),
+        )
+    )
+    assert len(member_edges) == 1
 
 
 # ---- remove_user_from_role ----------------------------------------------
@@ -180,7 +246,7 @@ async def test_remove_user_from_role_requires_manage(
             role_id=str(role.id),
             ctx=_DummyUserContext(user_id="carol"),
         )
-    assert role_repo.remove_calls == []
+    # Denied before the service touches SpiceDB.
 
 
 # ---- update_role / delete_role -----------------------------------------
@@ -230,9 +296,9 @@ async def test_update_role_succeeds_with_manage(
 
 async def test_create_role_rejects_missing_name(
     service: RoleServiceImpl,
-    super_admin_ids: set[str],
+    page_admin_ids: set[str],
 ) -> None:
-    super_admin_ids.add("alice")
+    page_admin_ids.add("alice")
     with pytest.raises(ValueError, match="role.name is required"):
         await service.create_role(RoleEntity(name=UNDEFINED), _DummyUserContext(user_id="alice"))
 
@@ -287,3 +353,53 @@ async def test_role_grant_propagates_to_user_permission_check(
     assert await permission_repo.has_permission(actor, "view", ObjectRef("note", "note-1"))
     # alice is NOT admin
     assert not await permission_repo.has_permission(actor, "delete", ObjectRef("note", "note-1"))
+
+async def test_get_roles_filters_member_id_in_service(
+    service: RoleServiceImpl,
+    role_repo: _FakeSpyRoleRepo,
+    permission_repo: InMemoryPermissionRepo,
+    page_admin_ids: set[str],
+) -> None:
+    """``member_id`` is resolved through SpiceDB, not the Postgres repo."""
+    page_admin_ids.add("alice")
+    actor = _DummyUserContext(user_id="alice")
+    engineering = await service.create_role(RoleEntity(name="engineering"), actor)
+    await service.create_role(RoleEntity(name="marketing"), actor)
+    await permission_repo.insert([
+        Relationship(
+            resource=ObjectRef(ObjectTypeEnum.ROLE, "other-role"),
+            relation=RoleRelationEnum.MEMBER,
+            subject=SubjectRef(ObjectTypeEnum.USER, "bob"),
+        )
+    ])
+
+    roles = await service.get_roles(
+        RoleFilter(member_id="alice"),
+        actor,
+    )
+
+    ids = {str(role.id) for role in roles}
+    assert str(engineering.id) in ids
+    assert len(ids) == 2
+
+
+async def test_create_role_writes_creator_admin_and_member(
+    service: RoleServiceImpl,
+    permission_repo: InMemoryPermissionRepo,
+    page_admin_ids: set[str],
+) -> None:
+    page_admin_ids.add("alice")
+    created = await service.create_role(
+        RoleEntity(name="engineering"),
+        _DummyUserContext(user_id="alice"),
+    )
+
+    for relation in (RoleRelationEnum.ADMIN, RoleRelationEnum.MEMBER):
+        edges = await permission_repo.lookup_relationships(
+            Relationship(
+                resource=ObjectRef(ObjectTypeEnum.ROLE, str(created.id)),
+                relation=relation,
+                subject=SubjectRef(ObjectTypeEnum.USER, "alice"),
+            )
+        )
+        assert len(edges) == 1

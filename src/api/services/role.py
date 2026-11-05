@@ -7,13 +7,12 @@ The service enforces capability-based gates on every role write path:
   the resource that grants the role.  Note admins can attach a role to
   a note without being able to edit the role's membership.
 * ``update_role`` and ``delete_role`` -- gated on the role's
-  ``administrator`` relation.
+  ``admin`` relation.
 
-``create_role`` is the only write that has no resource to gate on,
-because there is no role yet.  Implementations are expected to gate
-``create_role`` on a bootstrap concept (e.g. an env-var list of
-super-admin user ids, or a sentinel ``role:[global]super-admin``
-whose ``administrator`` relation the caller holds).
+``create_role`` is the only write that has no role to gate on,
+because there is no role yet.  Implementations gate it on the global
+page-admin relation (``page:global#admin``), which is
+seeded from the ``Page Administrator`` role.
 
 Implementations:
 * :class:`src.services.role_service.RoleServiceImpl`
@@ -37,12 +36,20 @@ class RoleServiceABC(ABC):
     async def create_role(self, role: RoleEntity, ctx: UserContextABC) -> RoleEntity:
         """Create a new role.
 
+        The creating user is granted every permission of the new
+        role: the service writes ``role#admin`` (all ``role``
+        permissions derive from it) and ``role#member`` (so the
+        creator also holds every grant the role receives on
+        resources).
+
         Args:
             role: role to create.  ``name`` is required; ``id`` and
                 ``created_at`` are assigned by the repo.
             ctx: caller context.  Implementations gate ``create_role``
-                on a bootstrap concept -- callers cannot rely on a
-                ``administrator`` relation on a non-existent role.
+                on the global page-admin permission -- callers
+                cannot rely on an ``admin`` relation on a
+                non-existent role.  ``ctx.user_id`` becomes the new
+                role's first member/admin.
 
         Returns:
             RoleEntity: the persisted role.
@@ -59,7 +66,7 @@ class RoleServiceABC(ABC):
 
         Args:
             role: role carrying ``id`` and the fields to update.
-            ctx: caller context.  Must hold ``administrator`` on the role.
+            ctx: caller context.  Must hold ``admin`` on the role.
 
         Returns:
             RoleEntity: the updated role.
@@ -67,7 +74,7 @@ class RoleServiceABC(ABC):
         Raises:
             ValueError: ``role.id`` is missing.
             LookupError: the role no longer exists.
-            PermissionError: caller lacks ``administrator`` on the role.
+            PermissionError: caller lacks ``admin`` on the role.
         """
         ...
 
@@ -83,12 +90,12 @@ class RoleServiceABC(ABC):
 
         Args:
             role_id: id of the role to delete.
-            ctx: caller context.  Must hold ``administrator`` on the role.
+            ctx: caller context.  Must hold ``admin`` on the role.
 
         Raises:
             ValueError: ``role_id`` is missing.
             LookupError: the role no longer exists.
-            PermissionError: caller lacks ``administrator`` on the role.
+            PermissionError: caller lacks ``admin`` on the role.
         """
         ...
 

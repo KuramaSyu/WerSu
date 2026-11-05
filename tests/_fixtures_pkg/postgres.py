@@ -29,7 +29,7 @@ from src.db.repos.note.note_facade import NoteFacadeImpl
 from src.db.repos.tag.postgres import PostgresTagRepo
 from src.db.repos.note.versioning import NoteVersionPostgresRepo
 from src.db.repos.permissions.spicedb_repo import SpicedbPermissionRepo
-from src.db.repos.permissions.spicedb_role_repo import SpicedbRoleRepo
+from src.db.repos.permissions.postgres_role_repo import PostgresRoleRepo
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.db.repos.shelf.postgres import PostgresShelfRepo
 from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
@@ -92,7 +92,7 @@ class IntegrationEnv:
     permission_service: PermissionServiceImpl
     sharing_repo: SharingPostgresRepo
     sharing_service: SharingServiceImpl
-    role_repo: SpicedbRoleRepo
+    role_repo: PostgresRoleRepo
     role_service: RoleServiceImpl
     shelf_repo: "PostgresShelfRepo"
     rule_repo: "PostgresRuleRepo"
@@ -301,14 +301,13 @@ async def spicedb_postgres_env() -> AsyncIterator[IntegrationEnv]:
         )
         # Roles: metadata in Postgres (``roles`` table), membership
         # edges in SpiceDB (``role:<id>#member@user:<id>``).
-        role_repo = SpicedbRoleRepo(
+        role_repo = PostgresRoleRepo(
             table=Table(
                 db=db,
                 table_name="roles",
                 id_fields=["id"],
                 logging_provider=logging_provider,
             ),
-            permission_repo=permission_repo,
             logging_provider=logging_provider,
         )
         permission_service = PermissionServiceImpl(

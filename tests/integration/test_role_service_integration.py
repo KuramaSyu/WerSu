@@ -3,7 +3,9 @@
 Exercises the full role lifecycle against real Postgres + SpiceDB
 containers:
 
-1.  ``create_role`` writes the role row in Postgres.
+1.  ``create_role`` writes the role row in Postgres and grants the
+    creator ``role#admin`` + ``role#member`` in SpiceDB, so the
+    creator holds every permission of the new role.
 2.  ``add_user_to_role`` writes ``user#member_of@role`` into SpiceDB.
 3.  A role granted ``reader`` on a note grants ``view`` to every
     member of that role -- the round-trip from service -> Postgres ->
@@ -18,10 +20,10 @@ containers:
     tuples survive until explicitly deleted (``remove_user_from_role``
     is the canonical way to revoke role-based access).
 8.  ``manage`` permission gates: a caller that does NOT hold
-    ``role#administrator`` on a role cannot add users, update, or
+    ``role#admin`` on a role cannot add users, update, or
     delete the role; the service raises ``PermissionError``.
-9.  ``create_role`` super-admin gate is enforced via the injected
-    ``is_super_admin`` callable.
+9.  ``create_role`` page-admin gate is enforced via the injected
+    ``is_page_admin`` callable.
 
 Multiple checks run in one test because standing up Postgres +
 SpiceDB containers is expensive; grouping keeps the suite fast.
@@ -37,7 +39,6 @@ from src.api import (
     ObjectRef,
     ObjectTypeEnum,
     Relationship,
-    RoleRelationEnum,
     SubjectRef,
 )
 from src.api.other.undefined import UNDEFINED
@@ -53,19 +54,6 @@ from tests.doubles import _DummyUserContext as UserContext
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.spicedb]
-
-
-async def _grant_role_admin(
-    env: IntegrationEnv, *, role_id: str, user_id: str
-) -> None:
-    """Insert ``role:<id>#administrator@user:<id>`` so the user can ``manage`` it."""
-    await env.permission_repo.insert([
-        Relationship(
-            resource=ObjectRef(ObjectTypeEnum.ROLE, role_id),
-            relation=RoleRelationEnum.ADMINISTRATOR,
-            subject=SubjectRef(ObjectTypeEnum.USER, user_id),
-        )
-    ])
 
 
 async def test_role_lifecycle_end_to_end(
@@ -107,22 +95,22 @@ async def test_role_lifecycle_end_to_end(
     member_id = str(member_user.id)
 
     # Restrict ``create_role`` to ``owner_id`` for the duration of
-    # this test by overwriting the injected super-admin lookup.
+    # this test by overwriting the injected page-admin lookup.
     # Mutating the attribute (rather than rebuilding the service)
     # exercises the "mutable lambda" path the public API exposes
     # for tests that already hold a service handle.
-    allowed_super_admins: Set[str] = {owner_id}
+    allowed_page_admins: Set[str] = {owner_id}
 
-    def _is_super_admin(_ctx: object) -> Set[str]:
-        return allowed_super_admins
+    def _is_page_admin(_ctx: object) -> Set[str]:
+        return allowed_page_admins
 
-    role_service.is_super_admin = _is_super_admin  # type: ignore[method-assign]
-    super_admin_ctx = UserContext(owner_id)
+    role_service.is_page_admin = _is_page_admin  # type: ignore[method-assign]
+    page_admin_ctx = UserContext(owner_id)
 
     # ---- check 1: create_role writes the Postgres row --------------
     role = await role_service.create_role(
         RoleEntity(name="engineering", description="all engineers"),
-        super_admin_ctx,
+        page_admin_ctx,
     )
     assert role.id is not UNDEFINED, f"create_role returned a role without an ID: {role!r}"
     assert role.name == "engineering"
@@ -130,23 +118,36 @@ async def test_role_lifecycle_end_to_end(
     role_id = str(role.id)
 
     # Round-trip read.
-    fetched = await role_service.get_role(role_id, super_admin_ctx)
+    fetched = await role_service.get_role(role_id, page_admin_ctx)
     assert fetched is not None, "get_role() returned None for the just-created role"
     assert fetched.id == role_id
     assert fetched.name == "engineering"
 
-    # Owner becomes ``administrator`` on the role so they can mutate it.
-    await _grant_role_admin(env, role_id=role_id, user_id=owner_id)
+    # The repo grants the creator every permission of the freshly
+    # created role: ``admin`` (which every ``role`` permission
+    # derives from) plus ``member``.  No extra grant is needed before
+    # mutating the role.
+    async def _creator_is_role_admin() -> bool:
+        return await env.permission_repo.has_permission(
+            page_admin_ctx,
+            "can_assign_delegate_member",
+            ObjectRef(ObjectTypeEnum.ROLE, role_id),
+        )
+
+    await wait_until(
+        _creator_is_role_admin,
+        description="creator granted admin on the new role",
+    )
 
     # ---- check 2: add_user_to_role writes the SpiceDB edge ---------
     await role_service.add_user_to_role(
         member_id,
         role_id,
-        super_admin_ctx,
+        page_admin_ctx,
     )
 
     async def _is_member() -> bool:
-        ids = await role_service.get_roles_for_user(member_id, super_admin_ctx)
+        ids = await role_service.get_roles_for_user(member_id, page_admin_ctx)
         return any(r.id == role_id for r in ids if r.id is not None)
 
     await wait_until(_is_member, description="role membership visible")
@@ -200,11 +201,11 @@ async def test_role_lifecycle_end_to_end(
     await role_service.remove_user_from_role(
         member_id,
         role_id,
-        super_admin_ctx,
+        page_admin_ctx,
     )
 
     async def _no_longer_member() -> bool:
-        ids = await role_service.get_roles_for_user(member_id, super_admin_ctx)
+        ids = await role_service.get_roles_for_user(member_id, page_admin_ctx)
         return not any(r.id == role_id for r in ids if r.id is not None)
 
     await wait_until(_no_longer_member, description="role membership gone")
@@ -221,7 +222,7 @@ async def test_role_lifecycle_end_to_end(
     # ---- check 5: update_role mutates metadata only ----------------
     updated = await role_service.update_role(
         RoleEntity(id=role_id, description="engineers, redesigned"),
-        super_admin_ctx,
+        page_admin_ctx,
     )
     assert updated.description == "engineers, redesigned"
     assert updated.name == "engineering", "update must not touch name when only description is set"
@@ -231,14 +232,14 @@ async def test_role_lifecycle_end_to_end(
     # exclude.
     second = await role_service.create_role(
         RoleEntity(name="marketing"),
-        super_admin_ctx,
+        page_admin_ctx,
     )
     assert second.id is not UNDEFINED
 
     # By name: should find exactly the engineering role.
     by_name = await role_service.get_roles(
         RoleFilter(name="engineering"),
-        super_admin_ctx,
+        page_admin_ctx,
     )
     assert [r.id for r in by_name if r.id is not None] == [role_id]
 
@@ -246,13 +247,13 @@ async def test_role_lifecycle_end_to_end(
     await role_service.add_user_to_role(
         member_id,
         role_id,
-        super_admin_ctx,
+        page_admin_ctx,
     )
     await wait_until(_is_member, description="member re-added")
 
     by_member = await role_service.get_roles(
         RoleFilter(member_id=member_id),
-        super_admin_ctx,
+        page_admin_ctx,
     )
     assert any(r.id == role_id for r in by_member if r.id is not None)
     # Marketing role does NOT match because the member is only in engineering.
@@ -260,13 +261,13 @@ async def test_role_lifecycle_end_to_end(
 
     # get_users_for_role walks SpiceDB membership edges.
     users_for_role = await role_service.get_users_for_role(
-        role_id, super_admin_ctx
+        role_id, page_admin_ctx
     )
     assert any(m.user_id == member_id for m in users_for_role)
 
     # ---- check 7: delete_role drops the row -------------------------
-    await role_service.delete_role(role_id, super_admin_ctx)
-    assert await role_service.get_role(role_id, super_admin_ctx) is None
+    await role_service.delete_role(role_id, page_admin_ctx)
+    assert await role_service.get_role(role_id, page_admin_ctx) is None
 
     # SpiceDB has no "delete a role" concept: roles live as objects
     # and the membership + reader edges remain in SpiceDB until
@@ -279,7 +280,7 @@ async def test_role_lifecycle_end_to_end(
     await role_service.remove_user_from_role(
         member_id,
         role_id,
-        super_admin_ctx,
+        page_admin_ctx,
     )
 
     async def _no_view_after_revoke() -> bool:
@@ -293,14 +294,14 @@ async def test_role_lifecycle_end_to_end(
 
     # ---- check 8: manage-permission gate ----------------------------
     # The second user (``member_user``) is a *member* of the second
-    # role (not an administrator).  They must NOT be allowed to
-    # update or delete that role.  Grant the owner administrator on
-    # the second role first so we can use them to add member_id.
-    await _grant_role_admin(env, role_id=str(second.id), user_id=owner_id)
+    # role (not an admin).  They must NOT be allowed to
+    # update or delete that role.  The owner can add them because
+    # ``create_role`` already granted the owner ``admin`` on
+    # the second role.
     await role_service.add_user_to_role(
-        member_id, str(second.id), super_admin_ctx
+        member_id, str(second.id), page_admin_ctx
     )
-    # member is NOT an administrator on the role.
+    # member is NOT an admin on the role.
     with pytest.raises(PermissionError):
         await role_service.update_role(
             RoleEntity(id=str(second.id), description="should not work"),
@@ -321,19 +322,19 @@ async def test_role_lifecycle_end_to_end(
             UserContext(member_id),
         )
 
-    # The owner already holds ``administrator`` on the second role
-    # (granted above).  Update through them to verify the gate
+    # The owner holds ``admin`` on the second role (granted
+    # by ``create_role``).  Update through them to verify the gate
     # flips back to allow.
     updated2 = await role_service.update_role(
         RoleEntity(id=str(second.id), description="now allowed"),
-        super_admin_ctx,
+        page_admin_ctx,
     )
     assert updated2.description == "now allowed"
 
-    # ---- check 9: create_role super-admin gate ----------------------
-    # Tighten the super-admin lookup to an empty set; member_user is
+    # ---- check 9: create_role page-admin gate ----------------------
+    # Tighten the page-admin lookup to an empty set; member_user is
     # now not allowed and must be rejected.
-    allowed_super_admins.clear()
+    allowed_page_admins.clear()
     with pytest.raises(PermissionError):
         await role_service.create_role(
             RoleEntity(name="forbidden"),
@@ -342,14 +343,14 @@ async def test_role_lifecycle_end_to_end(
 
     # ---- check 10: input validation --------------------------------
     with pytest.raises(ValueError):
-        await role_service.create_role(RoleEntity(name=UNDEFINED), super_admin_ctx)
+        await role_service.create_role(RoleEntity(name=UNDEFINED), page_admin_ctx)
     with pytest.raises(ValueError):
-        await role_service.update_role(RoleEntity(name="x"), super_admin_ctx)
+        await role_service.update_role(RoleEntity(name="x"), page_admin_ctx)
     with pytest.raises(ValueError):
         await role_service.add_user_to_role(
-            user_id="", role_id=str(second.id), ctx=super_admin_ctx
+            user_id="", role_id=str(second.id), ctx=page_admin_ctx
         )
     with pytest.raises(ValueError):
         await role_service.add_user_to_role(
-            user_id=member_id, role_id="", ctx=super_admin_ctx
+            user_id=member_id, role_id="", ctx=page_admin_ctx
         )
