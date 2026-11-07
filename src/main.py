@@ -2,7 +2,7 @@ import logging
 import sys
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import asyncio
 from typing import Any, Dict, List
@@ -47,6 +47,7 @@ from src.services.background_process import (
 )
 from src.services.background_process.processes import (
     MissingEmbeddingProcessImpl,
+    TrashUnlinkedAttachmentsProcessImpl,
     UserDisableProcessImpl,
     UserEnableProcessImpl,
 )
@@ -71,6 +72,7 @@ from src.db.repos.attachments.attachments import (
     AttachmentRepoABC,
     AttachmentS3Repo,
 )
+from src.db.repos.attachments.trash import PostgresAttachmentTrashRepo
 from src.db.repos.user import RepoContextFactory
 from src.db.repos.user.user import UserPostgresRepo
 from src.db.repos.user.user_auth_postgres import PostgresUserAuthRepoImpl
@@ -169,6 +171,27 @@ async def serve():
     s3_secret_key = get_os_env_variable("GARAGE_DEFAULT_SECRET_KEY",log, UNDEFINED)
     s3_bucket = get_os_env_variable("GARAGE_DEFAULT_BUCKET", log, UNDEFINED)
     jwt_secret = get_os_env_variable("JWT_SECRET", log, UNDEFINED)
+    attachment_trash_interval = timedelta(
+        seconds=int(
+            get_os_env_variable(
+                "ATTACHMENT_TRASH_INTERVAL_SECONDS", log, "3600"
+            )
+        )
+    )
+    attachment_trash_grace_period = timedelta(
+        seconds=int(
+            get_os_env_variable(
+                "ATTACHMENT_TRASH_GRACE_SECONDS", log, "86400"
+            )
+        )
+    )
+    attachment_trash_retention_period = timedelta(
+        seconds=int(
+            get_os_env_variable(
+                "ATTACHMENT_TRASH_RETENTION_SECONDS", log, "2592000"
+            )
+        )
+    )
 
     # create server 
     server = grpc.aio.server()
@@ -775,6 +798,16 @@ async def serve():
         embedding_repo=embedding_repo,
         log=logging_provider,
     )
+    trash_attachment_process = TrashUnlinkedAttachmentsProcessImpl(
+        trash_repo=PostgresAttachmentTrashRepo(db=db),
+        attachment_repo=attachments_repo,
+        permission_repo=permission_repo,
+        get_now=lambda: datetime.now(),
+        log=logging_provider,
+        interval=attachment_trash_interval,
+        grace_period=attachment_trash_grace_period,
+        retention_period=attachment_trash_retention_period,
+    )
     background_scheduler = BackgroundSchedulerImpl(
         clock=AsyncClockAsyncio(),
         task_spawner=TaskSpawnerAsyncio(),
@@ -791,6 +824,7 @@ async def serve():
         on_handle=user_enable_listener.bind,
     )
     background_scheduler.register(missing_embedding_process)
+    background_scheduler.register(trash_attachment_process)
     background_scheduler.attach_handles()
     background_scheduler.start()
 

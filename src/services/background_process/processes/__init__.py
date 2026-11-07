@@ -1,10 +1,15 @@
 """Concrete :class:`BackgroundProcessABC` implementations.
 
-User-action pair plus the one-shot
+User-action pair, the one-shot
 :class:`~.missing_embedding_process.MissingEmbeddingProcessImpl` that
-backfills embeddings on startup.
+backfills embeddings on startup, and the periodic
+:class:`~.trash_unlinked_attachments_process.TrashUnlinkedAttachmentsProcessImpl`
+that trashes and purges unlinked attachments.
 """
 
 from .missing_embedding_process import MissingEmbeddingProcessImpl  # noqa: F401
+from .trash_unlinked_attachments_process import (  # noqa: F401
+    TrashUnlinkedAttachmentsProcessImpl,
+)
 from .user_disable_process import UserDisableProcessImpl  # noqa: F401
 from .user_enable_process import UserEnableProcessImpl  # noqa: F401

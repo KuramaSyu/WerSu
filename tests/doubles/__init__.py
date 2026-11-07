@@ -33,6 +33,9 @@ from tests.doubles.spys import _RecordingEmbeddingGenerator  # noqa: F401
 from tests.doubles.spys import _RecordingEmbeddingRepo  # noqa: F401
 from tests.doubles.fakes import InMemoryAttachmentRepo  # noqa: F401
 from tests.doubles.fakes import InMemoryAttachmentMetadataRepo  # noqa: F401
+from tests.doubles.fakes import InMemoryAttachmentTrashRepo  # noqa: F401
+from tests.doubles.fakes import FailingAttachmentRepo  # noqa: F401
+from tests.doubles.fakes import RecordingAttachmentPermissionRepo  # noqa: F401
 from tests.doubles.fakes import ManualClock  # noqa: F401
 from tests.doubles.fakes import InMemoryTaskHandle  # noqa: F401
 from tests.doubles.fakes import InMemoryTaskSpawner  # noqa: F401

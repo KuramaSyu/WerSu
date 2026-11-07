@@ -5,6 +5,9 @@ from __future__ import annotations
 from tests.doubles.fakes.attachments import (
     InMemoryAttachmentRepo,
     InMemoryAttachmentMetadataRepo,
+    InMemoryAttachmentTrashRepo,
+    FailingAttachmentRepo,
+    RecordingAttachmentPermissionRepo,
 )
 
 from tests.doubles.fakes.background_process import (
