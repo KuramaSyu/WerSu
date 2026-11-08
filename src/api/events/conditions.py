@@ -78,9 +78,27 @@ class NoteTitleContains:
     type: ConditionType = "note_title_contains"
 
 
+@dataclass(frozen=True)
+class NoteHasNoDirectory:
+    """True when ``note_id`` has no parent directory.
+
+    Used by the default-fleeting rule: a note created without an
+    explicit directory (the frontend only supplied its shelf) is
+    routed into ``fleeting_notes``, while a note that already
+    carries a directory keeps exactly that placement.
+    """
+
+    type: ConditionType = "note_has_no_directory"
+
+
 # Union type used by the service / repo layer to type-annotate a
 # deserialised condition.  Add new variants here.
-Condition = Union[AlwaysTrue, NoteContentContains, NoteTitleContains]
+Condition = Union[
+    AlwaysTrue,
+    NoteContentContains,
+    NoteTitleContains,
+    NoteHasNoDirectory,
+]
 
 
 # ---- (de)serialisation ----------------------------------------------------
@@ -103,7 +121,15 @@ def serialise_condition(condition: Condition) -> dict[str, Any]:
     Raises:
         TypeError: when ``condition`` is not a known variant.
     """
-    if not isinstance(condition, (AlwaysTrue, NoteContentContains, NoteTitleContains)):
+    if not isinstance(
+        condition,
+        (
+            AlwaysTrue,
+            NoteContentContains,
+            NoteTitleContains,
+            NoteHasNoDirectory,
+        ),
+    ):
         raise TypeError(
             f"unknown condition variant: {type(condition).__name__}"
         )
@@ -145,6 +171,8 @@ def deserialise_condition(payload: Mapping[str, Any]) -> Condition:
                 "note_title_contains requires a non-empty 'substring' field"
             )
         return NoteTitleContains(substring=substring)
+    if ctype == "note_has_no_directory":
+        return NoteHasNoDirectory()
     raise ValueError(f"unknown condition type: {ctype!r}")
 
 
@@ -152,6 +180,7 @@ __all__ = [
     "AlwaysTrue",
     "NoteContentContains",
     "NoteTitleContains",
+    "NoteHasNoDirectory",
     "Condition",
     "serialise_condition",
     "deserialise_condition",

@@ -91,6 +91,7 @@ async def test_apply_creates_three_default_books_and_a_rule() -> None:
         attached_entity_id=sid,
     )
     assert len(rules) == 1
+    assert rules[0].condition == {"type": "note_has_no_directory"}
     assert rules[0].action_context["directory_id"] in bound
 
 
@@ -268,6 +269,7 @@ async def test_ensure_rule_helper_inserts_when_missing() -> None:
         attached_entity_id="shelf-1",
     )
     assert len(rules) == 1
+    assert rules[0].condition == {"type": "note_has_no_directory"}
     assert rules[0].action_context["directory_id"] == "dir-fleeting"
     assert rules[0].creator_id == "user-1"
 

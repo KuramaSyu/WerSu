@@ -414,6 +414,7 @@ async def test_create_user_bootstraps_shelf_books_and_rule(
         )
     rule = rules[0]
     assert rule.action_type == "add_to_directory"
+    assert rule.condition == {"type": "note_has_no_directory"}
     assert rule.enabled is True
     fleeting_book = next(
         d for d in books if d is not None and d.slug == "fleeting_notes"

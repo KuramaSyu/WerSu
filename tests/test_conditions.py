@@ -7,6 +7,7 @@ import pytest
 from src.api.events.conditions import (
     AlwaysTrue,
     NoteContentContains,
+    NoteHasNoDirectory,
     NoteTitleContains,
     deserialise_condition,
     serialise_condition,
@@ -33,6 +34,12 @@ def test_serialise_note_title_contains():
     assert serialise_condition(cond) == {
         "type": "note_title_contains",
         "substring": "hello",
+    }
+
+
+def test_serialise_note_has_no_directory():
+    assert serialise_condition(NoteHasNoDirectory()) == {
+        "type": "note_has_no_directory",
     }
 
 
@@ -63,6 +70,12 @@ def test_deserialise_note_title_contains():
         {"type": "note_title_contains", "substring": "hi"}
     )
     assert cond == NoteTitleContains(substring="hi")
+
+
+def test_deserialise_note_has_no_directory():
+    assert deserialise_condition(
+        {"type": "note_has_no_directory"}
+    ) == NoteHasNoDirectory()
 
 
 def test_deserialise_missing_type_raises():
@@ -100,6 +113,7 @@ def test_deserialise_empty_substring_raises():
         NoteContentContains(substring="linux"),
         NoteContentContains(substring="a long substring with spaces"),
         NoteTitleContains(substring="title fragment"),
+        NoteHasNoDirectory(),
     ],
 )
 def test_round_trip(cond):

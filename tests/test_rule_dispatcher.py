@@ -175,6 +175,37 @@ async def test_note_content_contains_only_fires_on_match():
     assert child_id == "n1"
 
 
+async def test_note_has_no_directory_only_fires_for_unassigned_notes():
+    """The default-fleeting condition skips notes already placed in a dir."""
+    class Ctx(NoopEventContext):
+        async def note_parent_directory_id(self, note_id):
+            return {"n-placed": "d-existing"}.get(note_id)
+
+    dispatcher, _, directory_repo, _ = await _build(
+        rules=[
+            _rule(
+                event_type="NoteCreated",
+                condition={"type": "note_has_no_directory"},
+                attached_entity_type="note",
+                attached_entity_id="n-orphan",
+            ),
+            _rule(
+                event_type="NoteCreated",
+                condition={"type": "note_has_no_directory"},
+                attached_entity_type="note",
+                attached_entity_id="n-placed",
+            ),
+        ],
+        context=Ctx(),
+    )
+
+    await dispatcher._dispatch(NoteCreated(note_id="n-orphan", actor_id="u"))
+    await dispatcher._dispatch(NoteCreated(note_id="n-placed", actor_id="u"))
+
+    assert len(directory_repo.calls) == 1
+    assert directory_repo.calls[0][3] == "n-orphan"
+
+
 async def test_always_true_does_not_call_data_fetchers():
     """A no-op condition must not query the context for content."""
     fetched: list[str] = []

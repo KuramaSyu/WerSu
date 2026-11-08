@@ -185,7 +185,7 @@ async def ensure_default_fleeting_rule(
             event_type="NoteCreated",
             attached_entity_type="shelf",
             attached_entity_id=shelf_id,
-            condition={"type": "always_true"},
+            condition={"type": "note_has_no_directory"},
             action_type="add_to_directory",
             action_context={"directory_id": str(fleeting_directory_id)},
             enabled=True,

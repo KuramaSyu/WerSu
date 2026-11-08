@@ -50,6 +50,7 @@ from src.api.events.conditions import (
     AlwaysTrue,
     Condition,
     NoteContentContains,
+    NoteHasNoDirectory,
     NoteTitleContains,
     deserialise_condition,
 )
@@ -429,6 +430,12 @@ class RuleDispatcher:
             if title is None:
                 return False
             return condition.substring in title
+        if isinstance(condition, NoteHasNoDirectory):
+            note_id = event_primary_entity_id(event)
+            if note_id is None or not isinstance(event, (NoteCreated, NoteUpdated)):
+                return False
+            parent_id = await self._context.note_parent_directory_id(note_id)
+            return parent_id is None
         return False
 
 

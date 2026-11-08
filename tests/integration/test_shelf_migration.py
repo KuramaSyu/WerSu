@@ -282,6 +282,7 @@ async def test_migration_bootstrap_for_various_pre_states(
         pytest.fail(f"expected 1 NoteCreated rule, got {len(rules)}")
     rule = rules[0]
     assert rule.action_type == "add_to_directory"
+    assert rule.condition == {"type": "note_has_no_directory"}
     fleeting = next(
         d for d in books if d is not None and d.slug == "fleeting_notes"
     )
