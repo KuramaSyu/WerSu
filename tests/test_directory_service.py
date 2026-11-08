@@ -247,6 +247,19 @@ async def test_create_directory_grants_caller_owner_relation() -> None:
     assert owner_rel.subject.object_id == "user-1"
 
 
+async def test_create_directory_forwards_shelf_ids_to_facade() -> None:
+    """Shelf membership from the create request reaches the facade."""
+    service, directory_repo, _, _, _ = _make_service()
+
+    await service.create_directory(
+        DirectoryEntity(slug="root", shelf_ids=["shelf-1", "shelf-2"]),
+        _DummyUserContext("user-1"),
+    )
+
+    assert len(directory_repo.created) == 1
+    assert list(directory_repo.created[0].shelf_ids) == ["shelf-1", "shelf-2"]
+
+
 async def test_create_directory_binds_readme_note_when_not_supplied() -> None:
     """A fresh directory auto-creates a ``README.md`` and binds its id."""
     service, directory_repo, note_repo, permission_repo, _activity_logger = _make_service()

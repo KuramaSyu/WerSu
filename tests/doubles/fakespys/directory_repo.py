@@ -108,6 +108,7 @@ class _FakeSpyDirectoryRepo(DirectoryFacadeABC):
             image_url=entity.image_url,
             readme_note_id=entity.readme_note_id,
             parent_directory_ids=entity.parent_directory_ids,
+            shelf_ids=entity.shelf_ids,
             tag_ids=entity.tag_ids,
             relations=entity.relations,
         )

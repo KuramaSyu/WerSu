@@ -86,8 +86,10 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
         parent_ids = entity.parent_directory_ids
         if parent_ids:
             await self._replace_parents(dir_id, list(parent_ids))
-        elif entity.shelf_ids:
-            # No directory parent -> bind to every supplied shelf.
+
+        # Shelf membership is independent of directory parents: a book
+        # can sit on a shelf and still be nested under a directory.
+        if entity.shelf_ids:
             for sid in non_empty(entity.shelf_ids):
                 await self._shelf_repo.add_book(
                     sid, dir_id, user_ctx=user_ctx,

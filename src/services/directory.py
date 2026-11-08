@@ -246,6 +246,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
                 description=entity.description,
                 image_url=entity.image_url,
                 parent_directory_ids=entity.parent_directory_ids,
+                shelf_ids=entity.shelf_ids,
                 tag_ids=entity.tag_ids,
                 readme_note_id=entity.readme_note_id,
                 relations=UNDEFINED,  # dir#admin@user will be created in the facade
@@ -282,10 +283,18 @@ class DirectoryServiceImpl(DirectoryServiceABC):
             if not readme:
                 self.log.warning(f"failed to fetch README note for directory {created_dir.id} to link attachment {attachment_key}")
             else:
-                await self._update_readme(readme, user_ctx, attachment_key=attachment_key)
+                await self._update_readme(
+                    readme,
+                    user_ctx,
+                    display_name=created_dir.display_name,
+                    description=created_dir.description,
+                    image_url=created_dir.image_url,
+                    attachment_key=attachment_key,
+                )
 
         refreshed = await self._directory_facade.fetch_directory(
-            str(created_dir.id)
+            str(created_dir.id),
+            include={"include_child_notes": True, "include_shelves": True},
         )
         if refreshed is not None:
             created_dir = refreshed
@@ -316,6 +325,23 @@ class DirectoryServiceImpl(DirectoryServiceABC):
 
         updated = await self._directory_facade.update_directory(entity)
         if updated is not None:
+            # Keep the README in sync with the directory metadata.  The
+            # read path overlays README fields onto the directory, so a
+            # patch that only updates the directory row would be hidden
+            # by the next read.
+            readme_id = updated.readme_note_id
+            if readme_id not in (UNDEFINED, None):
+                readme = await self._note_facade.select_by_id(
+                    str(readme_id), user_ctx
+                )
+                if readme is not None:
+                    await self._update_readme(
+                        readme,
+                        user_ctx,
+                        display_name=entity.display_name,
+                        description=entity.description,
+                        image_url=entity.image_url,
+                    )
             await self._activity_logger.directory_edited(
                 str(entity.id), user_ctx,
                 metadata=entity.convert(self._to_metadata),
@@ -493,33 +519,62 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         self,
         readme: NoteEntity,
         user_ctx: UserContextABC,
+        *,
+        display_name: object = UNDEFINED,
+        description: object = UNDEFINED,
+        image_url: object = UNDEFINED,
         attachment_key: Optional[str] = None,
     ) -> NoteEntity:
-        """Updates the README and links the attachment if provided. """
-        # now we have the ID -> link the attachment key to the note
+        """Update the README's title/description/image and link its attachment.
+
+        ``display_name``, ``description`` and ``image_url`` use the same
+        UNDEFINED semantics as the rest of the service layer: omitted
+        values keep the README's existing parsed value.  ``image_url``
+        may be either a raw attachment URL or a markdown image URL; the
+        attachment key is extracted so the README's image can be linked
+        to the note.
+        """
+        parsed = parse_readme(unwrap_undefined_or(readme.content, None))
+
+        if attachment_key is None and image_url not in (UNDEFINED, None, ""):
+            attachment_ids = extract_attachment_ids(str(image_url))
+            if attachment_ids:
+                attachment_key = attachment_ids[0]
+
         if attachment_key:
             await self._attachment_facade.link_attachment(
-                attachment_key, "note", unwrap_undefined(readme.note_id), user_ctx
+                attachment_key,
+                "note",
+                unwrap_undefined(readme.note_id),
+                user_ctx,
             )
 
-        # miss use ParseReadme to create one
-        title = readme.title or "README.md"
-        content = readme.content or ""
-        ParsedReadme(
-            title=title,
-            description=content,
-            image_url=build_attachment_url(attachment_key) if attachment_key else None,
+        next_title: Optional[str] = (
+            str(display_name)
+            if display_name not in (UNDEFINED, None, "")
+            else parsed.title
+        )
+        next_description: str = (
+            str(description)
+            if description not in (UNDEFINED, None)
+            else parsed.description
+        )
+        next_image_url: Optional[str] = (
+            build_attachment_url(attachment_key)
+            if attachment_key
+            else (
+                str(image_url)
+                if image_url not in (UNDEFINED, None, "")
+                else parsed.image_url
+            )
         )
 
-        # update the readme if any of the fields are provided
-        if readme.title or readme.content or attachment_key:
-            content = ParsedReadme(
-                title=title,
-                description=content,
-                image_url=build_attachment_url(attachment_key) if attachment_key else None,
-            ).write_readme()
-            return await self._note_service.update_note(readme, user_ctx)
-        return readme
+        readme.content = ParsedReadme(
+            title=next_title,
+            description=next_description,
+            image_url=next_image_url,
+        ).write_readme()
+        return await self._note_service.update_note(readme, user_ctx)
 
 
     async def _create_readme(
