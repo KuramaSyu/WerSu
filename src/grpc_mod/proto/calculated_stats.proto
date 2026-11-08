@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package proto;
+option go_package = "github.com/KuramaSyu/WerSu-Rest/src/proto;proto";
+
+// Precomputed per-user statistics.  One row is stored per user and
+// refreshed by the daily background process (or, later, by a
+// note-update trigger).
+message CalculatedStats {
+    string user_id = 1;
+    // Sum of character counts over every note the user can view.
+    int64 total_chars = 2;
+    // Number of notes the user can view.
+    int64 total_notes = 3;
+    // Visible directories with at least one parent (non-upper dirs).
+    int64 total_chapters = 4;
+    // Visible directories without a parent (upper / top-level dirs).
+    int64 total_books = 5;
+    // When this row was last recomputed.
+    google.protobuf.Timestamp calculated_at = 6;
+}
+
+message GetCalculatedStatsRequest {
+    // Caller identity.  Required.
+    string user_id = 1;
+    // Target user.  Empty means "the caller".  Reading another user's
+    // stats requires page-administrator access.
+    optional string target_user_id = 2;
+}
+
+message GetCalculatedStatsResponse {
+    CalculatedStats stats = 1;
+}
+
+service CalculatedStatsService {
+    // Return the stored stats for the caller or another user.
+    rpc GetCalculatedStats(GetCalculatedStatsRequest) returns (GetCalculatedStatsResponse);
+}

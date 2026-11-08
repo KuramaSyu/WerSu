@@ -7,6 +7,7 @@ backfills embeddings on startup, and the periodic
 that trashes and purges unlinked attachments.
 """
 
+from .calculated_stats_process import CalculatedStatsProcessImpl  # noqa: F401
 from .missing_embedding_process import MissingEmbeddingProcessImpl  # noqa: F401
 from .trash_unlinked_attachments_process import (  # noqa: F401
     TrashUnlinkedAttachmentsProcessImpl,

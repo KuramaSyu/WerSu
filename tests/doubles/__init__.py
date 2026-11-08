@@ -51,6 +51,7 @@ from tests.doubles.fakes import _FakeDirectoryTable  # noqa: F401
 from tests.doubles.fakes import _FakeDirectoryTagsTable  # noqa: F401
 from tests.doubles.fakes import _project  # noqa: F401
 from tests.doubles.fakes import _FakeCombinedNoteRepo  # noqa: F401
+from tests.doubles.fakes import _FakeCalculatedStatsRepo  # noqa: F401
 from tests.doubles.fakespys import _FakeSpyActivityLoggerService  # noqa: F401
 from tests.doubles.fakespys import _FakeSpyActivityRepo  # noqa: F401
 from tests.doubles.fakespys import FakeSpyBackgroundProcess  # noqa: F401

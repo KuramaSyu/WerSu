@@ -9,7 +9,9 @@ from typing import Any, Dict, List
 import boto3  # type: ignore[reportUnknownMemberType]
 import grpc
 
+from src.api.repos.calculated_stats_repo import CalculatedStatsRepoABC
 from src.api.services.activity_statistics_service import ActivityStatisticsServiceABC
+from src.api.services.calculated_stats_service import CalculatedStatsServiceABC
 from src.api.services.jwt_provider import JwtProvider
 from src.api.services.sharing import ShareAccessServiceABC, SharingRepoABC
 from src.api.services.role import RoleServiceABC
@@ -28,7 +30,9 @@ from src.db.repos.permissions.postgres_audit import PostgresPermissionAuditRepo
 from src.domain.share_policy import GrantPermissionFactory
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.grpc_mod.activity_statistics_service import GrpcActivityStatisticsService
+from src.grpc_mod.calculated_stats_service import GrpcCalculatedStatsService
 from src.grpc_mod.proto.activity_pb2_grpc import add_ActivityStatisticsServiceServicer_to_server  # type: ignore[attr-defined]
+from src.grpc_mod.proto.calculated_stats_pb2_grpc import add_CalculatedStatsServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.sharing_pb2_grpc import add_SharingServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.role_pb2_grpc import add_RoleServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.rule_pb2_grpc import add_RuleServiceServicer_to_server  # type: ignore[attr-defined]
@@ -46,6 +50,7 @@ from src.services.background_process import (
     TaskSpawnerAsyncio,
 )
 from src.services.background_process.processes import (
+    CalculatedStatsProcessImpl,
     MissingEmbeddingProcessImpl,
     TrashUnlinkedAttachmentsProcessImpl,
     UserDisableProcessImpl,
@@ -53,6 +58,7 @@ from src.services.background_process.processes import (
 )
 from src.services.activity_logger_service import ActivityLoggerServiceImpl
 from src.services.activity_statistics_service import ActivityStatisticsServiceImpl
+from src.services.calculated_stats_service import CalculatedStatsServiceImpl
 from src.services.sharing import SharingServiceImpl
 from src.services.role_service import RoleServiceImpl
 from src.services.note import NoteServiceImpl
@@ -82,6 +88,7 @@ from src.db.repos.user.notifying_user_action_repo import (
 )
 from src.db.repos.user.user_action import UserActionPostgresRepo
 from src.db.repos.activity.postgres import PostgresActivityRepo
+from src.db.repos.calculated_stats.postgres import PostgresCalculatedStatsRepo
 from src.db.table import Table, setup_table_logging
 from src.grpc_mod.proto.attachments_pb2_grpc import add_AttachmentServiceServicer_to_server  # type: ignore[attr-defined]
 from src.grpc_mod.proto.preferences_pb2_grpc import add_PreferencesServiceServicer_to_server  # type: ignore[attr-defined]
@@ -241,6 +248,7 @@ async def serve():
         ("note.directory_tag", ["directory_id", "tag_id"]),
         ("note.note_tag", ["note_id", "tag_id"]),
         ("preferences", ["id"]),
+        ("calculated_stats", ["user_id"]),
     )
     tables = {
         name: Table(**common_table_kwargs, table_name=name, id_fields=ids)
@@ -272,6 +280,7 @@ async def serve():
     directory_tags_table = tables["note.directory_tag"]
     note_tags_table = tables["note.note_tag"]
     preferences_table = tables["preferences"]
+    calculated_stats_table = tables["calculated_stats"]
 
     # setup S3 connection
     s3_client: Any = boto3.client(  # type: ignore[reportUnknownMemberType]
@@ -463,6 +472,14 @@ async def serve():
         to_postgres_row=postgres_visitor,
     )
 
+    calculated_stats_repo: CalculatedStatsRepoABC = PostgresCalculatedStatsRepo(
+        stats_table=calculated_stats_table,
+        note_content_table=content_table,
+        directory_table=directory_table,
+        directory_subdirectory_table=directory_subdirectory_table,
+        user_table=auth_user_table,
+    )
+
     preferences_service = PreferencesServiceImpl(
         preferences_repo=preferences_repo,
         permission_repo=permission_repo,
@@ -471,6 +488,12 @@ async def serve():
 
     tag_service: TagServiceABC = TagServiceImpl(
         tag_repo=tag_repo,
+        logging_provider=logging_provider,
+    )
+
+    calculated_stats_service: CalculatedStatsServiceABC = CalculatedStatsServiceImpl(
+        stats_repo=calculated_stats_repo,
+        permission_repo=permission_repo,
         logging_provider=logging_provider,
     )
 
@@ -748,6 +771,16 @@ async def serve():
     )
     add_ActivityStatisticsServiceServicer_to_server(grpc_activity_statistics_service, server)
 
+    # setup gRPC calculated-stats service (precomputed per-user counts)
+    grpc_calculated_stats_service = GrpcCalculatedStatsService(
+        stats_service=calculated_stats_service,
+        log=logging_provider,
+        context_factory=user_context_factory,
+    )
+    add_CalculatedStatsServiceServicer_to_server(
+        grpc_calculated_stats_service, server
+    )
+
     # construct runner which needs a lot of the just
     # created services
     log.info("Running migrations...")
@@ -808,6 +841,11 @@ async def serve():
         grace_period=attachment_trash_grace_period,
         retention_period=attachment_trash_retention_period,
     )
+    calculated_stats_process = CalculatedStatsProcessImpl(
+        stats_service=calculated_stats_service,
+        get_now=lambda: datetime.now(),
+        log=logging_provider,
+    )
     background_scheduler = BackgroundSchedulerImpl(
         clock=AsyncClockAsyncio(),
         task_spawner=TaskSpawnerAsyncio(),
@@ -825,6 +863,7 @@ async def serve():
     )
     background_scheduler.register(missing_embedding_process)
     background_scheduler.register(trash_attachment_process)
+    background_scheduler.register(calculated_stats_process)
     background_scheduler.attach_handles()
     background_scheduler.start()
 

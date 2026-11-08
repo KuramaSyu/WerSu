@@ -63,6 +63,7 @@ from src.api.repos.permission_repo import (
     DirectoryChild,
 )
 from src.api.repos.permission_audit_repo import PermissionAuditRepoABC
+from src.api.repos.calculated_stats_repo import CalculatedStatsRepoABC
 from src.api.repos.activity_repo import ActivityRepoABC, ActivityFilterBuilder
 from src.api.repos.user_action_repo import UserActionRepoABC
 from src.api.repos.preferences_repo import (
@@ -110,6 +111,7 @@ from src.api.services.activity_statistics_service import (
     ActivityStatisticsServiceABC,
     Algorithm,
 )
+from src.api.services.calculated_stats_service import CalculatedStatsServiceABC
 from src.api.services.attachment_facade import AttachmentFacadeABC, LinkTargetType
 from src.api.services.directory_activity_service import DirectoryActivityServiceABC
 from src.api.services.sharing import (
@@ -187,6 +189,7 @@ __all__ = [
     # repos
     "PermissionRepoABC",
     "PermissionAuditRepoABC",
+    "CalculatedStatsRepoABC",
     "ResolvedChildren",
     "DirectoryChild",
     "ActivityRepoABC",
@@ -218,6 +221,7 @@ __all__ = [
     "RoleGrantMetadata",
     "RoleRevokeMetadata",
     "ActivityStatisticsServiceABC",
+    "CalculatedStatsServiceABC",
     "Algorithm",
     "AttachmentFacadeABC",
     "DirectoryActivityServiceABC",

@@ -50,3 +50,7 @@ from tests.doubles.fakes.combined_note_repo import (
 from tests.doubles.fakes.permission_audit_repo import (
     FakePermissionAuditRepo,
 )
+
+from tests.doubles.fakes.calculated_stats_repo import (
+    _FakeCalculatedStatsRepo,
+)
