@@ -13,7 +13,10 @@ from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.embedding import NoteEmbeddingEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.note.tag import TagEntity
-from src.db.entities.note.versioning import NoteVersionEntry
+from src.db.entities.note.versioning import (
+    NoteVersionCompactionResult,
+    NoteVersionEntry,
+)
 from src.api.facades.directory_facade import DirectoryFacadeABC
 from src.api.repos.directory_repo import (
     DirectoryChildType,
@@ -66,6 +69,9 @@ class _StubVersionRepo(NoteVersionRepoABC):
 
     async def get_content_at_version(self, note_id: str, version_index: int):  # type: ignore[override]
         raise NotImplementedError()
+
+    async def compact_deltas_before(self, cutoff):  # type: ignore[override]
+        return NoteVersionCompactionResult()
 
 
 __all__ = [

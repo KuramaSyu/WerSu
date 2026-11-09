@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import date, datetime
 import difflib
 import json
 from typing import List, Optional
@@ -9,6 +9,7 @@ from typing import List, Optional
 from asyncpg import Record
 
 from src.db.entities.note.versioning import (
+    NoteVersionCompactionResult,
     NoteVersionContent,
     NoteVersionDeltaEntity,
     NoteVersionEntry,
@@ -73,6 +74,28 @@ class NoteVersionRepoABC(ABC):
         version_index: int,
     ) -> NoteVersionContent:
         """Reconstruct note content at a specific version index."""
+        ...
+
+    @abstractmethod
+    async def compact_deltas_before(
+        self,
+        cutoff: datetime,
+    ) -> NoteVersionCompactionResult:
+        """Collapse deltas older than ``cutoff`` into one delta per day.
+
+        For every note and snapshot, all deltas created on the same
+        calendar day are rewritten as a single delta on the *last*
+        version index of that day.  The day's earlier version indices
+        are removed, so only the day's final state stays restorable.
+
+        Groups are keyed by ``(note_id, snapshot_id, date)`` so a
+        snapshot created mid-day starts a new group and older, already
+        compacted days are left untouched (a one-delta group is a
+        no-op).  The operation is idempotent.
+
+        Returns:
+            Counts of notes changed and delta rows removed.
+        """
         ...
 
 
@@ -297,6 +320,15 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         note_id: str,
         version_index: int,
     ) -> NoteVersionContent:
+        # Compaction removes old version indices. A stale client still
+        # holding the pre-compaction list must get an error instead of
+        # silently reconstructing an older base state as if it were
+        # the requested version.
+        if not await self._version_exists(note_id, version_index):
+            raise RuntimeError(
+                f"Version {version_index} does not exist for note {note_id}"
+            )
+
         snapshot = await self._get_snapshot_for_version(note_id, version_index)
         if snapshot is None:
             raise RuntimeError(f"No snapshot found for note {note_id} at version {version_index}")
@@ -335,6 +367,91 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
             title=title,
             content=content,
         )
+
+    async def compact_deltas_before(
+        self,
+        cutoff: datetime,
+    ) -> NoteVersionCompactionResult:
+        sql = f"""
+            SELECT delta_id, note_id, snapshot_id, version_index, created_at,
+                   author_id, title_patch, content_patch
+            FROM {self._delta_table.name}
+            WHERE created_at < $1
+            ORDER BY note_id, snapshot_id, version_index ASC
+        """
+        rows = await self._delta_table.fetch(sql, cutoff)
+        if not rows:
+            return NoteVersionCompactionResult()
+
+        groups: dict[tuple[str, str, date], list[Record]] = {}
+        for row in rows:
+            group_key = (
+                str(row["note_id"]),
+                str(row["snapshot_id"]),
+                row["created_at"].date(),
+            )
+            groups.setdefault(group_key, []).append(row)
+
+        result = NoteVersionCompactionResult()
+        for (note_id, snapshot_id, _day), group in groups.items():
+            if len(group) < 2:
+                # Already compacted (or only one save that day).
+                continue
+
+            group.sort(key=lambda row: int(row["version_index"]))
+            first_index = int(group[0]["version_index"])
+            last_index = int(group[-1]["version_index"])
+
+            # Reconstruct the day's base and final state from the raw
+            # version chain; the patches themselves are replaced below.
+            base = await self.get_content_at_version(note_id, first_index - 1)
+            tip = await self.get_content_at_version(note_id, last_index)
+
+            title_patch = self._build_patch(base.title or "", tip.title or "")
+            content_patch = self._build_patch(base.content or "", tip.content or "")
+
+            await self._delta_table.fetch(
+                f"""
+                    UPDATE {self._delta_table.name}
+                    SET title_patch = $3, content_patch = $4
+                    WHERE note_id = $1 AND version_index = $2
+                """,
+                note_id,
+                last_index,
+                title_patch,
+                content_patch,
+            )
+            await self._delta_table.fetch(
+                f"""
+                    DELETE FROM {self._delta_table.name}
+                    WHERE note_id = $1 AND snapshot_id = $2
+                      AND version_index >= $3 AND version_index < $4
+                """,
+                note_id,
+                snapshot_id,
+                first_index,
+                last_index,
+            )
+            result.notes_compacted += 1
+            result.deltas_removed += len(group) - 1
+
+        return result
+
+    async def _version_exists(self, note_id: str, version_index: int) -> bool:
+        for table in (self._snapshot_table, self._delta_table):
+            rows = await table.fetch(
+                f"""
+                    SELECT version_index
+                    FROM {table.name}
+                    WHERE note_id = $1 AND version_index = $2
+                    LIMIT 1
+                """,
+                note_id,
+                version_index,
+            )
+            if rows:
+                return True
+        return False
 
     async def _get_latest_snapshot(self, note_id: str) -> Optional[NoteVersionSnapshotEntity]:
         sql = f"""
@@ -469,35 +586,69 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         return "".join(diff_lines)
 
     def _apply_patch(self, patch_text: str, base_text: str) -> str:
-        # Unified-diff reconstruction: skip file/hunk headers, drop
-        # ``-`` lines, keep `` `` and ``+`` lines verbatim.  Built by
-        # hand because ``difflib.restore`` only understands ``ndiff``
-        # output.
+        """Apply a unified diff produced by :meth:`_build_patch`.
+
+        The patch only contains the changed hunks plus a few context
+        lines, so the untouched regions of ``base_text`` must be copied
+        around each hunk using the ``@@ -old_start,old_count`` offsets.
+        Concatenating the payload lines alone loses everything outside
+        the hunks (leading sections, table headers, trailing text, ...).
+        """
         if not patch_text:
             return base_text
+
+        # _build_patch normalises both sides to a trailing newline before
+        # diffing, so hunk offsets assume a newline-terminated payload.
+        # Mirror that for the base or the offsets drift on content saved
+        # without a final newline.
         needs_trim = not base_text.endswith("\n")
-        diff_lines = patch_text.splitlines(keepends=True)
-        restored_parts: list[str] = []
-        for line in diff_lines:
-            head = line[:3]
-            # File headers ("--- ", "+++ ") and hunk headers ("@@ ")
-            # never carry payload bytes.
-            if head in ("---", "+++", "@@ "):
+        base_lines = base_text.splitlines(keepends=True)
+        if needs_trim and base_lines:
+            base_lines[-1] += "\n"
+
+        restored: list[str] = []
+        cursor = 0  # next base line that has not been consumed yet
+
+        for line in patch_text.splitlines(keepends=True):
+            # File headers are written as "--- " / "+++ " (empty file
+            # names). Content lines always carry a prefix, so a line
+            # starting with exactly these markers cannot be payload.
+            if line.startswith("--- ") or line.startswith("+++ "):
                 continue
+            if line.startswith("@@"):
+                # @@ -old_start[,old_count] +new_start[,new_count] @@
+                header = line[2:].split("@@", 1)[0].strip()
+                old_spec = header.split(" ", 1)[0].lstrip("-")
+                start_text, _, count_text = old_spec.partition(",")
+                old_start = int(start_text)
+                old_count = int(count_text) if count_text else 1
+                # Copy everything before this hunk from the base. An
+                # insertion-only hunk (old_count == 0) points *after*
+                # the line it inserts at.
+                target = old_start - 1 if old_count > 0 else old_start
+                if target > cursor:
+                    restored.extend(base_lines[cursor:target])
+                    cursor = target
+                continue
+
             prefix = line[:1]
-            if prefix == "+":
-                restored_parts.append(line[1:])
+            if prefix == " ":
+                # Context line: identical in base and result. Append the
+                # payload (not the base line) and consume one old line.
+                restored.append(line[1:])
+                cursor += 1
             elif prefix == "-":
-                continue  # dropped
-            elif prefix == " ":
-                restored_parts.append(line[1:])
-            # Other prefixes (e.g. '\\', '%', '#' markers from
-            # "No newline at end of file" / patch-level markers) are
-            # ignored.
-        restored = "".join(restored_parts)
-        if needs_trim and restored.endswith("\n"):
-            restored = restored[:-1]
-        return restored
+                cursor += 1
+            elif prefix == "+":
+                restored.append(line[1:])
+            # "\\ No newline at end of file" and other markers carry no
+            # payload and are ignored.
+
+        restored.extend(base_lines[cursor:])
+        result = "".join(restored)
+        if needs_trim and result.endswith("\n"):
+            result = result[:-1]
+        return result
 
     @staticmethod
     def _to_entry_from_snapshot(snapshot: NoteVersionSnapshotEntity) -> NoteVersionEntry:

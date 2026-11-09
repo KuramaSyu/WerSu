@@ -4,7 +4,11 @@ from datetime import datetime
 from typing import List, Optional, cast
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
-from src.db.entities.note.versioning import NoteVersionContent, NoteVersionEntry
+from src.db.entities.note.versioning import (
+    NoteVersionCompactionResult,
+    NoteVersionContent,
+    NoteVersionEntry,
+)
 from src.api.facades.note_facade import NoteFacadeABC
 from src.db.repos.note.versioning import NoteVersionRepoABC
 
@@ -46,6 +50,9 @@ class _StubGrpcNoteVersionRepo(NoteVersionRepoABC):
 
     async def get_content_at_version(self, note_id: str, version_index: int) -> NoteVersionContent:
         return self.content
+
+    async def compact_deltas_before(self, cutoff) -> NoteVersionCompactionResult:
+        return NoteVersionCompactionResult()
 
 
 class _StubGrpcNoteRepo(NoteFacadeABC):

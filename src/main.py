@@ -51,6 +51,7 @@ from src.services.background_process import (
 )
 from src.services.background_process.processes import (
     CalculatedStatsProcessImpl,
+    DailyVersionCompactionProcessImpl,
     MissingEmbeddingProcessImpl,
     TrashUnlinkedAttachmentsProcessImpl,
     UserDisableProcessImpl,
@@ -172,6 +173,12 @@ async def serve():
     grpc_spicedb_credentials = get_os_env_variable("GRPC_SPICEDB_CREDENTIALS", log, UNDEFINED)
     grpc_spicedb_address = get_os_env_variable("GRPC_SPICEDB_ADDRESS", log, UNDEFINED)
     max_note_deltas = int(get_os_env_variable("NOTE_VERSION_MAX_DELTAS", log, "10"))
+    # Destructive nightly roll-up of finished days' version deltas. Disable
+    # with NOTE_VERSION_DAILY_COMPACTION=false to keep every save as its own
+    # restorable version.
+    note_version_daily_compaction = get_os_env_variable(
+        "NOTE_VERSION_DAILY_COMPACTION", log, "true"
+    ).strip().lower() not in {"0", "false", "no", "off"}
     s3_endpoint = get_os_env_variable("S3_ENDPOINT", log, "http://localhost:3900")
     s3_region = get_os_env_variable("S3_REGION", log, "garage")
     s3_access_key = get_os_env_variable("GARAGE_DEFAULT_ACCESS_KEY", log, UNDEFINED)
@@ -846,6 +853,11 @@ async def serve():
         get_now=lambda: datetime.now(),
         log=logging_provider,
     )
+    daily_version_compaction_process = DailyVersionCompactionProcessImpl(
+        version_repo=version_repo,
+        get_now=lambda: datetime.now(),
+        log=logging_provider,
+    )
     background_scheduler = BackgroundSchedulerImpl(
         clock=AsyncClockAsyncio(),
         task_spawner=TaskSpawnerAsyncio(),
@@ -864,6 +876,8 @@ async def serve():
     background_scheduler.register(missing_embedding_process)
     background_scheduler.register(trash_attachment_process)
     background_scheduler.register(calculated_stats_process)
+    if note_version_daily_compaction:
+        background_scheduler.register(daily_version_compaction_process)
     background_scheduler.attach_handles()
     background_scheduler.start()
 

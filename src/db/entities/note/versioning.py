@@ -57,6 +57,14 @@ class NoteVersionEntry:
 
 
 @dataclass
+class NoteVersionCompactionResult:
+    """Outcome of collapsing historical deltas into one delta per day."""
+
+    notes_compacted: int = 0
+    deltas_removed: int = 0
+
+
+@dataclass
 class NoteVersionContent:
     """Reconstructed note content for a specific version."""
 
