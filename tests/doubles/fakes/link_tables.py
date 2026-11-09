@@ -17,7 +17,9 @@ class _FakeLinkTable(TableABC):
         self.insert_calls: List[dict] = []
         self.delete_calls: List[dict] = []
 
-    async def insert(self, record: dict) -> None:
+    async def insert(
+        self, record: dict, returning: str = "*", on_conflict: str = ""
+    ) -> None:
         # Dedup: keep unique (note_id, attachment_key) pairs.
         key = (record["note_id"], record["attachment_key"])
         if not any(
@@ -50,7 +52,9 @@ class _FakeUserLinkTable(TableABC):
     def __init__(self) -> None:
         self.rows: List[dict] = []
 
-    async def insert(self, record: dict) -> None:
+    async def insert(
+        self, record: dict, returning: str = "*", on_conflict: str = ""
+    ) -> None:
         key = (record["user_id"], record["attachment_key"])
         if not any(
             (r["user_id"], r["attachment_key"]) == key for r in self.rows

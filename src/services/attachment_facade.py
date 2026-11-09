@@ -197,7 +197,8 @@ class AttachmentFacadeImpl(AttachmentFacadeABC):
                     "note_id": sub_id,
                     "attachment_key": attachment_key,
                     "linked_at": self.get_now(),
-                }
+                },
+                on_conflict="DO NOTHING",
             )
             await self._permission_repo.insert(
                 [
@@ -214,7 +215,8 @@ class AttachmentFacadeImpl(AttachmentFacadeABC):
                     "user_id": sub_id,
                     "attachment_key": attachment_key,
                     "linked_at": self.get_now(),
-                }
+                },
+                on_conflict="DO NOTHING",
             )
             await self._permission_repo.insert(
                 [
