@@ -172,3 +172,77 @@ async def test_fetch_users_by_ids_empty_input(
     await user_repo.insert(test_user)
 
     assert await user_repo.fetch_users_by_ids([]) == []
+
+
+# ---------------------------------------------------------------------------
+# linked Discord identity (auth.third_party join)
+# ---------------------------------------------------------------------------
+
+
+async def _link_discord(
+    db: Database, user_id: str, discord_id: str = "362262726191349761"
+) -> None:
+    """Insert the ``auth.third_party`` row the auth schema uses for Discord."""
+    await db.execute(
+        "INSERT INTO auth.third_party "
+        "(user_id, provider, provider_user_id, extra_fields) "
+        "VALUES ($1, 'discord', $2, $3::jsonb)",
+        user_id,
+        discord_id,
+        '{"discriminator": "0"}',
+    )
+
+
+async def test_select_resolves_linked_discord_id(
+    db: Database, user_repo: UserRepoABC, test_user: UserEntity
+):
+    """``select`` joins ``auth.third_party`` so ``discord_id`` is populated."""
+    inserted = await user_repo.insert(test_user)
+    await _link_discord(db, str(inserted.id))
+
+    selected = await user_repo.select(FilterUser(user_id=inserted.id))
+
+    assert selected is not None
+    assert selected.discord_id == 362262726191349761
+    assert selected.discriminator == "0"
+
+
+async def test_fetch_users_by_ids_resolves_linked_discord_id(
+    db: Database, user_repo: UserRepoABC, test_user: UserEntity
+):
+    """The batch read populates the linked Discord identity."""
+    inserted = await user_repo.insert(test_user)
+    await _link_discord(db, str(inserted.id))
+
+    fetched = await user_repo.fetch_users_by_ids([str(inserted.id)])
+
+    assert fetched[0].discord_id == 362262726191349761
+    assert fetched[0].discriminator == "0"
+
+
+async def test_search_resolves_linked_discord_id(
+    db: Database, user_repo: UserRepoABC, test_user: UserEntity
+):
+    """The fuzzy search also carries the linked Discord identity."""
+    inserted = await user_repo.insert(test_user)
+    await _link_discord(db, str(inserted.id))
+
+    results = await user_repo.search("Kurama")
+
+    assert results[0].discord_id == 362262726191349761
+
+
+async def test_read_without_discord_link_leaves_discord_id_none(
+    user_repo: UserRepoABC, test_user: UserEntity
+):
+    """Users without a Discord link (e.g. URL avatars) keep ``None``.
+
+    This is the shape a Gravatar / already-resolved avatar has; the
+    frontend must not be handed a bogus ``discord_id`` for it.
+    """
+    inserted = await user_repo.insert(test_user)
+
+    fetched = await user_repo.fetch_users_by_ids([str(inserted.id)])
+
+    assert fetched[0].discord_id is None
+    assert fetched[0].discriminator is None

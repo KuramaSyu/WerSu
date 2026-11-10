@@ -10,9 +10,16 @@ The Discord identity (``discord_id`` + ``discriminator``) used to
 live on the user row; the auth schema moved it to
 ``auth.third_party``.  :class:`UserPostgresRepo` therefore strips
 those columns from INSERT/UPDATE payloads and refuses methods that
-require a Discord join (e.g. :meth:`select_by_discord_id`) --
-callers that need Discord lookups should switch to
+require a *filtered* Discord lookup (e.g.
+:meth:`select_by_discord_id`) -- callers that need to search by
+Discord id should switch to
 :class:`src.db.repos.user.user_auth_postgres.PostgresUserAuthRepoImpl`.
+
+Read methods (:meth:`select`, :meth:`fetch_users_by_ids`,
+:meth:`search`) however resolve the linked Discord id / discriminator
+via a correlated subquery on ``auth.third_party`` so the ``User``
+gRPC message carries the real Discord snowflake instead of the proto
+default ``0``.
 """
 
 from __future__ import annotations
@@ -45,6 +52,38 @@ class UserPostgresRepo(UserRepoABC):
     """
 
     _returning = "id, avatar, username, email, display_name, type"
+
+    # ``auth.third_party`` owns the Discord identity after the
+    # auth-schema migration.  Correlated scalar subqueries keep the
+    # join to at most one row per user (a user may have zero linked
+    # providers, and the schema does not enforce one row per
+    # provider), so the batch read stays a single round trip without
+    # duplicating user rows.  ``discord_id`` is cast to ``bigint`` to
+    # match :class:`UserEntity`; the ``provider = 'discord'`` filter
+    # also excludes the google links whose ids are not numeric.
+    _discord_id_subquery = (
+        "(SELECT tp.provider_user_id::bigint "
+        "FROM auth.third_party tp "
+        "WHERE tp.user_id = u.id AND tp.provider = 'discord' "
+        "ORDER BY tp.created_at, tp.id LIMIT 1)"
+    )
+    _discriminator_subquery = (
+        "(SELECT tp.extra_fields->>'discriminator' "
+        "FROM auth.third_party tp "
+        "WHERE tp.user_id = u.id AND tp.provider = 'discord' "
+        "ORDER BY tp.created_at, tp.id LIMIT 1)"
+    )
+
+    @property
+    def _joined_returning(self) -> str:
+        """Select list for reads that need the linked Discord identity."""
+        return (
+            "u.id AS id, u.avatar AS avatar, u.username AS username, "
+            "u.email AS email, u.display_name AS display_name, "
+            "u.type AS type, "
+            f"{self._discord_id_subquery} AS discord_id, "
+            f"{self._discriminator_subquery} AS discriminator"
+        )
 
     def __init__(
         self,
@@ -135,13 +174,22 @@ class UserPostgresRepo(UserRepoABC):
             where["id"] = filter.user_id
         if filter.username is not UNDEFINED:
             where["username"] = filter.username
-        record = await self._table.select_row(
-            where=where,
-            select=self._returning,
+
+        # A raw SELECT (instead of ``select_row``) so the Discord
+        # identity from ``auth.third_party`` is resolved alongside the
+        # user row -- ``select_row`` only knows the plain table.
+        keys = list(where)
+        clause = " AND ".join(
+            f"u.{key} = ${index + 1}" for index, key in enumerate(keys)
         )
-        if record is None:
+        records = await self._table.fetch(
+            f"SELECT {self._joined_returning} "
+            f"FROM {self._table.name} u WHERE {clause} LIMIT 1",
+            *[where[key] for key in keys],
+        )
+        if not records:
             return None
-        return self._from_record(record)
+        return self._from_record(records[0])
 
     async def select_by_discord_id(self, discord_id: int) -> Optional[UserEntity]:
         """Select a user by ``discord_id``.
@@ -175,8 +223,9 @@ class UserPostgresRepo(UserRepoABC):
             wanted.append(user_id)
 
         sql = (
-            f"SELECT {self._returning} FROM {self._table.name} "
-            "WHERE id = ANY($1)"
+            f"SELECT {self._joined_returning} "
+            f"FROM {self._table.name} u "
+            "WHERE u.id = ANY($1)"
         )
         records = await self._table.fetch(sql, wanted) or []
         by_id = {
@@ -201,8 +250,9 @@ class UserPostgresRepo(UserRepoABC):
             # Exact match only: an email lookup must not fuzzily
             # return unrelated addresses.
             sql = (
-                f"SELECT {self._returning} FROM {self._table.name} "
-                "WHERE email = $1 LIMIT $2"
+                f"SELECT {self._joined_returning} "
+                f"FROM {self._table.name} u "
+                "WHERE u.email = $1 LIMIT $2"
             )
             records = await self._table.fetch(sql, term, limit) or []
             return [self._from_record(record) for record in records]
@@ -216,16 +266,16 @@ class UserPostgresRepo(UserRepoABC):
         )
         pattern = f"%{escaped}%"
         sql = (
-            f"SELECT {self._returning} "
-            f"FROM {self._table.name} "
-            "WHERE id ILIKE $2 ESCAPE '\\' "
-            "OR username ILIKE $2 ESCAPE '\\' "
-            "OR display_name ILIKE $2 ESCAPE '\\' "
-            "OR similarity(username, $1) > 0.1 "
-            "OR similarity(display_name, $1) > 0.1 "
+            f"SELECT {self._joined_returning} "
+            f"FROM {self._table.name} u "
+            "WHERE u.id ILIKE $2 ESCAPE '\\' "
+            "OR u.username ILIKE $2 ESCAPE '\\' "
+            "OR u.display_name ILIKE $2 ESCAPE '\\' "
+            "OR similarity(u.username, $1) > 0.1 "
+            "OR similarity(u.display_name, $1) > 0.1 "
             "ORDER BY COALESCE("
-            "GREATEST(similarity(username, $1), similarity(display_name, $1)), 0"
-            ") DESC, username ASC NULLS LAST "
+            "GREATEST(similarity(u.username, $1), similarity(u.display_name, $1)), 0"
+            ") DESC, u.username ASC NULLS LAST "
             "LIMIT $3"
         )
         records = await self._table.fetch(sql, term, pattern, limit) or []
@@ -246,9 +296,10 @@ class UserPostgresRepo(UserRepoABC):
         The ``type`` column comes back as the ``user_kind`` enum string;
         :class:`UserEntity` accepts the free-form :class:`UserTypeT`
         string so no further conversion is required.  ``discord_id``
-        and ``discriminator`` are filled with ``None`` because they
-        no longer live on the user row -- callers that need them
-        must go through the auth schema.
+        and ``discriminator`` are only present on read paths that use
+        :attr:`_joined_returning` (resolved from ``auth.third_party``);
+        the plain :attr:`_returning` used for INSERT/UPDATE does not
+        include them, so they default to ``None`` for those callers.
         """
         data = dict(record)
         data.setdefault("discord_id", None)
