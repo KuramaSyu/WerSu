@@ -30,7 +30,7 @@ type (e.g. an intermediate base that re-exports the typevar),
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, ClassVar, get_args, get_origin
+from typing import TYPE_CHECKING, Any, ClassVar, get_args, get_origin
 
 if TYPE_CHECKING:
     from src.api.events.event_context import EventContext
@@ -59,7 +59,7 @@ class Listener[EventT: Event]:
     #: Concrete event subclass this listener reacts to.  Populated
     #: by :meth:`__init_subclass__` from the generic parameter
     #: passed to ``Listener[...]``; do not set it manually.
-    event: ClassVar[type[EventT]]
+    event: ClassVar[type[Event]]
 
 
     def __init_subclass__(cls, **kwargs: object) -> None:
@@ -112,7 +112,7 @@ class Listener[EventT: Event]:
         ...
 
 
-def extract_event_type(listener: Listener) -> type[Event]:
+def extract_event_type(listener: Listener[Any]) -> type[Event]:
     """Return the concrete event class a listener was declared against.
 
     Convenience wrapper around the :attr:`Listener.event` classvar

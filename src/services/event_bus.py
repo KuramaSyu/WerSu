@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from src.api.events.event_bus import EventBus
 from src.api.events.event_context import EventContext, NoopEventContext
@@ -40,11 +40,11 @@ class NoopEventBus(EventBus):
     listeners unconditionally.
     """
 
-    async def subscribe(self, listener: Listener) -> None:
+    async def subscribe(self, listener: Listener[Any]) -> None:
         """Discard ``listener``; nothing to register."""
         return None
 
-    async def unsubscribe(self, listener: Listener) -> None:
+    async def unsubscribe(self, listener: Listener[Any]) -> None:
         """Discard ``listener``; nothing to remove."""
         return None
 
@@ -74,11 +74,11 @@ class InMemoryEventBus(EventBus):
     """
 
     def __init__(self, context: EventContext | None = None) -> None:
-        self._listeners: Dict[type, List[Listener]] = defaultdict(list)
+        self._listeners: Dict[type, List[Listener[Any]]] = defaultdict(list)
         self._context: EventContext = context or NoopEventContext()
         self.log = default_logging_provider(__name__, self)
 
-    async def subscribe(self, listener: Listener) -> None:
+    async def subscribe(self, listener: Listener[Any]) -> None:
         """Register ``listener`` under its declared event type.
 
         Args:
@@ -93,7 +93,7 @@ class InMemoryEventBus(EventBus):
         event_type = extract_event_type(listener)
         self._listeners[event_type].append(listener)
 
-    async def unsubscribe(self, listener: Listener) -> None:
+    async def unsubscribe(self, listener: Listener[Any]) -> None:
         """Remove ``listener`` from the bus.
 
         Idempotent: removing a listener that was never subscribed
@@ -137,7 +137,9 @@ class InMemoryEventBus(EventBus):
             return_exceptions=True,
         )
 
-    async def _safe_invoke(self, listener: Listener, event: Event) -> None:
+    async def _safe_invoke(
+        self, listener: Listener[Any], event: Event
+    ) -> None:
         """Run one listener, catching and logging any exception."""
         try:
             await listener.on_event(event, self._context)
