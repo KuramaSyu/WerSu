@@ -39,7 +39,7 @@ from src.api.other.relationship import (
     SubjectRef,
 )
 from src.api.other.types import LoggingProvider
-from src.api.other.undefined import UNDEFINED, unwrap_undefined
+from src.api.other.undefined import UNDEFINED, is_undefined, unwrap_undefined
 from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.domain.permission_chain import HasDirectoryViewPerm, PermissionCheckChain, PermissionCheckChainStart
@@ -199,8 +199,15 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
 
         # Shelf binding: replace the entire shelf set when the entity
         # carries shelf_ids; otherwise leave the binding alone.
-        if entity.shelf_ids:
-            current = await self.fetch_directory(entity.id)
+        # `is_undefined` (not truthiness) distinguishes "field omitted"
+        # from "explicitly set to an empty list" so clearing every shelf
+        # works.  The current bindings must be fetched with
+        # include_shelves=True or the diff below would never see the
+        # existing edges and therefore never remove any of them.
+        if not is_undefined(entity.shelf_ids):
+            current = await self.fetch_directory(
+                entity.id, include={"include_shelves": True}
+            )
             current_shelves: Set[str] = set()
             if current and current.shelf_ids:
                 current_shelves = set(current.shelf_ids)
@@ -223,7 +230,12 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
                 "directory", str(entity.id), list(entity.tag_ids),
             )
 
-        return await self.fetch_directory(str(entity.id))
+        # Include shelves so a PATCH reply carries the updated
+        # memberships; otherwise the REST `omitempty` drops the field
+        # and the client cache briefly loses the shelf chips.
+        return await self.fetch_directory(
+            str(entity.id), include={"include_shelves": True}
+        )
 
     async def fetch_directories(
         self, user: UserContextABC

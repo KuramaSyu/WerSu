@@ -665,6 +665,66 @@ async def test_fetch_directory_with_include_shelves_populates_shelf_ids() -> Non
     assert shelf_repo.calls == [str(created.id)]
 
 
+async def test_update_directory_removes_dropped_shelf_bindings() -> None:
+    """Dropping a shelf from a book must actually delete the stale edge.
+
+    Regression: ``update_directory`` used to fetch the current bindings
+    without ``include_shelves``, so ``current_shelves`` was always empty
+    and the removal diff was a no-op.  A book could be added to a new
+    shelf but never removed from an old one.
+    """
+    from tests.doubles import InMemoryShelfRepo
+
+    shelf_repo = InMemoryShelfRepo()
+    facade, dir_repo, _perm, _tags = _build_facade(shelf_repo=shelf_repo)
+
+    created = await facade.create_directory(
+        DirectoryEntity(slug="x", display_name="X"),
+        _DummyUserContext("alice"),
+    )
+    book_id = str(created.id)
+    # Seed the book on two shelves.
+    await shelf_repo.add_book("shelf-A", book_id)
+    await shelf_repo.add_book("shelf-B", book_id)
+
+    # Keep only shelf-B: shelf-A must be detached.
+    updated = await facade.update_directory(
+        DirectoryEntity(id=book_id, shelf_ids=["shelf-B"])
+    )
+
+    assert updated is not None
+    assert updated.shelf_ids == ["shelf-B"]
+    assert await shelf_repo.get_shelves_of_book(book_id) == ["shelf-B"]
+    # The current bindings must have been fetched with include_shelves
+    # so the removal diff could see the stale edge.
+    assert any(
+        call[1] and call[1].get("include_shelves") for call in dir_repo.fetch_calls
+    )
+
+
+async def test_update_directory_can_clear_every_shelf() -> None:
+    """An explicit empty shelf list removes every binding."""
+    from tests.doubles import InMemoryShelfRepo
+
+    shelf_repo = InMemoryShelfRepo()
+    facade, _dir_repo, _perm, _tags = _build_facade(shelf_repo=shelf_repo)
+
+    created = await facade.create_directory(
+        DirectoryEntity(slug="x", display_name="X"),
+        _DummyUserContext("alice"),
+    )
+    book_id = str(created.id)
+    await shelf_repo.add_book("shelf-A", book_id)
+    await shelf_repo.add_book("shelf-B", book_id)
+
+    updated = await facade.update_directory(
+        DirectoryEntity(id=book_id, shelf_ids=[])
+    )
+
+    assert updated is not None
+    assert await shelf_repo.get_shelves_of_book(book_id) == []
+
+
 async def test_fetch_directory_shelf_lookup_failure_yields_empty_list() -> None:
     """When the shelf repo raises, the entity gets an empty shelf_ids list."""
 
