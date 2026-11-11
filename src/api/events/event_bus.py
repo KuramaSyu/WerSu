@@ -27,6 +27,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from src.api.events.events import Event
+from typing import Any
+
 from src.api.events.listener import Listener
 
 
@@ -39,7 +41,7 @@ class EventBus(ABC):
     """
 
     @abstractmethod
-    async def subscribe(self, listener: Listener) -> None:
+    async def subscribe(self, listener: Listener[Any]) -> None:
         """Register ``listener`` to receive events of its declared type.
 
         Args:
@@ -55,7 +57,7 @@ class EventBus(ABC):
         ...
 
     @abstractmethod
-    async def unsubscribe(self, listener: Listener) -> None:
+    async def unsubscribe(self, listener: Listener[Any]) -> None:
         """Remove ``listener`` so it stops receiving events.
 
         Idempotent: removing a listener that was never subscribed
