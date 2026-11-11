@@ -61,8 +61,16 @@ class PostgresCalculatedStatsRepo(CalculatedStatsRepoABC):
     # ---- stats row storage --------------------------------------------
 
     async def list_user_ids(self) -> List[str]:
+        """Return the ids of every *human* user.
+
+        System (e.g. the seeded ``public_user``) and temporary share
+        users never own a stats row: their wildcard ``view`` lookups
+        either match the whole instance or nothing meaningful, so a
+        stats row for them would be noise.
+        """
         rows = await self._user_table.fetch(
-            f"SELECT id FROM {self._user_table.name} ORDER BY id"
+            f"SELECT id FROM {self._user_table.name} "
+            f"WHERE type = 'human' ORDER BY id"
         )
         return [str(row["id"]) for row in rows or [] if row["id"] is not None]
 

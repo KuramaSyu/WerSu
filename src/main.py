@@ -56,6 +56,7 @@ from src.services.background_process.processes import (
     TrashUnlinkedAttachmentsProcessImpl,
     UserDisableProcessImpl,
     UserEnableProcessImpl,
+    stats_invalidation_listeners,
 )
 from src.services.activity_logger_service import ActivityLoggerServiceImpl
 from src.services.activity_statistics_service import ActivityStatisticsServiceImpl
@@ -880,6 +881,11 @@ async def serve():
         background_scheduler.register(daily_version_compaction_process)
     background_scheduler.attach_handles()
     background_scheduler.start()
+
+    # Invalidate calculated stats when a note or directory changes.
+    # Subscribed after attach_handles() so the process has its handle.
+    for listener in stats_invalidation_listeners(calculated_stats_process):
+        await event_bus.subscribe(listener)
 
     # Start the server
     await server.start()

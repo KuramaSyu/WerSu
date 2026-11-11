@@ -27,10 +27,12 @@ class CalculatedStatsRepoABC(ABC):
 
     @abstractmethod
     async def list_user_ids(self) -> List[str]:
-        """Return every user id that can own a stats row.
+        """Return every **human** user id that can own a stats row.
 
-        Used by :meth:`CalculatedStatsServiceABC.recalculate` when the
-        caller does not pass an explicit user filter.
+        System and temporary users are excluded: the wildcard
+        ``view`` lookup is meaningless for them.  Used by
+        :meth:`CalculatedStatsServiceABC.recalculate` when the caller
+        does not pass an explicit user filter.
         """
         ...
 

@@ -133,7 +133,15 @@ class CalculatedStatsServiceImpl(CalculatedStatsServiceABC):
         filter: Optional[CalculatedStatsFilter],
     ) -> List[str]:
         if filter is not None and filter.user_ids is not None:
-            return _dedupe_non_empty(filter.user_ids)
+            requested = _dedupe_non_empty(filter.user_ids)
+            if not requested:
+                return []
+            # The full-sweep path already enumerates human users; an
+            # explicit filter (e.g. one actor woken by a note change)
+            # must be intersected with that set so system / temporary
+            # users never receive a row.
+            human_ids = set(await self._stats_repo.list_user_ids())
+            return [user_id for user_id in requested if user_id in human_ids]
         return await self._stats_repo.list_user_ids()
 
     async def _recalculate_one(

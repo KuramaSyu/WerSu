@@ -120,6 +120,19 @@ class TestRecalculate:
         assert rows == []
         assert stats_repo.rows == {}
 
+    async def test_non_human_filtered_user_is_skipped(
+        self,
+        service: CalculatedStatsServiceImpl,
+        stats_repo: _FakeCalculatedStatsRepo,
+    ) -> None:
+        # The fake repo only reports u1 / u2 as human users.
+        rows = await service.recalculate(
+            CalculatedStatsFilter(user_ids=["u2", "system"])
+        )
+
+        assert [row.user_id for row in rows] == ["u2"]
+        assert list(stats_repo.rows) == ["u2"]
+
 
 class TestGetStats:
     async def test_actor_can_read_own_stats(

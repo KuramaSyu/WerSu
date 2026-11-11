@@ -7,7 +7,10 @@ backfills embeddings on startup, and the periodic
 that trashes and purges unlinked attachments.
 """
 
-from .calculated_stats_process import CalculatedStatsProcessImpl  # noqa: F401
+from .calculated_stats_process import (  # noqa: F401
+    CalculatedStatsProcessImpl,
+    stats_invalidation_listeners,
+)
 from .daily_version_compaction_process import (  # noqa: F401
     DailyVersionCompactionProcessImpl,
 )

@@ -147,3 +147,6 @@ async def test_list_user_ids_reads_auth_user() -> None:
     repo = _repo(user_table=user_table)
 
     assert await repo.list_user_ids() == ["u1", "u2"]
+    sql = user_table.calls_of("fetch")[0].kwargs["sql"]
+    # Only human users get a stats row; system / temporary are skipped.
+    assert "type = 'human'" in sql

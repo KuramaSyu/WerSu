@@ -609,6 +609,29 @@ async def test_insert_note_records_note_created() -> None:
     ) in activity_logger.calls
 
 
+async def test_update_note_records_note_edited() -> None:
+    """`update_note` records a `note_edited` event after the repo update."""
+    service, _db, content_repo, _dir, perm_repo, _jwt, activity_logger = _make_service()
+    content_repo.seed(_seed_note(note_id="note-1", content="old"))
+    await _grant_admin(perm_repo, "user-1", "note-1")
+
+    await service.update_note(
+        NoteEntity(
+            note_id="note-1",
+            title="New title",
+            content="new content",
+            updated_at=datetime(2026, 7, 4, 9, 30, 0),
+            author_id="user-1",
+        ),
+        _human_ctx("user-1"),
+    )
+
+    assert activity_logger.calls
+    assert activity_logger.calls[0][0] == "note_edited"
+    assert activity_logger.calls[0][1] == "note-1"
+    assert activity_logger.calls[0][2] == "user-1"
+
+
 async def test_delete_note_records_note_deleted() -> None:
     """`delete_note` records a `note_deleted` event when the repo removes a row."""
     service, _db, content_repo, _dir, perm_repo, _jwt, activity_logger = _make_service()

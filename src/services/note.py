@@ -168,7 +168,13 @@ class NoteServiceImpl(NoteServiceABC):
         write_result = await write_check.check(user_ctx)
         if write_result.error:
             raise write_result.error
-        return await self._note_repo.update(note, user_ctx)
+
+        updated = await self._note_repo.update(note, user_ctx)
+        await self._activity_logger.note_edited(
+            str(updated.note_id), user_ctx,
+            metadata=updated.convert(self._to_metadata),
+        )
+        return updated
 
     async def delete_note(
         self,
