@@ -33,6 +33,7 @@ from src.api.other.relationship import (
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory_facade import DirectoryEntity
+from src.domain.rules import BookMustHaveAtLeastOneShelfError
 from src.services.directory import DirectoryServiceImpl, README_TITLE
 from tests.doubles import InMemoryPermissionRepo
 from tests.doubles import _FakeSpyNoteRepoFacade, _FakeSpyDirectoryRepo
@@ -219,6 +220,56 @@ async def test_patch_directory_requires_write_permission() -> None:
 
     # The denied patch must not reach the repo.
     assert directory_repo.updated == []
+
+
+async def test_patch_directory_rejects_clearing_every_shelf() -> None:
+    """A patch that empties ``shelf_ids`` would orphan the book."""
+    service, directory_repo, _, permission_repo, _ = _make_service()
+    directory_repo.directories_by_id["dir-1"] = DirectoryEntity(
+        id="dir-1", slug="root", shelf_ids=["shelf-1"],
+    )
+    await permission_repo.insert(
+        [
+            Relationship(
+                resource=ObjectRef(ObjectTypeEnum.DIRECTORY, "dir-1"),
+                relation=DirectoryRelationEnum.WRITER,
+                subject=SubjectRef(ObjectTypeEnum.USER, "user-1"),
+            )
+        ]
+    )
+
+    with pytest.raises(BookMustHaveAtLeastOneShelfError):
+        await service.patch_directory(
+            DirectoryEntity(id="dir-1", shelf_ids=[]),
+            _DummyUserContext("user-1"),
+        )
+
+    # The rejected patch must not reach the repo.
+    assert directory_repo.updated == []
+
+
+async def test_patch_directory_allows_setting_a_shelf() -> None:
+    """A patch that keeps at least one shelf passes the rule."""
+    service, directory_repo, _, permission_repo, _ = _make_service()
+    directory_repo.directories_by_id["dir-1"] = DirectoryEntity(
+        id="dir-1", slug="root",
+    )
+    await permission_repo.insert(
+        [
+            Relationship(
+                resource=ObjectRef(ObjectTypeEnum.DIRECTORY, "dir-1"),
+                relation=DirectoryRelationEnum.WRITER,
+                subject=SubjectRef(ObjectTypeEnum.USER, "user-1"),
+            )
+        ]
+    )
+
+    await service.patch_directory(
+        DirectoryEntity(id="dir-1", shelf_ids=["shelf-1"]),
+        _DummyUserContext("user-1"),
+    )
+
+    assert len(directory_repo.updated) == 1
 
 
 async def test_delete_directory_requires_delete_permission() -> None:

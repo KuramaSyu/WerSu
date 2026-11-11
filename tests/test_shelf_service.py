@@ -20,6 +20,7 @@ from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.shelf import ShelfEntity
 from src.db.repos.shelf.spicedb_decorator import SpicedbShelfRepoDecorator
 from src.services.shelf_service import ShelfServiceImpl
+from src.domain.rules import BookMustHaveAtLeastOneShelfError
 from tests.doubles import InMemoryPermissionRepo
 from tests.doubles import InMemoryRuleRepo
 from tests.doubles import InMemoryShelfRepo
@@ -28,6 +29,7 @@ import pytest
 
 from tests.doubles.dummies.user_ctx import _DummyUserCtx
 from tests.doubles.fakes.shelf_service import FakeDirectoryFacade
+from tests.doubles.fakespys import _FakeSpyDirectoryService
 
 
 # ---- fakes ----------------------------------------------------------------
@@ -56,6 +58,7 @@ def _make_service(
     rule_repo: Optional[InMemoryRuleRepo] = None,
     permission_repo: Optional[InMemoryPermissionRepo] = None,
     directory_facade: Optional[FakeDirectoryFacade] = None,
+    directory_service: Optional[_FakeSpyDirectoryService] = None,
 ) -> ShelfServiceImpl:
     """Build a :class:`ShelfServiceImpl` with in-memory defaults.
 
@@ -83,6 +86,7 @@ def _make_service(
             directory_facade if directory_facade is not None else FakeDirectoryFacade()
         ),
         rule_repo=rule_repo if rule_repo is not None else InMemoryRuleRepo(),
+        directory_service=directory_service,
     )
 
 
@@ -331,6 +335,56 @@ async def test_delete_shelf_returns_none_on_real_delete() -> None:
     assert await service.get_shelf(shelf_id, _DummyUserCtx("u-1")) is None
 
 
+async def test_delete_shelf_deletes_orphaned_books() -> None:
+    permission_repo = InMemoryPermissionRepo()
+    shelf_repo = InMemoryShelfRepo()
+    directory_service = _FakeSpyDirectoryService()
+    service = _make_service(
+        shelf_repo=shelf_repo,
+        permission_repo=permission_repo,
+        directory_service=directory_service,
+    )
+    shelf, _ = await service.create_shelf(
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
+    )
+    shelf_id = str(unwrap_undefined(shelf.id))
+    await shelf_repo.set_books_of(shelf_id, ["b-1"])
+
+    assert await service.delete_shelf(shelf_id, _DummyUserCtx("u-1")) is None
+
+    # ``b-1`` had no other shelf, so it was deleted too.
+    assert directory_service.last_delete_id == "b-1"
+    assert directory_service.last_delete_user_id == "u-1"
+    assert await service.get_shelf(shelf_id, _DummyUserCtx("u-1")) is None
+
+
+async def test_delete_shelf_leaves_books_with_another_shelf() -> None:
+    permission_repo = InMemoryPermissionRepo()
+    shelf_repo = InMemoryShelfRepo()
+    directory_service = _FakeSpyDirectoryService()
+    service = _make_service(
+        shelf_repo=shelf_repo,
+        permission_repo=permission_repo,
+        directory_service=directory_service,
+    )
+    shelf, _ = await service.create_shelf(
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
+    )
+    shelf_id = str(unwrap_undefined(shelf.id))
+    other, _ = await service.create_shelf(
+        ShelfEntity(slug="other"), _DummyUserCtx("u-1"),
+    )
+    other_id = str(unwrap_undefined(other.id))
+    await service.attach_book(shelf_id, "b-1", _DummyUserCtx("u-1"))
+    await service.attach_book(other_id, "b-1", _DummyUserCtx("u-1"))
+
+    await service.delete_shelf(shelf_id, _DummyUserCtx("u-1"))
+
+    # ``b-1`` still lives on the other shelf, so it must not be deleted.
+    assert directory_service.last_delete_id is None
+    assert await shelf_repo.get_books_of(other_id) == ["b-1"]
+
+
 async def test_delete_shelf_requires_delete_permission() -> None:
     permission_repo = InMemoryPermissionRepo()
     shelf_repo = InMemoryShelfRepo()
@@ -407,8 +461,35 @@ async def test_set_books_replaces_full_set() -> None:
     await service.set_books(shelf_id, ["b-1", "b-2"], _DummyUserCtx("u-1"))
     assert await shelf_repo.get_books_of(shelf_id) == ["b-1", "b-2"]
 
-    await service.set_books(shelf_id, ["b-3"], _DummyUserCtx("u-1"))
-    assert await shelf_repo.get_books_of(shelf_id) == ["b-3"]
+    # ``b-2`` also lives on another shelf, so dropping it here is safe.
+    other, _ = await service.create_shelf(
+        ShelfEntity(slug="other"), _DummyUserCtx("u-1"),
+    )
+    other_id = str(unwrap_undefined(other.id))
+    await service.attach_book(other_id, "b-2", _DummyUserCtx("u-1"))
+
+    await service.set_books(shelf_id, ["b-1"], _DummyUserCtx("u-1"))
+    assert await shelf_repo.get_books_of(shelf_id) == ["b-1"]
+    assert await shelf_repo.get_books_of(other_id) == ["b-2"]
+
+
+async def test_set_books_rejects_removing_last_shelf_of_book() -> None:
+    permission_repo = InMemoryPermissionRepo()
+    shelf_repo = InMemoryShelfRepo()
+    service = _make_service(
+        shelf_repo=shelf_repo, permission_repo=permission_repo,
+    )
+    shelf, _ = await service.create_shelf(
+        ShelfEntity(slug="mine"), _DummyUserCtx("u-1"),
+    )
+    shelf_id = str(unwrap_undefined(shelf.id))
+    await service.set_books(shelf_id, ["b-1", "b-2"], _DummyUserCtx("u-1"))
+
+    with pytest.raises(BookMustHaveAtLeastOneShelfError):
+        await service.set_books(shelf_id, ["b-1"], _DummyUserCtx("u-1"))
+
+    # The rejected mutation must not have been persisted.
+    assert await shelf_repo.get_books_of(shelf_id) == ["b-1", "b-2"]
 
 
 async def test_attach_and_detach_book_are_idempotent() -> None:
@@ -426,9 +507,23 @@ async def test_attach_and_detach_book_are_idempotent() -> None:
     await service.attach_book(shelf_id, "b-1", _DummyUserCtx("u-1"))  # idempotent
     assert await shelf_repo.get_books_of(shelf_id) == ["b-1"]
 
+    # This is the book's only shelf, so detaching would orphan it.
+    with pytest.raises(BookMustHaveAtLeastOneShelfError):
+        await service.detach_book(shelf_id, "b-1", _DummyUserCtx("u-1"))
+    assert await shelf_repo.get_books_of(shelf_id) == ["b-1"]
+
+    # Put the book on a second shelf first; then detaching is safe
+    # and idempotent.
+    other, _ = await service.create_shelf(
+        ShelfEntity(slug="other"), _DummyUserCtx("u-1"),
+    )
+    other_id = str(unwrap_undefined(other.id))
+    await service.attach_book(other_id, "b-1", _DummyUserCtx("u-1"))
+
     await service.detach_book(shelf_id, "b-1", _DummyUserCtx("u-1"))
     await service.detach_book(shelf_id, "b-1", _DummyUserCtx("u-1"))  # idempotent
     assert await shelf_repo.get_books_of(shelf_id) == []
+    assert await shelf_repo.get_books_of(other_id) == ["b-1"]
 
 
 async def test_get_books_of_shelf_requires_view() -> None:

@@ -27,6 +27,7 @@ from __future__ import annotations
 from typing import List, Optional
 
 from src.api.facades.directory_facade import DirectoryFacadeABC
+from src.api.services.directory_service import DirectoryServiceABC
 from src.api.other.relationship import (
     ObjectRef,
     ObjectTypeEnum,
@@ -40,6 +41,7 @@ from src.api.other.user_context import UserContextABC
 from src.api.repos.permission_repo import PermissionRepoABC
 from src.api.repos.rule_repo import RuleRepoABC
 from src.api.repos.shelf_repo import ShelfRepoABC
+from src.db.entities.directory.directory import DirectoryEntity
 from src.api.services.shelf_service import (
     BootstrapResult,
     BootstrapStrategy,
@@ -55,6 +57,11 @@ from src.domain.permission_chain import (
     HasShelfViewPerm,
     HasShelfWritePerm,
     PermissionCheckChainStart,
+)
+from src.domain.rules import (
+    BOOK_SHELF_RULE_ENGINE,
+    BookShelfState,
+    RuleEngine,
 )
 from src.services.shelf_bootstrap import build_strategy
 
@@ -72,6 +79,17 @@ class ShelfServiceImpl(ShelfServiceABC):
         rule_repo: rule repo -- passed through to the bootstrap
             strategies (the default-fleeting rule lives there).
         logging_provider: optional logger factory.
+        rule_engine: business-rule set applied to book mutations.
+            Defaults to the book/shelf domain rules
+            (:data:`~src.domain.rules.BOOK_SHELF_RULE_ENGINE`),
+            which forbid orphaning a book (removing its last shelf).
+            Inject a different engine to relax or extend the
+            invariants.
+        directory_service: directory service used by
+            :meth:`delete_shelf` to delete the books that only sit
+            on the deleted shelf (full note/attachment cascade).
+            When omitted, the shelf service falls back to deleting
+            the directory row through ``directory_facade`` itself.
     """
 
     def __init__(
@@ -81,12 +99,16 @@ class ShelfServiceImpl(ShelfServiceABC):
         directory_facade: DirectoryFacadeABC,
         rule_repo: RuleRepoABC,
         logging_provider: Optional[LoggingProvider] = None,
+        rule_engine: Optional[RuleEngine[BookShelfState]] = None,
+        directory_service: Optional[DirectoryServiceABC] = None,
     ) -> None:
         self._shelf_repo = shelf_repo
         self._permission_repo = permission_repo
         self._directory_facade = directory_facade
         self._rule_repo = rule_repo
         self._logging_provider = logging_provider
+        self._rules = rule_engine or BOOK_SHELF_RULE_ENGINE
+        self._directory_service = directory_service
 
     # ---- create ----------------------------------------------------------
 
@@ -287,6 +309,15 @@ class ShelfServiceImpl(ShelfServiceABC):
                 binding_count=len(book_ids),
             )
 
+        # A real delete drops every binding.  A book that only sat on
+        # this shelf has no home left, so it is deleted too; books
+        # that still sit on another shelf are merely detached.
+        for book_id in await self._shelf_repo.get_books_of(shelf_id):
+            shelves = await self._shelf_repo.get_shelves_of_book(str(book_id))
+            if any(str(s) != shelf_id for s in shelves):
+                continue
+            await self._delete_orphaned_book(str(book_id), actor)
+
         await self._shelf_repo.delete_shelf(shelf_id)
         return None
 
@@ -298,13 +329,32 @@ class ShelfServiceImpl(ShelfServiceABC):
         book_ids: List[str],
         actor: UserContextABC,
     ) -> None:
-        """Replace the full book set of ``shelf_id``."""
+        """Replace the full book set of ``shelf_id``.
+
+        Every book this call would remove from the shelf is checked
+        against the rule engine first, so a removal that would leave
+        a book without any shelf is rejected instead of persisted.
+        """
         if not shelf_id:
             raise ValueError("shelf_id is required for set_books")
         await self._enforce_write_permission(str(shelf_id), actor)
+        normalized = [str(b) for b in book_ids if b]
+        desired = set(normalized)
+        current = await self._shelf_repo.get_books_of(str(shelf_id))
+        for book_id in current:
+            if str(book_id) in desired:
+                continue
+            # The book is being removed from this shelf; make sure it
+            # stays on at least one other shelf.
+            shelves = await self._shelf_repo.get_shelves_of_book(str(book_id))
+            remaining = tuple(
+                str(s) for s in shelves if str(s) != str(shelf_id)
+            )
+            self._rules.enforce(
+                BookShelfState(book_id=str(book_id), shelf_ids=remaining),
+            )
         await self._shelf_repo.set_books_of(
-            str(shelf_id), [str(b) for b in book_ids if b],
-            user_ctx=actor,
+            str(shelf_id), normalized, user_ctx=actor,
         )
 
     async def attach_book(
@@ -329,12 +379,24 @@ class ShelfServiceImpl(ShelfServiceABC):
         book_id: str,
         actor: UserContextABC,
     ) -> None:
-        """Remove the ``book_id`` binding from ``shelf_id``."""
+        """Remove the ``book_id`` binding from ``shelf_id``.
+
+        The shelves the book would keep are computed first and run
+        through the rule engine, so detaching the book from its last
+        shelf is rejected.
+        """
         if not shelf_id:
             raise ValueError("shelf_id is required for detach_book")
         if not book_id:
             raise ValueError("book_id is required for detach_book")
         await self._enforce_write_permission(str(shelf_id), actor)
+        shelves = await self._shelf_repo.get_shelves_of_book(str(book_id))
+        remaining = tuple(
+            str(s) for s in shelves if str(s) != str(shelf_id)
+        )
+        self._rules.enforce(
+            BookShelfState(book_id=str(book_id), shelf_ids=remaining),
+        )
         await self._shelf_repo.remove_book(
             str(shelf_id), str(book_id), user_ctx=actor,
         )
@@ -377,6 +439,25 @@ class ShelfServiceImpl(ShelfServiceABC):
         return visible
 
     # ---- internal helpers -----------------------------------------------
+
+    async def _delete_orphaned_book(
+        self,
+        book_id: str,
+        actor: UserContextABC,
+    ) -> None:
+        """Delete a book that has no shelf left after a shelf delete.
+
+        Prefers the full directory service (notes, attachments and
+        SpiceDB relations are cleaned up there); callers that only
+        wired ``directory_facade`` fall back to the row delete, which
+        still lets the ``note.shelf_book`` FK cascade run.
+        """
+        if self._directory_service is not None:
+            await self._directory_service.delete_directory(book_id, actor)
+            return
+        await self._directory_facade.delete_directory(
+            DirectoryEntity(id=book_id)
+        )
 
     async def _enforce_view_permission(
         self,

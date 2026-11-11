@@ -30,7 +30,12 @@ from src.api import (
 from src.api.services.note_service import NoteServiceABC
 from src.api.services.activity_logger_service import EventMetadataVisitor
 from src.api.repos.permission_repo import DirectoryChild
-from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
+from src.api.other.undefined import (
+    UNDEFINED,
+    is_undefined,
+    unwrap_undefined,
+    unwrap_undefined_or,
+)
 from src.api.other.user_context import UserContextABC
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
@@ -40,6 +45,11 @@ from src.domain.permission_chain import (
     HasDirectoryDeletePerm,
     HasDirectoryViewPerm,
     HasDirectoryWritePerm,
+)
+from src.domain.rules import (
+    BOOK_SHELF_RULE_ENGINE,
+    BookShelfState,
+    RuleEngine,
 )
 from src.utils.attachment_url import build_attachment_url
 from src.utils.extract_attachments import extract_attachment_ids
@@ -78,6 +88,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         note_service: NoteServiceABC,
         attachment_facade: AttachmentFacadeABC,
         log: LoggingProvider,
+        rule_engine: Optional[RuleEngine[BookShelfState]] = None,
     ) -> None:
         self._directory_facade = directory_facade
         self._note_facade = note_facade
@@ -87,6 +98,8 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         self._attachment_facade = attachment_facade
         self.log = log(__name__, self)
         self._to_metadata = EventMetadataVisitor()
+        # Book/shelf invariants (a book must keep at least one shelf).
+        self._rules = rule_engine or BOOK_SHELF_RULE_ENGINE
 
     async def get_directory_notes(
         self,
@@ -322,6 +335,19 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         result = await check.check(user_ctx)
         if result.error:
             raise result.error
+
+        # A patch that carries ``shelf_ids`` is the book-side way to
+        # drop shelf memberships.  Reject a patch that would leave the
+        # book without any shelf before it reaches the facade.
+        if not is_undefined(entity.shelf_ids):
+            self._rules.enforce(
+                BookShelfState(
+                    book_id=str(entity.id),
+                    shelf_ids=tuple(
+                        str(s) for s in (entity.shelf_ids or [])
+                    ),
+                )
+            )
 
         updated = await self._directory_facade.update_directory(entity)
         if updated is not None:

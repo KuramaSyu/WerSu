@@ -705,6 +705,7 @@ async def serve():
         directory_facade=directory_facade,
         rule_repo=rule_repo,
         logging_provider=logging_provider,
+        directory_service=directory_app_service,
     )
     app_user_service = UserServiceImpl(
         user_repo=user_repo,

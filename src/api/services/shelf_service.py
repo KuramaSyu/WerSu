@@ -28,8 +28,9 @@ class DryDeleteResult:
     """Outcome of a ``delete_shelf(dry=True)`` call.
 
     Attributes:
-        affected_book_ids: every book id that would be detached
-            from the shelf if the delete ran for real.
+        affected_book_ids: every book id affected by the delete.
+            A real delete detaches all of them from the shelf and
+            additionally deletes the ones that had no other shelf.
         binding_count: number of ``note.shelf_book`` rows that
             would be removed.  ``len(affected_book_ids)`` and the
             cascade contract guarantee these are equal for
@@ -330,6 +331,12 @@ class ShelfServiceABC(ABC):
             ShelfPermissionError: the caller cannot ``delete`` the
                 shelf.
             ValueError: ``shelf_id`` is missing.
+        Note:
+            A real delete (``dry=False``) does not orphan books:
+            every book that only sat on this shelf is deleted too
+            (see :meth:`delete_shelf` on the implementation).  Books
+            that sit on another shelf are merely detached.  Dry runs
+            only report the would-be cascade.
         """
         ...
 
@@ -348,13 +355,16 @@ class ShelfServiceABC(ABC):
             shelf_id: id of the shelf to mutate.
             book_ids: complete list of book ids that should sit
                 on the shelf after this call.  Empty list clears
-                every binding.  Idempotent.
+                every binding -- allowed only when no removed book
+                is left without another shelf.  Idempotent.
             actor: caller identity.
 
         Raises:
             ShelfPermissionError: the caller cannot ``write`` the
                 shelf.
             ValueError: ``shelf_id`` is missing.
+            BookMustHaveAtLeastOneShelfError: a book removed by this
+                call would no longer sit on any shelf.
         """
         ...
 
@@ -401,6 +411,8 @@ class ShelfServiceABC(ABC):
             ShelfPermissionError: the caller cannot ``write`` the
                 shelf.
             ValueError: ``shelf_id`` or ``book_id`` is missing.
+            BookMustHaveAtLeastOneShelfError: this shelf is the
+                book's last one, so detaching would orphan it.
         """
         ...
 
