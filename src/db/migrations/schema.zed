@@ -96,7 +96,12 @@ definition directory {
     // owner is a full admin-equivalent so an owner-only directory can
     // view/write/delete just like an admin.
     permission has_admin = admin + owner
-    permission delete = has_admin
+    // ``parent`` is a directory or a shelf.  Following it here lets a
+    // caller who may delete a shelf delete its books too, and lets the
+    // recursive directory cascade run under the same permission.  The
+    // caller must delete the books *before* the shelf: once the shelf
+    // row is gone the ``parent`` edge (and this grant) is gone with it.
+    permission delete = has_admin + parent->delete
     permission write = writer + has_admin
     permission view = reader + write
 }

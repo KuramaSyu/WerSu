@@ -311,7 +311,10 @@ class ShelfServiceImpl(ShelfServiceABC):
 
         # A real delete drops every binding.  A book that only sat on
         # this shelf has no home left, so it is deleted too; books
-        # that still sit on another shelf are merely detached.
+        # that still sit on another shelf are merely detached.  The
+        # books must go first: their ``directory#delete`` grant follows
+        # ``directory#parent->delete`` and therefore resolves through
+        # this shelf, which must still exist for the check to pass.
         for book_id in await self._shelf_repo.get_books_of(shelf_id):
             shelves = await self._shelf_repo.get_shelves_of_book(str(book_id))
             if any(str(s) != shelf_id for s in shelves):

@@ -142,7 +142,12 @@ permission write = writer + has_admin
 permission view = reader + write
 ```
 
-Directories additionally have `relation parent: directory | shelf`.
+Directories additionally have `relation parent: directory | shelf` and
+`permission delete = has_admin + parent->delete`.  Following the parent lets
+a caller who may delete a shelf (or a parent directory) delete its
+books/subdirectories too.  A shelf delete must therefore delete its books
+**before** the shelf: deleting the shelf removes the `parent` edge the grant
+resolves through.
 
 ## Note
 
