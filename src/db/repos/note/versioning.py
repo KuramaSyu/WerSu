@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import date, datetime
-import difflib
+from datetime import datetime, time, timedelta
 import json
 from typing import List, Optional
 
@@ -16,6 +15,12 @@ from src.db.entities.note.versioning import (
     NoteVersionSnapshotEntity,
 )
 from src.db.table import TableABC
+from src.domain.note_version_compaction import (
+    DailyVersionCompactor,
+    DeltaVersion,
+    SnapshotVersion,
+)
+from src.domain.note_version_patch import apply_patch, build_patch
 from src.grpc_mod.converter.postgres_row_converter import (
     PostgresRowConverter,
 )
@@ -81,20 +86,22 @@ class NoteVersionRepoABC(ABC):
         self,
         cutoff: datetime,
     ) -> NoteVersionCompactionResult:
-        """Collapse deltas older than ``cutoff`` into one delta per day.
+        """Collapse a completed day's versions into one snapshot.
 
-        For every note and snapshot, all deltas created on the same
-        calendar day are rewritten as a single delta on the *last*
-        version index of that day.  The day's earlier version indices
-        are removed, so only the day's final state stays restorable.
+        For every note, all snapshots and deltas created on the same
+        calendar day (before ``cutoff``) are replaced by a single
+        snapshot that holds the day's final state.  If the day already
+        contains a snapshot, its *last* snapshot is kept and rewritten
+        to the day's final content; otherwise a fresh snapshot is
+        created at the day's last version index.  The day's other
+        snapshots and every delta of that day are removed, so only the
+        day's final state stays restorable.
 
-        Groups are keyed by ``(note_id, snapshot_id, date)`` so a
-        snapshot created mid-day starts a new group and older, already
-        compacted days are left untouched (a one-delta group is a
-        no-op).  The operation is idempotent.
+        Groups are keyed by ``(note_id, date)``.  A day with a single
+        version is a no-op, and the operation is idempotent.
 
         Returns:
-            Counts of notes changed and delta rows removed.
+            Counts of notes changed and delta/snapshot rows removed.
         """
         ...
 
@@ -108,6 +115,7 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         delta_table: TableABC,
         max_deltas_per_snapshot: int,
         to_postgres_row: Optional[PostgresRowConverter] = None,
+        compactor: Optional[DailyVersionCompactor] = None,
     ) -> None:
         if max_deltas_per_snapshot < 0:
             raise ValueError("max_deltas_per_snapshot must be >= 0")
@@ -117,7 +125,7 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         self._max_deltas_per_snapshot = max_deltas_per_snapshot
         # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
         self._to_postgres_row = to_postgres_row or PostgresRowConverter()
-        self._dmp = difflib
+        self._compactor = compactor or DailyVersionCompactor()
 
     @property
     def max_deltas_per_snapshot(self) -> int:
@@ -228,9 +236,10 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
                 LIMIT 1
             ),
             deltas AS (
-                SELECT COUNT(*) AS delta_count, MAX(snapshot_id::text) AS sample_id
+                SELECT COUNT(*) AS delta_count
                 FROM {self._delta_table.name}
                 WHERE note_id = $1
+                  AND snapshot_id = (SELECT snapshot_id FROM snap)
             ),
             versions AS (
                 SELECT version_index FROM {self._snapshot_table.name} WHERE note_id = $1
@@ -372,70 +381,116 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         self,
         cutoff: datetime,
     ) -> NoteVersionCompactionResult:
-        sql = f"""
+        snapshot_sql = f"""
+            SELECT snapshot_id, note_id, version_index, created_at,
+                   author_id, title, content
+            FROM {self._snapshot_table.name}
+            WHERE created_at < $1
+            ORDER BY note_id, version_index ASC
+        """
+        delta_sql = f"""
             SELECT delta_id, note_id, snapshot_id, version_index, created_at,
                    author_id, title_patch, content_patch
             FROM {self._delta_table.name}
             WHERE created_at < $1
-            ORDER BY note_id, snapshot_id, version_index ASC
+            ORDER BY note_id, version_index ASC
         """
-        rows = await self._delta_table.fetch(sql, cutoff)
-        if not rows:
+        snapshot_rows = await self._snapshot_table.fetch(snapshot_sql, cutoff) or []
+        delta_rows = await self._delta_table.fetch(delta_sql, cutoff) or []
+        if not snapshot_rows and not delta_rows:
             return NoteVersionCompactionResult()
 
-        groups: dict[tuple[str, str, date], list[Record]] = {}
-        for row in rows:
-            group_key = (
-                str(row["note_id"]),
-                str(row["snapshot_id"]),
-                row["created_at"].date(),
-            )
-            groups.setdefault(group_key, []).append(row)
+        plan = self._compactor.plan(
+            snapshots=[
+                SnapshotVersion(
+                    snapshot_id=str(row["snapshot_id"]),
+                    note_id=str(row["note_id"]),
+                    version_index=int(row["version_index"]),
+                    created_at=row["created_at"],
+                    author_id=str(row["author_id"]),
+                    title=row["title"],
+                    content=row["content"] or "",
+                )
+                for row in snapshot_rows
+            ],
+            deltas=[
+                DeltaVersion(
+                    delta_id=str(row["delta_id"]),
+                    note_id=str(row["note_id"]),
+                    snapshot_id=str(row["snapshot_id"]),
+                    version_index=int(row["version_index"]),
+                    created_at=row["created_at"],
+                    author_id=str(row["author_id"]),
+                    title_patch=row["title_patch"],
+                    content_patch=row["content_patch"] or "",
+                )
+                for row in delta_rows
+            ],
+            cutoff=cutoff,
+        )
 
-        result = NoteVersionCompactionResult()
-        for (note_id, snapshot_id, _day), group in groups.items():
-            if len(group) < 2:
-                # Already compacted (or only one save that day).
-                continue
-
-            group.sort(key=lambda row: int(row["version_index"]))
-            first_index = int(group[0]["version_index"])
-            last_index = int(group[-1]["version_index"])
-
-            # Reconstruct the day's base and final state from the raw
-            # version chain; the patches themselves are replaced below.
-            base = await self.get_content_at_version(note_id, first_index - 1)
-            tip = await self.get_content_at_version(note_id, last_index)
-
-            title_patch = self._build_patch(base.title or "", tip.title or "")
-            content_patch = self._build_patch(base.content or "", tip.content or "")
-
-            await self._delta_table.fetch(
-                f"""
-                    UPDATE {self._delta_table.name}
-                    SET title_patch = $3, content_patch = $4
-                    WHERE note_id = $1 AND version_index = $2
-                """,
-                note_id,
-                last_index,
-                title_patch,
-                content_patch,
-            )
+        for day in plan.days:
+            day_start = datetime.combine(day.day, time.min)
+            day_end = day_start + timedelta(days=1)
+            # Drop the day's deltas first: deleting a snapshot cascades
+            # into the deltas that reference it, and we want the counts
+            # to stay exact.
             await self._delta_table.fetch(
                 f"""
                     DELETE FROM {self._delta_table.name}
-                    WHERE note_id = $1 AND snapshot_id = $2
-                      AND version_index >= $3 AND version_index < $4
+                    WHERE note_id = $1
+                      AND created_at >= $2 AND created_at < $3
                 """,
-                note_id,
-                snapshot_id,
-                first_index,
-                last_index,
+                day.note_id,
+                day_start,
+                day_end,
             )
-            result.notes_compacted += 1
-            result.deltas_removed += len(group) - 1
+            for snapshot_id in day.snapshot_ids_to_delete:
+                await self._snapshot_table.fetch(
+                    f"""
+                        DELETE FROM {self._snapshot_table.name}
+                        WHERE snapshot_id = $1
+                    """,
+                    snapshot_id,
+                )
 
-        return result
+            retained = day.retained_snapshot
+            if retained.is_new:
+                await self._snapshot_table.insert(
+                    {
+                        "note_id": retained.note_id,
+                        "version_index": retained.version_index,
+                        "created_at": retained.created_at,
+                        "author_id": retained.author_id,
+                        "title": retained.title,
+                        "content": retained.content,
+                    },
+                    returning=(
+                        "snapshot_id, note_id, version_index, created_at, "
+                        "author_id, title, content"
+                    ),
+                )
+            else:
+                await self._snapshot_table.fetch(
+                    f"""
+                        UPDATE {self._snapshot_table.name}
+                        SET version_index = $2, created_at = $3,
+                            author_id = $4, title = $5, content = $6
+                        WHERE snapshot_id = $1
+                    """,
+                    retained.snapshot_id,
+                    retained.version_index,
+                    retained.created_at,
+                    retained.author_id,
+                    retained.title,
+                    retained.content,
+                )
+
+        return NoteVersionCompactionResult(
+            notes_compacted=plan.notes_compacted,
+            deltas_removed=plan.deltas_removed,
+            snapshots_removed=plan.snapshots_removed,
+        )
 
     async def _version_exists(self, note_id: str, version_index: int) -> bool:
         for table in (self._snapshot_table, self._delta_table):
@@ -573,82 +628,12 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         )
 
     def _build_patch(self, old_text: str, new_text: str) -> str:
-        # Use unified_diff: O(N) plus hunk headers, far smaller than ndiff for
-        # large mostly-identical content.  ``n=2`` keeps a small context
-        # window so the patch remains self-describing.
-        old_payload = old_text if old_text.endswith("\n") else f"{old_text}\n"
-        new_payload = new_text if new_text.endswith("\n") else f"{new_text}\n"
-        diff_lines = self._dmp.unified_diff(
-            old_payload.splitlines(keepends=True),
-            new_payload.splitlines(keepends=True),
-            n=2,
-        )
-        return "".join(diff_lines)
+        """Return a unified diff from ``old_text`` to ``new_text``."""
+        return build_patch(old_text, new_text)
 
     def _apply_patch(self, patch_text: str, base_text: str) -> str:
-        """Apply a unified diff produced by :meth:`_build_patch`.
-
-        The patch only contains the changed hunks plus a few context
-        lines, so the untouched regions of ``base_text`` must be copied
-        around each hunk using the ``@@ -old_start,old_count`` offsets.
-        Concatenating the payload lines alone loses everything outside
-        the hunks (leading sections, table headers, trailing text, ...).
-        """
-        if not patch_text:
-            return base_text
-
-        # _build_patch normalises both sides to a trailing newline before
-        # diffing, so hunk offsets assume a newline-terminated payload.
-        # Mirror that for the base or the offsets drift on content saved
-        # without a final newline.
-        needs_trim = not base_text.endswith("\n")
-        base_lines = base_text.splitlines(keepends=True)
-        if needs_trim and base_lines:
-            base_lines[-1] += "\n"
-
-        restored: list[str] = []
-        cursor = 0  # next base line that has not been consumed yet
-
-        for line in patch_text.splitlines(keepends=True):
-            # File headers are written as "--- " / "+++ " (empty file
-            # names). Content lines always carry a prefix, so a line
-            # starting with exactly these markers cannot be payload.
-            if line.startswith("--- ") or line.startswith("+++ "):
-                continue
-            if line.startswith("@@"):
-                # @@ -old_start[,old_count] +new_start[,new_count] @@
-                header = line[2:].split("@@", 1)[0].strip()
-                old_spec = header.split(" ", 1)[0].lstrip("-")
-                start_text, _, count_text = old_spec.partition(",")
-                old_start = int(start_text)
-                old_count = int(count_text) if count_text else 1
-                # Copy everything before this hunk from the base. An
-                # insertion-only hunk (old_count == 0) points *after*
-                # the line it inserts at.
-                target = old_start - 1 if old_count > 0 else old_start
-                if target > cursor:
-                    restored.extend(base_lines[cursor:target])
-                    cursor = target
-                continue
-
-            prefix = line[:1]
-            if prefix == " ":
-                # Context line: identical in base and result. Append the
-                # payload (not the base line) and consume one old line.
-                restored.append(line[1:])
-                cursor += 1
-            elif prefix == "-":
-                cursor += 1
-            elif prefix == "+":
-                restored.append(line[1:])
-            # "\\ No newline at end of file" and other markers carry no
-            # payload and are ignored.
-
-        restored.extend(base_lines[cursor:])
-        result = "".join(restored)
-        if needs_trim and result.endswith("\n"):
-            result = result[:-1]
-        return result
+        """Apply a unified diff produced by :meth:`_build_patch`."""
+        return apply_patch(patch_text, base_text)
 
     @staticmethod
     def _to_entry_from_snapshot(snapshot: NoteVersionSnapshotEntity) -> NoteVersionEntry:

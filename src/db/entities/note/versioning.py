@@ -58,10 +58,11 @@ class NoteVersionEntry:
 
 @dataclass
 class NoteVersionCompactionResult:
-    """Outcome of collapsing historical deltas into one delta per day."""
+    """Outcome of collapsing a completed day's versions into one snapshot."""
 
     notes_compacted: int = 0
     deltas_removed: int = 0
+    snapshots_removed: int = 0
 
 
 @dataclass

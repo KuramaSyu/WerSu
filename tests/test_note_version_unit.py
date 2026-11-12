@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from tests.doubles import _DummyUserContext as UserContext
@@ -486,23 +487,23 @@ def _compaction_repo() -> NoteVersionPostgresRepo:
     )
 
 
-async def test_versioning_compaction_merges_one_day_into_one_delta() -> None:
+async def test_versioning_compaction_merges_day_into_one_snapshot() -> None:
     repo = _compaction_repo()
 
     result = await repo.compact_deltas_before(datetime(2026, 5, 19))
 
     assert result.notes_compacted == 1
-    assert result.deltas_removed == 2
+    assert result.deltas_removed == 3
+    assert result.snapshots_removed == 0
 
-    # Day 1 keeps only its last version; day 2 is untouched.
+    # Day 1 collapses to its snapshot; day 2's delta is untouched.
     remaining = await repo._delta_table.fetch("SELECT * FROM note.version_delta")
-    assert sorted(row["version_index"] for row in remaining) == [4, 5]
+    assert sorted(row["version_index"] for row in remaining) == [5]
 
-    # The retained day-1 version still reconstructs the full day's state.
+    # The retained day-1 snapshot moved to the day's last index and
+    # carries the day's final state.
     restored_day_one = await repo.get_content_at_version("note-1", 4)
-    assert (
-        restored_day_one.content == "start\nsecond\nthird\nfourth\n"
-    )
+    assert restored_day_one.content == "start\nsecond\nthird\nfourth\n"
 
     # The next day's delta still applies on top of the compacted day.
     restored_day_two = await repo.get_content_at_version("note-1", 5)
@@ -518,85 +519,188 @@ async def test_versioning_compaction_is_idempotent() -> None:
     first = await repo.compact_deltas_before(cutoff)
     second = await repo.compact_deltas_before(cutoff)
 
-    assert first.deltas_removed == 2
+    assert first.deltas_removed == 3
     assert second.deltas_removed == 0
+    assert second.snapshots_removed == 0
     assert second.notes_compacted == 0
 
 
-async def test_versioning_compaction_does_not_cross_snapshots() -> None:
-    """A snapshot created mid-day starts a new group with its own base."""
+async def test_versioning_compaction_combines_many_snapshots() -> None:
+    """Thirty snapshots in one day collapse to a single snapshot."""
     note_id = "note-1"
-    day_one = datetime(2026, 5, 18, 9, 0, 0)
-    snap_1 = {
-        "snapshot_id": "snap-1",
-        "note_id": note_id,
-        "version_index": 1,
-        "created_at": day_one,
-        "author_id": "user-1",
-        "title": "start",
-        "content": "one\n",
-    }
-    # Version 3 forces a full snapshot (as append_version does after N deltas).
-    snap_3 = {
-        "snapshot_id": "snap-3",
-        "note_id": note_id,
-        "version_index": 3,
-        "created_at": day_one,
-        "author_id": "user-1",
-        "title": "start",
-        "content": "three\n",
-    }
-    contents = {2: "two\n", 3: "three\n", 4: "four\n", 5: "five\n"}
+    day = datetime(2026, 5, 18, 9, 0, 0)
+    snapshots = [
+        {
+            "snapshot_id": f"snap-{index}",
+            "note_id": note_id,
+            "version_index": index,
+            "created_at": day,
+            "author_id": "user-1",
+            "title": "t",
+            "content": f"content-{index}\n",
+        }
+        for index in range(1, 31)
+    ]
+    repo = NoteVersionPostgresRepo(
+        snapshot_table=_FakeTable(
+            "note.version_snapshot", snapshots, id_field="snapshot_id"
+        ),
+        delta_table=_FakeTable("note.version_delta", []),
+        max_deltas_per_snapshot=100,
+    )
+
+    result = await repo.compact_deltas_before(datetime(2026, 5, 19))
+
+    assert result.notes_compacted == 1
+    assert result.snapshots_removed == 29
+    remaining = await repo._snapshot_table.fetch(
+        "SELECT * FROM note.version_snapshot"
+    )
+    assert len(remaining) == 1
+    assert remaining[0]["snapshot_id"] == "snap-30"
+    restored = await repo.get_content_at_version(note_id, 30)
+    assert restored.content == "content-30\n"
+
+
+async def test_versioning_compaction_combines_snapshots_and_deltas() -> None:
+    """Three snapshots and thirty deltas in one day collapse to one snapshot."""
+    note_id = "note-1"
+    day = datetime(2026, 5, 18, 9, 0, 0)
+    contents = {index: f"v{index}\n" for index in range(1, 35)}
     builder = NoteVersionPostgresRepo(
         snapshot_table=_DummyTable("note.version_snapshot"),
         delta_table=_DummyTable("note.version_delta"),
         max_deltas_per_snapshot=100,
     )
-    deltas = [
+    snapshots = [
         {
-            "delta_id": "d2",
+            "snapshot_id": f"snap-{index}",
             "note_id": note_id,
-            "snapshot_id": "snap-1",
-            "version_index": 2,
-            "created_at": day_one,
+            "version_index": index,
+            "created_at": day,
             "author_id": "user-1",
-            "title_patch": "",
-            "content_patch": builder._build_patch("one\n", contents[2]),
-        },
-        {
-            "delta_id": "d4",
-            "note_id": note_id,
-            "snapshot_id": "snap-3",
-            "version_index": 4,
-            "created_at": day_one,
-            "author_id": "user-1",
-            "title_patch": "",
-            "content_patch": builder._build_patch(contents[3], contents[4]),
-        },
-        {
-            "delta_id": "d5",
-            "note_id": note_id,
-            "snapshot_id": "snap-3",
-            "version_index": 5,
-            "created_at": day_one,
-            "author_id": "user-1",
-            "title_patch": "",
-            "content_patch": builder._build_patch(contents[4], contents[5]),
-        },
+            "title": "t",
+            "content": contents[index],
+        }
+        for index in (1, 12, 23)
     ]
+    deltas = []
+    for start, snap_id in ((2, "snap-1"), (13, "snap-12"), (24, "snap-23")):
+        for index in range(start, start + 10):
+            deltas.append(
+                {
+                    "delta_id": f"d{index}",
+                    "note_id": note_id,
+                    "snapshot_id": snap_id,
+                    "version_index": index,
+                    "created_at": day,
+                    "author_id": "user-1",
+                    "title_patch": "",
+                    "content_patch": builder._build_patch(
+                        contents[index - 1], contents[index]
+                    ),
+                }
+            )
+    # A later day's delta, to prove the collapsed snapshot becomes its base.
+    deltas.append(
+        {
+            "delta_id": "d34",
+            "note_id": note_id,
+            "snapshot_id": "snap-23",
+            "version_index": 34,
+            "created_at": datetime(2026, 5, 19, 9, 0, 0),
+            "author_id": "user-1",
+            "title_patch": "",
+            "content_patch": builder._build_patch(contents[33], contents[34]),
+        }
+    )
     repo = NoteVersionPostgresRepo(
-        snapshot_table=_FakeTable("note.version_snapshot", [snap_1, snap_3]),
+        snapshot_table=_FakeTable(
+            "note.version_snapshot", snapshots, id_field="snapshot_id"
+        ),
         delta_table=_FakeTable("note.version_delta", deltas),
         max_deltas_per_snapshot=100,
     )
 
     result = await repo.compact_deltas_before(datetime(2026, 5, 19))
 
-    assert result.deltas_removed == 1
-    remaining = await repo._delta_table.fetch("SELECT * FROM note.version_delta")
-    # d2 already had a single delta on this side of the snapshot; d4/d5 merge.
-    assert sorted(row["version_index"] for row in remaining) == [2, 5]
-    assert (await repo.get_content_at_version(note_id, 5)).content == "five\n"
+    assert result.notes_compacted == 1
+    assert result.deltas_removed == 30
+    assert result.snapshots_removed == 2
+    remaining_snapshots = await repo._snapshot_table.fetch(
+        "SELECT * FROM note.version_snapshot"
+    )
+    assert [row["snapshot_id"] for row in remaining_snapshots] == ["snap-23"]
+    # The kept snapshot moved to the day's last index and now holds
+    # the day's final state ...
+    assert (await repo.get_content_at_version(note_id, 33)).content == "v33\n"
+    # ... and the next day's delta still chains on top of it.
+    assert (await repo.get_content_at_version(note_id, 34)).content == "v34\n"
+
+
+async def test_versioning_compaction_creates_snapshot_for_delta_only_day() -> None:
+    """A day with only deltas becomes a snapshot at its last index."""
+    note_id = "note-1"
+    day_one = datetime(2026, 5, 17, 9, 0, 0)
+    day_two = datetime(2026, 5, 18, 9, 0, 0)
+    builder = NoteVersionPostgresRepo(
+        snapshot_table=_DummyTable("note.version_snapshot"),
+        delta_table=_DummyTable("note.version_delta"),
+        max_deltas_per_snapshot=100,
+    )
+    snapshots = [
+        {
+            "snapshot_id": "snap-1",
+            "note_id": note_id,
+            "version_index": 1,
+            "created_at": day_one,
+            "author_id": "user-1",
+            "title": "t",
+            "content": "one\n",
+        }
+    ]
+    deltas = [
+        {
+            "delta_id": "d2",
+            "note_id": note_id,
+            "snapshot_id": "snap-1",
+            "version_index": 2,
+            "created_at": day_two,
+            "author_id": "user-1",
+            "title_patch": "",
+            "content_patch": builder._build_patch("one\n", "two\n"),
+        },
+        {
+            "delta_id": "d3",
+            "note_id": note_id,
+            "snapshot_id": "snap-1",
+            "version_index": 3,
+            "created_at": day_two,
+            "author_id": "user-1",
+            "title_patch": "",
+            "content_patch": builder._build_patch("two\n", "three\n"),
+        },
+    ]
+    repo = NoteVersionPostgresRepo(
+        snapshot_table=_FakeTable(
+            "note.version_snapshot", snapshots, id_field="snapshot_id"
+        ),
+        delta_table=_FakeTable("note.version_delta", deltas),
+        max_deltas_per_snapshot=100,
+    )
+
+    result = await repo.compact_deltas_before(datetime(2026, 5, 19))
+
+    assert result.notes_compacted == 1
+    assert result.deltas_removed == 2
+    assert result.snapshots_removed == 0
+    assert await repo._delta_table.fetch("SELECT * FROM note.version_delta") == []
+    remaining_snapshots = await repo._snapshot_table.fetch(
+        "SELECT * FROM note.version_snapshot"
+    )
+    assert len(remaining_snapshots) == 2
+    assert (await repo.get_content_at_version(note_id, 3)).content == "three\n"
+    assert (await repo.get_content_at_version(note_id, 1)).content == "one\n"
 
 
 async def test_versioning_compacted_version_index_is_not_reconstructed() -> None:
@@ -609,3 +713,113 @@ async def test_versioning_compacted_version_index_is_not_reconstructed() -> None
         assert "does not exist" in str(exc)
     else:
         raise AssertionError("expected removed version index to raise")
+
+
+class _ContextTable:
+    """Fake snapshot table that answers ``_load_append_context``.
+
+    ``delta_count`` mirrors the SQL: it counts the deltas that
+    reference the latest snapshot when the query filters on it, and
+    every delta of the note otherwise.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        snapshots: list[dict],
+        deltas: list[dict],
+    ) -> None:
+        self.name = name
+        self._snapshots = snapshots
+        self._deltas = deltas
+
+    async def fetch(self, sql: str, *args):
+        note_id = args[0]
+        snapshots = [s for s in self._snapshots if s["note_id"] == note_id]
+        latest = max(
+            snapshots,
+            key=lambda s: s["version_index"],
+            default=None,
+        )
+
+        deltas_block = sql.split("deltas AS", 1)[1].split("versions AS", 1)[0]
+        filters_by_snapshot = "FROM snap" in deltas_block
+        note_deltas = [d for d in self._deltas if d["note_id"] == note_id]
+        if filters_by_snapshot:
+            note_deltas = [
+                d
+                for d in note_deltas
+                if latest is not None
+                and d["snapshot_id"] == latest["snapshot_id"]
+            ]
+
+        versions = [s["version_index"] for s in snapshots] + [
+            d["version_index"]
+            for d in self._deltas
+            if d["note_id"] == note_id
+        ]
+        return [
+            {
+                "snapshot_json": (
+                    json.dumps(latest, default=str)
+                    if latest is not None
+                    else None
+                ),
+                "delta_count": len(note_deltas),
+                "next_version_index": max(versions, default=0) + 1,
+            }
+        ]
+
+
+async def test_append_context_counts_only_deltas_since_latest_snapshot() -> None:
+    """Regression: hitting ``max_deltas`` must not turn every later
+    save into a snapshot.  ``_load_append_context`` counts only the
+    deltas referencing the latest snapshot."""
+    note_id = "note-1"
+    snapshots = [
+        {
+            "snapshot_id": "snap-1",
+            "note_id": note_id,
+            "version_index": 1,
+            "created_at": datetime(2026, 5, 18, 9, 0, 0),
+            "author_id": "user-1",
+            "title": "t",
+            "content": "c",
+        },
+        {
+            "snapshot_id": "snap-12",
+            "note_id": note_id,
+            "version_index": 12,
+            "created_at": datetime(2026, 5, 18, 10, 0, 0),
+            "author_id": "user-1",
+            "title": "t",
+            "content": "c",
+        },
+    ]
+    deltas = [
+        {
+            "delta_id": f"d{index}",
+            "note_id": note_id,
+            "snapshot_id": "snap-1",
+            "version_index": index,
+            "created_at": datetime(2026, 5, 18, 9, index, 0),
+        }
+        for index in range(2, 12)
+    ] + [
+        {
+            "delta_id": "d13",
+            "note_id": note_id,
+            "snapshot_id": "snap-12",
+            "version_index": 13,
+            "created_at": datetime(2026, 5, 18, 10, 1, 0),
+        }
+    ]
+    repo = NoteVersionPostgresRepo(
+        snapshot_table=_ContextTable("note.version_snapshot", snapshots, deltas),
+        delta_table=_FakeTable("note.version_delta", []),
+        max_deltas_per_snapshot=10,
+    )
+
+    context = await repo._load_append_context(note_id)
+
+    assert context["delta_count"] == 1

@@ -1,20 +1,16 @@
-"""Daily compaction of old note-version deltas.
+"""Daily compaction of old note versions.
 
 Every note save appends a delta row (or a full snapshot every N
 deltas).  A busy note can therefore accumulate hundreds of rows, and
-the version list becomes noisy.  This process collapses the deltas of
-each *completed* calendar day into a single delta per note/snapshot,
-keeping only that day's final state restorable.
+the version list becomes noisy.  This process collapses **all** of a
+note's snapshots and deltas for a *completed* calendar day into one
+snapshot that holds that day's final state.
 
 The compaction is deliberately limited to days before ``today``:
-today's deltas are still being written, and the newest version must
-stay exactly as the user saved it.  Because a group that already has a
-single delta is a no-op, running the process again is idempotent and
+today's versions are still being written, and the newest version must
+stay exactly as the user saved it.  Because a day that already has a
+single version is a no-op, running the process again is idempotent and
 also catches up on days where the service was down.
-
-Snapshots are never deleted here.  A snapshot created mid-day starts a
-new group, so compaction cannot merge deltas that belong to different
-snapshot bases.
 """
 
 from __future__ import annotations
@@ -72,7 +68,7 @@ class DailyVersionCompactionProcessImpl(BackgroundProcessABC):
         return datetime.combine(next_day, time(hour=self._run_at_hour, minute=5))
 
     async def run(self) -> None:
-        """Compact all deltas created before today's midnight."""
+        """Compact every version created before today's midnight."""
         now = self._get_now()
         cutoff = datetime.combine(now.date(), time.min)
         try:
@@ -83,7 +79,8 @@ class DailyVersionCompactionProcessImpl(BackgroundProcessABC):
             )
             return
 
-        if result.deltas_removed == 0:
+        removed = result.deltas_removed + result.snapshots_removed
+        if removed == 0:
             self.log.debug(
                 "DailyVersionCompactionProcess: nothing to compact before "
                 f"{cutoff.isoformat()}"
@@ -93,7 +90,9 @@ class DailyVersionCompactionProcessImpl(BackgroundProcessABC):
         self.log.info(
             "DailyVersionCompactionProcess: compacted "
             f"{result.notes_compacted} note(s), removed "
-            f"{result.deltas_removed} delta(s) before {cutoff.isoformat()}"
+            f"{result.deltas_removed} delta(s) and "
+            f"{result.snapshots_removed} snapshot(s) before "
+            f"{cutoff.isoformat()}"
         )
 
 
