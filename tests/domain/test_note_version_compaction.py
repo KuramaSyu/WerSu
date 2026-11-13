@@ -202,3 +202,63 @@ def test_plan_reconstructs_title_and_content() -> None:
     retained = plan.days[0].retained_snapshot
     assert retained.title == "new"
     assert retained.content == "body\nmore\n"
+
+
+def test_plan_exposes_first_index_and_orders_days_oldest_first() -> None:
+    """The repository needs the day's base index and an oldest-first order.
+
+    Grouping puts snapshots before deltas, so ``plan.days`` can list a
+    later day before an earlier one; ``days_oldest_first`` must not.
+    """
+    snapshots = [
+        _snapshot(1, "a\n", created_at=DAY_ONE),
+        _snapshot(9, "b\n", created_at=DAY_TWO),
+    ]
+    deltas = [
+        _delta(2, "snap-1", "a\n", "b\n", created_at=DAY_ONE),
+        _delta(10, "snap-9", "b\n", "c\n", created_at=DAY_TWO),
+    ]
+
+    plan = DailyVersionCompactor().plan(snapshots, deltas, CUTOFF)
+
+    by_day = {day.day: day for day in plan.days}
+    assert by_day[DAY_ONE.date()].first_version_index == 1
+    assert by_day[DAY_TWO.date()].first_version_index == 9
+    assert [day.day for day in plan.days_oldest_first] == [
+        DAY_ONE.date(),
+        DAY_TWO.date(),
+    ]
+
+
+def test_plan_orders_days_per_note() -> None:
+    other = "note-2"
+    snapshots = [
+        _snapshot(5, "a\n", created_at=DAY_ONE),
+        SnapshotVersion(
+            snapshot_id="snap-b",
+            note_id=other,
+            version_index=1,
+            created_at=DAY_ONE,
+            author_id="user-1",
+            title="t",
+            content="x\n",
+        ),
+    ]
+    deltas = [
+        _delta(6, "snap-5", "a\n", "b\n", created_at=DAY_ONE),
+        DeltaVersion(
+            delta_id="delta-b",
+            note_id=other,
+            snapshot_id="snap-b",
+            version_index=2,
+            created_at=DAY_ONE,
+            author_id="user-1",
+            title_patch=build_patch("t", "t"),
+            content_patch=build_patch("x\n", "y\n"),
+        ),
+    ]
+
+    plan = DailyVersionCompactor().plan(snapshots, deltas, CUTOFF)
+
+    order = [(day.note_id, day.first_version_index) for day in plan.days_oldest_first]
+    assert order == [(NOTE, 5), (other, 1)]

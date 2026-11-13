@@ -58,7 +58,7 @@ class NoteVersionEntry:
 
 @dataclass
 class NoteVersionCompactionResult:
-    """Outcome of collapsing a completed day's versions into one snapshot."""
+    """Outcome of collapsing a completed day's versions into one version."""
 
     notes_compacted: int = 0
     deltas_removed: int = 0

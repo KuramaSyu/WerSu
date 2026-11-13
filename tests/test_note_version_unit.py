@@ -638,8 +638,8 @@ async def test_versioning_compaction_combines_snapshots_and_deltas() -> None:
     assert (await repo.get_content_at_version(note_id, 34)).content == "v34\n"
 
 
-async def test_versioning_compaction_creates_snapshot_for_delta_only_day() -> None:
-    """A day with only deltas becomes a snapshot at its last index."""
+async def test_versioning_compaction_creates_delta_for_delta_only_day() -> None:
+    """A day with only deltas becomes one delta against the earlier version."""
     note_id = "note-1"
     day_one = datetime(2026, 5, 17, 9, 0, 0)
     day_two = datetime(2026, 5, 18, 9, 0, 0)
@@ -685,7 +685,9 @@ async def test_versioning_compaction_creates_snapshot_for_delta_only_day() -> No
         snapshot_table=_FakeTable(
             "note.version_snapshot", snapshots, id_field="snapshot_id"
         ),
-        delta_table=_FakeTable("note.version_delta", deltas),
+        delta_table=_FakeTable(
+            "note.version_delta", deltas, id_field="delta_id"
+        ),
         max_deltas_per_snapshot=100,
     )
 
@@ -694,11 +696,20 @@ async def test_versioning_compaction_creates_snapshot_for_delta_only_day() -> No
     assert result.notes_compacted == 1
     assert result.deltas_removed == 2
     assert result.snapshots_removed == 0
-    assert await repo._delta_table.fetch("SELECT * FROM note.version_delta") == []
+
+    # No full snapshot was written for the day; its final bytes live in
+    # a single delta against the version that survived.
     remaining_snapshots = await repo._snapshot_table.fetch(
         "SELECT * FROM note.version_snapshot"
     )
-    assert len(remaining_snapshots) == 2
+    assert len(remaining_snapshots) == 1
+    assert remaining_snapshots[0]["snapshot_id"] == "snap-1"
+    remaining_deltas = await repo._delta_table.fetch(
+        "SELECT * FROM note.version_delta"
+    )
+    assert len(remaining_deltas) == 1
+    assert remaining_deltas[0]["version_index"] == 3
+    assert remaining_deltas[0]["snapshot_id"] == "snap-1"
     assert (await repo.get_content_at_version(note_id, 3)).content == "three\n"
     assert (await repo.get_content_at_version(note_id, 1)).content == "one\n"
 
@@ -823,3 +834,274 @@ async def test_append_context_counts_only_deltas_since_latest_snapshot() -> None
     context = await repo._load_append_context(note_id)
 
     assert context["delta_count"] == 1
+
+
+def _multi_day_repo(
+    snapshots: list[dict],
+    deltas: list[dict],
+    *,
+    max_deltas_per_snapshot: int = 100,
+):
+    return NoteVersionPostgresRepo(
+        snapshot_table=_FakeTable(
+            "note.version_snapshot", snapshots, id_field="snapshot_id"
+        ),
+        delta_table=_FakeTable(
+            "note.version_delta", deltas, id_field="delta_id"
+        ),
+        max_deltas_per_snapshot=max_deltas_per_snapshot,
+    )
+
+
+async def test_versioning_compaction_chains_deltas_across_days() -> None:
+    """Days compact oldest first, so each delta diffs the surviving base.
+
+    Day one has no earlier version and keeps a snapshot; day two becomes
+    a delta against day one's retained state.  Reading the untouched
+    day-three delta must still reproduce the newest content.
+    """
+    note_id = "note-1"
+    day_one = datetime(2026, 5, 18, 9, 0, 0)
+    day_two = datetime(2026, 5, 19, 9, 0, 0)
+    day_three = datetime(2026, 5, 20, 9, 0, 0)
+    contents = {index: f"v{index}\n" for index in range(1, 7)}
+    builder = NoteVersionPostgresRepo(
+        snapshot_table=_DummyTable("note.version_snapshot"),
+        delta_table=_DummyTable("note.version_delta"),
+        max_deltas_per_snapshot=100,
+    )
+    snapshots = [
+        {
+            "snapshot_id": "snap-1",
+            "note_id": note_id,
+            "version_index": 1,
+            "created_at": day_one,
+            "author_id": "user-1",
+            "title": "t",
+            "content": contents[1],
+        }
+    ]
+    created = {2: day_one, 3: day_one, 4: day_two, 5: day_two, 6: day_three}
+    deltas = [
+        {
+            "delta_id": f"d{index}",
+            "note_id": note_id,
+            "snapshot_id": "snap-1",
+            "version_index": index,
+            "created_at": created[index],
+            "author_id": "user-1",
+            "title_patch": "",
+            "content_patch": builder._build_patch(
+                contents[index - 1], contents[index]
+            ),
+        }
+        for index in (2, 3, 4, 5, 6)
+    ]
+    repo = _multi_day_repo(snapshots, deltas)
+
+    result = await repo.compact_deltas_before(day_three)
+
+    assert result.notes_compacted == 1
+    assert result.deltas_removed == 4
+
+    # One full snapshot (day one's final state) plus one patch for day
+    # two; the day-three delta is untouched.
+    remaining_snapshots = await repo._snapshot_table.fetch(
+        "SELECT * FROM note.version_snapshot"
+    )
+    assert [(row["snapshot_id"], row["version_index"]) for row in remaining_snapshots] == [
+        ("snap-1", 3)
+    ]
+    assert (await repo.get_content_at_version(note_id, 3)).content == contents[3]
+
+    remaining_deltas = sorted(
+        await repo._delta_table.fetch("SELECT * FROM note.version_delta"),
+        key=lambda row: row["version_index"],
+    )
+    assert [row["version_index"] for row in remaining_deltas] == [5, 6]
+    assert all(row["snapshot_id"] == "snap-1" for row in remaining_deltas)
+
+    # The chain still restores every surviving version.
+    assert (await repo.get_content_at_version(note_id, 5)).content == contents[5]
+    assert (await repo.get_content_at_version(note_id, 6)).content == contents[6]
+
+
+async def test_versioning_compaction_repoints_later_deltas() -> None:
+    """Deltas attached to a snapshot a day deletes move to the chain root.
+
+    Without the rewrite the ``ON DELETE CASCADE`` would silently drop
+    the later day's delta when the day's snapshot is removed.
+    """
+    note_id = "note-1"
+    day_one = datetime(2026, 5, 18, 9, 0, 0)
+    day_two = datetime(2026, 5, 19, 9, 0, 0)
+    day_three = datetime(2026, 5, 20, 9, 0, 0)
+    contents = {index: f"v{index}\n" for index in range(1, 7)}
+    builder = NoteVersionPostgresRepo(
+        snapshot_table=_DummyTable("note.version_snapshot"),
+        delta_table=_DummyTable("note.version_delta"),
+        max_deltas_per_snapshot=100,
+    )
+    snapshots = [
+        {
+            "snapshot_id": "snap-1",
+            "note_id": note_id,
+            "version_index": 1,
+            "created_at": day_one,
+            "author_id": "user-1",
+            "title": "t",
+            "content": contents[1],
+        },
+        {
+            "snapshot_id": "snap-2",
+            "note_id": note_id,
+            "version_index": 2,
+            "created_at": day_one,
+            "author_id": "user-1",
+            "title": "t",
+            "content": contents[2],
+        },
+        {
+            "snapshot_id": "snap-4",
+            "note_id": note_id,
+            "version_index": 4,
+            "created_at": day_two,
+            "author_id": "user-1",
+            "title": "t",
+            "content": contents[4],
+        },
+    ]
+    deltas = [
+        {
+            "delta_id": "d3",
+            "note_id": note_id,
+            "snapshot_id": "snap-2",
+            "version_index": 3,
+            "created_at": day_one,
+            "author_id": "user-1",
+            "title_patch": "",
+            "content_patch": builder._build_patch(contents[2], contents[3]),
+        },
+        {
+            "delta_id": "d5",
+            "note_id": note_id,
+            "snapshot_id": "snap-4",
+            "version_index": 5,
+            "created_at": day_two,
+            "author_id": "user-1",
+            "title_patch": "",
+            "content_patch": builder._build_patch(contents[4], contents[5]),
+        },
+        {
+            "delta_id": "d6",
+            "note_id": note_id,
+            "snapshot_id": "snap-4",
+            "version_index": 6,
+            "created_at": day_three,
+            "author_id": "user-1",
+            "title_patch": "",
+            "content_patch": builder._build_patch(contents[5], contents[6]),
+        },
+    ]
+    repo = _multi_day_repo(snapshots, deltas)
+
+    result = await repo.compact_deltas_before(day_three)
+
+    assert result.snapshots_removed == 2  # snap-1 and the day-two snap-4
+    remaining_snapshots = await repo._snapshot_table.fetch(
+        "SELECT * FROM note.version_snapshot"
+    )
+    assert [(row["snapshot_id"], row["version_index"]) for row in remaining_snapshots] == [
+        ("snap-2", 3)
+    ]
+
+    remaining_deltas = sorted(
+        await repo._delta_table.fetch("SELECT * FROM note.version_delta"),
+        key=lambda row: row["version_index"],
+    )
+    # The day-three delta survived the day-two snapshot delete ...
+    assert [row["version_index"] for row in remaining_deltas] == [5, 6]
+    # ... because it was re-pointed at the surviving chain root.
+    assert all(row["snapshot_id"] == "snap-2" for row in remaining_deltas)
+
+    assert (await repo.get_content_at_version(note_id, 5)).content == contents[5]
+    assert (await repo.get_content_at_version(note_id, 6)).content == contents[6]
+    assert (await repo.get_content_at_version(note_id, 3)).content == contents[3]
+
+
+async def test_versioning_compaction_starts_new_snapshot_at_delta_budget() -> None:
+    """Once the chain holds ``max_deltas_per_snapshot`` patches, a day is
+    stored as a snapshot again and a new chain starts there."""
+    note_id = "note-1"
+    day_one = datetime(2026, 5, 18, 9, 0, 0)
+    day_two = datetime(2026, 5, 19, 9, 0, 0)
+    day_three = datetime(2026, 5, 20, 9, 0, 0)
+    day_four = datetime(2026, 5, 21, 9, 0, 0)
+    contents = {index: f"v{index}\n" for index in range(1, 8)}
+    builder = NoteVersionPostgresRepo(
+        snapshot_table=_DummyTable("note.version_snapshot"),
+        delta_table=_DummyTable("note.version_delta"),
+        max_deltas_per_snapshot=100,
+    )
+    snapshots = [
+        {
+            "snapshot_id": "snap-1",
+            "note_id": note_id,
+            "version_index": 1,
+            "created_at": day_one,
+            "author_id": "user-1",
+            "title": "t",
+            "content": contents[1],
+        }
+    ]
+    created = {
+        2: day_two,
+        3: day_two,
+        4: day_three,
+        5: day_three,
+        6: day_four,
+        7: day_four,
+    }
+    deltas = [
+        {
+            "delta_id": f"d{index}",
+            "note_id": note_id,
+            "snapshot_id": "snap-1",
+            "version_index": index,
+            "created_at": created[index],
+            "author_id": "user-1",
+            "title_patch": "",
+            "content_patch": builder._build_patch(
+                contents[index - 1], contents[index]
+            ),
+        }
+        for index in range(2, 8)
+    ]
+    repo = _multi_day_repo(snapshots, deltas, max_deltas_per_snapshot=2)
+
+    result = await repo.compact_deltas_before(
+        datetime(2026, 5, 22, 0, 0, 0)
+    )
+
+    assert result.deltas_removed == 6
+    assert result.snapshots_removed == 0
+
+    # Day two and day three became deltas; day four hit the budget and
+    # became a fresh snapshot instead.
+    remaining_snapshots = sorted(
+        await repo._snapshot_table.fetch("SELECT * FROM note.version_snapshot"),
+        key=lambda row: row["version_index"],
+    )
+    assert [(row["version_index"], row["content"]) for row in remaining_snapshots] == [
+        (1, contents[1]),
+        (7, contents[7]),
+    ]
+    remaining_deltas = sorted(
+        await repo._delta_table.fetch("SELECT * FROM note.version_delta"),
+        key=lambda row: row["version_index"],
+    )
+    assert [row["version_index"] for row in remaining_deltas] == [3, 5]
+
+    # The new snapshot is a chain root: reading still works from it.
+    assert (await repo.get_content_at_version(note_id, 7)).content == contents[7]
+    assert (await repo.get_content_at_version(note_id, 5)).content == contents[5]

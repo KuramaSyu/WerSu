@@ -4,7 +4,12 @@ Every note save appends a delta row (or a full snapshot every N
 deltas).  A busy note can therefore accumulate hundreds of rows, and
 the version list becomes noisy.  This process collapses **all** of a
 note's snapshots and deltas for a *completed* calendar day into one
-snapshot that holds that day's final state.
+version that holds that day's final state.  The repository stores that
+version as a delta against the last earlier version while that chain has
+fewer than ``NOTE_VERSION_MAX_DELTAS`` patches; after that the day is
+written as a fresh snapshot and a new chain starts.  Days are compacted
+oldest first so each patch is taken against a version that survives the
+run.
 
 The compaction is deliberately limited to days before ``today``:
 today's versions are still being written, and the newest version must
@@ -27,7 +32,12 @@ from src.db.repos.note.versioning import NoteVersionRepoABC
 
 
 class DailyVersionCompactionProcessImpl(BackgroundProcessABC):
-    """Collapse every completed day's deltas into one delta per note.
+    """Collapse every completed day's versions into one version per note.
+
+    The retained day-final state is written as a delta whenever an
+    earlier version exists and the chain still has delta budget left
+    (see ``DeltaVersionAdapter``); otherwise it becomes a full snapshot
+    that starts a new chain.
 
     Args:
         version_repo: versioning repository that owns the snapshot and

@@ -20,6 +20,10 @@ from src.domain.note_version_compaction import (
     DeltaVersion,
     SnapshotVersion,
 )
+from src.domain.note_version_delta_adapter import (
+    BaseVersion,
+    DeltaVersionAdapter,
+)
 from src.domain.note_version_patch import apply_patch, build_patch
 from src.grpc_mod.converter.postgres_row_converter import (
     PostgresRowConverter,
@@ -86,16 +90,25 @@ class NoteVersionRepoABC(ABC):
         self,
         cutoff: datetime,
     ) -> NoteVersionCompactionResult:
-        """Collapse a completed day's versions into one snapshot.
+        """Collapse each completed day's versions into one entry.
 
         For every note, all snapshots and deltas created on the same
         calendar day (before ``cutoff``) are replaced by a single
-        snapshot that holds the day's final state.  If the day already
-        contains a snapshot, its *last* snapshot is kept and rewritten
-        to the day's final content; otherwise a fresh snapshot is
-        created at the day's last version index.  The day's other
-        snapshots and every delta of that day are removed, so only the
-        day's final state stays restorable.
+        version that holds the day's final state at the day's last
+        version index.  When a version from an earlier day survives,
+        that final state is stored as a *delta* against it
+        (``DeltaVersionAdapter``), so a long history stays one initial
+        snapshot plus at most ``max_deltas_per_snapshot`` patches between
+        snapshots.  When that budget is used up, the day is written as a
+        fresh snapshot instead, starting a new chain.  A note's oldest
+        day - which has nothing to diff against - always keeps a full
+        snapshot, acting as the chain root.
+
+        Days are applied oldest first per note, so each delta's base is
+        a version that this run keeps rather than one a later iteration
+        deletes.  Deltas of later days that referenced a removed
+        snapshot are re-pointed at the surviving chain root before the
+        delete, keeping the FK cascade from taking them down.
 
         Groups are keyed by ``(note_id, date)``.  A day with a single
         version is a no-op, and the operation is idempotent.
@@ -116,6 +129,7 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         max_deltas_per_snapshot: int,
         to_postgres_row: Optional[PostgresRowConverter] = None,
         compactor: Optional[DailyVersionCompactor] = None,
+        delta_adapter: Optional[DeltaVersionAdapter] = None,
     ) -> None:
         if max_deltas_per_snapshot < 0:
             raise ValueError("max_deltas_per_snapshot must be >= 0")
@@ -126,6 +140,7 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
         # Internal knob: a shared PostgresRowConverter instance is injected from main.py.
         self._to_postgres_row = to_postgres_row or PostgresRowConverter()
         self._compactor = compactor or DailyVersionCompactor()
+        self._delta_adapter = delta_adapter or DeltaVersionAdapter()
 
     @property
     def max_deltas_per_snapshot(self) -> int:
@@ -429,9 +444,38 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
             cutoff=cutoff,
         )
 
-        for day in plan.days:
+        # Oldest day first, per note: the base of each delta is then a
+        # version this run keeps, never one a later iteration removes.
+        deltas_removed = 0
+        snapshots_removed = 0
+        # Every delta the run will collapse, so budget counts only measure
+        # the chain that actually survives this run.
+        compacted_delta_ids = [
+            delta_id for compacted in plan.days for delta_id in compacted.delta_ids
+        ]
+        for day in plan.days_oldest_first:
             day_start = datetime.combine(day.day, time.min)
             day_end = day_start + timedelta(days=1)
+
+            # Resolve the version right before this day *before* touching
+            # any rows, so its reconstructed content is stable.
+            previous = await self._get_latest_version_before(
+                day.note_id, day.first_version_index
+            )
+            base: Optional[BaseVersion] = None
+            if previous is not None and previous.snapshot_id is not None:
+                base_content = await self.get_content_at_version(
+                    day.note_id, previous.version_index
+                )
+                base = BaseVersion(
+                    version_index=previous.version_index,
+                    snapshot_id=previous.snapshot_id,
+                    title=base_content.title,
+                    content=base_content.content,
+                )
+            # A note's oldest day has nothing to diff against, so it stays
+            # a snapshot and becomes the chain root.
+
             # Drop the day's deltas first: deleting a snapshot cascades
             # into the deltas that reference it, and we want the counts
             # to stay exact.
@@ -445,31 +489,64 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
                 day_start,
                 day_end,
             )
-            for snapshot_id in day.snapshot_ids_to_delete:
-                await self._snapshot_table.fetch(
-                    f"""
-                        DELETE FROM {self._snapshot_table.name}
-                        WHERE snapshot_id = $1
-                    """,
-                    snapshot_id,
+            deltas_removed += len(day.delta_ids)
+
+            # Only diff against the base while its chain has budget left;
+            # once it holds ``max_deltas`` patches the day is a snapshot.
+            adapted = None
+            if base is not None:
+                deltas_since_snapshot = await self._count_deltas_since_snapshot(
+                    day.note_id,
+                    base.snapshot_id,
+                    exclude_ids=compacted_delta_ids,
+                )
+                adapted = self._delta_adapter.adapt(
+                    day.retained_snapshot,
+                    base,
+                    deltas_since_snapshot=deltas_since_snapshot,
+                    max_deltas=self._max_deltas_per_snapshot,
                 )
 
             retained = day.retained_snapshot
-            if retained.is_new:
-                await self._snapshot_table.insert(
-                    {
-                        "note_id": retained.note_id,
-                        "version_index": retained.version_index,
-                        "created_at": retained.created_at,
-                        "author_id": retained.author_id,
-                        "title": retained.title,
-                        "content": retained.content,
-                    },
-                    returning=(
-                        "snapshot_id, note_id, version_index, created_at, "
-                        "author_id, title, content"
-                    ),
+            snapshots_to_delete = list(day.snapshot_ids_to_delete)
+            if adapted is not None:
+                # The day becomes a delta, so even the retained snapshot
+                # row goes away; later deltas are re-pointed at the chain
+                # root so the FK cascade cannot take them down with it.
+                if retained.snapshot_id is not None:
+                    snapshots_to_delete.append(retained.snapshot_id)
+                await self._repoint_deltas(
+                    day.note_id, snapshots_to_delete, adapted.snapshot_id
                 )
+                for snapshot_id in snapshots_to_delete:
+                    await self._delete_snapshot(snapshot_id)
+                snapshots_removed += len(snapshots_to_delete)
+                await self._insert_delta(
+                    NoteVersionDeltaEntity(
+                        note_id=day.note_id,
+                        snapshot_id=adapted.snapshot_id,
+                        version_index=adapted.version_index,
+                        created_at=adapted.created_at,
+                        author_id=adapted.author_id,
+                        title_patch=adapted.title_patch,
+                        content_patch=adapted.content_patch,
+                    )
+                )
+                continue
+
+            # No base version: keep the retained snapshot (full content).
+            if retained.is_new:
+                kept = await self._insert_snapshot(
+                    NoteVersionSnapshotEntity(
+                        note_id=retained.note_id,
+                        version_index=retained.version_index,
+                        created_at=retained.created_at,
+                        author_id=retained.author_id,
+                        title=retained.title,
+                        content=retained.content,
+                    )
+                )
+                kept_snapshot_id = str(kept.snapshot_id)
             else:
                 await self._snapshot_table.fetch(
                     f"""
@@ -485,11 +562,105 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
                     retained.title,
                     retained.content,
                 )
+                kept_snapshot_id = str(retained.snapshot_id)
+
+            await self._repoint_deltas(
+                day.note_id, snapshots_to_delete, kept_snapshot_id
+            )
+            for snapshot_id in snapshots_to_delete:
+                await self._delete_snapshot(snapshot_id)
+            snapshots_removed += len(snapshots_to_delete)
 
         return NoteVersionCompactionResult(
             notes_compacted=plan.notes_compacted,
-            deltas_removed=plan.deltas_removed,
-            snapshots_removed=plan.snapshots_removed,
+            deltas_removed=deltas_removed,
+            snapshots_removed=snapshots_removed,
+        )
+
+    async def _get_latest_version_before(
+        self,
+        note_id: str,
+        version_index: int,
+    ) -> Optional[NoteVersionEntry]:
+        """Return the newest surviving version strictly before an index.
+
+        Used as the diff base for a compacted day.  Queried per table so
+        both a snapshot and a delta can be the base.
+        """
+        snapshot_sql = f"""
+            SELECT 'snapshot' AS kind, snapshot_id AS version_id, note_id,
+                   version_index, created_at, author_id, snapshot_id AS snapshot_ref
+            FROM {self._snapshot_table.name}
+            WHERE note_id = $1 AND version_index < $2
+            ORDER BY version_index DESC
+            LIMIT 1
+        """
+        delta_sql = f"""
+            SELECT 'delta' AS kind, delta_id AS version_id, note_id,
+                   version_index, created_at, author_id, snapshot_id AS snapshot_ref
+            FROM {self._delta_table.name}
+            WHERE note_id = $1 AND version_index < $2
+            ORDER BY version_index DESC
+            LIMIT 1
+        """
+        snapshot_rows = await self._snapshot_table.fetch(
+            snapshot_sql, note_id, version_index
+        ) or []
+        delta_rows = await self._delta_table.fetch(
+            delta_sql, note_id, version_index
+        ) or []
+
+        candidates = [
+            self._entry_from_row(row) for row in [*snapshot_rows, *delta_rows]
+        ]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda entry: entry.version_index)
+
+    async def _repoint_deltas(
+        self,
+        note_id: str,
+        snapshot_ids: list[str],
+        keep_snapshot_id: str,
+    ) -> None:
+        """Move deltas off snapshots a compaction is about to delete.
+
+        Reads order deltas by ``version_index`` only, so rewriting the
+        ``snapshot_id`` FK changes nothing about reconstruction but keeps
+        the ``ON DELETE CASCADE`` from removing later days' deltas.
+        """
+        if not snapshot_ids:
+            return
+        await self._delta_table.fetch(
+            f"""
+                UPDATE {self._delta_table.name}
+                SET snapshot_id = $3
+                WHERE note_id = $1 AND snapshot_id = ANY($2::text[])
+            """,
+            note_id,
+            snapshot_ids,
+            keep_snapshot_id,
+        )
+
+    async def _delete_snapshot(self, snapshot_id: str) -> None:
+        await self._snapshot_table.fetch(
+            f"""
+                DELETE FROM {self._snapshot_table.name}
+                WHERE snapshot_id = $1
+            """,
+            snapshot_id,
+        )
+
+    @staticmethod
+    def _entry_from_row(row: Record) -> NoteVersionEntry:
+        return NoteVersionEntry(
+            version_id=str(row["version_id"]),
+            note_id=str(row["note_id"]),
+            version_index=int(row["version_index"]),
+            created_at=row["created_at"],
+            author_id=str(row["author_id"]),
+            is_snapshot=row["kind"] == "snapshot",
+            snapshot_id=str(row["snapshot_ref"]) if row["snapshot_ref"] else None,
         )
 
     async def _version_exists(self, note_id: str, version_index: int) -> bool:
@@ -557,14 +728,24 @@ class NoteVersionPostgresRepo(NoteVersionRepoABC):
             return []
         return [self._delta_from_record(row) for row in rows]
 
-    async def _count_deltas_since_snapshot(self, note_id: str, snapshot_id: str) -> int:
-        # RA: γ_{count(*)}(σ_{note_id=? ∧ snapshot_id=?}(Deltas))
+    async def _count_deltas_since_snapshot(
+        self,
+        note_id: str,
+        snapshot_id: str,
+        exclude_ids: Optional[List[str]] = None,
+    ) -> int:
+        # RA: γ_{count(*)}(σ_{note_id=? ∧ snapshot_id=? ∧ delta_id∉excluded}(Deltas))
+        # ``exclude_ids`` lets a catch-up run ignore the deltas it is
+        # about to collapse, so the surviving chain's budget is measured.
         sql = f"""
             SELECT COUNT(*) AS delta_count
             FROM {self._delta_table.name}
             WHERE note_id = $1 AND snapshot_id = $2
+              AND NOT (delta_id = ANY($3::text[]))
         """
-        rows = await self._delta_table.fetch(sql, note_id, snapshot_id)
+        rows = await self._delta_table.fetch(
+            sql, note_id, snapshot_id, exclude_ids or []
+        )
         if not rows:
             return 0
         return int(rows[0]["delta_count"])

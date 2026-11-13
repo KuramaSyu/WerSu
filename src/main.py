@@ -27,6 +27,7 @@ from src.services.shelf_bootstrap import build_strategy
 from src.db.repos import SpicedbPermissionRepo
 from src.db.repos.permissions.postgres_role_repo import PostgresRoleRepo
 from src.db.repos.permissions.postgres_audit import PostgresPermissionAuditRepo
+from src.domain.note_version_delta_adapter import DEFAULT_MAX_DELTAS_PER_SNAPSHOT
 from src.domain.share_policy import GrantPermissionFactory
 from src.db.repos.sharing.sharing import SharingPostgresRepo
 from src.grpc_mod.activity_statistics_service import GrpcActivityStatisticsService
@@ -173,7 +174,13 @@ async def serve():
     grpc_port = get_os_env_variable("GRPC_PORT", log, "50052")
     grpc_spicedb_credentials = get_os_env_variable("GRPC_SPICEDB_CREDENTIALS", log, UNDEFINED)
     grpc_spicedb_address = get_os_env_variable("GRPC_SPICEDB_ADDRESS", log, UNDEFINED)
-    max_note_deltas = int(get_os_env_variable("NOTE_VERSION_MAX_DELTAS", log, "10"))
+    max_note_deltas = int(
+        get_os_env_variable(
+            "NOTE_VERSION_MAX_DELTAS",
+            log,
+            str(DEFAULT_MAX_DELTAS_PER_SNAPSHOT),
+        )
+    )
     # Destructive nightly roll-up of finished days' version deltas. Disable
     # with NOTE_VERSION_DAILY_COMPACTION=false to keep every save as its own
     # restorable version.

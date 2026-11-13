@@ -56,6 +56,28 @@ class _FakeTable:
             matches.sort(key=lambda row: (row["note_id"], row["version_index"]))
             return matches
 
+        if "version_index < $2" in sql and "FROM note.version_snapshot" in sql:
+            note_id, version_index = args
+            matches = [
+                row
+                for row in self._rows
+                if row["note_id"] == note_id
+                and row["version_index"] < version_index
+            ]
+            matches.sort(key=lambda row: row["version_index"], reverse=True)
+            return [self._as_entry(row, "snapshot") for row in matches[:1]]
+
+        if "version_index < $2" in sql and "FROM note.version_delta" in sql:
+            note_id, version_index = args
+            matches = [
+                row
+                for row in self._rows
+                if row["note_id"] == note_id
+                and row["version_index"] < version_index
+            ]
+            matches.sort(key=lambda row: row["version_index"], reverse=True)
+            return [self._as_entry(row, "delta") for row in matches[:1]]
+
         if "FROM note.version_snapshot" in sql and "version_index <=" in sql:
             note_id, version_index = args
             matches = [
@@ -85,15 +107,36 @@ class _FakeTable:
             return matches[:1]
 
         if "FROM note.version_delta" in sql and "COUNT" in sql:
-            note_id, snapshot_id = args
+            if len(args) == 3:
+                note_id, snapshot_id, excluded_ids = args
+            else:
+                note_id, snapshot_id = args
+                excluded_ids = []
             matches = [
                 row
                 for row in self._rows
-                if row["note_id"] == note_id and row["snapshot_id"] == snapshot_id
+                if row["note_id"] == note_id
+                and row["snapshot_id"] == snapshot_id
+                and row["delta_id"] not in excluded_ids
             ]
             return [{"delta_count": len(matches)}]
 
         return []
+
+    def _as_entry(self, row: dict, kind: str) -> dict:
+        """Shape a row like the UNION view used by the version queries."""
+        version_id = (
+            row["snapshot_id"] if kind == "snapshot" else row["delta_id"]
+        )
+        return {
+            "kind": kind,
+            "version_id": version_id,
+            "note_id": row["note_id"],
+            "version_index": row["version_index"],
+            "created_at": row["created_at"],
+            "author_id": row.get("author_id"),
+            "snapshot_ref": row["snapshot_id"],
+        }
 
     def _delete(self, sql: str, args: tuple):
         if len(args) == 1:
@@ -134,6 +177,19 @@ class _FakeTable:
         return [{"deleted": before - len(self._rows)}]
 
     def _update(self, sql: str, args: tuple):
+        if "SET snapshot_id" in sql:
+            # UPDATE delta SET snapshot_id = $3 ... ANY($2::text[])
+            note_id, snapshot_ids, keep_snapshot_id = args
+            matches = [
+                row
+                for row in self._rows
+                if row["note_id"] == note_id
+                and row["snapshot_id"] in snapshot_ids
+            ]
+            for row in matches:
+                row["snapshot_id"] = keep_snapshot_id
+            return matches
+
         if len(args) == 6:
             # UPDATE snapshot SET version_index/created_at/author/title/content
             snapshot_id, version_index, created_at, author_id, title, content = args

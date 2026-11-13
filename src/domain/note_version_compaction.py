@@ -45,12 +45,17 @@ class DeltaVersion:
 
 @dataclass(frozen=True)
 class RetainedSnapshot:
-    """The single snapshot a compacted day collapses into.
+    """The single version a compacted day collapses into.
 
     ``snapshot_id`` is ``None`` when the day had no snapshot and the
     repository must insert a new row.  Otherwise the existing row is
     rewritten in place (keeping its id so later deltas still reference
     it).
+
+    The repository may store this as a delta instead of a full snapshot
+    (see :class:`~src.domain.note_version_delta_adapter.DeltaVersionAdapter`).
+    In that case neither the snapshot nor its id is kept; the fields
+    only describe the day's final bytes.
     """
 
     snapshot_id: Optional[str]
@@ -72,6 +77,7 @@ class CompactedDay:
 
     note_id: str
     day: date
+    first_version_index: int
     retained_snapshot: RetainedSnapshot
     delta_ids: tuple[str, ...]
     snapshot_ids_to_delete: tuple[str, ...]
@@ -82,6 +88,21 @@ class CompactionPlan:
     """Everything the repository needs to apply a compaction run."""
 
     days: tuple[CompactedDay, ...] = ()
+
+    @property
+    def days_oldest_first(self) -> tuple[CompactedDay, ...]:
+        """Days ordered so a note's history is rewritten from the start.
+
+        Applying an older day first means the base of the next day's
+        delta is already the version that survives, not one this run
+        will delete.
+        """
+        return tuple(
+            sorted(
+                self.days,
+                key=lambda day: (day.note_id, day.first_version_index),
+            )
+        )
 
     @property
     def notes_compacted(self) -> int:
@@ -105,13 +126,13 @@ class _Content:
 
 
 class DailyVersionCompactor:
-    """Collapse each completed day's snapshots and deltas into one snapshot.
+    """Collapse each completed day's versions into one day-final entry.
 
     A day with fewer than two versions is left alone, which makes the
-    operation idempotent.  The retained snapshot is the day's last
-    snapshot (rewritten to the day's final state and moved to the
-    day's last version index) or, when the day had no snapshot, a new
-    snapshot at that index.
+    operation idempotent.  The retained entry carries the day's final
+    state at the day's last version index, so no bytes are lost; how it
+    is stored (full snapshot or delta against the previous version) is
+    the repository's decision.
     """
 
     def plan(
@@ -148,6 +169,7 @@ class DailyVersionCompactor:
                 continue
 
             versions.sort(key=lambda version: version.version_index)
+            first_index = versions[0].version_index
             last_index = versions[-1].version_index
             final = self._content_at(
                 note_id,
@@ -175,6 +197,7 @@ class DailyVersionCompactor:
                 CompactedDay(
                     note_id=note_id,
                     day=day,
+                    first_version_index=first_index,
                     retained_snapshot=retained,
                     delta_ids=tuple(
                         version.delta_id
