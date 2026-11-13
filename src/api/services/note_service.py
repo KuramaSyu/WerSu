@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, TypedDict
 from src.api.other.user_context import UserContextABC
 from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 from src.api.search_filter import NoteSearchFilter
+from src.api.other.note_ref import NoteRef
 
 if TYPE_CHECKING:
     from src.db.entities.note.metadata import NoteEntity
@@ -44,8 +45,10 @@ class GetNotesOptions(TypedDict, total=False):
 class NoteIncludeOptions(TypedDict, total=False):
     """Per-note enrichment flags for the note read paths.
 
-    Every key defaults to `False`, so callers opt into the extra
-    PostgreSQL round-trips explicitly.  Each `True` flag costs one
+    Enrichment keys default to `False`, so callers opt into the extra
+    PostgreSQL round-trips explicitly; `include_references` instead
+    defaults to `True` because reference resolution is part of the
+    normal note read.  Each `True` enrichment flag costs one
     dedicated SQL statement (see
     :meth:`NoteRepoFacadeABC.select_by_id`) and lands its result on
     the matching :class:`~src.db.entities.note.metadata.NoteEntity`
@@ -64,6 +67,11 @@ class NoteIncludeOptions(TypedDict, total=False):
       lookup under the same option so callers don't have to
       special-case it.  Defaults to `True` to match the historic
       behaviour of :meth:`NoteRepoFacadeABC.select_by_id`.
+    * `include_references` -- resolves the ``{{@note-id}}`` references
+      embedded in the note content through the injected
+      :class:`~src.api.services.note_ref_parser.NoteRefParserABC`.
+      Defaults to `True`; set it to `False` to return the raw note
+      content only.
 
     Note:
         Callers that only want metadata should pass `{}` (or omit
@@ -75,6 +83,7 @@ class NoteIncludeOptions(TypedDict, total=False):
     include_tag_ids: bool
     include_attachment_ids: bool
     include_permissions: bool
+    include_references: bool
 
 
 def resolve_include_options(
@@ -95,6 +104,7 @@ def resolve_include_options(
         include_tag_ids=bool(raw.get("include_tag_ids", False)),
         include_attachment_ids=bool(raw.get("include_attachment_ids", False)),
         include_permissions=bool(raw.get("include_permissions", False)),
+        include_references=bool(raw.get("include_references", True)),
     )
 
 
@@ -120,10 +130,15 @@ class NoteResponse(AcceptsVisitor):
         `id_token_map`: attachment id -> 15-minute JWT.  Only
             populated when `user_ctx` is a temporary user; empty for
             every other caller.
+        `references`: resolved note references keyed by
+            :class:`~src.api.other.note_ref.NoteRef`.  Every reference found
+            in the note is present; unauthorized references carry an
+            error message instead of the protected note content.
     """
 
     note: Optional[NoteEntity] = None
     id_token_map: dict[str, str] = field(default_factory=dict)  # type: ignore
+    references: dict[NoteRef, str] = field(default_factory=dict)
 
     def visit(self, visitor: EntityVisitor) -> Any:
         """Dispatch this response to ``visitor.visit_note_response``"""
@@ -153,14 +168,20 @@ class NoteServiceABC(ABC):
             user_ctx: caller identity used for permission checks and
                 to determine whether per-attachment JWTs are minted.
             include: opt-in enrichment flags; see
-                :class:`NoteIncludeOptions`.  When omitted, only
-                permissions are loaded (legacy behaviour).
+                :class:`NoteIncludeOptions`.  ``include_references``
+                defaults to `True`, so embedded references are resolved
+                unless the caller explicitly disables them.  When
+                omitted, only permissions are loaded (legacy behaviour)
+                plus reference resolution.
 
         Returns:
             NoteResponse: the resolved note plus a `id_token_map` of
             attachment id -> 15-minute JWT for every attachment the
             caller can read.  `id_token_map` is empty unless
-            `user_ctx.is_temporary_user()` is `True`.
+            `user_ctx.is_temporary_user()` is `True`.  `references`
+            holds every identified reference; authorized references map
+            to their extracted content and unauthorized ones map to an
+            error string.
 
         Raises:
             PermissionError: when `user_ctx` cannot read `note_id`.

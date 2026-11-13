@@ -54,6 +54,7 @@ from src.api.other.user_context import (
     UserTypeT,
 )
 from src.api.other.service_unavailable_error import ServiceUnavailableError
+from src.api.other.note_ref import NoteRef
 from src.api.other.visitor import AcceptsVisitor, EntityVisitor
 
 # storage contracts (single-table repos)
@@ -93,6 +94,7 @@ from src.api.services.directory_service import (
     DirectoryIncludeOptions,
     resolve_directory_include_options,
 )
+from src.api.services.note_ref_parser import NoteRefParserABC
 from src.api.services.note_service import (
     GetNotesOptions,
     NoteIncludeOptions,
@@ -186,6 +188,8 @@ __all__ = [
     "UserTypeT",
     "AcceptsVisitor",
     "EntityVisitor",
+    "NoteRef",
+    "NoteRefParserABC",
     # repos
     "PermissionRepoABC",
     "PermissionAuditRepoABC",

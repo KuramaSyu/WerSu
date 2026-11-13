@@ -45,6 +45,8 @@ class _FakeNoteContentRepo(NoteContentRepo):
         self._store: dict[str, NoteEntity] = {}
         self._facade = facade
         self._next_id = 0
+        #: note ids passed to :meth:`select_by_id`, for read-path tests.
+        self.read_ids: List[str] = []
 
     def _lookup(self, note_id: str) -> Optional[NoteEntity]:
         existing = self._store.get(str(note_id))
@@ -109,6 +111,7 @@ class _FakeNoteContentRepo(NoteContentRepo):
         return [n for n in self._store.values() if n.note_id == metadata.note_id]
 
     async def select_by_id(self, note_id: str) -> NoteEntity:
+        self.read_ids.append(str(note_id))
         existing = self._lookup(note_id)
         if existing is None:
             raise RuntimeError(f"note {note_id!r} not found")

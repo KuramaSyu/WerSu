@@ -65,6 +65,7 @@ from src.services.calculated_stats_service import CalculatedStatsServiceImpl
 from src.services.sharing import SharingServiceImpl
 from src.services.role_service import RoleServiceImpl
 from src.services.note import NoteServiceImpl
+from src.services.note_ref_parser import NoteRefParserImpl
 from src.services.directory import DirectoryServiceImpl
 from src.api.services.shelf_service import ShelfServiceABC
 from src.api.services.tag_service import TagServiceABC
@@ -592,6 +593,7 @@ async def serve():
         activity_logger=activity_logger_service,
         rule_repo=rule_repo,
         logging_provider=logging_provider,
+        note_ref_parser=NoteRefParserImpl(note_content_repo),
     )
 
     sharing_service = SharingServiceImpl(

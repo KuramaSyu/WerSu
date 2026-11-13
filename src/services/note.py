@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import inspect
 from typing import Callable, List, Optional
 
 from src.api import (
@@ -25,10 +26,17 @@ from src.api.other.relationship import AttachmentRelationEnum
 from src.api.other.types import LoggingProvider, Pagination
 from src.api.other.undefined import UNDEFINED, unwrap_undefined, unwrap_undefined_or
 from src.api.other.user_context import UserContextABC
+from src.api.other.note_ref import NoteRef
+from src.api.services.note_ref_parser import NoteRefParserABC, ReferenceContentMap
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory_facade import DirectoryFacadeABC
 from src.domain.permission_chain import  HasNoteDeletePerm, HasNoteViewPerm, HasNoteWritePerm
 from src.utils.extract_attachments import extract_attachment_ids
+
+
+UNAUTHORIZED_REFERENCE_CONTENT = (
+    "Error: user has no permission to view the referenced note"
+)
 
 
 class NoteServiceImpl(NoteServiceABC):
@@ -47,10 +55,12 @@ class NoteServiceImpl(NoteServiceABC):
         activity_logger: ActivityLoggerServiceABC,
         rule_repo: RuleRepoABC,
         logging_provider: LoggingProvider,
+        note_ref_parser: Optional[NoteRefParserABC] = None,
         now: Callable[[], datetime.datetime] = datetime.datetime.now,
     ) -> None:
         self._note_repo = note_repo
         self._permission_repo = permission_repo
+        self._note_ref_parser = note_ref_parser
         self._jwt_provider = jwt_provider
         self._directory_repo = directory_repo
         self._activity_logger = activity_logger
@@ -84,11 +94,144 @@ class NoteServiceImpl(NoteServiceABC):
 
         note.permissions = await self._fetch_note_permissions(note_id)
 
+        references: dict[NoteRef, str] = ReferenceContentMap()
+        include_references = (
+            True if include is None else bool(include.get("include_references", True))
+        )
+        if include_references:
+            references = await self._resolve_references(note, user_ctx)
+            note.references = references
+
         id_token_map: dict[str, str] = {}
         if await user_ctx.is_temporary_user():
             id_token_map = await self._build_attachment_tokens(note, user_ctx)
 
-        return NoteResponse(note=note, id_token_map=id_token_map)
+        return NoteResponse(
+            note=note,
+            id_token_map=id_token_map,
+            references=references,
+        )
+
+    async def _resolve_references(
+        self,
+        note: NoteEntity,
+        user_ctx: UserContextABC,
+    ) -> dict[NoteRef, str]:
+        """Resolve the note's references after per-reference authorization.
+
+        Permission checks happen *before* :meth:`NoteRefParserABC.fetch_ref`
+        is called, so a denied reference never reaches the content repo.
+        The reference itself is kept (and remains in the note content);
+        its content field receives :data:`UNAUTHORIZED_REFERENCE_CONTENT`
+        so the frontend can render the failed section instead of hiding it.
+        """
+        parser = self._note_ref_parser
+        if parser is None:
+            return {}
+
+        refs = await self._identify_references(parser, note)
+
+        resolved: dict[NoteRef, str] = ReferenceContentMap()
+        for ref in refs:
+            allowed = await self._has_view_permission(user_ctx, ref.note_id)
+            if not allowed:
+                resolved[ref] = UNAUTHORIZED_REFERENCE_CONTENT
+                continue
+            resolved[ref] = await parser.fetch_ref(ref)
+        return resolved
+
+    async def _identify_references(
+        self,
+        parser: NoteRefParserABC,
+        note: NoteEntity,
+    ) -> list[NoteRef]:
+        """Ask the injected parser to identify references without fetching.
+
+        Production always uses :class:`NoteRefParserABC._parse_refs`, which
+        only scans text.  The public ``parse`` fallback keeps lightweight
+        test doubles working; their returned content is deliberately
+        ignored so authorization still precedes the real fetch.
+        """
+        content = note.content if isinstance(note.content, str) else ""
+
+        # Identification only: the abstract parser API guarantees that
+        # this call does not retrieve referenced content.
+        for name in ("parse_refs", "_parse_refs"):
+            method = getattr(parser, name, None)
+            if callable(method):
+                result = method(content)
+                if inspect.isawaitable(result):
+                    result = await result
+                return self._coerce_refs(result)
+
+        parse = getattr(parser, "parse", None)
+        if callable(parse):
+            result = parse(note)
+            if inspect.isawaitable(result):
+                result = await result
+            return self._coerce_refs(result)
+        return []
+
+    @staticmethod
+    def _coerce_refs(result: object) -> list[NoteRef]:
+        """Normalise parser output to a list of :class:`NoteRef`."""
+        if result is None:
+            return []
+        if isinstance(result, dict):
+            candidates = list(result.keys())
+        elif isinstance(result, (list, tuple, set)):
+            candidates = list(result)
+        else:
+            candidates = [result]
+
+        refs: list[NoteRef] = []
+        seen: set[NoteRef] = set()
+        for candidate in candidates:
+            if isinstance(candidate, NoteRef):
+                ref = candidate
+            elif isinstance(candidate, str):
+                ref = NoteRef.from_string(candidate)
+            elif isinstance(candidate, (list, tuple)) and candidate:
+                first = candidate[0]
+                ref = (
+                    first
+                    if isinstance(first, NoteRef)
+                    else NoteRef.from_string(str(first))
+                )
+            else:
+                continue
+            if ref not in seen:
+                seen.add(ref)
+                refs.append(ref)
+        return refs
+
+    async def _has_view_permission(
+        self,
+        user_ctx: UserContextABC,
+        note_id: str,
+    ) -> bool:
+        """Return whether ``user_ctx`` may view ``note_id``.
+
+        ``has_permission`` is the primary PermissionRepoABC API; the
+        permission chain is kept as a fallback so lightweight test
+        doubles that only implement ``check`` keep working.
+        """
+        has_permission = getattr(self._permission_repo, "has_permission", None)
+        if callable(has_permission):
+            try:
+                return await has_permission(
+                    user_ctx,
+                    NoteRelationEnum.VIEW,
+                    ObjectRef(ObjectTypeEnum.NOTE, note_id),
+                )
+            except NotImplementedError:
+                pass
+
+        check = HasNoteViewPerm(note_id).set_permission_repo(
+            self._permission_repo
+        )
+        result = await check.check(user_ctx)
+        return bool(result)
 
     async def insert_note(
         self,

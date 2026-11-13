@@ -45,6 +45,7 @@ from tests.doubles.fakes import InMemoryRuleRepo  # noqa: F401
 from tests.doubles.fakes import InMemoryShelfRepo  # noqa: F401
 from tests.doubles.fakes import _FakeDatabase  # noqa: F401
 from tests.doubles.fakes import _FakeNoteContentRepo  # noqa: F401
+from tests.doubles.fakes import _FakeNoteRefParser  # noqa: F401
 from tests.doubles.fakes import _FakeDirectorySubdirectoryTable  # noqa: F401
 from tests.doubles.fakes import _FakeDirectoryNoteTable  # noqa: F401
 from tests.doubles.fakes import _FakeDirectoryTable  # noqa: F401

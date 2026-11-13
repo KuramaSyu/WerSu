@@ -11,6 +11,7 @@ from src.api import Relationship
 
 from .embedding import NoteEmbeddingEntity
 from .permission import NotePermissionEntity
+from src.api.other.note_ref import NoteRef
 from src.api.other.undefined import *
 
 if TYPE_CHECKING:
@@ -38,6 +39,9 @@ class NoteEntity(AcceptsVisitor):
 
     # for internal usage only
     permissions: UndefinedOr[List[Relationship]] = UNDEFINED
+
+    # resolved references, populated by the application service
+    references: UndefinedOr[Dict[NoteRef, str]] = UNDEFINED
 
 
     def visit(self, visitor: EntityVisitor):

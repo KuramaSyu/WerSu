@@ -97,6 +97,48 @@ async def test_get_note_returns_note_response_with_resolved_note() -> None:
     assert stub.last_user_ctx.user_id == "user-1"
 
 
+async def test_get_note_passes_include_references_inside_include_options() -> None:
+    """`include_references` travels in the include-options mapping."""
+    entity = NoteEntity(
+        note_id="note-1",
+        title="t",
+        content="c",
+        author_id="user-1",
+        permissions=[],
+    )
+    service, stub = _make_service(NoteResponse(note=entity))
+    context = _DummyContext()
+
+    request = GetNoteRequest(
+        id="note-1",
+        user_id="user-1",
+        include_references=False,
+    )
+    await service.GetNote(request, cast(ServicerContext, context))
+
+    assert stub.last_include is not None
+    assert stub.last_include["include_references"] is False
+
+
+async def test_get_note_defaults_include_references_to_true_in_options() -> None:
+    """An absent proto field still enables reference resolution by default."""
+    entity = NoteEntity(
+        note_id="note-1",
+        title="t",
+        content="c",
+        author_id="user-1",
+        permissions=[],
+    )
+    service, stub = _make_service(NoteResponse(note=entity))
+    context = _DummyContext()
+
+    request = GetNoteRequest(id="note-1", user_id="user-1")
+    await service.GetNote(request, cast(ServicerContext, context))
+
+    assert stub.last_include is not None
+    assert stub.last_include["include_references"] is True
+
+
 async def test_get_note_returns_not_found_with_empty_response_on_miss() -> None:
     """A `None` note from the service yields `NOT_FOUND` + empty `NoteResponse`."""
     service, stub = _make_service(NoteResponse(note=None))

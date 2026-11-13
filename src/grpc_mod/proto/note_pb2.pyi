@@ -70,19 +70,28 @@ class GetNoteRequest(_message.Message):
 
     ID_FIELD_NUMBER: _builtins.int
     USER_ID_FIELD_NUMBER: _builtins.int
+    INCLUDE_REFERENCES_FIELD_NUMBER: _builtins.int
     id: _builtins.str
     user_id: _builtins.str
+    include_references: _builtins.bool
+    """Resolve note references embedded in the note content.  When the
+    field is absent the server defaults to true for backwards
+    compatibility with clients that predate reference resolution.
+    """
     def __init__(
         self,
         *,
         id: _builtins.str = ...,
         user_id: _builtins.str = ...,
+        include_references: _builtins.bool | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_include_references", b"_include_references", "include_references", b"include_references"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["id", b"id", "user_id", b"user_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_include_references", b"_include_references", "id", b"id", "include_references", b"include_references", "user_id", b"user_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    def WhichOneof(self, oneof_group: _Never) -> None: ...
+    _WhichOneofReturnType__include_references: _TypeAlias = _typing.Literal["include_references"]  # noqa: Y015
+    _WhichOneofArgType__include_references: _TypeAlias = _typing.Literal["_include_references", b"_include_references"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__include_references) -> _WhichOneofReturnType__include_references | None: ...
 
 Global___GetNoteRequest: _TypeAlias = GetNoteRequest  # noqa: Y015
 
@@ -404,6 +413,34 @@ class Note(_message.Message):
 Global___Note: _TypeAlias = Note  # noqa: Y015
 
 @_typing.final
+class NoteReference(_message.Message):
+    """One resolved reference embedded in a note."""
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    NOTE_ID_FIELD_NUMBER: _builtins.int
+    SECTION_FIELD_NUMBER: _builtins.int
+    CONTENT_FIELD_NUMBER: _builtins.int
+    note_id: _builtins.str
+    section: _builtins.str
+    """empty when the reference points at the whole note"""
+    content: _builtins.str
+    def __init__(
+        self,
+        *,
+        note_id: _builtins.str = ...,
+        section: _builtins.str = ...,
+        content: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["content", b"content", "note_id", b"note_id", "section", b"section"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___NoteReference: _TypeAlias = NoteReference  # noqa: Y015
+
+@_typing.final
 class NoteResponse(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -429,19 +466,25 @@ class NoteResponse(_message.Message):
 
     NOTE_FIELD_NUMBER: _builtins.int
     ID_TOKEN_MAP_FIELD_NUMBER: _builtins.int
+    REFERENCES_FIELD_NUMBER: _builtins.int
     @_builtins.property
     def note(self) -> Global___Note: ...
     @_builtins.property
     def id_token_map(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]: ...
+    @_builtins.property
+    def references(self) -> _containers.RepeatedCompositeFieldContainer[Global___NoteReference]:
+        """Only references the caller is allowed to view are included."""
+
     def __init__(
         self,
         *,
         note: Global___Note | None = ...,
         id_token_map: _abc.Mapping[_builtins.str, _builtins.str] | None = ...,
+        references: _abc.Iterable[Global___NoteReference] | None = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["note", b"note"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["id_token_map", b"id_token_map", "note", b"note"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["id_token_map", b"id_token_map", "note", b"note", "references", b"references"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 

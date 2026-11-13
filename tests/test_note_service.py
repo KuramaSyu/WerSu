@@ -34,9 +34,12 @@ from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
 from src.db.entities.rule import RuleEntity
 from src.db.repos.note.note_facade import NoteFacadeImpl
-from src.services.note import NoteServiceImpl
+from src.services.note import NoteServiceImpl, UNAUTHORIZED_REFERENCE_CONTENT
+from src.services.note_ref_parser import NoteRefParserImpl
+from src.api.other.note_ref import NoteRef
 from tests.doubles import _FakeCombinedNoteRepo, _FakeDatabase, _StubEmbeddingRepo, _FakeSpyJwtProvider, _FakeNoteContentRepo, _FakeSpyTagRepo, _StubVersionRepo, _RecordingEmbeddingGenerator, _RecordingEmbeddingRepo, _FakeSpyDirectoryRepo
 from tests.doubles import _FakeSpyActivityLoggerService
+from tests.doubles import _FakeNoteRefParser
 from tests.doubles import InMemoryPermissionRepo
 from tests.doubles import InMemoryRuleRepo
 from tests.doubles import InMemoryShelfRepo
@@ -85,6 +88,7 @@ def _make_service(
     permission_repo: Optional[PermissionRepoABC] = None,
     jwt_provider: Optional[JwtProvider] = None,
     embedding_repo: Optional[_StubEmbeddingRepo] = None,
+    note_ref_parser: Optional[NoteRefParserImpl] = None,
     next_note_id: str = "019f0000-0000-7000-8000-000000000001",
 ) -> tuple[
     NoteServiceImpl,
@@ -132,6 +136,7 @@ def _make_service(
         activity_logger=fake_activity_logger,
         rule_repo=facade._rule_repo,  # type: ignore[attr-defined]
         logging_provider=_log_provider,
+        note_ref_parser=note_ref_parser,
     )
     return service, fake_db, fake_content, fake_directory, fake_permission, fake_jwt, fake_activity_logger
 
@@ -768,3 +773,98 @@ async def test_update_note_drives_recording_embedding_generator() -> None:
     await _wait_for_pending_embedding_tasks(service)
     assert recording_repo.update_calls == [("note-1", "Recording update", "Recording body v2")]
     assert recording_repo.generate_calls == ["Recording update\nRecording body v2"]
+
+
+
+async def test_get_note_checks_each_reference_and_keeps_denied_refs() -> None:
+    """Every ref is authorized before its content is read.
+
+    Allowed references resolve normally.  Denied references stay in the
+    response (and in the original note content) but carry an error string
+    instead of content, and their note id must never hit the content repo.
+    """
+    content_repo = _FakeNoteContentRepo()
+    parser = NoteRefParserImpl(content_repo)
+    service, _db, _content, _dir, permission_repo, _jwt, _activity = _make_service(
+        content_repo=content_repo,
+        note_ref_parser=parser,
+    )
+
+    original_content = "before {{@note-2#visible}} and {{@note-3#secret}} after"
+    content_repo.seed(_seed_note(note_id="note-1", content=original_content))
+    content_repo.seed(
+        _seed_note(note_id="note-2", content="# Visible\nallowed body")
+    )
+    content_repo.seed(
+        _seed_note(note_id="note-3", content="# Secret\nprotected body")
+    )
+
+    await _grant_admin(permission_repo, "user-1", "note-1")
+    await _grant_admin(permission_repo, "user-1", "note-2")
+
+    response = await service.get_note("note-1", _human_ctx("user-1"))
+
+    assert response.note is not None
+    # References embedded in the note are untouched.
+    assert response.note.content == original_content
+
+    visible = NoteRef("note-2", "visible")
+    denied = NoteRef("note-3", "secret")
+    assert response.references[visible] == "allowed body"
+    assert response.references[denied] == UNAUTHORIZED_REFERENCE_CONTENT
+    assert "protected body" not in response.references[denied]
+    assert "permission" in response.references[denied].lower()
+
+    # The denied note was never retrieved; the allowed one was.
+    assert "note-2" in content_repo.read_ids
+    assert "note-3" not in content_repo.read_ids
+
+
+async def test_get_note_without_references_does_not_resolve_them() -> None:
+    """`include_references=False` leaves references unresolved."""
+    content_repo = _FakeNoteContentRepo()
+    parser = NoteRefParserImpl(content_repo)
+    service, _db, _content, _dir, permission_repo, _jwt, _activity = _make_service(
+        content_repo=content_repo,
+        note_ref_parser=parser,
+    )
+    content_repo.seed(
+        _seed_note(note_id="note-1", content="see {{@note-2}}")
+    )
+    content_repo.seed(_seed_note(note_id="note-2", content="other body"))
+    await _grant_admin(permission_repo, "user-1", "note-1")
+    await _grant_admin(permission_repo, "user-1", "note-2")
+
+    response = await service.get_note(
+        "note-1",
+        _human_ctx("user-1"),
+        include={"include_references": False},
+    )
+
+    assert response.note is not None
+    assert response.note.content == "see {{@note-2}}"
+    assert response.references == {}
+    assert "note-2" not in content_repo.read_ids
+
+
+async def test_get_note_uses_injected_parser_implementation() -> None:
+    """The service can run against any NoteRefParserABC implementation."""
+    ref = NoteRef("note-2", "custom")
+    fake_parser = _FakeNoteRefParser(
+        refs=[ref],
+        contents={ref: "content from the injected parser"},
+    )
+    service, _db, content_repo, _dir, permission_repo, _jwt, _activity = _make_service(
+        note_ref_parser=fake_parser,
+    )
+    content_repo.seed(
+        _seed_note(note_id="note-1", content="parser-specific syntax")
+    )
+    await _grant_admin(permission_repo, "user-1", "note-1")
+    await _grant_admin(permission_repo, "user-1", "note-2")
+
+    response = await service.get_note("note-1", _human_ctx("user-1"))
+
+    assert response.references[ref] == "content from the injected parser"
+    assert fake_parser.parse_refs_calls == ["parser-specific syntax"]
+    assert fake_parser.fetch_calls == [ref]

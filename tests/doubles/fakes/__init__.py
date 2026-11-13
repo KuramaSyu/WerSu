@@ -36,6 +36,10 @@ from tests.doubles.fakes.note_content_repo import (
     _FakeNoteContentRepo,
 )
 
+from tests.doubles.fakes.note_ref_parser import (
+    _FakeNoteRefParser,
+)
+
 from tests.doubles.fakes.directory_tables import (
     _FakeDirectorySubdirectoryTable,
     _FakeDirectoryNoteTable,

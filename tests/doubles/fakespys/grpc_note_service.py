@@ -76,7 +76,13 @@ class _FakeSpyCapturingNoteService(NoteServiceABC):
     async def delete_note(self, note_id, user_ctx):  # pragma: no cover
         raise NotImplementedError
 
-    async def get_note(self, note_id, user_ctx, *, include=None):  # pragma: no cover
+    async def get_note(
+        self,
+        note_id,
+        user_ctx,
+        *,
+        include=None,
+    ):  # pragma: no cover
         raise NotImplementedError
 
     async def search_notes(  # pragma: no cover
@@ -106,7 +112,13 @@ class _FakeSpyUpdateNoteService(NoteServiceABC):
     async def delete_note(self, note_id, user_ctx):  # pragma: no cover
         raise NotImplementedError
 
-    async def get_note(self, note_id, user_ctx, *, include=None):  # pragma: no cover
+    async def get_note(
+        self,
+        note_id,
+        user_ctx,
+        *,
+        include=None,
+    ):  # pragma: no cover
         raise NotImplementedError
 
     async def search_notes(  # pragma: no cover

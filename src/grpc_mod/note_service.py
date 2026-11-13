@@ -64,12 +64,20 @@ class GrpcNoteService(NoteServiceServicer):
     async def GetNote(self, request: GetNoteRequest, context: ServicerContext) -> NoteResponse:
         try:
             user_ctx = await self._context.create(request.user_id)
-            response = await self._note_service.get_note(request.id, user_ctx, include={
-                "include_attachment_ids": True,
-                "include_directory_ids": True,
-                "include_permissions": False,
-                "include_tag_ids": True,
-            })
+            include_references = True
+            if request.HasField("include_references"):
+                include_references = request.include_references
+            response = await self._note_service.get_note(
+                request.id,
+                user_ctx,
+                include={
+                    "include_attachment_ids": True,
+                    "include_directory_ids": True,
+                    "include_permissions": False,
+                    "include_references": include_references,
+                    "include_tag_ids": True,
+                },
+            )
             self.log.debug(
                 f"Fetched note id={response.note.note_id if response.note else '<none>'} "
                 f"title={truncate(response.note.title if response.note else None)!r} "

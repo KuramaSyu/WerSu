@@ -9,6 +9,11 @@ option go_package = "github.com/KuramaSyu/Wersu-Rest/src/proto;proto";
 message GetNoteRequest {
     string id = 1;
     string user_id = 2;
+
+    // Resolve note references embedded in the note content.  When the
+    // field is absent the server defaults to true for backwards
+    // compatibility with clients that predate reference resolution.
+    optional bool include_references = 3;
 }
 
 
@@ -102,9 +107,20 @@ message Note {
     repeated string shelf_ids = 12;
 }
 
+// One resolved reference embedded in a note.
+message NoteReference {
+    string note_id = 1;
+    // empty when the reference points at the whole note
+    string section = 2;
+    string content = 3;
+}
+
 message NoteResponse {
     Note note = 1;
     map<string, string> id_token_map = 2;
+
+    // Only references the caller is allowed to view are included.
+    repeated NoteReference references = 3;
 }
 
 message NoteEmbedding {

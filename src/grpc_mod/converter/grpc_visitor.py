@@ -61,6 +61,7 @@ from src.grpc_mod.proto.note_pb2 import (
     MinimalNote,
     MinimalTag,
     Note,
+    NoteReference,
     NotesReply,
     NoteResponse as GrpcNoteResponse,
     PermissionAuditAction,
@@ -300,9 +301,18 @@ class ConvertToGrpcVisitor(EntityVisitor):
         proto_note = (
             self.visit_note(response.note) if response.note else Note()
         )
+        references = [
+            NoteReference(
+                note_id=ref.note_id,
+                section=ref.section or "",
+                content=content,
+            )
+            for ref, content in response.references.items()
+        ]
         return GrpcNoteResponse(
             note=proto_note,
             id_token_map=dict(response.id_token_map),
+            references=references,
         )
 
     # ---- notes reply ---------------------------------------------------
