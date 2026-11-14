@@ -226,6 +226,12 @@ class GrpcDirectoryService(DirectoryServiceServicer):
             context.set_code(grpc.StatusCode.PERMISSION_DENIED)
             context.set_details(str(e))
             return Directory()
+        except ValueError as e:
+            # Domain rule violations (e.g. a parent edge that would
+            # create a directory cycle) subclass ValueError.
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(e))
+            return Directory()
         except Exception:
             self.log.error(f"Error patching directory: {traceback.format_exc()}\nwith request: {request}")
             context.set_code(grpc.StatusCode.INTERNAL)

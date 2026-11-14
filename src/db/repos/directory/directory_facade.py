@@ -655,10 +655,10 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
     ) -> None:
         """Replace the full parent set for ``directory_id``.
 
-        Reads the existing parents, drops the SpiceDB ``parent``
-        relations that go away, keeps / inserts the ones that stay,
-        then rewrites the Postgres hierarchy rows in a single call.
-        Empty ``new_parent_ids`` clears the directory of every parent.
+        Writes the Postgres hierarchy rows first (the repo validates
+        the edge, so a rejected parent set leaves SpiceDB untouched),
+        then syncs the SpiceDB ``parent`` relations.  Empty
+        ``new_parent_ids`` clears the directory of every parent.
         """
         existing = set(
             await self._dir_repo.get_parents_of(
@@ -666,6 +666,14 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
             )
         )
         desired = {str(p) for p in new_parent_ids if p}
+
+        # Mirror the bind in the Postgres hierarchy table first: the
+        # repo runs the cycle check before writing, so a rejected
+        # parent set never leaves a stray SpiceDB edge behind (the
+        # service also validates up front, this is the backstop).
+        await self._dir_repo.set_parents_of(
+            "directory", directory_id, "directory", sorted(desired)
+        )
 
         # Drop SpiceDB relations for parents that are no longer wanted.
         for removed in existing - desired:
@@ -700,11 +708,6 @@ class DirectoryFacadeImpl(DirectoryFacadeABC):
                     )
                 ]
             )
-
-        # Mirror the bind in the Postgres hierarchy table.
-        await self._dir_repo.set_parents_of(
-            "directory", directory_id, "directory", sorted(desired)
-        )
 
     async def _create_user_owner_relation(
         self,

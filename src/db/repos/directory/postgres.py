@@ -47,6 +47,11 @@ from src.api.repos.directory_repo import (
 )
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.table import TableABC
+from src.domain.rules import (
+    DIRECTORY_HIERARCHY_RULE_ENGINE,
+    MAX_HIERARCHY_DEPTH,
+    DirectoryHierarchyState,
+)
 from src.utils import row_get
 
 
@@ -495,23 +500,21 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
         supported -- callers must issue separate calls per type.
         """
         if child_type == "directory" and parent_type == "directory":
-            # Cycle check: walking the descendants of each new
-            # parent must NOT include ``child_id``; otherwise the
-            # new edge would close a loop in the directory DAG.
-            descendants_of_child = set(
-                await self.get_children_of(
-                    "directory", str(child_id), "directory", depth=10
+            # Reuse the domain rule: walking the subtree of
+            # ``child_id`` must not reach any of the new parents,
+            # otherwise the edge would close a loop in the directory
+            # DAG.  Runs before any row is written.
+            descendants = await self.get_children_of(
+                "directory", str(child_id), "directory",
+                depth=MAX_HIERARCHY_DEPTH,
+            )
+            DIRECTORY_HIERARCHY_RULE_ENGINE.enforce(
+                DirectoryHierarchyState(
+                    child_id=str(child_id),
+                    parent_ids=tuple(str(p) for p in parent_ids),
+                    descendant_ids=tuple(str(d) for d in descendants),
                 )
             )
-            for new_parent in parent_ids:
-                if (
-                    str(new_parent) == str(child_id)
-                    or str(new_parent) in descendants_of_child
-                ):
-                    raise ValueError(
-                        f"adding parent {new_parent!r} for directory "
-                        f"{child_id!r} would create a cycle"
-                    )
 
         current = set(
             await self.get_parents_of(
@@ -733,22 +736,19 @@ class PostgresDirectoryRepo(DirectoryRepoABC):
                 "use ShelfRepoABC.add_book()"
             )
         if parent_type == "directory" and child_type == "directory":
-            # Cycle check: parent_id must not be a descendant of
-            # child_id (otherwise parent_id -> ... -> child_id
-            # -> parent_id closes a loop).
-            descendants = set(
-                await self.get_children_of(
-                    "directory", str(child_id), "directory", depth=10
+            # Same domain rule as ``set_parents_of`` -- a parent
+            # must not be a descendant of its child.
+            descendants = await self.get_children_of(
+                "directory", str(child_id), "directory",
+                depth=MAX_HIERARCHY_DEPTH,
+            )
+            DIRECTORY_HIERARCHY_RULE_ENGINE.enforce(
+                DirectoryHierarchyState(
+                    child_id=str(child_id),
+                    parent_ids=(str(parent_id),),
+                    descendant_ids=tuple(str(d) for d in descendants),
                 )
             )
-            if (
-                str(parent_id) == str(child_id)
-                or str(parent_id) in descendants
-            ):
-                raise ValueError(
-                    f"adding directory parent {parent_id!r} for "
-                    f"directory {child_id!r} would create a cycle"
-                )
         await self._insert_binding(parent_type, str(parent_id), child_type, str(child_id))
 
     async def remove_child_from(

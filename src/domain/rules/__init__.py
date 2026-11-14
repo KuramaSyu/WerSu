@@ -7,6 +7,13 @@ synchronous and side-effect free.
 """
 
 from src.domain.rules.base import RuleABC, RuleEngine, RuleViolation
+from src.domain.rules.hierarchy import (
+    DIRECTORY_HIERARCHY_RULE_ENGINE,
+    MAX_HIERARCHY_DEPTH,
+    DirectoryHierarchyCycleError,
+    DirectoryHierarchyState,
+    DirectoryMustNotContainCycle,
+)
 from src.domain.rules.shelf import (
     BOOK_SHELF_RULE_ENGINE,
     BookMustHaveAtLeastOneShelf,
@@ -22,4 +29,9 @@ __all__ = [
     "BookMustHaveAtLeastOneShelf",
     "BookMustHaveAtLeastOneShelfError",
     "BookShelfState",
+    "DIRECTORY_HIERARCHY_RULE_ENGINE",
+    "MAX_HIERARCHY_DEPTH",
+    "DirectoryHierarchyCycleError",
+    "DirectoryHierarchyState",
+    "DirectoryMustNotContainCycle",
 ]

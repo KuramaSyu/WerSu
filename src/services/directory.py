@@ -48,7 +48,10 @@ from src.domain.permission_chain import (
 )
 from src.domain.rules import (
     BOOK_SHELF_RULE_ENGINE,
+    DIRECTORY_HIERARCHY_RULE_ENGINE,
+    MAX_HIERARCHY_DEPTH,
     BookShelfState,
+    DirectoryHierarchyState,
     RuleEngine,
 )
 from src.utils.attachment_url import build_attachment_url
@@ -89,6 +92,7 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         attachment_facade: AttachmentFacadeABC,
         log: LoggingProvider,
         rule_engine: Optional[RuleEngine[BookShelfState]] = None,
+        hierarchy_rule_engine: Optional[RuleEngine[DirectoryHierarchyState]] = None,
     ) -> None:
         self._directory_facade = directory_facade
         self._note_facade = note_facade
@@ -100,6 +104,10 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         self._to_metadata = EventMetadataVisitor()
         # Book/shelf invariants (a book must keep at least one shelf).
         self._rules = rule_engine or BOOK_SHELF_RULE_ENGINE
+        # Directory-tree invariant (re-parenting must not close a loop).
+        self._hierarchy_rules = (
+            hierarchy_rule_engine or DIRECTORY_HIERARCHY_RULE_ENGINE
+        )
 
     async def get_directory_notes(
         self,
@@ -336,6 +344,16 @@ class DirectoryServiceImpl(DirectoryServiceABC):
         if result.error:
             raise result.error
 
+        # Re-parenting is validated before anything is written: the
+        # facade writes SpiceDB relations and Postgres rows, and a
+        # rejected patch must not leave a half-applied parent edge
+        # behind.  A cycle would also make the delete cascade recurse
+        # forever.
+        if not is_undefined(entity.parent_directory_ids):
+            await self._enforce_no_parent_cycle(
+                str(entity.id), list(entity.parent_directory_ids)
+            )
+
         # A patch that carries ``shelf_ids`` is the book-side way to
         # drop shelf memberships.  Reject a patch that would leave the
         # book without any shelf before it reaches the facade.
@@ -373,6 +391,32 @@ class DirectoryServiceImpl(DirectoryServiceABC):
                 metadata=entity.convert(self._to_metadata),
             )
         return updated
+
+    async def _enforce_no_parent_cycle(
+        self,
+        child_id: str,
+        parent_ids: List[str],
+    ) -> None:
+        """Reject a parent set that would make ``child_id`` its own descendant.
+
+        Reuses the hierarchy helper's subtree walk instead of walking
+        the graph here; the rule only compares the resulting sets.
+        """
+        if not parent_ids:
+            # Dropping every parent can never close a loop.
+            return
+
+        child = str(child_id)
+        descendants = await self._directory_facade.get_children_of(
+            "directory", child, "directory", depth=MAX_HIERARCHY_DEPTH
+        )
+        self._hierarchy_rules.enforce(
+            DirectoryHierarchyState(
+                child_id=child,
+                parent_ids=tuple(str(p) for p in parent_ids),
+                descendant_ids=tuple(str(d) for d in descendants),
+            )
+        )
 
     async def delete_directory(
         self,
