@@ -33,7 +33,7 @@ from src.api.other.relationship import (
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.note.metadata import NoteEntity
 from src.db.repos.directory.directory_facade import DirectoryEntity
-from src.domain.rules import BookMustHaveAtLeastOneShelfError
+from src.domain.rules import BookMustHaveAtLeastOneShelfError, DirectoryHierarchyCycleError
 from src.services.directory import DirectoryServiceImpl, README_TITLE
 from tests.doubles import InMemoryPermissionRepo
 from tests.doubles import _FakeSpyNoteRepoFacade, _FakeSpyDirectoryRepo
@@ -523,3 +523,91 @@ async def test_delete_directory_does_not_record_on_permission_denied() -> None:
 
     assert activity_logger.calls == []
 
+
+
+async def _grant_write(
+    permission_repo: InMemoryPermissionRepo, user_id: str, directory_id: str
+) -> None:
+    """Grant the user `writer` on `directory_id` via the in-memory repo."""
+    await permission_repo.insert(
+        [
+            Relationship(
+                resource=ObjectRef(ObjectTypeEnum.DIRECTORY, directory_id),
+                relation=DirectoryRelationEnum.WRITER,
+                subject=SubjectRef(ObjectTypeEnum.USER, user_id),
+            )
+        ]
+    )
+
+
+async def test_patch_directory_rejects_direct_parent_cycle() -> None:
+    """T1 -> T2 -> T1 must be rejected before anything is written."""
+    service, directory_repo, _, permission_repo, _ = _make_service()
+    directory_repo.directories_by_id["T1"] = DirectoryEntity(id="T1", slug="t1")
+    directory_repo.directories_by_id["T2"] = DirectoryEntity(id="T2", slug="t2")
+    await _grant_write(permission_repo, "user-1", "T1")
+
+    # T2 currently sits under T1.
+    await directory_repo.set_parents_of("directory", "T2", "directory", ["T1"])
+
+    with pytest.raises(DirectoryHierarchyCycleError):
+        await service.patch_directory(
+            DirectoryEntity(id="T1", parent_directory_ids=["T2"]),
+            _DummyUserContext("user-1"),
+        )
+
+    # The rejected patch must not reach the repo (no partial scalar
+    # update, no SpiceDB parent edge).
+    assert directory_repo.updated == []
+    assert await directory_repo.get_parents_of("directory", "T1", "directory") == []
+
+
+async def test_patch_directory_rejects_self_parent() -> None:
+    service, directory_repo, _, permission_repo, _ = _make_service()
+    directory_repo.directories_by_id["T1"] = DirectoryEntity(id="T1", slug="t1")
+    await _grant_write(permission_repo, "user-1", "T1")
+
+    with pytest.raises(DirectoryHierarchyCycleError):
+        await service.patch_directory(
+            DirectoryEntity(id="T1", parent_directory_ids=["T1"]),
+            _DummyUserContext("user-1"),
+        )
+
+    assert directory_repo.updated == []
+
+
+async def test_patch_directory_rejects_cycle_beyond_ten_levels() -> None:
+    """The walk must not be capped at the repo's ``depth=10`` backstop."""
+    service, directory_repo, _, permission_repo, _ = _make_service()
+    chain = ["T1"] + [f"P{i}" for i in range(1, 15)]
+    for directory_id in chain:
+        directory_repo.directories_by_id[directory_id] = DirectoryEntity(
+            id=directory_id, slug=directory_id.lower()
+        )
+    await _grant_write(permission_repo, "user-1", "T1")
+
+    # P1's parent chain walks all the way back up to T1, 14 hops away.
+    for child, parent in zip(chain[1:], chain[:-1]):
+        await directory_repo.set_parents_of("directory", child, "directory", [parent])
+
+    with pytest.raises(DirectoryHierarchyCycleError):
+        await service.patch_directory(
+            DirectoryEntity(id="T1", parent_directory_ids=["P1"]),
+            _DummyUserContext("user-1"),
+        )
+
+    assert directory_repo.updated == []
+
+
+async def test_patch_directory_allows_reparenting_to_unrelated_directory() -> None:
+    service, directory_repo, _, permission_repo, _ = _make_service()
+    directory_repo.directories_by_id["T1"] = DirectoryEntity(id="T1", slug="t1")
+    directory_repo.directories_by_id["X"] = DirectoryEntity(id="X", slug="x")
+    await _grant_write(permission_repo, "user-1", "T1")
+
+    await service.patch_directory(
+        DirectoryEntity(id="T1", parent_directory_ids=["X"]),
+        _DummyUserContext("user-1"),
+    )
+
+    assert [d.id for d in directory_repo.updated] == ["T1"]

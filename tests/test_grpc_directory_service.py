@@ -28,6 +28,7 @@ from tests.doubles import _FakeSpyDirectoryService, _StubUserContextFactory, sil
 from src.api.other.undefined import UNDEFINED
 from src.db.entities.directory.directory import DirectoryEntity
 from src.db.entities.note.metadata import NoteEntity
+from src.domain.rules import DirectoryHierarchyCycleError
 from src.grpc_mod.proto.note_pb2 import (
     AlterDirectoryRequest,
     CreateDirectoryRequest,
@@ -448,3 +449,28 @@ async def test_get_notes_of_directory_rejects_negative_offset() -> None:
     assert list(result.notes) == []
     assert context.code == grpc.StatusCode.INVALID_ARGUMENT
     assert "offset" in (context.details or "")
+
+
+async def test_patch_directory_rule_violation_maps_to_invalid_argument() -> None:
+    """Domain rule violations surface as INVALID_ARGUMENT with their message."""
+    impl = _FakeSpyDirectoryService()
+
+    async def _raise_cycle(entity, user_ctx):  # type: ignore[no-untyped-def]
+        raise DirectoryHierarchyCycleError(str(entity.id), ("dir-2",))
+
+    impl.patch_directory = _raise_cycle  # type: ignore[method-assign]
+    service = _service(impl)
+    context = _DummyContext()
+
+    result = await service.PatchDirectory(
+        AlterDirectoryRequest(
+            id="dir-1",
+            user_id="user-1",
+            parent_ids=IdsOrUndefined(ids=["dir-2"]),
+        ),
+        cast(ServicerContext, context),
+    )
+
+    assert result.id == ""
+    assert context.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert "cycle" in context.details
