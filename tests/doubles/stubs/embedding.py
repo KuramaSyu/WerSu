@@ -67,15 +67,20 @@ class _StubEmbeddingRepo(NoteEmbeddingRepo):
 
     def __init__(self) -> None:
         self._generator = _StubEmbeddingGenerator()
+        #: ``(note_id, title, content)`` tuples captured for assertions.
+        self.insert_calls: List[Tuple[str, str, str]] = []
+        self.update_calls: List[Tuple[str, str, str]] = []
 
     @property
     def embedding_generator(self) -> _StubEmbeddingGenerator:
         return self._generator
 
     async def insert(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
+        self.insert_calls.append((note_id, title, content))
         return NoteEmbeddingEntity(note_id=note_id, model="fake", embedding=[0.0])
 
     async def update(self, note_id: str, title: str, content: str) -> NoteEmbeddingEntity:
+        self.update_calls.append((note_id, title, content))
         return NoteEmbeddingEntity(note_id=note_id, model="fake", embedding=[0.0])
 
     async def _update(self, set: NoteEmbeddingEntity, where: NoteEmbeddingEntity) -> NoteEmbeddingEntity:

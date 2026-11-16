@@ -354,11 +354,11 @@ class NoteFacadeImpl(NoteFacadeABC):
         # ``embeddings`` list; the background task fills the
         # ``note.embedding`` row when the model finishes.
         note.embeddings = []
-        if note.content:
+        if note.title or note.content:
             self._schedule_embedding_insert(
                 note_id=str(note_id),
-                title=note.title if note.title else "",
-                content=note.content,
+                title=note.title or "",
+                content=note.content or "",
             )
 
         # Resolve directory ids: explicit list wins; otherwise
@@ -438,6 +438,12 @@ class NoteFacadeImpl(NoteFacadeABC):
         # fetch current state for versioning before applying updates
         current = await self._content_repo.select_by_id(str(note.note_id))
 
+        # Merge the partial update with the persisted state so the
+        # embedding refresh below always sees the effective title and
+        # content, not just the fields the client happened to send.
+        new_title: str = unwrap_undefined_or(note.title, current.title) or ""
+        new_content: str = unwrap_undefined_or(note.content, current.content) or ""
+
         updated = await self._content_repo.update(
             set=_keep_only_content(note),
             where=NoteEntity(note_id=note.note_id),
@@ -446,11 +452,15 @@ class NoteFacadeImpl(NoteFacadeABC):
         # Embedding regeneration runs in the background so the user-visible
         # response only waits on the content write.  A failure here cannot
         # fail the note update; content is already persisted above.
-        if note.content and note.note_id:
+        # Regenerate when either title or content was supplied -- a
+        # title-only rename must refresh the embedding too, and a
+        # content-only update must keep the existing title in the
+        # embedded text.
+        if note.title is not UNDEFINED or note.content is not UNDEFINED:
             self._schedule_embedding_refresh(
                 note_id=str(note.note_id),
-                title=note.title if note.title else "",
-                content=note.content,
+                title=new_title,
+                content=new_content,
             )
 
         # replace tags when given
@@ -482,12 +492,6 @@ class NoteFacadeImpl(NoteFacadeABC):
         if updated.embeddings is UNDEFINED:
             updated.embeddings = []
 
-        new_title: str = unwrap_undefined_or(
-            note.title, str(current.title),
-        )
-        new_content: str = unwrap_undefined_or(
-            note.content, str(current.content),
-        )
         new_author_id: str = (
             str(note.author_id) if note.author_id is not UNDEFINED
             else str(current.author_id)

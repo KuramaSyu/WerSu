@@ -180,7 +180,7 @@ class NoteEmbeddingPostgresRepo(NoteEmbeddingRepo):
         content: str,
     ) -> Any:
         """Run the (sync) generator on a worker thread and log timings."""
-        embedding_content = f"{title}\n{content}"
+        embedding_content = f"{title or ''}\n{content or ''}"
         model = self._embedding_generator.model_name
         self._log.debug(
             f"embedding: dispatching note_id={note_id} model={model} "

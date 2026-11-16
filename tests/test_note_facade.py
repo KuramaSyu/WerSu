@@ -32,6 +32,7 @@ from tests.doubles import InMemoryShelfRepo
 from tests.doubles import _DummyUserContext as UserContext
 from typing import Optional
 from uuid import UUID
+import asyncio
 import logging, pytest
 
 
@@ -119,6 +120,31 @@ async def test_insert_without_content_skips_embedding() -> None:
     #  we exercised that branch in test_insert_records_initial_snapshot_when_version_repo_present)
 
 
+async def test_insert_title_only_schedules_embedding() -> None:
+    """A note with only a title still gets an embedding (of its title)."""
+    facade, fake_db, _content, embedding, fake_directory, _combined, _tags, _version_repo = _make_facade()
+    fake_db.fetchrow_responses.append({"id": "note-title-only"})
+    default_dir = DirectoryEntity(id="dir-default", slug="fleeting_notes")
+    fake_directory.directories_by_id["dir-default"] = default_dir
+    fake_directory.user_to_directory_ids["user-1"] = ["dir-default"]
+    await _seed_default_fleeting_rule_for(
+        facade, "user-1", "dir-default", "shelf-1",  # type: ignore[arg-type]
+    )
+
+    note = NoteEntity(
+        title="Only title",
+        content="",
+        updated_at=datetime(2026, 7, 3, 12, 0, 0),
+        author_id="user-1",
+        shelf_ids=["shelf-1"],
+    )
+    await facade.insert(note, UserContext("user-1"))
+    await _drain_embedding_tasks(facade)
+
+    note_id = str(note.note_id)
+    assert embedding.insert_calls == [(note_id, "Only title", "")]
+
+
 async def test_insert_records_initial_snapshot_when_version_repo_present() -> None:
     """`insert` records an initial version snapshot via the version repo."""
     facade, fake_db, _content, _embedding, fake_directory, _combined, _tags, _version_repo = _make_facade(version_repo=_StubVersionRepo())
@@ -176,6 +202,41 @@ async def test_update_overwrites_content_and_refreshes_embedding() -> None:
     persisted = await content_repo.select_by_id("note-1")
     assert persisted.title == "New title"
     assert persisted.content == "New content"
+
+
+async def _drain_embedding_tasks(facade: NoteFacadeImpl) -> None:
+    """Await the fire-and-forget embedding tasks the facade tracks."""
+    pending = list(getattr(facade, "_embedding_tasks", set()))
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
+async def test_update_content_only_keeps_existing_title_in_embedding() -> None:
+    """A partial content update must embed the persisted title, not ""."""
+    facade, _db, content_repo, embedding, _directory, _combined, _tags, _version_repo = _make_facade()
+    content_repo.seed(_seed_note(note_id="note-1", title="Seed", content="old content"))
+
+    await facade.update(
+        NoteEntity(note_id="note-1", content="New content"),
+        UserContext("user-1"),
+    )
+    await _drain_embedding_tasks(facade)
+
+    assert embedding.update_calls == [("note-1", "Seed", "New content")]
+
+
+async def test_update_title_only_refreshes_embedding_with_new_title() -> None:
+    """A title-only rename must regenerate the embedding with the new title."""
+    facade, _db, content_repo, embedding, _directory, _combined, _tags, _version_repo = _make_facade()
+    content_repo.seed(_seed_note(note_id="note-1", title="Seed", content="old content"))
+
+    await facade.update(
+        NoteEntity(note_id="note-1", title="Renamed"),
+        UserContext("user-1"),
+    )
+    await _drain_embedding_tasks(facade)
+
+    assert embedding.update_calls == [("note-1", "Renamed", "old content")]
 
 
 async def test_update_appends_version_entry_when_version_repo_present() -> None:
