@@ -46,6 +46,8 @@ from src.db.repos.note.search_strategy import (
     DateNoteSearchStrategy,
     SimilaritySearchStrategy,
     WebNoteSearchStrategy,
+    WeightedReciprocalRankFusionSearchStrategy,
+    WordSimilaritySearchStrategy,
 )
 from src.db.repos.note.versioning import NoteVersionRepoABC
 from src.db.repos.permissions import PermissionRepoABC
@@ -77,6 +79,9 @@ class NoteFacadeImpl(NoteFacadeABC):
         version_repo: NoteVersionRepoABC,
         shelf_repo: ShelfRepoABC,
         rule_repo: RuleRepoABC,
+        *,
+        fuzzy_min_similarity: float = SimilaritySearchStrategy.DEFAULT_MIN_SIMILARITY,
+        word_min_similarity: float = WordSimilaritySearchStrategy.DEFAULT_MIN_SIMILARITY,
     ):
         self._db = db
         self._content_repo = content_repo
@@ -89,6 +94,8 @@ class NoteFacadeImpl(NoteFacadeABC):
         # Powers the default-fleeting rule lookup in _resolve_directory_ids.
         self._shelf_repo = shelf_repo
         self._rule_repo = rule_repo
+        self._fuzzy_min_similarity = fuzzy_min_similarity
+        self._word_min_similarity = word_min_similarity
         self.log = logging_provider(__name__, self)
         # Holds fire-and-forget embedding refresh tasks so the loop
         # does not garbage-collect them mid-flight.
@@ -591,7 +598,10 @@ class NoteFacadeImpl(NoteFacadeABC):
         }
         strategy = self._strategy_for(search_type, common_init_parameters)
 
-        note_entities = await strategy.search()
+        search_results = await strategy.search()
+        # Strategies produce scored results; the facade contract exposes
+        # the note entities themselves.
+        note_entities = [result.note for result in search_results]
         if not filter_obj.is_empty():
             note_entities = await self._apply_search_filter(
                 note_entities, filter_obj,
@@ -676,14 +686,63 @@ class NoteFacadeImpl(NoteFacadeABC):
             return DateNoteSearchStrategy(**common_init_parameters)
         if search_type == SearchType.FULL_TEXT_TITLE:
             return WebNoteSearchStrategy(**common_init_parameters)
-        if search_type == SearchType.FUZZY:
-            return SimilaritySearchStrategy(**common_init_parameters)
-        if search_type == SearchType.CONTEXT:
-            return ContextNoteSearchStrategy(
+        if search_type in (SearchType.FUZZY, SearchType.CONTEXT):
+            # Fusion needs a candidate window covering the requested
+            # page, then applies its own offset/limit to the fused rank.
+            candidate_limit = (
+                common_init_parameters["limit"]
+                + common_init_parameters["offset"]
+            )
+            child_parameters = {
                 **common_init_parameters,
-                generator=self._embedding_repo.embedding_generator,
+                "limit": candidate_limit,
+                "offset": 0,
+            }
+
+        if search_type == SearchType.FUZZY:
+            return self._build_fuzzy_rrf(child_parameters)
+        if search_type == SearchType.CONTEXT:
+            fuzzy_rrf = self._build_fuzzy_rrf(child_parameters)
+            return WeightedReciprocalRankFusionSearchStrategy(
+                strategies=[
+                    (WebNoteSearchStrategy(**child_parameters), 0.2),
+                    (fuzzy_rrf, 0.3),
+                    (
+                        ContextNoteSearchStrategy(
+                            **child_parameters,
+                            generator=self._embedding_repo.embedding_generator,
+                        ),
+                        0.5,
+                    ),
+                ],
+                **common_init_parameters,
             )
         raise ValueError(f"Unknown SearchType: {search_type}")
+
+    def _build_fuzzy_rrf(
+        self,
+        child_parameters: Dict[str, Any],
+    ) -> WeightedReciprocalRankFusionSearchStrategy:
+        """Combine whole-string and word-level fuzzy search with RRF."""
+        return WeightedReciprocalRankFusionSearchStrategy(
+            strategies=[
+                (
+                    SimilaritySearchStrategy(
+                        **child_parameters,
+                        min_similarity=self._fuzzy_min_similarity,
+                    ),
+                    0.5,
+                ),
+                (
+                    WordSimilaritySearchStrategy(
+                        **child_parameters,
+                        min_similarity=self._word_min_similarity,
+                    ),
+                    0.5,
+                ),
+            ],
+            **child_parameters,
+        )
 
 
 #: Attributes backed by columns on the ``note`` SQL table.

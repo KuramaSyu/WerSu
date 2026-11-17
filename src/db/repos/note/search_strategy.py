@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 import asyncio
-from typing import List, Optional, Self
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Self, Sequence, Tuple
 
-from src.api.other.undefined import UNDEFINED
+from src.api.other.undefined import UNDEFINED, is_undefined
 from src.api.other.user_context import UserContextABC
 from src.api.search_filter import NoteSearchFilter
 from src.ai.embedding_generator import  EmbeddingGeneratorABC
@@ -10,6 +11,28 @@ from src.db.database import  DatabaseABC
 from src.db.entities import NoteEntity
 from src.db.repos.permissions import PermissionRepoABC
 from src.api import NoteRelationEnum, ObjectRef, ObjectTypeEnum, Relationship, SubjectRef
+
+
+@dataclass(frozen=True, slots=True)
+class SearchResult:
+    """A note together with its normalized search score.
+
+    ``score`` is in the inclusive range ``[0, 1]``: ``0`` means no
+    similarity at all and ``1`` means a full / exact match.
+    """
+
+    note: NoteEntity
+    score: float
+
+    @property
+    def entity(self) -> NoteEntity:
+        """Alias for :attr:`note` for callers that prefer ``entity``."""
+        return self.note
+
+    @property
+    def note_entity(self) -> NoteEntity:
+        """Alias for :attr:`note` for callers that prefer ``note_entity``."""
+        return self.note
 
 
 class NoteSearchStrategy(ABC):
@@ -85,7 +108,7 @@ class NoteSearchStrategy(ABC):
         )
     
     @abstractmethod
-    async def search(self) -> list["NoteEntity"]:
+    async def search(self) -> list["SearchResult"]:
         """Searches for notes based on the provided query.
 
         Args:
@@ -99,8 +122,9 @@ class NoteSearchStrategy(ABC):
 
         Returns:
         --------
-        `list[NoteEntity]`:
-            A list of notes matching the search criteria.
+        `list[SearchResult]`:
+            Notes matching the search criteria, together with a
+            normalized similarity score in ``[0, 1]``.
         """
         ...
 
@@ -131,7 +155,7 @@ class NoteSearchStrategy(ABC):
 class DateNoteSearchStrategy(NoteSearchStrategy):
     """Return notes sorted by date (most recent first)."""
 
-    async def search(self) -> list["NoteEntity"]:
+    async def search(self) -> list["SearchResult"]:
         date_filter = self._date_filter_sql()
         readme_filter = self._exclude_readme_sql()
         query = f"""
@@ -145,9 +169,12 @@ class DateNoteSearchStrategy(NoteSearchStrategy):
         OFFSET {self.offset};
         """
         records = await self.db.fetch(query, self.user_context.user_id)
-        # if not records:
-        #     return []
-        return [NoteEntity.from_record(record) for record in records]
+        # A date listing has no textual similarity: every returned
+        # note is a full hit for this strategy.
+        return [
+            SearchResult(note=NoteEntity.from_record(record), score=1.0)
+            for record in records
+        ]
 
 
 class WebNoteSearchStrategy(NoteSearchStrategy):
@@ -156,7 +183,7 @@ class WebNoteSearchStrategy(NoteSearchStrategy):
     Title is also fuzzy searched
     """
 
-    async def search(self) -> list["NoteEntity"]:
+    async def search(self) -> list["SearchResult"]:
         note_ids = await self._get_user_note_ids()
         date_filter = self._date_filter_sql()
         readme_filter = self._exclude_readme_sql()
@@ -177,9 +204,11 @@ class WebNoteSearchStrategy(NoteSearchStrategy):
         OFFSET {self.offset};
         """
         records = await self.db.fetch(query, self.query, note_ids)
-        # if not records:
-        #     raise RuntimeError("Failed to fetch notes by exact title.")
-        return [NoteEntity.from_record(record) for record in records]
+        # This is the bare / exact text search: a hit is a full hit.
+        return [
+            SearchResult(note=NoteEntity.from_record(record), score=1.0)
+            for record in records
+        ]
 
 
 class SimilaritySearchStrategy(NoteSearchStrategy):
@@ -188,50 +217,212 @@ class SimilaritySearchStrategy(NoteSearchStrategy):
     The query is compared against ``title`` and ``content``
     independently; the rank is the greater of the two so a strong
     title hit wins over a noisy content hit (and vice versa).
+
+    Results below ``min_similarity`` are discarded.  The default of
+    ``0.08`` is calibrated for whole-string trigram similarity: known
+    typo queries such as ``"Selda"`` and ``"Mario Card 9"`` score
+    roughly ``0.09``-``0.11``.  This is a conservative floor rather
+    than a precision filter: short titles can still produce false
+    positives, and long notes dilute whole-content similarity.  Callers
+    that need word-level matching should use a word-similarity based
+    score with a higher threshold (around ``0.35``).
     """
 
-    async def search(self) -> list["NoteEntity"]:
+    DEFAULT_MIN_SIMILARITY = 0.08
+
+    def __init__(
+        self,
+        query: str,
+        limit: int,
+        offset: int,
+        db: DatabaseABC,
+        user_context: UserContextABC,
+        note_permissions: PermissionRepoABC,
+        filter_: Optional[NoteSearchFilter] = None,
+        min_similarity: float = DEFAULT_MIN_SIMILARITY,
+    ) -> None:
+        super().__init__(
+            query,
+            limit,
+            offset,
+            db,
+            user_context,
+            note_permissions,
+            filter_=filter_,
+        )
+        if not 0.0 <= min_similarity <= 1.0:
+            raise ValueError("min_similarity must be between 0 and 1")
+        self.min_similarity = min_similarity
+
+    async def search(self) -> list["SearchResult"]:
         note_ids = await self._get_user_note_ids()
         date_filter = self._date_filter_sql()
         readme_filter = self._exclude_readme_sql()
         query = f"""
-        SELECT id, title, author_id, content, updated_at
+        SELECT id, title, author_id, content, updated_at,
+            GREATEST(
+                similarity(title, $1),
+                similarity(content, $1)
+            ) AS search_score
         FROM note.content
         WHERE id = ANY($2)
+            AND GREATEST(
+                similarity(title, $1),
+                similarity(content, $1)
+            ) >= $3
             {readme_filter}
             {date_filter}
-        ORDER BY GREATEST(
-            similarity(title, $1),
-            similarity(content, $1)
-        ) DESC
+        ORDER BY search_score DESC
         LIMIT {self.limit}
         OFFSET {self.offset};
         """
-        records = await self.db.fetch(query, self.query, note_ids)
-        return [NoteEntity.from_record(record) for record in records]
+        records = await self.db.fetch(
+            query, self.query, note_ids, self.min_similarity,
+        )
+        return [
+            SearchResult(
+                note=NoteEntity.from_record(record),
+                score=float(record.get("search_score") or 0.0),
+            )
+            for record in records
+        ]
+
+
+class WordSimilaritySearchStrategy(NoteSearchStrategy):
+    """Return notes ranked by word-level trigram similarity.
+
+    Unlike :class:`SimilaritySearchStrategy`, which compares the query
+    against the whole title/content string, this strategy uses
+    :func:`word_similarity` and therefore matches the query against the
+    best matching word extent inside the title or content.  That avoids
+    diluting an exact technical term across a long note.
+
+    The default threshold is ``0.35``.  Word similarity produces much
+    higher values than whole-string similarity; empirically, known typo
+    queries such as ``"Selda"`` (``0.50``) and ``"Mario Card 9"``
+    (``0.46``) stay above it, while most nonsense queries fall below.
+    """
+
+    DEFAULT_MIN_SIMILARITY = 0.35
+
+    def __init__(
+        self,
+        query: str,
+        limit: int,
+        offset: int,
+        db: DatabaseABC,
+        user_context: UserContextABC,
+        note_permissions: PermissionRepoABC,
+        filter_: Optional[NoteSearchFilter] = None,
+        min_similarity: float = DEFAULT_MIN_SIMILARITY,
+    ) -> None:
+        super().__init__(
+            query,
+            limit,
+            offset,
+            db,
+            user_context,
+            note_permissions,
+            filter_=filter_,
+        )
+        if not 0.0 <= min_similarity <= 1.0:
+            raise ValueError("min_similarity must be between 0 and 1")
+        self.min_similarity = min_similarity
+
+    async def search(self) -> list["SearchResult"]:
+        note_ids = await self._get_user_note_ids()
+        date_filter = self._date_filter_sql()
+        readme_filter = self._exclude_readme_sql()
+        query = f"""
+        SELECT id, title, author_id, content, updated_at,
+            GREATEST(
+                word_similarity($1, title),
+                word_similarity($1, content)
+            ) AS search_score
+        FROM note.content
+        WHERE id = ANY($2)
+            AND GREATEST(
+                word_similarity($1, title),
+                word_similarity($1, content)
+            ) >= $3
+            {readme_filter}
+            {date_filter}
+        ORDER BY search_score DESC
+        LIMIT {self.limit}
+        OFFSET {self.offset};
+        """
+        records = await self.db.fetch(
+            query, self.query, note_ids, self.min_similarity,
+        )
+        return [
+            SearchResult(
+                note=NoteEntity.from_record(record),
+                score=float(record.get("search_score") or 0.0),
+            )
+            for record in records
+        ]
 
 
 class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
-    """Return notes where the title or content is similar to the query"""
+    """Return notes where the title or content is similar to the query.
 
-    async def search(self) -> list["NoteEntity"]:
+    Like :class:`SimilaritySearchStrategy`, this compares the whole
+    title/content string rather than individual words and filters out
+    results below ``min_similarity``.
+    """
+
+    DEFAULT_MIN_SIMILARITY = 0.08
+
+    def __init__(
+        self,
+        query: str,
+        limit: int,
+        offset: int,
+        db: DatabaseABC,
+        user_context: UserContextABC,
+        note_permissions: PermissionRepoABC,
+        filter_: Optional[NoteSearchFilter] = None,
+        min_similarity: float = DEFAULT_MIN_SIMILARITY,
+    ) -> None:
+        super().__init__(
+            query,
+            limit,
+            offset,
+            db,
+            user_context,
+            note_permissions,
+            filter_=filter_,
+        )
+        if not 0.0 <= min_similarity <= 1.0:
+            raise ValueError("min_similarity must be between 0 and 1")
+        self.min_similarity = min_similarity
+
+    async def search(self) -> list["SearchResult"]:
         note_ids = await self._get_user_note_ids()
         date_filter = self._date_filter_sql()
         readme_filter = self._exclude_readme_sql()
         query = f"""
-        SELECT id, title, author_id, content, updated_at
+        SELECT id, title, author_id, content, updated_at,
+            similarity(title || ' ' || content, $1) AS search_score
         FROM note.content
         WHERE id = ANY($2)
+            AND similarity(title || ' ' || content, $1) >= $3
             {readme_filter}
             {date_filter}
-        ORDER BY similarity(title || ' ' || content, $1) DESC
+        ORDER BY search_score DESC
         LIMIT {self.limit}
         OFFSET {self.offset};
         """
-        records = await self.db.fetch(query, self.query, note_ids)
-        # if not records:
-        #     raise RuntimeError("Failed to fetch notes by fuzzy title/content.")
-        return [NoteEntity.from_record(record) for record in records]
+        records = await self.db.fetch(
+            query, self.query, note_ids, self.min_similarity,
+        )
+        return [
+            SearchResult(
+                note=NoteEntity.from_record(record),
+                score=float(record.get("search_score") or 0.0),
+            )
+            for record in records
+        ]
 
 
 class ContextNoteSearchStrategy(NoteSearchStrategy):
@@ -250,11 +441,15 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         super().__init__(query, limit, offset, db, user_context, note_permissions, filter_=filter_)
         self.generator = generator
 
-    async def search(self) -> list["NoteEntity"]:
+    async def search(self) -> list["SearchResult"]:
         date_filter = self._date_filter_sql()
         readme_filter = self._exclude_readme_sql()
         query = f"""
-        SELECT id, title, author_id, content, updated_at, (embedding <=> $1::vector) AS similarity
+        SELECT id, title, author_id, content, updated_at,
+            GREATEST(
+                0.0,
+                LEAST(1.0, 1.0 - (embedding <=> $1::vector))
+            ) AS search_score
         FROM note.embedding
         JOIN
             note.content on note.content.id = note.embedding.note_id
@@ -262,7 +457,7 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
             AND note.content.id = ANY($3)
             {readme_filter}
             {date_filter}
-        ORDER BY similarity ASC
+        ORDER BY search_score DESC
         LIMIT {self.limit}
         OFFSET {self.offset}
         """
@@ -280,4 +475,193 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         # the user can simply have no notes at all
         # if not records:
         #     raise RuntimeError("Failed to fetch notes by context.")
-        return [NoteEntity.from_record(record) for record in records]
+        return [
+            SearchResult(
+                note=NoteEntity.from_record(record),
+                score=float(record.get("search_score") or 0.0),
+            )
+            for record in records
+        ]
+
+
+class WeightedReciprocalRankFusionSearchStrategy(NoteSearchStrategy):
+    """Fuse any number of strategies with weighted reciprocal-rank fusion.
+
+    ``strategies`` is a sequence of ``(strategy, weight)`` tuples.  Each
+    hit contributes
+
+    ``weight * 1 / (k + rank)``
+
+    The similarity score carried by a :class:`SearchResult` is ignored
+    here; only the rank and the configured per-strategy weight matter.
+    """
+
+    DEFAULT_K = 60
+
+    def __init__(
+        self,
+        strategies: Sequence[Tuple[NoteSearchStrategy, float]],
+        *,
+        db: Optional[DatabaseABC] = None,
+        query: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        user_context: Optional[UserContextABC] = None,
+        note_permissions: Optional[PermissionRepoABC] = None,
+        filter_: Optional[NoteSearchFilter] = None,
+        k: int = DEFAULT_K,
+    ) -> None:
+        if not strategies:
+            raise ValueError(
+                f"{type(self).__name__} requires at least one strategy"
+            )
+
+        self.strategies = tuple(strategies)
+        first_strategy = self.strategies[0][0]
+
+        # When used stand-alone (e.g. in a unit test) derive omitted
+        # common fields from the first strategy.  The facade passes the
+        # requested pagination explicitly.
+        db = db if db is not None else getattr(first_strategy, "db", None)
+        query = query if query is not None else getattr(first_strategy, "query", "")
+        limit = limit if limit is not None else getattr(first_strategy, "limit", 50)
+        offset = offset if offset is not None else getattr(first_strategy, "offset", 0)
+        user_context = (
+            user_context
+            if user_context is not None
+            else getattr(first_strategy, "user_context", None)
+        )
+        note_permissions = (
+            note_permissions
+            if note_permissions is not None
+            else getattr(first_strategy, "note_permissions", None)
+        )
+        if filter_ is None:
+            filter_ = getattr(first_strategy, "filter", None)
+
+        super().__init__(
+            query=query,
+            limit=limit,
+            offset=offset,
+            db=db,  # type: ignore[arg-type]
+            user_context=user_context,  # type: ignore[arg-type]
+            note_permissions=note_permissions,  # type: ignore[arg-type]
+            filter_=filter_,
+        )
+        self.k = k
+
+    @property
+    def weighted_strategies(self) -> Tuple[Tuple[NoteSearchStrategy, float], ...]:
+        """The strategies together with their RRF weights."""
+        return self.strategies
+
+    def _contribution(
+        self,
+        result: SearchResult,
+        weight: float,
+        rank: int,
+    ) -> float:
+        """Return one strategy's weighted RRF contribution for ``result``."""
+        return weight * (1.0 / (self.k + rank))
+
+    async def search(self) -> list["SearchResult"]:
+        strategy_results = await asyncio.gather(
+            *(strategy.search() for strategy, _ in self.strategies)
+        )
+
+        fused: Dict[Any, SearchResult] = {}
+        fused_scores: Dict[Any, float] = {}
+
+        for (_strategy, weight), results in zip(
+            self.strategies, strategy_results,
+        ):
+            for rank, result in enumerate(results, start=1):
+                note = result.note
+                note_id = note.note_id
+                key = (
+                    ("object", id(note))
+                    if is_undefined(note_id) or note_id is None
+                    else ("note", str(note_id))
+                )
+
+                contribution = self._contribution(result, weight, rank)
+                fused_scores[key] = fused_scores.get(key, 0.0) + contribution
+                if key not in fused:
+                    fused[key] = result
+
+        ordered = sorted(
+            fused_scores.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+        window = ordered[self.offset:self.offset + self.limit]
+        return [
+            SearchResult(note=fused[key].note, score=score)
+            for key, score in window
+        ]
+
+
+class SimilarityWeightedReciprocalRankFusionSearchStrategy(
+    WeightedReciprocalRankFusionSearchStrategy,
+):
+    """Fuse strategies with weighted RRF *and* similarity multiplication.
+
+    This extends
+    :class:`WeightedReciprocalRankFusionSearchStrategy`
+    by multiplying each hit's contribution with its normalized
+    similarity score:
+
+    ``strategy_weight * similarity * 1 / (k + rank)``
+
+    A note that is merely the least-bad hit of a strategy therefore
+    contributes very little, while a strong hit confirmed by several
+    strategies accumulates a much larger fused score.
+    """
+
+    def _contribution(
+        self,
+        result: SearchResult,
+        weight: float,
+        rank: int,
+    ) -> float:
+        similarity = max(0.0, min(1.0, float(result.score)))
+        return weight * similarity * (1.0 / (self.k + rank))
+
+
+#: Short aliases for the weighted RRF strategies.
+#:
+#: ``WeightedRrfStrategy`` is the main, similarity-free strategy.
+#: ``WeightedRrfWithoutSimilarityStrategy`` is kept as an explicit
+#: spelling of that same strategy.
+WeightedRrfStrategy = WeightedReciprocalRankFusionSearchStrategy
+WeightedRrfWithoutSimilarityStrategy = WeightedReciprocalRankFusionSearchStrategy
+SimilarityWeightedRrfStrategy = SimilarityWeightedReciprocalRankFusionSearchStrategy
+WeightedRrfWithSimilarityStrategy = SimilarityWeightedReciprocalRankFusionSearchStrategy
+
+#: Descriptive aliases kept for callers that spell out the variants.
+WeightedReciprocalRankFusionWithoutSimilaritySearchStrategy = (
+    WeightedReciprocalRankFusionSearchStrategy
+)
+WeightedReciprocalRankFusionWithSimilaritySearchStrategy = (
+    SimilarityWeightedReciprocalRankFusionSearchStrategy
+)
+
+
+__all__ = [
+    "SearchResult",
+    "NoteSearchStrategy",
+    "DateNoteSearchStrategy",
+    "WebNoteSearchStrategy",
+    "SimilaritySearchStrategy",
+    "WordSimilaritySearchStrategy",
+    "FuzzyTitleContentSearchStrategy",
+    "ContextNoteSearchStrategy",
+    "WeightedReciprocalRankFusionSearchStrategy",
+    "SimilarityWeightedReciprocalRankFusionSearchStrategy",
+    "WeightedRrfStrategy",
+    "WeightedRrfWithoutSimilarityStrategy",
+    "SimilarityWeightedRrfStrategy",
+    "WeightedRrfWithSimilarityStrategy",
+    "WeightedReciprocalRankFusionWithoutSimilaritySearchStrategy",
+    "WeightedReciprocalRankFusionWithSimilaritySearchStrategy",
+]
