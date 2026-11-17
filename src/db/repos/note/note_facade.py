@@ -82,6 +82,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         *,
         fuzzy_min_similarity: float = SimilaritySearchStrategy.DEFAULT_MIN_SIMILARITY,
         word_min_similarity: float = WordSimilaritySearchStrategy.DEFAULT_MIN_SIMILARITY,
+        context_min_score: float = ContextNoteSearchStrategy.DEFAULT_MIN_SCORE,
     ):
         self._db = db
         self._content_repo = content_repo
@@ -96,6 +97,7 @@ class NoteFacadeImpl(NoteFacadeABC):
         self._rule_repo = rule_repo
         self._fuzzy_min_similarity = fuzzy_min_similarity
         self._word_min_similarity = word_min_similarity
+        self._context_min_score = context_min_score
         self.log = logging_provider(__name__, self)
         # Holds fire-and-forget embedding refresh tasks so the loop
         # does not garbage-collect them mid-flight.
@@ -705,14 +707,15 @@ class NoteFacadeImpl(NoteFacadeABC):
             fuzzy_rrf = self._build_fuzzy_rrf(child_parameters)
             return WeightedReciprocalRankFusionSearchStrategy(
                 strategies=[
-                    (WebNoteSearchStrategy(**child_parameters), 0.2),
-                    (fuzzy_rrf, 0.3),
+                    (WebNoteSearchStrategy(**child_parameters), 0.4),
+                    (fuzzy_rrf, 0.4),
                     (
                         ContextNoteSearchStrategy(
                             **child_parameters,
                             generator=self._embedding_repo.embedding_generator,
+                            min_score=self._context_min_score,
                         ),
-                        0.5,
+                        1.0,
                     ),
                 ],
                 **common_init_parameters,

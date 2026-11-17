@@ -219,16 +219,19 @@ class SimilaritySearchStrategy(NoteSearchStrategy):
     title hit wins over a noisy content hit (and vice versa).
 
     Results below ``min_similarity`` are discarded.  The default of
-    ``0.08`` is calibrated for whole-string trigram similarity: known
+    ``0.10`` is calibrated for whole-string trigram similarity: known
     typo queries such as ``"Selda"`` and ``"Mario Card 9"`` score
     roughly ``0.09``-``0.11``.  This is a conservative floor rather
     than a precision filter: short titles can still produce false
-    positives, and long notes dilute whole-content similarity.  Callers
-    that need word-level matching should use a word-similarity based
-    score with a higher threshold (around ``0.35``).
+    positives, and long notes dilute whole-content similarity.  A lower
+    floor (the former ``0.08``) let unrelated notes through: the query
+    ``"play games on Nintendo Switch"`` already scored ``0.0806``
+    against ``"A random note without relevant content."``.  Callers that
+    need word-level matching should use a word-similarity based score
+    with a higher threshold (around ``0.35``).
     """
 
-    DEFAULT_MIN_SIMILARITY = 0.08
+    DEFAULT_MIN_SIMILARITY = 0.10
 
     def __init__(
         self,
@@ -426,7 +429,17 @@ class FuzzyTitleContentSearchStrategy(NoteSearchStrategy):
 
 
 class ContextNoteSearchStrategy(NoteSearchStrategy):
-    """Return notes based on semantic search using embeddings."""
+    """Return notes based on semantic search using embeddings.
+
+    Results below ``min_score`` are discarded.  Without that floor an
+    embedding search returns *every* note of the user (unrelated notes
+    score around ``0.0``); in the hybrid search those zero-relevance
+    hits still collected reciprocal-rank-fusion credit and could
+    outrank the semantically best match.
+    """
+
+    DEFAULT_MIN_SCORE = 0.05
+
     def __init__(
         self,
         db: DatabaseABC,
@@ -437,9 +450,13 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         generator: EmbeddingGeneratorABC,
         note_permissions: PermissionRepoABC,
         filter_: Optional[NoteSearchFilter] = None,
+        min_score: float = DEFAULT_MIN_SCORE,
     ) -> None:
         super().__init__(query, limit, offset, db, user_context, note_permissions, filter_=filter_)
         self.generator = generator
+        if not 0.0 <= min_score <= 1.0:
+            raise ValueError("min_score must be between 0 and 1")
+        self.min_score = min_score
 
     async def search(self) -> list["SearchResult"]:
         date_filter = self._date_filter_sql()
@@ -455,6 +472,10 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
             note.content on note.content.id = note.embedding.note_id
         WHERE note.embedding.model = $2
             AND note.content.id = ANY($3)
+            AND GREATEST(
+                0.0,
+                LEAST(1.0, 1.0 - (embedding <=> $1::vector))
+            ) >= $4
             {readme_filter}
             {date_filter}
         ORDER BY search_score DESC
@@ -469,7 +490,7 @@ class ContextNoteSearchStrategy(NoteSearchStrategy):
         query_embedding_str = self.generator.tensor_to_str_vec(query_embedding)
         model_name = self.generator.model_name
         records = await self.db.fetch(
-            query, query_embedding_str, model_name, note_ids,
+            query, query_embedding_str, model_name, note_ids, self.min_score,
         )
 
         # the user can simply have no notes at all
