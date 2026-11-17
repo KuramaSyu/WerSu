@@ -47,7 +47,7 @@ class NoteFacadeABC(ABC):
     with its parent directories and tags and write them to the `directory_ids` and `tag_ids` fields, respectively.
 
     Implementations:
-    * :class:`src.db.repos.note.note.NoteFacadeImpl`
+    * :class:`src.db.repos.note.NoteFacadeImpl`
     """
 
     @property
